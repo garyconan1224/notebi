@@ -1,0 +1,731 @@
+/* ProcessingPage 局部 token 映射到 Nibi */
+.vm-processing-scope {
+  --accent:       var(--color-accent);
+  --accent-2:     var(--color-accent);
+  --accent-3:     var(--color-accent);
+  --accent-warm:  var(--color-warning);
+  --accent-green: var(--color-success);
+
+  --bg:        var(--color-bg);
+  --bg-elev:   var(--color-surface);
+  --bg-sunken: var(--color-bg-alt);
+  --ink:    var(--color-fg);
+  --ink-2:  var(--color-fg-2);
+  --ink-3:  var(--color-muted);
+  --ink-4:  oklch(70% 0.008 70);
+  --line:        var(--color-border);
+  --line-strong: var(--color-border-s);
+
+  --mono:    var(--font-mono);
+  --display: var(--font-display);
+  --radius:   10px;
+  --radius-lg: 14px;
+  --proc-dark: oklch(13% 0.012 265);
+  --proc-dark-strong: oklch(8% 0.01 265);
+  --proc-on-dark: oklch(100% 0 0);
+  --proc-live: var(--color-error);
+
+  color: var(--color-fg);
+  background: var(--color-bg);
+  font-family: var(--font-body);
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* ─── Layout ─── */
+.vm-processing-scope .proc-wrap {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 28px;
+}
+
+.vm-processing-scope .proc-main {
+  background: var(--srf);
+  border: 1px solid var(--bdr);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── Topbar ─── */
+.vm-processing-scope .proc-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--bdr);
+  background: var(--srf);
+}
+
+.vm-processing-scope .proc-back {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--fg2);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 120ms, color 120ms;
+}
+
+.vm-processing-scope .proc-back:hover {
+  background: var(--bgalt);
+  color: var(--fg);
+}
+
+.vm-processing-scope .proc-top-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vm-processing-scope .proc-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.vm-processing-scope .proc-top-btn {
+  height: 30px;
+  padding: 0 12px;
+  border: 1.5px solid var(--bdrs);
+  border-radius: var(--radius);
+  background: var(--srf);
+  color: var(--fg2);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: background 120ms, border-color 120ms, color 120ms, opacity 120ms;
+}
+
+.vm-processing-scope .proc-top-btn:hover:not(:disabled) {
+  border-color: var(--fg);
+  color: var(--fg);
+  background: var(--bgalt);
+}
+
+.vm-processing-scope .proc-top-btn.primary {
+  border-color: var(--fg);
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.vm-processing-scope .proc-top-btn.primary:hover:not(:disabled) {
+  border-color: var(--acc);
+  background: var(--acc);
+  color: var(--accfg);
+}
+
+.vm-processing-scope .proc-top-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ─── Hero ─── */
+.vm-processing-scope .proc-hero {
+  padding: 28px 32px 20px;
+  border-bottom: 1px solid var(--bdr);
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.vm-processing-scope .proc-hero .thumb {
+  width: 220px;
+  aspect-ratio: 16/9;
+  border-radius: 16px;
+  background: var(--proc-dark-strong);
+  overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.vm-processing-scope .proc-hero .thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vm-processing-scope .proc-hero .thumb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 40%, color-mix(in oklch, var(--proc-dark-strong) 58%, transparent));
+}
+
+.vm-processing-scope .proc-hero .thumb .thumb-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.vm-processing-scope .proc-hero .thumb .thumb-placeholder-icon {
+  color: var(--ink-4);
+}
+
+.vm-processing-scope .proc-hero .thumb .live {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 99px;
+  background: color-mix(in oklch, var(--proc-dark-strong) 70%, transparent);
+  color: var(--proc-on-dark);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  z-index: 2;
+}
+
+.vm-processing-scope .proc-hero .thumb .live::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--proc-live);
+  animation: vm-pulse 1.2s infinite;
+}
+
+/* Audio badge — 左下角胶囊标签 */
+.vm-processing-scope .proc-hero .thumb .thumb-audio-badge {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  background: color-mix(in oklch, var(--proc-dark-strong) 72%, transparent);
+  color: var(--proc-on-dark);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  z-index: 2;
+  backdrop-filter: blur(4px);
+}
+
+/* Audio 蒙层 — 渐变叠加让封面区一眼区分 audio vs video */
+.vm-processing-scope .proc-hero .thumb .thumb-audio-mask {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 50%, color-mix(in oklch, var(--proc-dark-strong) 52%, transparent) 100%);
+  z-index: 1;
+  pointer-events: none;
+}
+
+@keyframes vm-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.vm-processing-scope .proc-hero .info {
+  flex: 1;
+  min-width: 0;
+}
+
+.vm-processing-scope .proc-hero .info .eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mut);
+}
+
+.vm-processing-scope .proc-hero .info .title {
+  font-family: var(--display);
+  font-size: 32px;
+  line-height: 1.1;
+  margin: 4px 0 8px;
+}
+
+.vm-processing-scope .proc-hero .info .title-platform {
+  color: var(--mut);
+  font-weight: 400;
+  margin-right: 10px;
+}
+
+.vm-processing-scope .proc-hero .info .src {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--mut);
+  word-break: break-all;
+}
+
+.vm-processing-scope .proc-hero .info .stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--mut);
+}
+
+.vm-processing-scope .proc-hero .info .stats span strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.vm-processing-scope .proc-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.vm-processing-scope .proc-tag {
+  display: inline-flex;
+  align-items: center;
+  max-width: 160px;
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--bdr);
+  border-radius: 99px;
+  background: var(--bgalt);
+  color: var(--fg2);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vm-processing-scope .proc-hero .info .actions {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ─── Buttons ─── */
+.vm-processing-scope .btn {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: var(--srf);
+  color: var(--fg2);
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 120ms;
+}
+
+.vm-processing-scope .btn:hover {
+  background: var(--bgalt);
+}
+
+.vm-processing-scope .btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.vm-processing-scope .btn-primary {
+  background: var(--fg);
+  color: var(--bg);
+  border-color: var(--fg);
+}
+
+.vm-processing-scope .btn-primary:hover {
+  opacity: 0.9;
+}
+
+/* ─── Chip ─── */
+.vm-processing-scope .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  border: 1px solid;
+  font-size: 11px;
+  font-family: var(--mono);
+}
+
+.vm-processing-scope .chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+}
+
+.vm-processing-scope .chip-success {
+  background: var(--color-success-light);
+  color: var(--accent-green);
+  border-color: color-mix(in oklch, var(--accent-green) 30%, transparent);
+}
+
+.vm-processing-scope .chip-success .chip-dot {
+  background: var(--accent-green);
+}
+
+.vm-processing-scope .proc-result-arming {
+  animation: proc-result-pulse 1.1s ease-in-out infinite;
+}
+
+.vm-processing-scope .proc-result-arming .chip-dot {
+  box-shadow: 0 0 0 0 color-mix(in oklch, var(--accent-green) 36%, transparent);
+  animation: proc-dot-ping 1.1s ease-in-out infinite;
+}
+
+@keyframes proc-result-pulse {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1px); }
+}
+
+@keyframes proc-dot-ping {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--accent-green) 36%, transparent); }
+  70% { box-shadow: 0 0 0 7px color-mix(in oklch, var(--accent-green) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--accent-green) 0%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vm-processing-scope .proc-result-arming,
+  .vm-processing-scope .proc-result-arming .chip-dot {
+    animation: none;
+  }
+}
+
+/* ─── Step rail (水平 stepper · 对标 BiliNote 图3) ─── */
+.vm-processing-scope .step-rail {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  padding: 8px 4px 0;
+  opacity: 0;
+  animation: vm-step-in 520ms cubic-bezier(0.22, 1, 0.36, 1) 80ms forwards;
+}
+
+@keyframes vm-step-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.vm-processing-scope .step-node {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 11px;
+}
+
+.vm-processing-scope .step-node .node-top {
+  position: relative;
+  width: 100%;
+  height: 30px;
+  display: grid;
+  place-items: center;
+}
+
+.vm-processing-scope .step-node .dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 99px;
+  border: 2px solid var(--bdr);
+  background: var(--srf);
+  display: grid;
+  place-items: center;
+  color: var(--mut);
+  position: relative;
+  z-index: 1;
+  transition: all 280ms ease;
+}
+.vm-processing-scope .step-node[data-state='done'] .dot {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--accfg);
+}
+.vm-processing-scope .step-node[data-state='running'] .dot {
+  border-color: var(--acc);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--acc) 15%, transparent);
+}
+.vm-processing-scope .step-node[data-state='running'] .ping {
+  width: 9px;
+  height: 9px;
+  border-radius: 99px;
+  background: var(--acc);
+  animation: vm-pulse 1.3s ease-in-out infinite;
+}
+
+/* 连接线：dot 左右两段拼成贯穿轨道，已走过的变色 */
+.vm-processing-scope .step-node .connector {
+  position: absolute;
+  top: 50%;
+  height: 2px;
+  background: var(--bdr);
+  transform: translateY(-50%);
+  transition: background 360ms ease;
+}
+.vm-processing-scope .step-node .connector.left {
+  left: 0;
+  right: calc(50% + 17px);
+}
+.vm-processing-scope .step-node .connector.right {
+  left: calc(50% + 17px);
+  right: 0;
+}
+.vm-processing-scope .step-node[data-state='done'] .connector {
+  background: var(--acc);
+}
+.vm-processing-scope .step-node[data-state='running'] .connector.left {
+  background: var(--acc);
+}
+
+.vm-processing-scope .step-node .node-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  text-align: center;
+  letter-spacing: normal;
+  transition: color 260ms ease;
+}
+.vm-processing-scope .step-node[data-state='queued'] .node-label {
+  color: var(--mut);
+  font-weight: 500;
+}
+.vm-processing-scope .step-node[data-state='running'] .node-label {
+  color: var(--acc);
+}
+
+.vm-processing-scope .step-node .node-sub {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--mut);
+  min-height: 13px;
+}
+.vm-processing-scope .step-node[data-state='running'] .node-sub {
+  color: var(--acc);
+  font-weight: 600;
+}
+.vm-processing-scope .step-node[data-state='done'] .node-sub {
+  color: var(--ok);
+}
+
+/* ─── Spinner ─── */
+.vm-processing-scope .spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 99px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: vm-spin 0.8s linear infinite;
+}
+
+@keyframes vm-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Sidebar ─── */
+.vm-processing-scope .proc-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.vm-processing-scope .side-card {
+  background: var(--srf);
+  border: 1px solid var(--bdr);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+}
+
+.vm-processing-scope .side-card h4 {
+  margin: 0 0 12px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mut);
+  font-family: var(--mono);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ─── Error state ─── */
+.vm-processing-scope .proc-error {
+  padding: 40px 32px;
+  text-align: center;
+}
+
+.vm-processing-scope .proc-error-icon {
+  color: var(--err);
+}
+
+.vm-processing-scope .proc-error h3 {
+  font-family: var(--display);
+  font-size: 24px;
+  margin: 12px 0 8px;
+}
+
+.vm-processing-scope .proc-error-message {
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 4px;
+  color: var(--fg);
+}
+
+.vm-processing-scope .proc-error-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.vm-processing-scope .proc-confirm {
+  padding: 20px 24px;
+}
+
+.vm-processing-scope .proc-confirm-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.vm-processing-scope .proc-confirm p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+
+.vm-processing-scope .proc-body {
+  padding: 38px 40px 14px;
+  text-align: center;
+}
+
+.vm-processing-scope .proc-body-title {
+  font-size: 19px;
+  font-weight: 700;
+  margin-bottom: 26px;
+  letter-spacing: normal;
+}
+
+.vm-processing-scope .proc-body-title-meta {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--ink-3);
+  margin-left: 8px;
+}
+
+.vm-processing-scope .proc-body-hint {
+  font-size: 13px;
+  color: var(--ink-4);
+  margin-top: 24px;
+  line-height: 1.5;
+}
+
+.vm-processing-scope .proc-advanced {
+  padding: 8px 24px 20px;
+}
+
+.vm-processing-scope .proc-advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-3);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.vm-processing-scope .proc-advanced-toggle:hover {
+  color: var(--fg);
+}
+
+.vm-processing-scope .proc-advanced-panel {
+  margin-top: 12px;
+}
+
+.vm-processing-scope .proc-error p {
+  font-size: 13px;
+  color: var(--mut);
+  margin-bottom: 20px;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.vm-processing-scope .proc-error .error-log {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--err);
+  background: var(--bgalt);
+  border-radius: 8px;
+  padding: 12px 16px;
+  text-align: left;
+  max-width: 500px;
+  margin: 0 auto 20px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ─── TasksCard ─── */
+.vm-processing-scope .tasklet {
+  display: flex;
+  gap: 10px;
+}
+
+.vm-processing-scope .tasklet:hover {
+  background: var(--bgalt) !important;
+}
+
+.vm-processing-scope .tl-thumb {
+  width: 56px;
+  aspect-ratio: 16/9;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--proc-dark-strong);
+}
+
+.vm-processing-scope .tl-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 900px) {
+  .vm-processing-scope .proc-wrap {
+    grid-template-columns: 1fr;
+  }
+
+  .vm-processing-scope .proc-hero {
+    flex-direction: column;
+  }
+
+  .vm-processing-scope .proc-hero .thumb {
+    width: 100%;
+  }
+
+  .vm-processing-scope .proc-topbar {
+    flex-wrap: wrap;
+  }
+
+  .vm-processing-scope .proc-top-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

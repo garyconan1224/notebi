@@ -1,0 +1,48 @@
+name: Bug Report
+description: Report a reproducible bug
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please provide enough detail to reproduce.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      placeholder: What went wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+        3. See error ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Error Output
+      description: Paste full error text if available
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: App Version
+      placeholder: e.g. 0.2.0
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: macOS + Python version

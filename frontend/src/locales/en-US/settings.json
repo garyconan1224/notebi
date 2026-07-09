@@ -1,0 +1,278 @@
+{
+  "about": {
+    "title": "About",
+    "subtitle": "Application info, version, and technology stack details",
+    "appName": "Nibi",
+    "appDescription": "A local-first multimedia analysis and creation blueprint tool",
+    "appSummary": "Nibi turns videos, image posts, audio, and text into structured notes, storyboards, and replicable creation blueprints.",
+    "projectName": "Project Name",
+    "versionNumber": "v0.3 BETA",
+    "appInfoTitle": "Application Info",
+    "appInfoDescription": "View core information and current running version of Nibi",
+    "versionLabel": "Version",
+    "statusLabel": "Status",
+    "statusActive": "Running",
+    "dependenciesTitle": "Technology Stack & Dependencies",
+    "dependenciesDescription": "Core frontend and backend frameworks and libraries",
+    "frontendStack": "Frontend Stack",
+    "backendStack": "Backend Stack",
+    "licenseTitle": "License & Open Source",
+    "licenseDescription": "Learn about licensing and access the source code",
+    "mitLicense": "MIT License",
+    "licenseText": "Nibi is licensed under the MIT License. You are free to use, modify, and distribute the software, but must retain the original copyright notice.",
+    "githubTitle": "GitHub Project",
+    "githubDescription": "View the project source code on GitHub, submit issues, or contribute code."
+  },
+  "layout": {
+    "backHome": "Back to Home",
+    "language": "Language",
+    "menu": {
+      "providers": "Providers",
+      "models": "Models",
+      "network": "Network",
+      "download": "Download",
+      "transcriber": "Transcriber",
+      "promptFormats": "Prompt Formats",
+      "screenshot": "Screenshot",
+      "monitor": "Monitor",
+      "about": "About"
+    }
+  },
+  "model": {
+    "fetchingModels": "Fetching model list from provider API…",
+    "fetchModelsFailed": "Failed to fetch models",
+    "fetchProvidersFailed": "Failed to load providers",
+    "loading": "Loading…",
+    "noModels": "This provider has no available models",
+    "noMatch": "No matching models",
+    "noMatchDesc": "Try adjusting the keyword or switching the capability filter",
+    "noProviders": "No providers found. Please add configuration in \"Provider Management\" first",
+    "refresh": "Refresh",
+    "refreshFailed": "Refresh failed",
+    "refreshModelsTitle": "Refresh model list",
+    "searchPlaceholder": "Search providers or models…",
+    "statusDisabled": "Disabled",
+    "statusEnabled": "Enabled",
+    "subtitle": "View models supported by each provider",
+    "title": "Model Management",
+    "filter": {
+      "all": "All",
+      "chat": "Chat",
+      "vision": "Vision"
+    },
+    "defaultText": {
+      "toggle": "Toggle default text model",
+      "set": "Set as default text model",
+      "active": "Current default text model (click again to clear)",
+      "saved": "Set as default text model",
+      "cleared": "Default text model cleared"
+    },
+    "defaultVision": {
+      "toggle": "Toggle default vision model",
+      "set": "Set as default vision model",
+      "active": "Current default vision model (click again to clear)",
+      "saved": "Set as default vision model",
+      "cleared": "Default vision model cleared"
+    }
+  },
+  "network": {
+    "title": "Network Settings",
+    "subtitle": "Configure global parameters for external network access and media download",
+    "saved": "Network configuration saved",
+    "proxyTitle": "Network Proxy Server",
+    "proxyDescription": "HTTP/SOCKS5 proxy for accessing overseas platforms. Leave empty for direct connection",
+    "proxyLabel": "Proxy Address",
+    "proxyPlaceholder": "Example: http://127.0.0.1:7890 or socks5://127.0.0.1:1080",
+    "proxySupport": "Supports http:// or socks5:// protocols, only effective during media fetching",
+    "poTokenSectionTitle": "PO Token",
+    "poTokenSectionDescription": "YouTube anti-bot credentials; leave empty to use defaults. Usually filled together with Visitor Data",
+    "poTokenLabel": "PO Token",
+    "poTokenPlaceholder": "YouTube PO Token (Optional)",
+    "visitorDataLabel": "Visitor Data",
+    "visitorDataPlaceholder": "YouTube Visitor Data (Optional)",
+    "cookieSectionTitle": "Cookie Directory",
+    "cookieSectionDescription": "yt-dlp scans the following absolute paths line by line for cookies.txt / bilibili_cookies.txt",
+    "cookieDirsLabel": "Cookie Files Directory",
+    "cookieDirsPlaceholder": "One absolute path per line, for example:\n/Users/you/cookies\n/data/cookies",
+    "cookieDirsDescription": "Leave empty to use built-in default directories. You can place cookies.txt or bilibili_cookies.txt in these directories"
+  },
+  "download": {
+    "title": "Download Settings",
+    "subtitle": "Configure storage path, filename template, network proxy and concurrency parameters for media downloads",
+    "saved": "Download configuration saved",
+    "saveFailed": "Failed to save download configuration",
+    "storageTitle": "Storage & Naming",
+    "storageDescription": "Configure storage location and naming rules for media files",
+    "outputDirLabel": "Output Directory",
+    "outputDirHint": "Leave empty to use default directory (data/videos/)",
+    "outputDirPlaceholder": "Example: /home/user/videos or D:\\downloads",
+    "filenameTemplateLabel": "Filename Template",
+    "filenameTemplateHint": "Use yt-dlp template syntax, such as %(title)s / %(id)s / %(uploader)s, etc.",
+    "filenameTemplatePlaceholder": "Example: %(title)s-%(id)s.%(ext)s",
+    "templatePreview": "Example preview",
+    "templatePresets": {
+      "titleOnly": "Title Only",
+      "titleId": "Title-ID",
+      "uploaderTitle": "Uploader-Title",
+      "playlistIndex": "Playlist Index-Title"
+    },
+    "networkTitle": "Network & Credentials",
+    "networkDescription": "Configure network proxy, YouTube credentials and cookie directories",
+    "proxyLabel": "HTTP/SOCKS Proxy",
+    "proxyHint": "Download-specific proxy; leave empty to use global proxy settings",
+    "proxyPlaceholder": "Example: http://127.0.0.1:7890",
+    "poTokenLabel": "PO Token",
+    "poTokenPlaceholder": "YouTube PO Token (Optional)",
+    "visitorDataLabel": "Visitor Data",
+    "visitorDataPlaceholder": "YouTube Visitor Data (Optional)",
+    "cookieDirsLabel": "Cookie Files Directory",
+    "cookieDirsHint": "yt-dlp scans following paths line by line for cookies.txt or bilibili_cookies.txt",
+    "cookieDirsPlaceholder": "One absolute path per line\n/Users/you/cookies\n/data/cookies",
+    "advancedTitle": "Advanced Parameters",
+    "advancedDescription": "Configure concurrency limit, retry count and timeout parameters",
+    "concurrencyLimitLabel": "Concurrent Downloads",
+    "concurrencyLimitHint": "Number of fragments downloaded simultaneously, range 1-8, default 2",
+    "retryCountLabel": "Retry Count",
+    "retryCountHint": "Number of retries on connection failure, range 0-10, default 3",
+    "socketTimeoutLabel": "Connection Timeout (seconds)",
+    "socketTimeoutHint": "Network connection timeout, range 5-300 seconds, default 30"
+  },
+  "screenshot": {
+    "title": "Video Screenshot",
+    "subtitle": "Configure default parameters for frame extraction, montage and vision understanding",
+    "saved": "Screenshot configuration saved",
+    "saveFailed": "Failed to save screenshot configuration",
+    "interval": {
+      "title": "Default Frame Interval",
+      "description": "How often (in seconds) to extract a key frame"
+    },
+    "grid": {
+      "title": "Grid Montage Size",
+      "description": "Select grid size. 3x3 is recommended for balanced performance and quality",
+      "totalFrames": "{{count}} frames total",
+      "invalid": "Grid size must be an integer between 1 and 10"
+    },
+    "quality": {
+      "title": "Image Quality",
+      "description": "Higher quality results in larger file sizes"
+    },
+    "embed": {
+      "title": "Auto Embed in Notes",
+      "description": "Whether to automatically include screenshot grids when generating notes"
+    }
+  },
+  "transcriber": {
+    "title": "Audio Transcription",
+    "subtitle": "Configure speech recognition engine and default parameters (ASR Provider)",
+    "saved": "Transcription settings saved",
+    "saveFailed": "Failed to save transcription settings",
+    "engine": {
+      "title": "Transcription Engine",
+      "description": "Select the engine to use for audio transcription",
+      "type": "Engine Type",
+      "modelSize": "Whisper Model",
+      "groqApiKey": "Groq API Key",
+      "badge": {
+        "local": "Local",
+        "online": "Online"
+      },
+      "description": {
+        "fastWhisper": "Free local transcription, fast but requires local resources, supports offline mode",
+        "bcut": "Bilibili's online service, no local resources needed, requires internet",
+        "kuaishou": "Kuaishou online service, no local resources needed, requires internet",
+        "groq": "Groq cloud service, fast and efficient, requires API Key",
+        "mlxWhisper": "Apple Silicon optimized version, only available for Mac chipsets"
+      },
+      "tosWarning": {
+        "bcut": "By using Bilibili's online service, your audio will be sent to Bilibili's servers for processing. Please ensure you have read and agreed to Bilibili's Terms of Service and Privacy Policy.",
+        "kuaishou": "By using Kuaishou's online service, your audio will be sent to Kuaishou's servers for processing. Please ensure you have read and agreed to Kuaishou's Terms of Service and Privacy Policy.",
+        "groq": "By using Groq's cloud service, your audio will be sent to Groq's servers for processing. Please ensure you have read and agreed to Groq's Terms of Service and Privacy Policy."
+      }
+    },
+    "initialPrompt": {
+      "title": "Initial Prompt",
+      "description": "Used to guide ASR recognition, e.g., technical terms, proper names",
+      "label": "Prompt",
+      "placeholder": "e.g., AI, transcript, technical terms (comma-separated)",
+      "hint": "Only effective with Faster Whisper engine"
+    },
+    "mlxNotAvailable": "MLX Whisper is only supported on macOS, automatically switched to Faster Whisper",
+    "language": {
+      "title": "Language",
+      "description": "Select target language or auto-detect",
+      "label": "Target Language"
+    },
+    "device": {
+      "title": "Compute Device",
+      "description": "Select compute device for transcription (CPU or GPU)",
+      "label": "Device"
+    }
+  },
+  "common": {
+    "save": "Save",
+    "saving": "Saving...",
+    "savSuccess": "Configuration saved successfully",
+    "cancel": "Cancel"
+  },
+  "shell": {
+    "tabs": {
+      "providers": "Providers",
+      "models": "Models",
+      "network": "Network",
+      "download": "Download",
+      "transcriber": "Transcriber",
+      "promptFormats": "Prompt Formats",
+      "screenshot": "Screenshot",
+      "about": "About"
+    },
+    "saveBar": {
+      "dirtyCount": "{{count}} unsaved change(s)",
+      "allSaved": "All changes saved",
+      "save": "Save",
+      "saving": "Saving...",
+      "reset": "Reset",
+      "export": "Export"
+    }
+  },
+  "dirty": {
+    "leaveConfirm": "You have unsaved changes. Leave anyway?",
+    "unsavedBadge": "Unsaved"
+  },
+  "providers": {
+    "apiKey": {
+      "label": "API Key",
+      "placeholder": "Leave empty to keep unchanged",
+      "hint": "Existing API keys are only overwritten when a non-empty value is submitted.",
+      "configured": "Configured",
+      "notConfigured": "Not configured"
+    },
+    "emptyState": {
+      "title": "No providers yet",
+      "description": "Click \"Add\" in the top right to connect OpenAI / Anthropic / Google / Ollama, etc.",
+      "action": "Add provider"
+    }
+  },
+  "monitor": {
+    "title": "Deployment Monitor",
+    "subtitle": "Live backend service status, system resource usage and runtime logs",
+    "status": {
+      "online": "Online",
+      "offline": "Offline"
+    },
+    "version": "Version",
+    "uptime": "Uptime",
+    "stats": {
+      "title": "System Metrics",
+      "description": "CPU / Memory / Disk usage (refreshed every 5 seconds)",
+      "cpu": "CPU Usage",
+      "cpuHint": "{{logical}} threads / {{physical}} physical cores",
+      "memory": "Memory Usage",
+      "disk": "Disk Usage"
+    },
+    "logs": {
+      "title": "Runtime Logs",
+      "description": "Recent backend task logs (virtual scrolling, up to 5000 lines)",
+      "empty": "No logs yet"
+    }
+  }
+}

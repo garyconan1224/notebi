@@ -1,0 +1,70 @@
+{
+  "actions": {
+    "delete": "Delete",
+    "testConnection": "Test Connection"
+  },
+  "delete": {
+    "cancel": "Cancel",
+    "confirm": "Delete",
+    "description": "This will remove the provider \"{{name}}\" from settings and cannot be undone. Any related default model selections will be cleared as well.",
+    "failed": "Failed to delete provider",
+    "successToast": "Provider \"{{name}}\" deleted",
+    "title": "Delete provider?"
+  },
+  "badge": {
+    "disabled": "Disabled",
+    "enabled": "Enabled"
+  },
+  "create": {
+    "apiKeyPlaceholder": "sk-...",
+    "baseUrlPlaceholder": "https://api.openai.com/v1",
+    "failed": "Failed to create provider",
+    "kindLabel": "Type",
+    "nameLabel": "Name *",
+    "namePlaceholder": "My provider",
+    "nameRequired": "Name is required",
+    "submit": "Create",
+    "successToast": "Provider \"{{name}}\" created",
+    "title": "Add Provider"
+  },
+  "form": {
+    "apiKey": "API Key",
+    "apiKeyPlaceholderEmpty": "Enter API Key",
+    "apiKeyPlaceholderSet": "Already set (leave blank to keep unchanged)",
+    "baseUrl": "Base URL",
+    "baseUrlPlaceholder": "https://api.example.com/v1",
+    "enabled": "Enabled",
+    "name": "Name",
+    "namePlaceholder": "Provider name"
+  },
+  "list": {
+    "addButton": "Add Provider",
+    "empty": "No providers yet. Click \"Add Provider\" to get started.",
+    "searchPlaceholder": "Search by name / type…"
+  },
+  "detail": {
+    "fetchFailed": "Failed to fetch provider details",
+    "emptyTitle": "Select a provider to view details",
+    "emptyDescription": "Choose any provider from the list on the left to edit, or click \"Add Provider\" to connect a new service.",
+    "sectionBasic": "Basic info",
+    "sectionAuth": "Authentication",
+    "sectionMeta": "Metadata",
+    "metaKind": "Kind",
+    "metaId": "ID",
+    "metaCapabilities": "Capabilities"
+  },
+  "page": {
+    "subtitle": "Configure and manage AI providers",
+    "title": "Providers"
+  },
+  "save": {
+    "failed": "Failed to save",
+    "success": "Saved"
+  },
+  "test": {
+    "failedDefault": "Connection failed",
+    "failedToast": "{{name}} connection failed: {{msg}}",
+    "successDefault": "Connection successful",
+    "successToast": "{{name}} connected"
+  }
+}

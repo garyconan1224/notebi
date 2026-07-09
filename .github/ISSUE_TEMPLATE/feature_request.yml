@@ -1,0 +1,28 @@
+name: Feature Request
+description: Suggest an idea for this project
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem are you trying to solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: Describe your preferred solution.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope / Impact
+      description: Which pages or modules are affected?

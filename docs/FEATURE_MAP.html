@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nibi 功能地图 · 重新编序版</title>
+<style>
+  :root{
+    --bg:#0f1115; --card:#171a21; --card2:#1d2129; --line:#2a2f3a;
+    --ink:#e8eaed; --ink2:#9aa0aa; --ink3:#6e7681;
+    --done:#3fb950; --next:#e3b341; --todo:#5a616e; --accent:#6ea8fe; --accent2:#a371f7;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:28px 22px 60px}
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:22px;font-weight:800;letter-spacing:.3px}
+  .sub{color:var(--ink2);font-size:12.5px;margin-top:4px}
+  .flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:18px 0 6px;padding:12px 14px;background:var(--card);border:1px solid var(--line);border-radius:12px}
+  .flow .step{padding:5px 11px;background:var(--card2);border:1px solid var(--line);border-radius:20px;font-size:12.5px;font-weight:600;white-space:nowrap}
+  .flow .arr{color:var(--ink3);font-size:13px}
+  .flow .step.future{opacity:.55;border-style:dashed}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin:14px 2px 20px;font-size:12.5px;color:var(--ink2)}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .dot.done{background:var(--done)} .dot.next{background:var(--next)} .dot.todo{background:var(--todo)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px}
+  .mod{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .mod-h{display:flex;align-items:center;gap:9px;padding:13px 15px;background:var(--card2);border-bottom:1px solid var(--line)}
+  .mod-h .ic{font-size:18px}
+  .mod-h .no{font-size:11px;font-weight:800;color:var(--bg);background:var(--accent);border-radius:6px;padding:2px 7px}
+  .mod-h .ti{font-size:15px;font-weight:700}
+  .mod-h .pct{margin-left:auto;font-size:11.5px;font-weight:700;color:var(--ink2)}
+  ul{list-style:none;padding:8px 8px 10px}
+  li{display:flex;gap:9px;align-items:flex-start;padding:6px 8px;border-radius:8px}
+  li:hover{background:var(--card2)}
+  li .d{flex-shrink:0;width:9px;height:9px;border-radius:50%;margin-top:6px}
+  li .d.done{background:var(--done)} li .d.next{background:var(--next)} li .d.todo{background:var(--todo)}
+  li .t{flex:1}
+  li .t b{font-weight:600}
+  li .ref{color:var(--ink3);font-size:11px;font-family:ui-monospace,monospace}
+  li.next .t b{color:var(--next)}
+  .tracks{margin-top:26px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .tracks h2{font-size:14px;margin-bottom:12px}
+  .bar{display:flex;align-items:center;gap:10px;margin:8px 0}
+  .bar .nm{width:120px;font-size:12.5px;color:var(--ink2)}
+  .bar .track{flex:1;height:9px;background:var(--card2);border-radius:6px;overflow:hidden}
+  .bar .fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+  .bar .vv{width:42px;text-align:right;font-size:12px;font-weight:700;color:var(--ink2)}
+  .foot{margin-top:24px;color:var(--ink3);font-size:11.5px;text-align:center}
+  .new{color:var(--next);font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🗺️ Nibi 功能地图 <span style="color:var(--accent2)">· 重新编序版</span></h1>
+  <div class="sub">把链接（视频/音频/图片/文章）做成笔记和知识库的本地创作工具 · 以 git 已合并为准 · 2026-06-04</div>
+
+  <!-- 主流程一条龙 -->
+  <div class="flow">
+    <span class="step">① 投入</span><span class="arr">→</span>
+    <span class="step">② 配置</span><span class="arr">→</span>
+    <span class="step">③ 处理</span><span class="arr">→</span>
+    <span class="step">④ 分析</span><span class="arr">→</span>
+    <span class="step">⑤ 成稿·笔记</span><span class="arr">→</span>
+    <span class="step">⑥ 知识库</span><span class="arr">→</span>
+    <span class="step future">⑦ 再创作（未来）</span>
+  </div>
+  <div class="legend">
+    <span><span class="dot done"></span>已完成（git 已合并 main）</span>
+    <span><span class="dot next"></span>下一步 / 进行中</span>
+    <span><span class="dot todo"></span>未做 / 搁置</span>
+    <span style="color:var(--ink3)">括号里 <span class="ref">N4 / RP1-B</span> 是历史编号，仅供对账</span>
+  </div>
+
+  <div class="grid">
+
+    <!-- 1 投入 -->
+    <div class="mod">
+      <div class="mod-h"><span class="no">1</span><span class="ic">📥</span><span class="ti">投入内容</span><span class="pct">✅ 95%</span></div>
+      <ul>
+        <li><span class="d done"></span><span class="t"><b>一个弹窗：粘链接 / 上传文件</b>（4 步合一）<span class="ref">N4·R2</span></span></li>
+        <li><span class="d done"></span><span class="t"><b>自动识别平台+类型</b> YouTube/B站/抖音/小红书/微信/快手 <span class="ref">R3·F4·K6</span></span></li>
+        <li><span class="d done"></span><span class="t"><b>1 链接 = 1 任务</b>（小红书多类型已收敛）<span class="ref">K-M6</span></span></li>
+        <li><span class="d done"></span><span class="t"><b>网页正文预览</b>（抓取后先看再入）<span class="ref">T2.2</span></span></li>
+        <li><span class="d todo"></span><span class="t"><b>首页输入框直接贴 URL</b>（暂跳过）<span class="ref">S0.8</span></span></li>
+      </ul>
+    </div>
+
+    <!-- 2 配置 -->
+    <div class="mod">
+      <div class="mod-h"><span class="no">2</span><span class="ic">⚙️</span><span class="ti">选择要做的分析</span><span class="pct">✅ 100%</span></div>
+      <ul>
+        <li><span class="d done"></span><span class="t"><b>Preflight 抽屉</b>：按内容类型勾要做哪些分析 <span class="ref">N5·R4·R8</span></span></li>
+        <li><span class="d done"></span><span class="t"><b>智能默认勾选 + 级联锁定</b> <span class="ref">R17</span></span></li>
+        <li><span class="d done"></span><span class="t"><b>分析范围</b>：视觉 / 音频 / 综合（av）<span class="ref">R18</span></span></li>
+        <li><span class="d done"></span><span class="t"><b>结果页内容由勾选决定</b>（未勾的留空态）</span></li>
+      </ul>
+    </div>
+
+    <!-- 3 处理 -->
+    <div class="mod">
+      <div class="mod-h"><span class="no">3</span><span class="ic">⏳</span><span class="ti">处理过程</span><span class="pct">✅ 90%</span></div>
+      <ul>
+        <li><span class="d done"></span><span class="t"><b>下载→转写→截帧→OCR 流水线</b> <span class="ref">1F·N7·N8·N9</span></span></li>
+        <li><span class="d done"></span><span class="t"><b>处理中页面</b>：进度/日志/封面/系统资源 <span class="ref">H3·R12·R13</span></span></li>
+        <li><span class="d done"></span><span class="t"><b>并行提速</b>：转写+截帧同跑 / VLM 多帧并发 <span class="ref">R22·R24·R25</span></span></li>
+        <li><span class="d todo"></span><span class="t"><b>本地 ASR</b>（fast-whisper）+ 失败弹窗 <span class="ref">R18.1</span></span></li>
+      </ul>
+    </div>
+
+    <!-- 4 分析 -->
+    <div class="mod">
+      <div class="mod-h"><span class="no">4</span><span class="ic">🔬</span><span class="ti">四类内容分析</span><span class="pct">~80%</span></div>
+      <ul>
+        <li><span class="d done"></span><span class="t">🎬 <b>视频</b>：镜头分析 / 字幕直接总结 / 类型模板 <span class="ref">N7·V</span></span></li>
+        <li><span class="d todo"></span><span class="t">🎬 视频路径3：<b>Gemini 直接看视频</b>（搁置待付费 API）<span class="ref">N7b-3</span></span></li>
+        <li><span class="d done"></span><span class="t">🎵 <b>音频</b>：转写 / VAD / 说话人 / 音乐 6 维 <span class="ref">N8·A</span></span></li>
+        <li><span class="d done"></span><span class="t">🖼 <b>图片</b>：OCR / EXIF / 4 联想 / 多图对比 / 批量 <span class="ref">N9·I1·I2</span></span></li>
+        <li><span class="d todo"></span><span class="t">🖼 图片 <b>风格 DNA</b> <span class="ref">I3</span></span></li>
+        <li><span class="d done"></span><span class="t">📝 <b>文字</b>：网页/PDF/微信抽取 / 改写翻译 / 多文对比 <span class="ref">N10·T2·T3</span></span></li>
+      </ul>
+    </div>
+
+    <!-- 5 成稿·笔记 -->
+    <div class="mod" style="grid-column:span 2;border-color:var(--next)">
+      <div class="mod-h" style="background:#241f15"><span class="no" style="background:var(--next)">5</span><span class="ic">📄</span><span class="ti">结果页 & 笔记三能力 <span class="new">← 你现在的主战场</span></span><span class="pct">部分</span></div>
+      <ul style="columns:2;column-gap:18px">
+        <li><span class="d done"></span><span class="t"><b>四类结果页</b> 视频/音频/图片/文字（设计稿 1:1）<span class="ref">H4·RP1</span></span></li>
+        <li><span class="d done"></span><span class="t"><b>学习笔记页(ln)</b>：双栏/字幕跟随/在线编辑/<b>AI问答抽屉</b>/截图插入/多格式导出 <span class="ref">RP1-B 全套</span></span></li>
+        <li><span class="d done"></span><span class="t"><b>视频复刻页</b>：主帧大图/缩略图轨/批量复刻包/提示词版本 <span class="ref">RP1-C</span></span></li>
+        <li><span class="d done"></span><span class="t"><b>纯文页</b>：原文+摘要+联想+改写翻译 / md·Obsidian 导出 <span class="ref">2C.2·K-M5</span></span></li>
+        <li><span class="d next"></span><span class="t"><b>纯文/图/音频页 对齐"笔记三能力"</b>（编辑+问答+导出，复用 ln 现成件）<span class="ref">新·M7</span></span></li>
+        <li><span class="d next"></span><span class="t"><b>两两合并</b>：图文 / 视频+文案 <span class="ref">新·M8</span></span></li>
+        <li><span class="d next"></span><span class="t"><b>全混合</b>：图+视频+文字 一篇笔记 <span class="ref">新·M9</span></span></li>
+        <li><span class="d todo"></span><span class="t"><b>PDF / Word 笔记导出</b>（写轻量 builder，依赖已装）<span class="ref">backlog</span></span></li>
+      </ul>
+    </div>
+
+    <!-- 6 知识库 -->
+    <div class="mod">
+      <div class="mod-h"><span class="no">6</span><span class="ic">📚</span><span class="ti">知识库（汇聚）</span><span class="pct">✅ 85%</span></div>
+      <ul>
+        <li><span class="d done"></span><span class="t"><b>工作空间 = 一个知识库</b> <span class="ref">K·3B</span></span></li>
+        <li><span class="d done"></span><span class="t"><b>14 种总结风格</b>（讲义/速览/口播/金句…）<span class="ref">K-M3</span></span></li>
+        <li><span class="d done"></span><span class="t"><b>跨笔记问答（RAG）</b> <span class="ref">K-M4·3B</span></span></li>
+        <li><span class="d done"></span><span class="t"><b>md / Obsidian 导出</b> <span class="ref">K-M5</span></span></li>
+        <li><span class="d todo"></span><span class="t"><b>问答联网增强</b>（web search 补充）<span class="ref">K4 设计未做</span></span></li>
+      </ul>
+    </div>
+
+    <!-- 7 再创作 -->
+    <div class="mod">
+      <div class="mod-h"><span class="no">7</span><span class="ic">🎨</span><span class="ti">再创作 / AI 导演</span><span class="pct">⬜ 10%</span></div>
+      <ul>
+        <li><span class="d done"></span><span class="t"><b>分镜页</b> Storyboard（markdown 展示）<span class="ref">H5</span></span></li>
+        <li><span class="d todo"></span><span class="t"><b>AI 导演</b>：改提示词生成新内容 / A·B 对比 / 风格 DNA 报告 <span class="ref">[C]</span></span></li>
+        <li><span class="d todo"></span><span class="t"><b>接生成 API</b>：可灵/即梦/MJ/Suno <span class="ref">[C]</span></span></li>
+      </ul>
+    </div>
+
+    <!-- 基础设施 -->
+    <div class="mod">
+      <div class="mod-h"><span class="no" style="background:var(--ink3)">＋</span><span class="ic">🧰</span><span class="ti">基础设施</span><span class="pct">✅</span></div>
+      <ul>
+        <li><span class="d done"></span><span class="t"><b>设置</b>：模型/渠道/性能档位/网络/下载/垃圾桶 <span class="ref">N3·R23</span></span></li>
+        <li><span class="d done"></span><span class="t"><b>资料库 Library</b> 聚合页 <span class="ref">L5</span></span></li>
+        <li><span class="d done"></span><span class="t"><b>标签库 7 维</b> + <b>收藏夹</b> <span class="ref">3C·2A</span></span></li>
+        <li><span class="d todo"></span><span class="t"><b>加密 / CI / 开源准备</b> <span class="ref">[D]</span></span></li>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- 六轨进度（沿用 ROADMAP 的能力维度视角） -->
+  <div class="tracks">
+    <h2>📊 能力维度进度（ROADMAP 6 轨视角，与上面 7 模块是同一批功能的两种切法）</h2>
+    <div class="bar"><span class="nm">F 全流程</span><span class="track"><span class="fill" style="width:85%"></span></span><span class="vv">85%</span></div>
+    <div class="bar"><span class="nm">V 视频</span><span class="track"><span class="fill" style="width:70%"></span></span><span class="vv">70%</span></div>
+    <div class="bar"><span class="nm">A 音频</span><span class="track"><span class="fill" style="width:80%"></span></span><span class="vv">80%</span></div>
+    <div class="bar"><span class="nm">T 文字</span><span class="track"><span class="fill" style="width:90%"></span></span><span class="vv">90%</span></div>
+    <div class="bar"><span class="nm">I 图片</span><span class="track"><span class="fill" style="width:80%"></span></span><span class="vv">80%</span></div>
+    <div class="bar"><span class="nm">R 复刻/导演</span><span class="track"><span class="fill" style="width:10%"></span></span><span class="vv">10%</span></div>
+  </div>
+
+  <div class="foot">事实来源：git log（已合并）+ EXECUTION_PLAN 打勾 + ROADMAP 进度。历史编号仅作对账锚点，不再用于沟通。</div>
+</div>
+</body>
+</html>

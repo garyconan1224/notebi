@@ -1,0 +1,73 @@
+
+__pycache__/
+!.env.example
+.claude/
+.claude/current-task.md
+.claude/worktrees/
+.codegraph/
+.DS_Store
+.env
+.env.*
+.local/
+.playwright-mcp/
+.pytest_cache/
+.venv/
+*.log
+*.pem
+*.pyc
+*.pyo
+*.sqlite*
+*.swp
+*.zip
+**/.env
+test-results/
+# CodeGraph Index
+# Design source archives (already extracted to docs/design/)
+# Frontend (Vite + React)
+# Local agent/tool instructions
+.codex/
+data/*.db
+data/chats/
+data/cookies/
+data/json_data/
+data/projects/
+data/videos/
+data/workspaces/
+frontend/.env
+frontend/.env.local
+frontend/.playwright-cli/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+product-builds/
+GEMINI.md
+local_settings.py
+node_modules/
+output/
+projects/
+runtime.log
+
+# Backend SQLite runtime db（运行时自动创建，不入仓）
+backend/vidmirror.db
+
+# ── 内部/本地专用，不进公开仓（本地保留）──
+# NoteBi 是本地接力仓库，保留本项目启动器与 AI 接力文档。
+*.command
+!启动 NoteBi.command
+!停止 NoteBi.command
+!start-notebi.command
+!stop-notebi.command
+.augment-guidelines
+docs/archive/
+docs/test-reports/
+docs/design/
+# 内部测试证据 / 路线 / 流程 / 计划状态
+docs/e2e-test/
+docs/roadmap/
+docs/flows/
+docs/COMPLETED_WORK.md
+docs/PROJECT_STATUS.md
+docs/EXECUTION_PLAN.md
+docs/OPEN_SOURCE_PREP_REPORT.md
+docs/ROADMAP.md
+docs/status-dashboard.html
+docs/test-urls.md

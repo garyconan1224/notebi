@@ -1,0 +1,70 @@
+{
+  "actions": {
+    "delete": "删除",
+    "testConnection": "测试连接"
+  },
+  "delete": {
+    "cancel": "取消",
+    "confirm": "删除",
+    "description": "此操作将从设置中移除提供商 \"{{name}}\"，无法撤销。关联的模型默认选择也会一并清理。",
+    "failed": "删除失败",
+    "successToast": "提供商 \"{{name}}\" 已删除",
+    "title": "删除提供商？"
+  },
+  "badge": {
+    "disabled": "已禁用",
+    "enabled": "已启用"
+  },
+  "create": {
+    "apiKeyPlaceholder": "sk-...",
+    "baseUrlPlaceholder": "https://api.openai.com/v1",
+    "failed": "创建失败",
+    "kindLabel": "类型",
+    "nameLabel": "名称 *",
+    "namePlaceholder": "我的提供商",
+    "nameRequired": "名称不能为空",
+    "submit": "创建",
+    "successToast": "提供商 \"{{name}}\" 已创建",
+    "title": "新增提供商"
+  },
+  "form": {
+    "apiKey": "API Key",
+    "apiKeyPlaceholderEmpty": "输入 API Key",
+    "apiKeyPlaceholderSet": "已设置（留空保持不变）",
+    "baseUrl": "Base URL",
+    "baseUrlPlaceholder": "https://api.example.com/v1",
+    "enabled": "启用",
+    "name": "名称",
+    "namePlaceholder": "提供商名称"
+  },
+  "list": {
+    "addButton": "新增提供商",
+    "empty": "暂无提供商，点击「新增提供商」开始配置",
+    "searchPlaceholder": "搜索名称 / 类型…"
+  },
+  "detail": {
+    "fetchFailed": "获取详情失败",
+    "emptyTitle": "选择一个提供商查看详情",
+    "emptyDescription": "从左侧列表选中任一提供商即可编辑；或点击「新增提供商」接入新服务。",
+    "sectionBasic": "基础信息",
+    "sectionAuth": "认证",
+    "sectionMeta": "元数据",
+    "metaKind": "类型",
+    "metaId": "ID",
+    "metaCapabilities": "能力"
+  },
+  "page": {
+    "subtitle": "配置和管理 AI 提供商",
+    "title": "提供商管理"
+  },
+  "save": {
+    "failed": "保存失败",
+    "success": "保存成功"
+  },
+  "test": {
+    "failedDefault": "连接失败",
+    "failedToast": "{{name}} 连接失败：{{msg}}",
+    "successDefault": "连接成功",
+    "successToast": "{{name}} 连接成功"
+  }
+}

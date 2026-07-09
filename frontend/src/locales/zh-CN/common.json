@@ -1,0 +1,20 @@
+{
+  "actions": {
+    "cancel": "取消",
+    "close": "关闭",
+    "confirm": "确认",
+    "create": "创建",
+    "refresh": "刷新",
+    "retry": "重试",
+    "save": "保存"
+  },
+  "form": {
+    "title": ""
+  },
+  "status": {
+    "failed": "失败",
+    "loading": "加载中…",
+    "success": "成功",
+    "unknownError": "未知错误"
+  }
+}

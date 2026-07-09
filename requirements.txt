@@ -1,0 +1,79 @@
+# Nibi — 本地优先内容创作蓝图工作台
+# 整合自：AI 导演编剧工作台、video-analyzer-new、YouTubeDownloader
+#
+# 安装：pip install -r requirements.txt
+# 系统依赖：ffmpeg（视频转码，需单独安装：brew install ffmpeg）
+
+# ── 后端依赖 ─────────────────────────────────────────────────
+python-dotenv>=1.0.0
+fastapi>=0.115.0
+uvicorn>=0.30.0
+pydantic>=2.8.0
+python-multipart>=0.0.9
+
+# ── HTTP 客户端与重试 ─────────────────────────────────────────
+requests>=2.31.0
+tenacity>=8.2.0
+httpx>=0.24.0
+
+# ── RAG 向量检索 ──────────────────────────────────────────────
+faiss-cpu>=1.7.4
+numpy>=1.24.0
+
+# ── 联网检索（DuckDuckGo）────────────────────────────────────
+duckduckgo-search>=6.0.0
+
+# ── 图像处理 ──────────────────────────────────────────────────
+Pillow>=10.0.0
+
+# ── 视频处理（OpenCV + 进度条 + AI 镜头检测）─────────────────────
+opencv-python>=4.9.0
+tqdm>=4.66.0
+scenedetect>=0.6.4  # N7: AI 镜头分析（PySceneDetect）
+
+# ── 视频下载（YouTube/B站）──────────────────────────────────────
+yt-dlp>=2024.1.0
+
+# ── 本地语音识别（ASR）───────────────────────────────────────────
+# faster-whisper 用于本地转录，规避外部 API 限流与网络依赖
+faster-whisper>=1.0.0
+# mlx-whisper：Apple Silicon 专用 ASR（M1/M2/M3），asr_router 自动检测可用性
+mlx-whisper>=0.4.0; platform_machine == "arm64" and sys_platform == "darwin"
+# opencc：繁体→简体中文转换（Whisper 中文输出后处理）
+opencc-python-reimplemented>=0.1.7
+
+# ── 音频分析（N8）──────────────────────────────────────────────
+silero-vad>=5.0    # VAD 人声活动检测（轻量，torch 后端）
+librosa>=0.10      # 音乐特征：BPM / 调性 / 能量曲线
+# pyannote.audio：说话人分离。**首次运行需 HF_TOKEN + 同意
+# pyannote/speaker-diarization-3.1 模型协议**。代码 graceful skip 缺包/缺 token
+pyannote.audio>=3.1
+ctranslate2>=4.0.0
+
+# ── 系统监控（部署监控页 M4）────────────────────────────────────
+# psutil 用于读取 CPU / 内存 / 磁盘使用率，驱动 /admin/system/stats
+psutil>=5.9.0
+
+# ── 文本输入层（Phase 2C.1：PDF / DOCX / 网页正文）─────────────
+# pypdf：纯 Python PDF 文本抽取（无 OCR；扫描件留给 Phase 3）
+# python-docx：Word .docx 解析
+# readability-lxml：Mozilla Readability 的 Python 移植，抽取网页正文
+pypdf>=4.0.0
+python-docx>=1.1.0
+python-pptx>=0.6.23
+readability-lxml>=0.8.1
+lxml>=5.0.0
+marker-pdf>=1.10.0  # N10: PDF → Markdown，保留图片+表格，扫描件 OCR
+
+# ── PDF 导出（R20）─────────────────────────────────────────────
+# playwright：HTML→PDF 渲染（需额外运行 playwright install chromium）
+playwright>=1.40.0
+# Jinja2：PDF 导出的 HTML 模板渲染（环境已有，显式声明直接依赖）
+Jinja2>=3.1.0
+
+# ── 测试 ──────────────────────────────────────────────────────
+pytest>=8.0.0
+
+# ── 下载器新增依赖（B站无Cookie）───────────────────────────────
+# tenacity>=8.2.0  # 重试机制（已有）
+# requests>=2.31.0 # HTTP客户端（已有）

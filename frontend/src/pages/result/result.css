@@ -1,0 +1,1187 @@
+/* VideoResultPage 组件样式（tokens 在 tokens.css） */
+
+.nibi-video-result-scope.vd-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.nibi-video-result-scope.vd-layout--replica {
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
+  background: var(--bg);
+}
+
+/* ─── Left: player + tracks ─── */
+.nibi-video-result-scope .vd-left {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.nibi-video-result-scope.vd-layout--replica .vd-left {
+  background: var(--bg);
+}
+
+.nibi-video-result-scope .vd-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--bdr);
+  flex-shrink: 0;
+  background: var(--srf);
+}
+
+.nibi-video-result-scope.vd-layout--replica .vd-nav {
+  padding: 12px 24px;
+}
+
+.nibi-video-result-scope .vd-nav .vd-title {
+  font-weight: 600;
+  font-size: 13px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nibi-video-result-scope .vd-nav .vd-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--bdr);
+  flex-shrink: 0;
+}
+
+.nibi-video-result-scope .vd-nav-btn {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.nibi-video-result-scope .vd-nav-btn--compact {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  gap: 4px;
+  border-color: var(--bdr);
+}
+
+.nibi-video-result-scope .vd-nav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.nibi-video-result-scope .vd-nav-spacer {
+  margin-left: auto;
+}
+
+.nibi-video-result-scope .vd-chip {
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.nibi-video-result-scope .vd-chip--demo {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--wrn);
+  color: var(--color-accent-fg);
+  font-weight: 700;
+}
+
+.nibi-video-result-scope .vd-beta {
+  font-size: 9px;
+  opacity: 0.6;
+}
+
+.nibi-video-result-scope .vd-dropdown-wrap {
+  position: relative;
+}
+
+.nibi-video-result-scope .vd-dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: 36px;
+  z-index: 50;
+  min-width: 140px;
+  padding: 4px 0;
+  border: 1px solid var(--bdr);
+  border-radius: var(--radius-base);
+  background: var(--srf);
+  box-shadow: var(--shadow-md);
+}
+
+.nibi-video-result-scope .vd-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 6px 14px;
+  border-radius: 0;
+  font-size: 12px;
+  text-align: left;
+}
+
+/* ── 学习/复刻 toggle ──────────────────────────── */
+.nibi-video-result-scope .vd-mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bgalt);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.nibi-video-result-scope .vd-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mut);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.nibi-video-result-scope .vd-mode-btn:hover {
+  color: var(--fg2);
+  background: var(--srf);
+}
+
+.nibi-video-result-scope .vd-mode-btn[data-active="true"] {
+  color: var(--fg);
+  background: var(--srf);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+
+/* ─── Video player ─── */
+.nibi-video-result-scope .vd-player-wrap {
+  padding: 14px 20px 10px;
+  flex-shrink: 0;
+}
+
+.nibi-video-result-scope .vd-player {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: pointer;
+  background: linear-gradient(135deg, var(--err), var(--acc));
+  aspect-ratio: 16/9;
+  max-height: 260px;
+}
+
+.nibi-video-result-scope .vd-player video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.nibi-video-result-scope .vd-player .vd-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 14px 16px;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.78) 0%, transparent);
+}
+
+.nibi-video-result-scope .vd-player .vd-overlay .vd-ov-meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.nibi-video-result-scope .vd-player .vd-overlay .vd-ov-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  margin-top: 2px;
+}
+
+.nibi-video-result-scope .vd-player .vd-overlay .vd-ov-sub {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 1px;
+}
+
+.nibi-video-result-scope .vd-player .vd-play-btn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.9);
+  display: grid;
+  place-items: center;
+  color: #000;
+}
+
+.nibi-video-result-scope .vd-player .vd-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.nibi-video-result-scope .vd-player .vd-progress .vd-progress-fill {
+  height: 100%;
+  background: var(--err);
+  transition: width 200ms linear;
+}
+
+.nibi-video-result-scope .vd-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+/* ─── Right: floating panel ─── */
+.nibi-video-result-scope .vd-right {
+  border-left: 1px solid var(--bdr);
+  display: flex;
+  flex-direction: column;
+  background: var(--srf);
+  overflow: hidden;
+}
+
+.nibi-video-result-scope.vd-layout--replica .vd-right {
+  border-left-color: var(--bdrs);
+  box-shadow: -12px 0 32px oklch(0% 0 0 / .06);
+}
+
+.nibi-video-result-scope .vd-frame-preview {
+  position: relative;
+  flex-shrink: 0;
+  aspect-ratio: 16/9;
+  background: linear-gradient(135deg, var(--acc), var(--acc));
+  overflow: hidden;
+}
+
+.nibi-video-result-scope.vd-layout--replica .vd-frame-preview,
+.nibi-video-result-scope.vd-layout--replica .vd-tags-strip {
+  display: none;
+}
+
+.nibi-video-result-scope .vd-frame-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.nibi-video-result-scope .vd-frame-preview .vd-frame-badge {
+  position: absolute;
+  bottom: 8px;
+  left: 10px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.55);
+  padding: 2px 7px;
+  border-radius: 5px;
+}
+
+.nibi-video-result-scope .vd-frame-preview .vd-frame-star {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+}
+
+.nibi-video-result-scope .vd-frame-info {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--bdr);
+  flex-shrink: 0;
+}
+
+.nibi-video-result-scope.vd-layout--replica .vd-frame-info {
+  padding: 22px 22px 16px;
+}
+
+.nibi-video-result-scope.vd-layout--replica .vd-frame-info .vd-fi-title {
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.nibi-video-result-scope .vd-frame-info .vd-fi-title {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.nibi-video-result-scope .vd-fi-title--editable {
+  cursor: pointer;
+}
+
+.nibi-video-result-scope .vd-inline-pencil {
+  opacity: 0.4;
+  vertical-align: middle;
+}
+
+.nibi-video-result-scope .vd-frame-info .vd-fi-sub {
+  font-size: 12px;
+  color: var(--mut);
+  margin-top: 2px;
+}
+
+.nibi-video-result-scope .vd-frame-info .vd-fi-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.nibi-video-result-scope .vd-tag {
+  font-size: 10px;
+}
+
+.nibi-video-result-scope .vd-title-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nibi-video-result-scope .vd-title-edit-input {
+  flex: 1;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--err);
+  border-radius: var(--radius-sm);
+  background: var(--srf);
+  color: var(--fg);
+  font-family: var(--display);
+  font-size: 13px;
+  outline: none;
+}
+
+/* ─── Prompt tabs ─── */
+.nibi-video-result-scope .vd-tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--bdr);
+  flex-shrink: 0;
+  background: var(--bgalt);
+}
+
+.nibi-video-result-scope.vd-layout--replica .vd-tabs-bar {
+  padding: 10px 18px;
+}
+
+.nibi-video-result-scope .vd-tabs-title {
+  flex: 1;
+}
+
+.nibi-video-result-scope .vd-tab-config {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--mut);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.nibi-video-result-scope .vd-tab-config:hover {
+  border-color: var(--bdrs);
+  color: var(--fg);
+}
+
+.nibi-video-result-scope .vd-tabs-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px 8px;
+  border-bottom: 1px solid var(--bdr);
+  flex-shrink: 0;
+  background: var(--bgalt);
+  overflow-x: auto;
+}
+
+.nibi-video-result-scope.vd-layout--replica .vd-tabs-row {
+  padding: 8px 18px 10px;
+}
+
+.nibi-video-result-scope .vd-tab-btn {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--mono);
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: transparent;
+  color: var(--mut);
+}
+
+.nibi-video-result-scope .vd-tab-btn[data-active='true'] {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+/* ─── Prompt area ─── */
+.nibi-video-result-scope .vd-prompt-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+}
+
+.nibi-video-result-scope.vd-layout--replica .vd-prompt-area {
+  padding: 16px 18px;
+}
+
+.nibi-video-result-scope .vd-prompt-text {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.72;
+  background: var(--bgalt);
+  padding: 12px 13px;
+  border-radius: 12px;
+  border: 1px solid var(--bdr);
+  color: var(--fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ─── Actions ─── */
+.nibi-video-result-scope .vd-actions {
+  padding: 10px 12px;
+  border-top: 1px solid var(--bdr);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex-shrink: 0;
+}
+
+.nibi-video-result-scope.vd-layout--replica .vd-actions {
+  padding: 14px 18px;
+}
+
+.nibi-video-result-scope .vd-summary-pane {
+  flex: 1;
+  overflow: hidden;
+}
+
+.nibi-video-result-scope .vd-prompt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.nibi-video-result-scope .vd-editor-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nibi-video-result-scope .vd-prompt-editor {
+  width: 100%;
+  min-height: 100px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--radius-sm);
+  background: var(--srf);
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+  outline: none;
+}
+
+.nibi-video-result-scope .vd-inline-actions,
+.nibi-video-result-scope .vd-frame-nav-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.nibi-video-result-scope .vd-inline-actions {
+  justify-content: flex-end;
+}
+
+.nibi-video-result-scope .vd-version-wrap {
+  margin-top: 14px;
+}
+
+.nibi-video-result-scope .vd-frame-nav-meta {
+  font-size: 10px;
+  color: var(--mut);
+}
+
+.nibi-video-result-scope .vd-btn-main {
+  width: 100%;
+  height: 36px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  cursor: pointer;
+  border: none;
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.nibi-video-result-scope .vd-btn-sub {
+  width: 100%;
+  height: 36px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  cursor: pointer;
+  border: 1px solid var(--bdr);
+  background: var(--bgalt);
+  color: var(--fg2);
+}
+
+.nibi-video-result-scope .vd-btn-sub[data-favored='true'] {
+  background: rgba(255, 184, 76, 0.12);
+  color: var(--wrn);
+}
+
+.nibi-video-result-scope .vd-frame-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.nibi-video-result-scope .vd-frame-nav-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid var(--bdr);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--fg2);
+}
+
+.nibi-video-result-scope .vd-frame-nav-btn:hover {
+  background: var(--bgalt);
+}
+
+/* ─── N7b 路径 1：字幕总结模式 ─── */
+
+.nibi-video-result-scope.vd-subtitle-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.nibi-video-result-scope .vd-subtitle-content {
+  flex: 1;
+  overflow: auto;
+  padding: 16px 20px;
+}
+
+.nibi-video-result-scope .vd-card {
+  background: var(--srf);
+  border: 1px solid var(--bdr);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.nibi-video-result-scope .vd-card:last-child {
+  margin-bottom: 0;
+}
+
+.nibi-video-result-scope .vd-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.nibi-video-result-scope .vd-card-head h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.nibi-video-result-scope .vd-summary-text {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.nibi-video-result-scope .vd-transcript-line {
+  display: flex;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--bdr);
+}
+
+.nibi-video-result-scope .vd-transcript-line:last-child {
+  border-bottom: none;
+}
+
+.nibi-video-result-scope .vd-transcript-ts {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--mut);
+  flex-shrink: 0;
+  min-width: 40px;
+}
+
+.nibi-video-result-scope .vd-transcript-text {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.nibi-video-result-scope .vd-insert-frame-btn {
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.5;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+
+.nibi-video-result-scope .vd-insert-frame-btn:hover {
+  opacity: 1;
+  border-color: var(--err);
+}
+
+.nibi-video-result-scope .vd-inline-frame {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 6px 52px;
+  border-bottom: 1px solid var(--bdr);
+}
+
+.nibi-video-result-scope .vd-inline-frame-img {
+  width: 120px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.nibi-video-result-scope .vd-inline-frame-ts {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--mut);
+}
+
+.nibi-video-result-scope .vd-inline-frame-del {
+  background: none;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--mut);
+  padding: 2px 6px;
+}
+
+.nibi-video-result-scope .vd-inline-frame-del:hover {
+  color: var(--err);
+}
+
+/* ═══════ C-1：主帧大图 + 缩略图轨道 + lightbox ═══════ */
+
+.nibi-video-result-scope .vd-main-frame-area {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 10px 20px 0;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.nibi-video-result-scope.vd-layout--replica .vd-main-frame-area {
+  padding: 18px 24px 0;
+}
+
+/* 主帧大图 */
+.nibi-video-result-scope .vd-main-frame {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--bgalt);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nibi-video-result-scope.vd-layout--replica .vd-main-frame {
+  border: 1px solid var(--bdr);
+  border-radius: var(--r);
+  background: color-mix(in oklch, var(--fg) 12%, var(--bg));
+  box-shadow: inset 0 0 0 1px oklch(100% 0 0 / .05);
+}
+
+.nibi-video-result-scope .vd-main-frame img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.nibi-video-result-scope .vd-main-frame-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--mut);
+  font-family: var(--display);
+  font-size: 16px;
+  text-align: center;
+  padding: 24px;
+  line-height: 1.5;
+}
+
+.nibi-video-result-scope .vd-frame-fallback-icon {
+  margin-bottom: 8px;
+  color: var(--mut);
+}
+
+.nibi-video-result-scope .vd-main-frame-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 10px 14px;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.72) 0%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nibi-video-result-scope.vd-layout--replica .vd-main-frame-info {
+  padding: 12px 16px;
+}
+
+.nibi-video-result-scope .vd-main-frame-info .mono {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.nibi-video-result-scope .vd-main-frame-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.nibi-video-result-scope .vd-main-frame-expand {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.85);
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.nibi-video-result-scope .vd-main-frame:hover .vd-main-frame-expand {
+  opacity: 1;
+}
+
+/* 缩略图轨道 */
+.nibi-video-result-scope .vd-thumb-track {
+  display: flex;
+  gap: 6px;
+  padding: 10px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--bdr) transparent;
+}
+
+.nibi-video-result-scope.vd-layout--replica .vd-thumb-track {
+  gap: 8px;
+  padding: 12px 0 14px;
+}
+
+.nibi-video-result-scope .vd-thumb-track::-webkit-scrollbar {
+  height: 4px;
+}
+
+.nibi-video-result-scope .vd-thumb-track::-webkit-scrollbar-thumb {
+  background: var(--bdr);
+  border-radius: 2px;
+}
+
+.nibi-video-result-scope .vd-thumb {
+  flex-shrink: 0;
+  width: 80px;
+  height: 60px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  background: var(--bgalt);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.nibi-video-result-scope.vd-layout--replica .vd-thumb {
+  width: 104px;
+  height: 68px;
+}
+
+.nibi-video-result-scope .vd-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.nibi-video-result-scope .vd-thumb-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  color: var(--mut);
+  font-family: var(--mono);
+}
+
+.nibi-video-result-scope .vd-thumb[data-active='true'] {
+  border-color: var(--err);
+  box-shadow: 0 0 0 1px var(--err), 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.nibi-video-result-scope .vd-thumb:hover:not([data-active='true']) {
+  border-color: var(--bdr);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* C-3: 帧多选样式 */
+.nibi-video-result-scope .vd-thumb[data-selected='true'] {
+  border-color: var(--accent-warm, #f59e0b);
+  box-shadow: 0 0 0 1px var(--accent-warm, #f59e0b);
+}
+
+.nibi-video-result-scope .vd-thumb-check {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 3px;
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 2;
+}
+
+.nibi-video-result-scope .vd-thumb:hover .vd-thumb-check,
+.nibi-video-result-scope .vd-thumb[data-selected='true'] .vd-thumb-check {
+  opacity: 1;
+}
+
+.nibi-video-result-scope .vd-thumb[data-selected='true'] .vd-thumb-check {
+  color: var(--accent-warm, #f59e0b);
+}
+
+.nibi-video-result-scope .vd-thumb {
+  position: relative;
+}
+
+.nibi-video-result-scope .vd-select-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  flex-shrink: 0;
+}
+
+.nibi-video-result-scope .vd-select-meta {
+  font-size: 11px;
+  color: var(--mut);
+}
+
+.nibi-video-result-scope .vd-select-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.nibi-video-result-scope .vd-btn-tool {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-family: var(--mono);
+  border: 1px solid var(--bdr);
+  background: transparent;
+  color: var(--mut);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.nibi-video-result-scope .vd-btn-tool:hover {
+  background: var(--bgalt);
+  color: var(--fg);
+}
+
+.nibi-video-result-scope .vd-btn-tool--danger {
+  border: none;
+  background: var(--err);
+  color: var(--color-accent-fg);
+}
+
+.nibi-video-result-scope .vd-btn-tool--danger:hover {
+  background: var(--color-error);
+  color: var(--color-accent-fg);
+}
+
+.nibi-video-result-scope .vd-btn-tool:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 视频播放器（缩小） */
+.nibi-video-result-scope .vd-player-mini-wrap {
+  flex-shrink: 0;
+  padding: 0 0 6px;
+}
+
+.nibi-video-result-scope .vd-player-mini-wrap--empty {
+  display: grid;
+  place-items: center;
+  padding: 8px 0;
+}
+
+.nibi-video-result-scope .vd-player-mini {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  background: linear-gradient(135deg, var(--err), var(--acc));
+  aspect-ratio: 16/9;
+  max-height: 100px;
+}
+
+.nibi-video-result-scope .vd-player-mini video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.nibi-video-result-scope .vd-player-empty,
+.nibi-video-result-scope .vd-frame-preview-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: oklch(100% 0 0 / 92%);
+  font-family: var(--display);
+  text-align: center;
+}
+
+.nibi-video-result-scope .vd-player-empty {
+  padding: 12px;
+  font-size: 14px;
+}
+
+.nibi-video-result-scope .vd-frame-preview-fallback {
+  padding: 16px;
+  font-size: 22px;
+}
+
+.nibi-video-result-scope .vd-play-btn-mini {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.85);
+  display: grid;
+  place-items: center;
+  color: #000;
+}
+
+.nibi-video-result-scope .vd-progress-mini {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.nibi-video-result-scope .vd-progress-mini-fill {
+  height: 100%;
+  background: var(--err);
+  transition: width 200ms linear;
+}
+
+.nibi-video-result-scope .vd-controls-mini {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.nibi-video-result-scope .vd-timecode,
+.nibi-video-result-scope .vd-muted {
+  color: var(--mut);
+}
+
+.nibi-video-result-scope .vd-timecode {
+  font-size: 10px;
+}
+
+.nibi-video-result-scope .vd-muted {
+  font-size: 11px;
+}
+
+.nibi-video-result-scope .vd-tags-strip {
+  flex-shrink: 0;
+  padding: 10px 20px 0;
+}
+
+/* Lightbox */
+.nibi-video-result-scope .vd-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.nibi-video-result-scope .vd-lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.12);
+  border: none;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  z-index: 101;
+  transition: background 0.15s;
+}
+
+.nibi-video-result-scope .vd-lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.nibi-video-result-scope .vd-lightbox-img {
+  max-width: 92vw;
+  max-height: 88vh;
+  object-fit: contain;
+  border-radius: 4px;
+  cursor: default;
+}
+
+.nibi-video-result-scope .vd-lightbox-info {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.55);
+  padding: 4px 14px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+/* ─── Open Design visual migration ─── */
+.nibi-video-result-scope {
+  background:
+    radial-gradient(circle at 92% 8%, rgba(255, 138, 54, 0.10), transparent 28%),
+    linear-gradient(180deg, #fbf8f3 0%, #f7f3ec 100%);
+}
+
+.nibi-video-result-scope .vd-nav {
+  background:
+    linear-gradient(135deg, rgba(255, 247, 234, 0.98), rgba(255, 255, 255, 0.86)) !important;
+  border-bottom: 1px solid rgba(25, 20, 16, 0.08) !important;
+}
+
+.nibi-video-result-scope .vd-title {
+  font-family: var(--fd);
+  font-size: clamp(24px, 2.8vw, 42px);
+  font-weight: 400;
+  color: var(--fg);
+}
+
+.nibi-video-result-scope .vd-left,
+.nibi-video-result-scope .vd-right,
+.nibi-video-result-scope .vd-subtitle-content {
+  background: transparent;
+}
+
+.nibi-video-result-scope .vd-main-frame,
+.nibi-video-result-scope .vd-frame-preview,
+.nibi-video-result-scope .vd-frame-info,
+.nibi-video-result-scope .vd-prompt-area,
+.nibi-video-result-scope .vd-card,
+.nibi-video-result-scope .vd-thumb,
+.nibi-video-result-scope .vd-player-mini,
+.nibi-video-result-scope .vd-dropdown-menu {
+  border-radius: 8px !important;
+  border-color: rgba(25, 20, 16, 0.08) !important;
+}
+
+.nibi-video-result-scope .vd-main-frame,
+.nibi-video-result-scope .vd-frame-info,
+.nibi-video-result-scope .vd-prompt-area,
+.nibi-video-result-scope .vd-card {
+  background: rgba(255, 255, 255, 0.80) !important;
+  box-shadow: 0 18px 42px rgba(36, 28, 18, 0.08);
+}

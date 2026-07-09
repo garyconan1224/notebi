@@ -1,0 +1,201 @@
+/* ═══════════════════════════════════════════════
+   Nibi Design Tokens — 唯一事实源
+   来源：Open Design 主原型 nibi-all-pages.html
+   ───────────────────────────────────────────────
+   命名规范：
+     短名 (--fd, --fb, ...) = 日常使用
+     长名 (--font-display, --color-bg, ...) = 语义解释
+   两者都暴露到 :root，业务代码优先用短名。
+   ═══════════════════════════════════════════════ */
+
+/* ── 得意黑 @font-face ── */
+@font-face {
+  font-family: 'Smiley Sans';
+  src: url('/fonts/SmileySans-Oblique.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* ── Typography ── */
+  --font-display: 'Smiley Sans', 'Noto Serif SC', Georgia, serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* ── Font sizes ── */
+  --text-xs:  0.6875rem;   /* 11px */
+  --text-sm:  0.8125rem;   /* 13px */
+  --text-base: 0.875rem;   /* 14px */
+  --text-lg:  1rem;        /* 16px */
+  --text-xl:  1.125rem;    /* 18px */
+  --text-2xl: 1.5rem;      /* 24px */
+  --text-3xl: 2rem;        /* 32px */
+
+  /* ── Color: surface & text ── */
+  --color-bg:        oklch(97.5% 0.003 80);
+  --color-bg-alt:    oklch(95.5% 0.005 75);
+  --color-surface:   oklch(100% 0 0);
+  --color-fg:        oklch(15% 0.012 70);
+  --color-fg-2:      oklch(40% 0.012 70);
+  --color-muted:     oklch(55% 0.01 70);
+  --color-border:    oklch(90% 0.005 80);
+  --color-border-s:  oklch(82% 0.008 80);
+  --color-sidebar:   oklch(95.5% 0.005 75);
+
+  /* ── Color: accent (amber 默认) ── */
+  --color-accent:        oklch(62% 0.20 55);
+  --color-accent-hover:  oklch(56% 0.22 55);
+  --color-accent-light:  oklch(95% 0.06 55);
+  --color-accent-fg:     oklch(100% 0 0);
+
+  /* ── Color: semantic ── */
+  --color-success:       oklch(58% 0.14 155);
+  --color-success-light: oklch(94% 0.04 155);
+  --color-warning:       oklch(70% 0.15 75);
+  --color-warning-light: oklch(95% 0.04 75);
+  --color-error:         oklch(56% 0.20 25);
+  --color-error-light:   oklch(94% 0.04 25);
+
+  /* ── Radius ── */
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-base: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-pill: 9999px;
+  --radius-full: 9999px;
+
+  /* ── Shadows ── */
+  --shadow-sm:    0 1px 4px oklch(0% 0 0 / .07);
+  --shadow-md:    0 6px 16px oklch(0% 0 0 / .10);
+  --shadow-lg:    0 10px 32px oklch(0% 0 0 / .14);
+  --shadow-focus: 0 0 0 3px var(--color-accent-light);
+
+  /* ── 短名别名（日常使用） ── */
+  --fd: var(--font-display);
+  --fb: var(--font-body);
+  --fm: var(--font-mono);
+  --xs: var(--text-xs);
+  --sm: var(--text-sm);
+  --base: var(--text-base);
+  --lg: var(--text-lg);
+  --xl: var(--text-xl);
+  --2xl: var(--text-2xl);
+  --3xl: var(--text-3xl);
+
+  --bg:    var(--color-bg);
+  --bgalt: var(--color-bg-alt);
+  --srf:   var(--color-surface);
+  --fg:    var(--color-fg);
+  --fg2:   var(--color-fg-2);
+  --mut:   var(--color-muted);
+  --bdr:   var(--color-border);
+  --bdrs:  var(--color-border-s);
+
+  --acc:   var(--color-accent);
+  --acch:  var(--color-accent-hover);
+  --accl:  var(--color-accent-light);
+  --accfg: var(--color-accent-fg);
+
+  --ok:   var(--color-success);
+  --okl:  var(--color-success-light);
+  --wrn:  var(--color-warning);
+  --wrnl: var(--color-warning-light);
+  --err:  var(--color-error);
+  --errl: var(--color-error-light);
+
+  --rs: var(--radius-sm);
+  --r:  var(--radius-base);
+  --rl: var(--radius-lg);
+  --rf: var(--radius-full);
+
+  --sh1: var(--shadow-sm);
+  --sh2: var(--shadow-md);
+  --sh3: var(--shadow-lg);
+  --shf: var(--shadow-focus);
+
+  /* ── 过渡层：旧业务 token 指向 Nibi（Goal 2+ 逐步移除） ── */
+  --vm-display: var(--fd);
+  --vm-sans:    var(--fb);
+  --vm-mono:    var(--fm);
+  --vm-accent:  var(--acc);
+
+  /* ── 过渡层：旧页面 token 指向 Nibi ── */
+  --display: var(--fd);
+  --sans:    var(--fb);
+  --mono:    var(--fm);
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --bg-elev:     var(--color-surface);
+  --bg-sunken:   var(--color-bg-alt);
+  --ink:         var(--color-fg);
+  --ink-2:       var(--color-fg-2);
+  --ink-3:       var(--color-muted);
+  --ink-4:       oklch(70% 0.008 70);
+  --line:        var(--color-border);
+  --line-strong: var(--color-border-s);
+  --accent-pink:  var(--color-accent);
+  --accent-2:     var(--color-accent);
+  --accent-purple: var(--color-accent);
+  --accent-3:     var(--color-accent);
+  --accent-blue:  var(--color-accent);
+  --accent-warm:  var(--color-warning);
+  --accent-amber: var(--color-warning);
+  --accent-green: var(--color-success);
+  --pill-bg: var(--color-fg);
+  --pill-ink: var(--color-bg);
+}
+
+/* ── 深色模式 ── */
+:root.dark {
+  --color-bg:        oklch(16% 0.006 70);
+  --color-bg-alt:    oklch(14% 0.005 70);
+  --color-surface:   oklch(20% 0.008 70);
+  --color-fg:        oklch(92% 0.004 70);
+  --color-fg-2:      oklch(68% 0.008 70);
+  --color-muted:     oklch(50% 0.008 70);
+  --color-border:    oklch(26% 0.006 70);
+  --color-border-s:  oklch(32% 0.008 70);
+  --color-sidebar:   oklch(14% 0.005 70);
+  --color-accent-light: oklch(22% 0.03 55);
+  --color-success:       oklch(68% 0.14 155);
+  --color-success-light: oklch(20% 0.04 155);
+  --color-warning:       oklch(78% 0.14 75);
+  --color-warning-light: oklch(22% 0.04 75);
+  --color-error:         oklch(66% 0.20 25);
+  --color-error-light:   oklch(22% 0.04 25);
+  --shadow-sm:    0 1px 2px oklch(0% 0 0 / .2);
+  --shadow-md:    0 4px 12px oklch(0% 0 0 / .3);
+  --shadow-lg:    0 8px 24px oklch(0% 0 0 / .4);
+
+  /* ── 深色过渡层：旧 token 也指向 Nibi ── */
+  --ink-4: oklch(45% 0.008 70);
+}
+
+/* ── 主题变体：sage / terra / lavender ── */
+:root[data-accent="sage"] {
+  --color-accent:       oklch(52% 0.12 155);
+  --color-accent-hover: oklch(46% 0.14 155);
+  --color-accent-light: oklch(94% 0.04 155);
+}
+:root[data-accent="terra"] {
+  --color-accent:       oklch(56% 0.14 35);
+  --color-accent-hover: oklch(50% 0.16 35);
+  --color-accent-light: oklch(94% 0.03 35);
+}
+:root[data-accent="lavender"] {
+  --color-accent:       oklch(58% 0.14 295);
+  --color-accent-hover: oklch(52% 0.16 295);
+  --color-accent-light: oklch(94% 0.03 295);
+}
+
+:root.dark[data-accent="sage"]     { --color-accent-light: oklch(20% 0.03 155); }
+:root.dark[data-accent="terra"]    { --color-accent-light: oklch(22% 0.03 35); }
+:root.dark[data-accent="lavender"] { --color-accent-light: oklch(22% 0.03 295); }

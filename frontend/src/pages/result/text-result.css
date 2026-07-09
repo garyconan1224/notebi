@@ -1,0 +1,618 @@
+/* TextResultPage 组件样式（tokens 在 tokens.css） */
+
+.vm-text-scope.tx-layout {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ─── Left: original text ─── */
+.vm-text-scope .tx-left {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.vm-text-scope .tx-content-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+.vm-text-scope .tx-content-body {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--ink-2);
+}
+
+.vm-text-scope .tx-para {
+  white-space: pre-wrap;
+  margin-bottom: 1em;
+}
+.vm-text-scope .tx-para:last-child {
+  margin-bottom: 0;
+}
+.vm-text-scope .tx-para[data-highlight='true'] {
+  animation: tx-highlight-fade 2s ease-out;
+}
+
+@keyframes tx-highlight-fade {
+  0%   { background: rgba(99, 102, 241, 0.18); border-radius: 6px; }
+  100% { background: transparent; }
+}
+
+/* T1.1: char 级高亮标记 */
+.vm-text-scope .tx-char-hl {
+  background: rgba(99, 102, 241, 0.22);
+  border-radius: 3px;
+  padding: 1px 0;
+  animation: tx-char-hl-fade 3s ease-out forwards;
+}
+
+@keyframes tx-char-hl-fade {
+  0%   { background: rgba(99, 102, 241, 0.22); }
+  70%  { background: rgba(99, 102, 241, 0.12); }
+  100% { background: transparent; }
+}
+
+/* ─── Right: analysis panel ─── */
+.vm-text-scope .tx-right {
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elev);
+  overflow: hidden;
+}
+
+.vm-text-scope .tx-right-header {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+  background: var(--bg-sunken);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.vm-text-scope .tx-compare-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.vm-text-scope .tx-right-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+}
+/* 问答 tab：由 NoteChatDrawer 内部管理滚动，禁用外层滚动 */
+.vm-text-scope .tx-right-scroll[data-tab="chat"] {
+  overflow: hidden;
+  padding: 0;
+}
+
+/* T2: 编辑模式 textarea */
+.vm-text-scope .tx-edit-textarea {
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--ink-2);
+  background: var(--bg-elev);
+  padding: 0;
+  font-family: var(--sans);
+}
+
+/* T2: 保存状态指示 */
+.tx-save-status {
+  font-size: 11px;
+  color: var(--ink-3);
+  font-family: var(--mono);
+}
+.tx-save-status[data-state="saving"] {
+  color: var(--accent-3);
+}
+.tx-save-status[data-state="saved"] {
+  color: var(--accent-green);
+}
+.tx-save-status[data-state="error"] {
+  color: var(--accent);
+}
+
+/* ─── Summary ─── */
+.vm-text-scope .tx-summary-text {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+
+/* T1.1: Key Points list */
+.vm-text-scope .tx-kp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vm-text-scope .tx-kp-item {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
+.vm-text-scope .tx-kp-item[data-clickable='true'] {
+  cursor: pointer;
+  transition: background 150ms, border-color 150ms;
+}
+.vm-text-scope .tx-kp-item[data-clickable='true']:hover {
+  background: rgba(99, 102, 241, 0.06);
+  border-color: var(--accent-pink);
+}
+
+.vm-text-scope .tx-kp-num {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-4);
+  padding-top: 2px;
+  flex-shrink: 0;
+}
+
+.vm-text-scope .tx-kp-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.vm-text-scope .tx-kp-text {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.vm-text-scope .tx-kp-excerpt {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--ink-3);
+  background: var(--bg-sunken);
+  border-radius: 6px;
+  padding: 5px 8px;
+  line-height: 1.5;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.vm-text-scope .tx-kp-excerpt-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-4);
+  flex-shrink: 0;
+}
+
+.vm-text-scope .tx-kp-pos {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--accent-pink);
+  background: rgba(99, 102, 241, 0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* T1.1: Golden Quotes list */
+.vm-text-scope .tx-gq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vm-text-scope .tx-gq-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vm-text-scope .tx-gq-item[data-clickable='true'] {
+  cursor: pointer;
+}
+.vm-text-scope .tx-gq-item[data-clickable='true']:hover .tx-gq-text {
+  border-left-color: var(--accent-2);
+}
+
+.vm-text-scope .tx-gq-text {
+  margin: 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--accent-pink);
+  background: var(--bg-sunken);
+  border-radius: 0 10px 10px 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--ink);
+  font-style: italic;
+}
+
+.vm-text-scope .tx-gq-pos {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--accent-pink);
+  background: rgba(99, 102, 241, 0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+  align-self: flex-end;
+}
+
+/* ─── Collapsible section ─── */
+.vm-text-scope .tx-collapse-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 6px;
+}
+
+.vm-text-scope .tx-section-body {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+
+.vm-text-scope .tx-section-item {
+  margin-bottom: 8px;
+}
+
+.vm-text-scope .tx-section-item-label {
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-bottom: 2px;
+}
+
+.vm-text-scope .tx-section-item-text {
+  white-space: pre-wrap;
+}
+
+/* ─── T1.2: Paragraph alignment view ─── */
+.vm-text-scope .tx-align-container {
+  margin-top: 6px;
+}
+
+.vm-text-scope .tx-align-mismatch-banner {
+  font-size: 11px;
+  color: var(--accent-warm);
+  background: rgba(255, 184, 76, 0.1);
+  border: 1px solid rgba(255, 184, 76, 0.25);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+}
+
+.vm-text-scope .tx-align-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.vm-text-scope .tx-align-idx {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-4);
+  padding-top: 16px;
+  flex-shrink: 0;
+  width: 18px;
+  text-align: right;
+}
+
+.vm-text-scope .tx-align-cols {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.vm-text-scope .tx-align-cell {
+  position: relative;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px 28px;
+  min-height: 48px;
+}
+
+.vm-text-scope .tx-align-cell-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--ink-4);
+  text-transform: uppercase;
+  letter-spacing: normal;
+  margin-bottom: 4px;
+}
+
+.vm-text-scope .tx-align-cell-text {
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--ink-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.vm-text-scope .tx-align-orig {
+  border-left: 2px solid var(--line);
+}
+
+.vm-text-scope .tx-align-result {
+  border-left: 2px solid var(--accent-pink);
+}
+
+.vm-text-scope .tx-align-missing {
+  color: var(--ink-4);
+  font-style: italic;
+  font-size: 11px;
+}
+
+.vm-text-scope .tx-align-copy {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg-elev);
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: color 120ms, border-color 120ms;
+}
+
+.vm-text-scope .tx-align-copy:hover {
+  color: var(--accent-pink);
+  border-color: var(--accent-pink);
+}
+
+/* ─── Meta info ─── */
+.vm-text-scope .tx-meta-body {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--ink-2);
+}
+
+/* ─── Action bar ─── */
+.vm-text-scope .tx-actions {
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex-shrink: 0;
+}
+
+.vm-text-scope .tx-btn-sub {
+  width: 100%;
+  height: 36px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--bg-sunken);
+  color: var(--ink-2);
+}
+
+.vm-text-scope .tx-btn-sub[data-favored='true'] {
+  background: rgba(255, 184, 76, 0.12);
+  color: var(--accent-warm);
+  border-color: transparent;
+}
+
+/* ─── Compare modal ─── */
+.vm-text-scope .tx-compare-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.5);
+  display: grid;
+  place-items: center;
+}
+
+.vm-text-scope .tx-compare-panel {
+  background: var(--bg);
+  border-radius: 12px;
+  width: 80vw;
+  max-width: 900px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+
+.vm-text-scope .tx-compare-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.vm-text-scope .tx-compare-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.vm-text-scope .tx-compare-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--ink-3);
+}
+
+.vm-text-scope .tx-compare-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.vm-text-scope .tx-compare-status {
+  text-align: center;
+  color: var(--ink-3);
+  padding: 40px;
+}
+
+.vm-text-scope .tx-compare-status[data-error='true'] {
+  color: var(--accent-pink);
+}
+
+.vm-text-scope .tx-compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-bottom: 16px;
+}
+
+.vm-text-scope .tx-compare-table thead tr {
+  border-bottom: 2px solid var(--line);
+}
+
+.vm-text-scope .tx-compare-table th {
+  text-align: left;
+  padding: 8px 6px;
+  color: var(--ink-3);
+}
+
+.vm-text-scope .tx-compare-table tbody tr {
+  border-bottom: 1px solid var(--line);
+}
+
+.vm-text-scope .tx-compare-table tbody tr[data-current='true'] {
+  background: rgba(99, 102, 241, 0.06);
+}
+
+.vm-text-scope .tx-compare-table td {
+  padding: 8px 6px;
+}
+
+.vm-text-scope .tx-compare-table td.name-cell {
+  font-weight: 400;
+}
+
+.vm-text-scope .tx-compare-table td.name-cell[data-current='true'] {
+  font-weight: 600;
+}
+
+.vm-text-scope .tx-compare-table td.summary-cell {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vm-text-scope .tx-compare-summary {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-2);
+  white-space: pre-wrap;
+}
+
+/* ── M5: 导出菜单 ──────────────────────────── */
+.vm-text-scope .tx-export-menu-wrapper {
+  position: relative;
+}
+
+.vm-text-scope .tx-export-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 160px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  padding: 4px;
+}
+
+.vm-text-scope .tx-export-menu button {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s;
+}
+
+.vm-text-scope .tx-export-menu button:hover {
+  background: var(--bg-sunken);
+}
+
+/* ─── Open Design visual migration ─── */
+.vm-text-scope {
+  background:
+    radial-gradient(circle at 92% 8%, rgba(148, 163, 184, 0.12), transparent 28%),
+    linear-gradient(180deg, #fbf8f3 0%, #f7f3ec 100%);
+}
+
+.vm-text-scope .vd-nav {
+  background:
+    linear-gradient(135deg, rgba(242, 244, 246, 0.98), rgba(255, 255, 255, 0.86)) !important;
+  border-bottom: 1px solid rgba(25, 20, 16, 0.08) !important;
+}
+
+.vm-text-scope .vd-title {
+  font-family: var(--fd);
+  font-size: clamp(24px, 2.8vw, 42px);
+  font-weight: 400;
+  color: var(--fg);
+}
+
+.vm-text-scope .tx-left,
+.vm-text-scope .tx-right {
+  background: transparent;
+}
+
+.vm-text-scope .tx-content-scroll,
+.vm-text-scope .tx-right-scroll,
+.vm-text-scope .im-section,
+.vm-text-scope .tx-export-menu,
+.vm-text-scope .tx-compare-panel {
+  border-radius: 8px !important;
+  border-color: rgba(25, 20, 16, 0.08) !important;
+  background: rgba(255, 255, 255, 0.80) !important;
+}
+
+.vm-text-scope .tx-right-header,
+.vm-text-scope .tx-actions {
+  background: rgba(255, 255, 255, 0.72);
+}

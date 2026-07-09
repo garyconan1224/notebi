@@ -1,0 +1,86 @@
+/* NoteChatDrawer 共用样式（ln drawer 模式 + text inline 模式共用） */
+/* 设计 token 参见 docs/DESIGN_TOKENS.md */
+
+.note-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.note-chat-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.note-chat-scope-hint {
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--ink-3);
+  background: var(--bg-sunken);
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+}
+
+.note-chat-messages {
+  flex: 1;
+  overflow: hidden;
+}
+.note-chat-messages-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+.note-chat-empty {
+  margin-top: 32px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-4);
+}
+
+.note-chat-bubble-row {
+  display: flex;
+  justify-content: flex-start;
+}
+.note-chat-bubble-row.note-chat-bubble-user {
+  justify-content: flex-end;
+}
+.note-chat-bubble {
+  max-width: 85%;
+  white-space: pre-wrap;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.note-chat-bubble-user-bg {
+  background: var(--accent-2);
+  color: #fff;
+}
+.note-chat-bubble-assistant-bg {
+  background: var(--bg-sunken);
+  color: var(--ink);
+}
+.note-chat-bubble-pending {
+  opacity: 0.85;
+}
+
+.note-chat-input-area {
+  border-top: 1px solid var(--line);
+  padding: 8px;
+}
+.note-chat-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.note-chat-textarea {
+  flex: 1;
+  resize: none;
+  font-size: 13px;
+}

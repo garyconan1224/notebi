@@ -1,0 +1,100 @@
+/* 结果页局部 token 映射层。
+   将原型 video_detail.jsx 的 --accent / --bg-elev / --ink / --line 等命名
+   映射到 Nibi 全局 token，不再使用旧显示字体或硬编码 hex。 */
+
+.nibi-video-result-scope {
+  --accent:       var(--color-accent);
+  --accent-2:     var(--color-accent);
+  --accent-3:     var(--color-accent);
+  --accent-warm:  var(--color-warning);
+  --accent-green: var(--color-success);
+
+  --bg:        var(--color-bg);
+  --bg-elev:   var(--color-surface);
+  --bg-sunken: var(--color-bg-alt);
+  --ink:    var(--color-fg);
+  --ink-2:  var(--color-fg-2);
+  --ink-3:  var(--color-muted);
+  --ink-4:  oklch(70% 0.008 70);
+  --line:        var(--color-border);
+  --line-strong: var(--color-border-s);
+
+  --mono:    var(--font-mono);
+  --display: var(--font-display);
+
+  color: var(--color-fg);
+  background: var(--color-bg);
+  font-family: var(--font-body);
+}
+
+.nibi-video-result-scope .eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.nibi-video-result-scope .mono {
+  font-family: var(--font-mono);
+}
+
+.nibi-video-result-scope .kw {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-alt);
+  color: var(--color-fg-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.nibi-video-result-scope .tr-line {
+  display: flex;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: var(--radius-base);
+  cursor: pointer;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--color-fg-2);
+  transition: background 120ms;
+}
+.nibi-video-result-scope .tr-line:hover {
+  background: var(--color-bg-alt);
+}
+.nibi-video-result-scope .tr-line[data-active='true'] {
+  background: var(--color-bg-alt);
+  color: var(--color-fg);
+  font-weight: 600;
+}
+.nibi-video-result-scope .tr-line .ts {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  flex-shrink: 0;
+  margin-top: 3px;
+  min-width: 38px;
+}
+.nibi-video-result-scope .tr-line[data-active='true'] .ts {
+  color: var(--color-accent);
+}
+.nibi-video-result-scope .tr-line .txt {
+  flex: 1;
+  word-break: break-word;
+}
+
+.nibi-video-result-scope .btn-ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-fg-2);
+  cursor: pointer;
+  border-radius: var(--radius-base);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.nibi-video-result-scope .btn-ghost:hover {
+  background: var(--color-bg-alt);
+}

@@ -1,0 +1,320 @@
+"""Phase 3B.2/3B.3：workspace 语义检索服务。
+
+- search_one_workspace：单工作空间检索（3B.2）
+- search_across_workspaces：跨工作空间合并 + reranker 精排（3B.3）
+
+返回结构与 plan §Q4 SearchSource 字段约定一致。
+"""
+
+from __future__ import annotations
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+from backend.app.services.workspace_knowledge import (
+    SourceMap,
+    build_or_load_workspace_index,
+)
+from backend.app.services.workspace_store import WorkspaceStore, normalize_workspace_kinds
+from shared.knowledge_base import (
+    LongKnowledge,
+    ShortKnowledge,
+    VideoChunk,
+    retrieve_with_sources,
+)
+from shared.sf_client import SiliconFlowError, rerank_documents
+from shared.settings_store import load_settings
+from shared.runtime_llm_config import (
+    get_embedding_model_for_rag,
+    get_openai_compat_api_key,
+    get_reranker_model_for_rag,
+)
+from src.vidmirror.core.providers import ChatRequest
+from src.vidmirror.core.providers.registry import create_default_registry
+
+
+_EXCERPT_LIMIT = 200
+
+
+def _excerpt(text: str, limit: int = _EXCERPT_LIMIT) -> str:
+    if not text:
+        return ""
+    s = text.strip().replace("\n", " ")
+    return s if len(s) <= limit else s[: limit - 1] + "…"
+
+
+def _jump_url(workspace_id: str, item_id: str, item_type: str) -> str:
+    """SearchSource.jump_url：与前端路由 /workspaces/{ws}/items/{id}/<type>_result 对齐。"""
+    type_seg = (item_type or "video").lower()
+    suffix_map = {
+        "video": "video_result",
+        "image": "image_result",
+        "audio": "audio_result",
+        "text": "text_result",
+    }
+    return f"/workspaces/{workspace_id}/items/{item_id}/{suffix_map.get(type_seg, 'video_result')}"
+
+
+def _resolve_api_key(api_key: Optional[str]) -> str:
+    if api_key and api_key.strip():
+        return api_key.strip()
+    settings = load_settings()
+    eff = str(getattr(settings, "openai_api_key", "") or "").strip()
+    if not eff:
+        eff = get_openai_compat_api_key(settings)
+    if not eff:
+        raise ValueError("RAG search requires an openai-compatible api key")
+    return eff
+
+
+def _source_from_short(workspace_id: str, workspace_name: str) -> Dict[str, Any]:
+    """ShortKnowledge 模式下没有 chunk，做一个占位 source。"""
+    return {
+        "workspace_id": workspace_id,
+        "workspace_name": workspace_name,
+        "item_id": "",
+        "item_type": "text",
+        "item_title": workspace_name,
+        "chunk_excerpt": "",
+        "score": 0.0,
+        "jump_url": f"/workspaces/{workspace_id}",
+    }
+
+
+def _build_source(
+    raw: Dict[str, Any],
+    source_map: SourceMap,
+    workspace_id_fallback: str,
+    workspace_name_fallback: str,
+) -> Dict[str, Any]:
+    info = source_map.get(str(raw.get("source_file") or "")) or {}
+    wid = info.get("workspace_id") or workspace_id_fallback
+    return {
+        "workspace_id": wid,
+        "workspace_name": info.get("workspace_name") or workspace_name_fallback,
+        "item_id": info.get("item_id") or "",
+        "item_type": info.get("item_type") or "video",
+        "item_title": info.get("item_title") or raw.get("title") or "",
+        "chunk_excerpt": _excerpt(str(raw.get("skeleton_text") or "")),
+        "score": float(raw.get("score") or 0.0),
+        "jump_url": _jump_url(
+            wid,
+            info.get("item_id") or "",
+            info.get("item_type") or "video",
+        ),
+    }
+
+
+def _llm_answer(query: str, context: str) -> str:
+    settings = load_settings()
+    registry = create_default_registry()
+    profile = registry.resolve_default_profile(settings, "chat")
+    provider = registry.build(profile)
+    model = profile.default_models.get("chat") or settings.text_model
+    if not model:
+        raise ValueError("default chat model is not configured")
+    return provider.chat(
+        ChatRequest(
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful RAG assistant. Cite evidence by source index like [1], [2].",
+                },
+                {
+                    "role": "user",
+                    "content": f"Question:\n{query}\n\nContext:\n{context}\n\n请用中文作答，并在引用证据时标注 [1][2] 等。",
+                },
+            ],
+            temperature=0.2,
+            max_tokens=2048,
+        )
+    )
+
+
+def search_one_workspace(
+    *,
+    workspace_id: str,
+    query: str,
+    top_k: int = 5,
+    api_key: Optional[str] = None,
+    store: Optional[WorkspaceStore] = None,
+    task_store: Any = None,
+) -> Dict[str, Any]:
+    """单 workspace 检索。返回 {answer, sources[]}。"""
+    if not query or not query.strip():
+        raise ValueError("query is required")
+
+    eff_key = _resolve_api_key(api_key)
+    store = store or WorkspaceStore()
+    settings = load_settings()
+    embedding_model = get_embedding_model_for_rag(settings)
+    rec = store.get(workspace_id)
+    if rec is None:
+        raise KeyError(f"workspace not found: {workspace_id}")
+
+    knowledge, source_map = build_or_load_workspace_index(
+        workspace_id, eff_key, embedding_model=embedding_model, store=store, task_store=task_store
+    )
+
+    sources_out: List[Dict[str, Any]] = []
+    context_parts: List[str] = []
+
+    if isinstance(knowledge, LongKnowledge):
+        raws = list(retrieve_with_sources(eff_key, knowledge, query))
+        raws = raws[:top_k]
+        for i, r in enumerate(raws):
+            s = _build_source(r, source_map, workspace_id, rec.name)
+            sources_out.append(s)
+            context_parts.append(
+                f"[{i+1}] {s['item_title']} ({s['item_type']})\n"
+                f"{str(r.get('skeleton_text') or '')[:3000]}"
+            )
+    else:
+        assert isinstance(knowledge, ShortKnowledge)
+        sources_out.append(_source_from_short(workspace_id, rec.name))
+        context_parts.append(knowledge.combined_json_text[:12000])
+
+    answer = _llm_answer(query, "\n\n".join(context_parts))
+    return {"answer": answer, "sources": sources_out}
+
+
+def _retrieve_one(
+    *,
+    workspace_id: str,
+    query: str,
+    api_key: str,
+    per_ws_top_k: int,
+    store: WorkspaceStore,
+    task_store: Any = None,
+) -> Tuple[List[Dict[str, Any]], List[VideoChunk], SourceMap, str, str]:
+    """跨空间检索单 worker：返回 (raw_sources, chunks_for_rerank, source_map, ws_id, ws_name)。"""
+    rec = store.get(workspace_id)
+    if rec is None:
+        return [], [], {}, workspace_id, ""
+    try:
+        embedding_model = get_embedding_model_for_rag(load_settings())
+        knowledge, source_map = build_or_load_workspace_index(
+            workspace_id, api_key, embedding_model=embedding_model, store=store, task_store=task_store
+        )
+    except ValueError:
+        return [], [], {}, workspace_id, rec.name
+    if not isinstance(knowledge, LongKnowledge):
+        # short 模式：拿合并文本占位
+        assert isinstance(knowledge, ShortKnowledge)
+        return (
+            [
+                {
+                    "skeleton_text": knowledge.combined_json_text[:5000],
+                    "source_file": "",
+                    "title": rec.name,
+                    "score": 0.0,
+                }
+            ],
+            [],
+            source_map,
+            workspace_id,
+            rec.name,
+        )
+    raws = list(retrieve_with_sources(api_key, knowledge, query))[:per_ws_top_k]
+    return raws, list(knowledge.chunks), source_map, workspace_id, rec.name
+
+
+def search_across_workspaces(
+    *,
+    query: str,
+    top_k: int = 10,
+    workspace_ids: Optional[List[str]] = None,
+    kinds: Optional[Iterable[str]] = None,
+    api_key: Optional[str] = None,
+    store: Optional[WorkspaceStore] = None,
+    task_store: Any = None,
+) -> Dict[str, Any]:
+    """跨工作空间检索。workspace_ids 为空 → 全部。"""
+    if not query or not query.strip():
+        raise ValueError("query is required")
+    eff_key = _resolve_api_key(api_key)
+    store = store or WorkspaceStore()
+    settings = load_settings()
+    rerank_model = get_reranker_model_for_rag(settings)
+    kind_filter = normalize_workspace_kinds(kinds)
+
+    if workspace_ids:
+        # 校验存在性，避免静默忽略
+        missing = [wid for wid in workspace_ids if store.get(wid) is None]
+        if missing:
+            raise KeyError(f"workspace(s) not found: {','.join(missing)}")
+        target_ids = list(dict.fromkeys(workspace_ids))
+    else:
+        target_ids = [r.workspace_id for r in store.list_all(kinds=kind_filter)]
+
+    if kind_filter is not None and target_ids:
+        allowed_ids = {r.workspace_id for r in store.list_all(kinds=kind_filter)}
+        target_ids = [wid for wid in target_ids if wid in allowed_ids]
+
+    if not target_ids:
+        return {"answer": "（暂无工作空间）", "sources": []}
+
+    per_ws_top_k = max(top_k, 5)
+    pool_raws: List[Tuple[Dict[str, Any], SourceMap, str, str]] = []
+
+    with ThreadPoolExecutor(max_workers=min(4, len(target_ids))) as pool:
+        futures = [
+            pool.submit(
+                _retrieve_one,
+                workspace_id=wid,
+                query=query,
+                api_key=eff_key,
+                per_ws_top_k=per_ws_top_k,
+                store=store,
+                task_store=task_store,
+            )
+            for wid in target_ids
+        ]
+        for fut in as_completed(futures):
+            try:
+                raws, _chunks, smap, wid, wname = fut.result()
+            except Exception:
+                continue
+            for r in raws:
+                pool_raws.append((r, smap, wid, wname))
+
+    if not pool_raws:
+        return {"answer": "（未在选定工作空间中找到相关内容）", "sources": []}
+
+    # reranker 二次精排（合并 score 量纲不一致问题）
+    docs = [str(r.get("skeleton_text") or "")[:3000] for r, *_ in pool_raws]
+    try:
+        rr = rerank_documents(eff_key, rerank_model, query, docs, top_n=top_k)
+        order = [(int(item.get("index", -1)), float(item.get("relevance_score", 0.0))) for item in rr]
+    except SiliconFlowError:
+        # 降级：按原始 score 排序
+        order = sorted(
+            [(i, float(pool_raws[i][0].get("score") or 0.0)) for i in range(len(pool_raws))],
+            key=lambda x: x[1],
+            reverse=True,
+        )[:top_k]
+
+    sources_out: List[Dict[str, Any]] = []
+    context_parts: List[str] = []
+    for ord_idx, (i, score) in enumerate(order[:top_k]):
+        if not (0 <= i < len(pool_raws)):
+            continue
+        raw, smap, wid, wname = pool_raws[i]
+        raw_with_score = dict(raw)
+        raw_with_score["score"] = score
+        s = _build_source(raw_with_score, smap, wid, wname)
+        sources_out.append(s)
+        context_parts.append(
+            f"[{ord_idx+1}] [{s['workspace_name']}] {s['item_title']} ({s['item_type']})\n"
+            f"{str(raw.get('skeleton_text') or '')[:2500]}"
+        )
+
+    answer = _llm_answer(query, "\n\n".join(context_parts))
+    return {"answer": answer, "sources": sources_out}
+
+
+__all__ = [
+    "search_one_workspace",
+    "search_across_workspaces",
+]

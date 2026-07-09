@@ -1,0 +1,451 @@
+/* ImageResultPage 组件样式（tokens 在 tokens.css） */
+
+.vm-image-scope .im-layout {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ─── Left: image viewer ─── */
+.vm-image-scope .im-left {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.vm-image-scope .im-viewer {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow: auto;
+  background: var(--bg-sunken);
+}
+
+.vm-image-scope .im-viewer img {
+  max-width: 100%;
+  max-height: 80vh;
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* ─── Right: analysis panel ─── */
+.vm-image-scope .im-right {
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elev);
+  overflow: hidden;
+}
+
+.vm-image-scope .im-section {
+  margin-bottom: 14px;
+}
+
+.vm-image-scope .im-kv {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.vm-image-scope .im-kv .im-kv-label {
+  color: var(--ink-4);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.vm-image-scope .im-kv .im-kv-value {
+  color: var(--ink-2);
+}
+
+/* ─── Scrollable content ─── */
+.vm-image-scope .im-content-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+}
+
+/* ─── Prompt text ─── */
+.vm-image-scope .im-prompt-text {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.72;
+  background: var(--bg-sunken);
+  padding: 12px 13px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-bottom: 14px;
+}
+
+/* ─── Section blocks ─── */
+.vm-image-scope .im-section-label {
+  margin-bottom: 6px;
+}
+
+.vm-image-scope .im-section-body {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.vm-image-scope .im-ocr-block {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  background: var(--bg-sunken);
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  white-space: pre-wrap;
+}
+
+.vm-image-scope .im-tags-wrap {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.vm-image-scope .im-assoc-dir {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-3);
+  margin-bottom: 2px;
+}
+
+.vm-image-scope .im-assoc-text {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.vm-image-scope .im-assoc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vm-image-scope .im-exif-body {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--ink-2);
+}
+
+/* ─── Action bar ─── */
+.vm-image-scope .im-actions {
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex-shrink: 0;
+}
+
+.vm-image-scope .im-btn-main {
+  width: 100%;
+  height: 36px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  cursor: pointer;
+  border: none;
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.vm-image-scope .im-btn-sub {
+  width: 100%;
+  height: 36px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--bg-sunken);
+  color: var(--ink-2);
+}
+
+.vm-image-scope .im-btn-sub[data-favored='true'] {
+  background: rgba(255, 184, 76, 0.12);
+  color: var(--accent-warm);
+  border-color: transparent;
+}
+
+.vm-image-scope .im-shortcut-hint {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-4);
+  text-align: center;
+}
+
+/* ─── Settings button ─── */
+.vm-image-scope .im-settings-btn {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-family: var(--mono);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ─── Format picker dialog ─── */
+.vm-image-scope .im-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 50;
+  display: grid;
+  place-items: center;
+}
+
+.vm-image-scope .im-picker-panel {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px;
+  width: 420px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vm-image-scope .im-picker-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.vm-image-scope .im-picker-hint {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+.vm-image-scope .im-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+
+.vm-image-scope .im-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.vm-image-scope .im-picker-item[data-selected='true'] {
+  border: 2px solid var(--accent-pink);
+  background: var(--accl);
+}
+
+.vm-image-scope .im-picker-check {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1.5px solid var(--ink-4);
+  background: transparent;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.vm-image-scope .im-picker-item[data-selected='true'] .im-picker-check {
+  border: none;
+  background: var(--accent-pink);
+}
+
+.vm-image-scope .im-picker-fmt-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.vm-image-scope .im-picker-fmt-desc {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 1px;
+}
+
+.vm-image-scope .im-picker-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.vm-image-scope .im-picker-cancel {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  cursor: pointer;
+}
+
+.vm-image-scope .im-picker-confirm {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  background: var(--ink);
+  color: var(--bg);
+  cursor: pointer;
+}
+
+/* ─── Compare dialog ─── */
+.vm-image-scope .im-compare-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.vm-image-scope .im-compare-panel {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px;
+  width: 100%;
+  max-width: 720px;
+  max-height: 80vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.vm-image-scope .im-compare-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.vm-image-scope .im-compare-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.vm-image-scope .im-compare-close {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  border: 1px solid var(--line);
+  background: transparent;
+  cursor: pointer;
+}
+
+.vm-image-scope .im-compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.vm-image-scope .im-compare-table th {
+  text-align: left;
+  padding: 6px 8px;
+  color: var(--ink-3);
+  font-weight: 600;
+  border-bottom: 1px solid var(--line);
+}
+
+.vm-image-scope .im-compare-table th.col-current {
+  color: var(--accent-warm);
+}
+
+.vm-image-scope .im-compare-table td {
+  padding: 6px 8px;
+  color: var(--ink-2);
+}
+
+.vm-image-scope .im-compare-table td.label-cell {
+  font-weight: 600;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.vm-image-scope .im-compare-summary {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-2);
+  white-space: pre-wrap;
+}
+
+.vm-image-scope .im-compare-empty {
+  font-size: 13px;
+  color: var(--ink-3);
+  text-align: center;
+  padding: 20px;
+}
+
+/* ─── Open Design visual migration ─── */
+.vm-image-scope {
+  background:
+    radial-gradient(circle at 92% 8%, rgba(168, 85, 247, 0.10), transparent 28%),
+    linear-gradient(180deg, #fbf8f3 0%, #f7f3ec 100%);
+}
+
+.vm-image-scope .vd-nav {
+  background:
+    linear-gradient(135deg, rgba(242, 238, 255, 0.96), rgba(255, 255, 255, 0.86)) !important;
+  border-bottom: 1px solid rgba(25, 20, 16, 0.08) !important;
+}
+
+.vm-image-scope .vd-title {
+  font-family: var(--fd);
+  font-size: clamp(24px, 2.8vw, 42px);
+  font-weight: 400;
+  color: var(--fg);
+}
+
+.vm-image-scope .im-left,
+.vm-image-scope .im-right {
+  background: transparent;
+}
+
+.vm-image-scope .im-viewer,
+.vm-image-scope .im-content-scroll,
+.vm-image-scope .im-section,
+.vm-image-scope .im-compare-panel {
+  border-radius: 8px !important;
+  border-color: rgba(25, 20, 16, 0.08) !important;
+  background: rgba(255, 255, 255, 0.80) !important;
+}
+
+.vm-image-scope .vd-tabs-bar {
+  background: rgba(255, 255, 255, 0.72);
+}

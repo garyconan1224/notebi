@@ -1,0 +1,217 @@
+/* NewSummaryModal 样式（仿 FramePickerModal 风格） */
+
+.nsm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.nsm-modal {
+  background: var(--bg);
+  border-radius: 10px;
+  width: 90vw;
+  max-width: 520px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.nsm-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.nsm-title {
+  font-size: 14px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.nsm-close {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--ink-3);
+  padding: 4px;
+}
+
+.nsm-body {
+  flex: 1;
+  overflow: auto;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.nsm-section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-3);
+  margin-bottom: 8px;
+}
+
+.nsm-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.nsm-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  cursor: pointer;
+  transition: border-color 0.15s;
+  text-align: left;
+}
+
+.nsm-card:hover {
+  border-color: var(--accent-pink);
+}
+
+.nsm-card.active {
+  border-color: var(--accent-pink);
+  box-shadow: 0 0 0 1px var(--accent-pink);
+}
+
+.nsm-card-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.nsm-card-desc {
+  font-size: 11px;
+  color: var(--ink-3);
+  line-height: 1.3;
+}
+
+.nsm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nsm-select {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--line-strong);
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.nsm-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  font-size: 13px;
+  resize: vertical;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+/* ── 模型选择 + 联网开关 ────────────────────────────── */
+
+.nsm-field-label {
+  font-size: 12px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  min-width: 80px;
+}
+
+.nsm-input {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--line-strong);
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.nsm-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.nsm-toggle-row input[type="checkbox"] {
+  accent-color: var(--accent-pink);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.nsm-toggle-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.nsm-toggle-hint {
+  font-size: 11px;
+  color: var(--ink-4);
+}
+
+/* ── 模型双下拉 ────────────────────────────────────── */
+
+.nsm-model-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.nsm-footer {
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.nsm-btn-cancel,
+.nsm-btn-confirm {
+  font-size: 12px;
+  padding: 6px 16px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.nsm-btn-cancel {
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.nsm-btn-confirm {
+  border: none;
+  background: var(--accent-pink);
+  color: #fff;
+  font-weight: 600;
+}
+
+.nsm-btn-confirm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

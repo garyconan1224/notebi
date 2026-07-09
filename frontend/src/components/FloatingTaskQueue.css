@@ -1,0 +1,11 @@
+/* FloatingTaskQueue — R10.1 动画 keyframes，对齐 p1_features.jsx §11.3 */
+
+@keyframes proc-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+
+@keyframes ks-menu-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}

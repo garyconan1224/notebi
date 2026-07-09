@@ -1,0 +1,20 @@
+{
+  "actions": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "confirm": "Confirm",
+    "create": "Create",
+    "refresh": "Refresh",
+    "retry": "Retry",
+    "save": "Save"
+  },
+  "form": {
+    "title": "form.title"
+  },
+  "status": {
+    "failed": "Failed",
+    "loading": "Loading…",
+    "success": "Success",
+    "unknownError": "Unknown error"
+  }
+}

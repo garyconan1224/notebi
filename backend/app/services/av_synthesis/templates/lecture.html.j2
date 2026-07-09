@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>{{ ctx.title }}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    color: #111;
+    background: #fff;
+    line-height: 1.7;
+    padding: 40px 48px;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 28px; margin-bottom: 8px; color: #111; }
+  .meta { color: #6b6b6b; font-size: 14px; margin-bottom: 24px; }
+  .cover { width: 100%; max-height: 360px; object-fit: cover; border-radius: 8px; margin-bottom: 24px; }
+
+  h2 {
+    font-size: 20px;
+    margin-top: 32px;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #d75a00;
+    color: #111;
+  }
+  h3 { font-size: 16px; margin-top: 20px; margin-bottom: 8px; color: #3a3a3a; }
+
+  p { margin-bottom: 10px; }
+
+  blockquote {
+    border-left: 3px solid #d75a00;
+    padding: 8px 16px;
+    margin: 12px 0;
+    background: #f6f5f0;
+    color: #3a3a3a;
+    font-size: 14px;
+    border-radius: 0 4px 4px 0;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th {
+    background: #f6f5f0;
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 2px solid rgba(0,0,0,0.08);
+    font-weight: 600;
+  }
+  td {
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(0,0,0,0.08);
+    vertical-align: top;
+  }
+  td img { max-width: 120px; max-height: 80px; border-radius: 4px; }
+
+  .chapter { margin-bottom: 24px; page-break-inside: avoid; }
+  .chapter-img { max-width: 100%; max-height: 240px; border-radius: 6px; margin: 8px 0; }
+  .highlights { color: #d75a00; font-weight: 600; }
+
+  .gallery-img { max-width: 120px; max-height: 80px; border-radius: 4px; }
+
+  .transcript-section {
+    background: #f6f5f0;
+    border-radius: 6px;
+    padding: 16px;
+    margin: 16px 0;
+    font-size: 13px;
+    white-space: pre-wrap;
+    line-height: 1.8;
+    max-height: 400px;
+    overflow: hidden;
+  }
+
+  .footer {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(0,0,0,0.08);
+    color: #a0a0a0;
+    font-size: 12px;
+    text-align: center;
+  }
+
+  @media print {
+    body { padding: 24px; }
+    .chapter { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<h1>{{ ctx.title }}</h1>
+<div class="meta">{{ ctx.platform }} · {{ ctx.author }} · {{ ctx.duration_display }} · {{ ctx.date_added }}</div>
+
+{% if ctx.cover_data_uri %}
+<img class="cover" src="{{ ctx.cover_data_uri }}" alt="封面">
+{% endif %}
+
+<h2>全局摘要</h2>
+<p>{{ ctx.summary }}</p>
+
+{% if ctx.gallery_rows %}
+<h2>关键帧画廊</h2>
+<table>
+  <thead>
+    <tr><th>时刻</th><th>画面</th><th>场景描述</th></tr>
+  </thead>
+  <tbody>
+    {% for row in ctx.gallery_rows %}
+    <tr>
+      <td>{{ row.timestamp_display }}</td>
+      <td>{% if row.image_data_uri %}<img class="gallery-img" src="{{ row.image_data_uri }}" alt="{{ row.timestamp_display }}">{% else %}-{% endif %}</td>
+      <td>{{ row.scene_description }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if ctx.chapters %}
+<h2>章节正文</h2>
+{% for ch in ctx.chapters %}
+<div class="chapter">
+  <h3>{{ loop.index }}. {{ ch.title }}（{{ ch.time_range }}）</h3>
+  {% if ch.frame_data_uri %}
+  <img class="chapter-img" src="{{ ch.frame_data_uri }}" alt="{{ ch.title }}">
+  {% endif %}
+  {% if ch.transcript_excerpt %}
+  <blockquote>{{ ch.transcript_excerpt }}</blockquote>
+  {% endif %}
+  {% if ch.highlights %}
+  <p class="highlights">重点：{{ ch.highlights }}</p>
+  {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+
+{% if ctx.full_transcript %}
+<h2>字幕原文</h2>
+<div class="transcript-section">{{ ctx.full_transcript }}</div>
+{% endif %}
+
+{% if ctx.final_synthesis %}
+<h2>最终综合</h2>
+<p>{{ ctx.final_synthesis }}</p>
+{% endif %}
+
+<div class="footer">由 Nibi 生成 · {{ ctx.date_added }}</div>
+
+</body>
+</html>

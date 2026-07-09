@@ -1,0 +1,278 @@
+{
+  "about": {
+    "title": "关于",
+    "subtitle": "应用信息、版本号与技术栈详情",
+    "appName": "Nibi",
+    "appDescription": "本地优先的多媒体内容分析与创作蓝图工具",
+    "appSummary": "Nibi 可以把视频、图文、音频和文字素材整理成结构化笔记、分镜与可复刻的创作蓝图。",
+    "projectName": "项目名称",
+    "versionNumber": "v0.3 BETA",
+    "appInfoTitle": "应用信息",
+    "appInfoDescription": "查看 Nibi 的核心信息与当前运行版本",
+    "versionLabel": "版本",
+    "statusLabel": "状态",
+    "statusActive": "运行中",
+    "dependenciesTitle": "技术栈与依赖",
+    "dependenciesDescription": "列出核心前端与后端框架及库",
+    "frontendStack": "前端技术栈",
+    "backendStack": "后端技术栈",
+    "licenseTitle": "许可证与开源",
+    "licenseDescription": "了解许可证信息与项目源代码",
+    "mitLicense": "MIT License",
+    "licenseText": "Nibi 采用 MIT License 开源协议。你可以自由使用、修改和分发该软件，但需保留原作者版权声明。",
+    "githubTitle": "GitHub 项目",
+    "githubDescription": "在 GitHub 上查看项目源代码、提交 Issue 或贡献代码。"
+  },
+  "layout": {
+    "backHome": "返回首页",
+    "language": "语言",
+    "menu": {
+      "providers": "提供商",
+      "models": "模型",
+      "network": "网络",
+      "download": "下载",
+      "transcriber": "转写",
+      "promptFormats": "提示词格式",
+      "screenshot": "截图",
+      "monitor": "监控",
+      "about": "关于"
+    }
+  },
+  "model": {
+    "fetchingModels": "正在从提供商接口获取模型列表…",
+    "fetchModelsFailed": "获取模型列表失败",
+    "fetchProvidersFailed": "加载提供商失败",
+    "loading": "加载中…",
+    "noModels": "该提供商暂无可用模型",
+    "noMatch": "没有匹配的模型",
+    "noMatchDesc": "尝试调整关键字或切换 Capability 过滤",
+    "noProviders": "暂无提供商，请先在「提供商管理」中添加配置",
+    "refresh": "刷新",
+    "refreshFailed": "刷新失败",
+    "refreshModelsTitle": "刷新模型列表",
+    "searchPlaceholder": "搜索 provider 或 model…",
+    "statusDisabled": "已禁用",
+    "statusEnabled": "已启用",
+    "subtitle": "查看各提供商支持的模型列表",
+    "title": "模型管理",
+    "filter": {
+      "all": "全部",
+      "chat": "文本对话",
+      "vision": "视觉理解"
+    },
+    "defaultText": {
+      "toggle": "切换默认文本模型",
+      "set": "设为默认文本模型",
+      "active": "当前默认文本模型（再次点击取消）",
+      "saved": "已设为默认文本模型",
+      "cleared": "已清除默认文本模型"
+    },
+    "defaultVision": {
+      "toggle": "切换默认视觉模型",
+      "set": "设为默认视觉模型",
+      "active": "当前默认视觉模型（再次点击取消）",
+      "saved": "已设为默认视觉模型",
+      "cleared": "已清除默认视觉模型"
+    }
+  },
+  "network": {
+    "title": "网络设置",
+    "subtitle": "配置外网访问与媒体下载相关的全局参数",
+    "saved": "网络配置已保存",
+    "proxyTitle": "网络代理服务器",
+    "proxyDescription": "访问海外平台时的网络代理；留空表示直连",
+    "proxyLabel": "代理地址",
+    "proxyPlaceholder": "示例：http://127.0.0.1:7890 或 socks5://127.0.0.1:1080",
+    "proxySupport": "支持 http:// 或 socks5:// 协议，仅在媒体抓取阶段生效",
+    "poTokenSectionTitle": "PO Token",
+    "poTokenSectionDescription": "YouTube 风控凭据；留空即使用默认策略，通常与 Visitor Data 成对填写",
+    "poTokenLabel": "PO Token",
+    "poTokenPlaceholder": "YouTube PO Token（可选）",
+    "visitorDataLabel": "Visitor Data",
+    "visitorDataPlaceholder": "YouTube Visitor Data（可选）",
+    "cookieSectionTitle": "Cookie 目录",
+    "cookieSectionDescription": "yt-dlp 按行扫描以下绝对路径查找 cookies.txt / bilibili_cookies.txt",
+    "cookieDirsLabel": "Cookie 文件目录",
+    "cookieDirsPlaceholder": "每行一个绝对路径，例如：\n/Users/you/cookies\n/data/cookies",
+    "cookieDirsDescription": "留空将使用内置默认目录；目录下可放置 cookies.txt 或 bilibili_cookies.txt"
+  },
+  "download": {
+    "title": "下载配置",
+    "subtitle": "配置媒体下载的存储路径、文件命名、网络代理和并发参数",
+    "saved": "下载配置已保存",
+    "saveFailed": "下载配置保存失败",
+    "storageTitle": "存储与命名",
+    "storageDescription": "配置媒体文件的存储位置和命名规则",
+    "outputDirLabel": "输出目录",
+    "outputDirHint": "留空将使用默认目录（data/videos/）",
+    "outputDirPlaceholder": "示例：/home/user/videos 或 D:\\downloads",
+    "filenameTemplateLabel": "文件名模板",
+    "filenameTemplateHint": "使用 yt-dlp 模板语法，如 %(title)s / %(id)s / %(uploader)s 等",
+    "filenameTemplatePlaceholder": "示例：%(title)s-%(id)s.%(ext)s",
+    "templatePreview": "示例预览",
+    "templatePresets": {
+      "titleOnly": "仅标题",
+      "titleId": "标题-ID",
+      "uploaderTitle": "上传者-标题",
+      "playlistIndex": "列表序号-标题"
+    },
+    "networkTitle": "网络与凭据",
+    "networkDescription": "配置网络代理、YouTube 凭据和 Cookie 目录",
+    "proxyLabel": "HTTP/SOCKS 代理",
+    "proxyHint": "下载专用代理，留空则使用全局代理设置",
+    "proxyPlaceholder": "示例：http://127.0.0.1:7890",
+    "poTokenLabel": "PO Token",
+    "poTokenPlaceholder": "YouTube PO Token（可选）",
+    "visitorDataLabel": "Visitor Data",
+    "visitorDataPlaceholder": "YouTube Visitor Data（可选）",
+    "cookieDirsLabel": "Cookie 文件目录",
+    "cookieDirsHint": "yt-dlp 按行扫描以下路径查找 cookies.txt 或 bilibili_cookies.txt",
+    "cookieDirsPlaceholder": "每行一个绝对路径\n/Users/you/cookies\n/data/cookies",
+    "advancedTitle": "高级参数",
+    "advancedDescription": "配置并发限制、重试次数和超时参数",
+    "concurrencyLimitLabel": "并发下载数",
+    "concurrencyLimitHint": "同时下载的分片数量，范围 1-8，默认 2",
+    "retryCountLabel": "重试次数",
+    "retryCountHint": "连接失败时的重试次数，范围 0-10，默认 3",
+    "socketTimeoutLabel": "连接超时（秒）",
+    "socketTimeoutHint": "网络连接超时时间，范围 5-300 秒，默认 30"
+  },
+  "screenshot": {
+    "title": "视频截图",
+    "subtitle": "配置抽帧、拼图与视觉理解的默认参数",
+    "saved": "截图配置已保存",
+    "saveFailed": "截图配置保存失败",
+    "interval": {
+      "title": "默认抽帧间隔",
+      "description": "每多少秒抽取一帧关键画面"
+    },
+    "grid": {
+      "title": "网格拼图大小",
+      "description": "选择网格尺寸，推荐 3x3 用于平衡性能与质量",
+      "totalFrames": "总共 {{count}} 帧",
+      "invalid": "网格大小必须为 1-10 的整数"
+    },
+    "quality": {
+      "title": "图片质量",
+      "description": "越高的质量会产生更大的文件"
+    },
+    "embed": {
+      "title": "自动嵌入笔记",
+      "description": "生成笔记时是否自动包含截图网格"
+    }
+  },
+  "transcriber": {
+    "title": "音频转写",
+    "subtitle": "配置语音识别引擎及默认参数（ASR Provider）",
+    "saved": "转写配置已保存",
+    "saveFailed": "转写配置保存失败",
+    "engine": {
+      "title": "转写引擎",
+      "description": "选择音频转写使用的引擎",
+      "type": "引擎类型",
+      "modelSize": "Whisper 模型",
+      "groqApiKey": "Groq API Key",
+      "badge": {
+        "local": "本地",
+        "online": "在线"
+      },
+      "description": {
+        "fastWhisper": "免费本地转写，速度快但需本地资源，支持离线使用",
+        "bcut": "必剪在线服务，无需本地资源，需网络连接",
+        "kuaishou": "快手在线服务，无需本地资源，需网络连接",
+        "groq": "Groq 云服务，快速高效，需提供 API Key",
+        "mlxWhisper": "Apple Silicon 优化版本，仅适用于 Mac 系列芯片"
+      },
+      "tosWarning": {
+        "bcut": "使用必剪在线服务，你的音频将被发送至必剪服务器进行处理。请确保你已阅读并同意必剪的服务条款与隐私政策。",
+        "kuaishou": "使用快手在线服务，你的音频将被发送至快手服务器进行处理。请确保你已阅读并同意快手的服务条款与隐私政策。",
+        "groq": "使用 Groq 云服务，你的音频将被发送至 Groq 服务器进行处理。请确保你已阅读并同意 Groq 的服务条款与隐私政策。"
+      }
+    },
+    "initialPrompt": {
+      "title": "初始提示词",
+      "description": "用于引导 ASR 识别，例如专业术语、人物名字等",
+      "label": "提示词",
+      "placeholder": "例如：AI、转录、技术术语（多个用英文逗号分隔）",
+      "hint": "仅在 Faster Whisper 引擎中生效"
+    },
+    "mlxNotAvailable": "MLX Whisper 仅支持 macOS，已自动切换到 Faster Whisper",
+    "language": {
+      "title": "语言",
+      "description": "选择转写的目标语言或自动识别",
+      "label": "目标语言"
+    },
+    "device": {
+      "title": "计算设备",
+      "description": "选择转写使用的计算设备（CPU 或 GPU）",
+      "label": "设备"
+    }
+  },
+  "common": {
+    "save": "保存",
+    "saving": "保存中...",
+    "savSuccess": "配置已保存",
+    "cancel": "取消"
+  },
+  "shell": {
+    "tabs": {
+      "providers": "提供商",
+      "models": "模型",
+      "network": "网络",
+      "download": "下载",
+      "transcriber": "转写",
+      "promptFormats": "提示词格式",
+      "screenshot": "截图",
+      "about": "关于"
+    },
+    "saveBar": {
+      "dirtyCount": "{{count}} 项未保存",
+      "allSaved": "所有变更已保存",
+      "save": "保存",
+      "saving": "保存中...",
+      "reset": "重置",
+      "export": "导出"
+    }
+  },
+  "dirty": {
+    "leaveConfirm": "有未保存的变更，确认离开吗？",
+    "unsavedBadge": "未保存"
+  },
+  "providers": {
+    "apiKey": {
+      "label": "API Key",
+      "placeholder": "留空则不修改",
+      "hint": "为避免误改，后端仅在字段非空时覆盖原有 API Key",
+      "configured": "已配置",
+      "notConfigured": "未配置"
+    },
+    "emptyState": {
+      "title": "还没有添加任何提供商",
+      "description": "在右上角点击「新增」以接入 OpenAI / Anthropic / Google / Ollama 等。",
+      "action": "新增提供商"
+    }
+  },
+  "monitor": {
+    "title": "部署监控",
+    "subtitle": "实时查看后端服务状态、系统资源占用与运行日志",
+    "status": {
+      "online": "在线",
+      "offline": "离线"
+    },
+    "version": "版本",
+    "uptime": "运行时长",
+    "stats": {
+      "title": "系统指标",
+      "description": "CPU / 内存 / 磁盘 使用率（每 5 秒刷新）",
+      "cpu": "CPU 使用率",
+      "cpuHint": "{{logical}} 线程 / {{physical}} 物理核心",
+      "memory": "内存使用率",
+      "disk": "磁盘使用率"
+    },
+    "logs": {
+      "title": "运行日志",
+      "description": "最近的后端任务日志（虚拟滚动，最多保留 5000 行）",
+      "empty": "暂无日志"
+    }
+  }
+}

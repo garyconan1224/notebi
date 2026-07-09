@@ -1,0 +1,39 @@
+# {{ ctx.title }}
+> {{ ctx.platform }} · {{ ctx.author }} · {{ ctx.duration_display }} · {{ ctx.date_added }}
+
+![封面]({{ ctx.cover_path }})
+
+## 全局摘要
+{{ ctx.summary }}
+
+## 关键帧画廊
+| 时刻 | 画面 | 场景描述 |
+|---|---|---|
+{% for row in ctx.gallery_rows -%}
+| {{ row.timestamp_display }} | ![]({{ row.image_path }}) | {{ row.scene_description }} |
+{% endfor %}
+
+## 章节正文
+{% for ch in ctx.chapters -%}
+### {{ loop.index }}. {{ ch.title }}（{{ ch.time_range }}）
+{% if ch.frame_path -%}
+![]({{ ch.frame_path }})
+{% endif -%}
+{% if ch.transcript_excerpt -%}
+> {{ ch.transcript_excerpt }}
+{% endif -%}
+{% if ch.highlights -%}
+**重点**：{{ ch.highlights }}
+{% endif %}
+
+{% endfor %}
+## 字幕原文
+<details>
+<summary>展开查看完整转写（含时间戳）</summary>
+
+{{ ctx.full_transcript }}
+
+</details>
+
+## 最终综合
+{{ ctx.final_synthesis }}

@@ -1,0 +1,636 @@
+/* ═══════════════════════════════════════════════
+   Settings Page — 对齐设计稿 pg-settings
+   全部使用 Nibi token，不写死 hex
+   ═══════════════════════════════════════════════ */
+
+/* ── 整体包裹 ── */
+.settings-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* ── 页面头部 ── */
+.settings-head {
+  padding: 28px 32px 20px;
+  border-bottom: 1px solid var(--bdr);
+  flex-shrink: 0;
+}
+.settings-head .eyebrow {
+  font-size: var(--xs);
+  color: var(--mut);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--fm);
+}
+.settings-head h1 {
+  font-family: var(--fd);
+  font-size: var(--3xl);
+  line-height: 1;
+  margin: 6px 0 8px;
+  color: var(--fg);
+}
+.settings-head p {
+  font-size: var(--sm);
+  color: var(--fg2);
+  max-width: 560px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ── 左 + 右布局 ── */
+.settings-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── 左侧导航 ── */
+.settings-sidebar {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--bdr);
+  background: var(--bgalt);
+  padding: 16px 12px;
+  overflow-y: auto;
+}
+
+/* 导航标题 */
+.settings-nav-title {
+  font-size: var(--xs);
+  color: var(--mut);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--fm);
+  padding: 6px 10px;
+  margin-bottom: 6px;
+}
+
+/* 导航项 */
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+.sn-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--r);
+  font-size: var(--sm);
+  font-weight: 500;
+  color: var(--mut);
+  text-align: left;
+  transition: all 120ms ease;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  width: 100%;
+}
+.sn-item:hover {
+  background: var(--bg);
+  color: var(--fg);
+}
+.sn-item[data-active="true"] {
+  background: var(--fg);
+  color: var(--bg);
+}
+.sn-item .sn-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* 导航底部 Build 信息卡 */
+.settings-nav-footer {
+  margin-top: auto;
+  padding: 12px 10px;
+  border: 1px dashed var(--bdrs);
+  border-radius: var(--r);
+}
+.settings-nav-footer .eyebrow {
+  font-size: 10px;
+  color: var(--mut);
+  margin-bottom: 4px;
+  font-family: var(--fm);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.settings-nav-footer .build-version {
+  font-family: var(--fd);
+  font-size: var(--xl);
+  line-height: 1;
+  color: var(--fg);
+}
+.settings-nav-footer .build-meta {
+  font-size: 10px;
+  color: var(--mut);
+  margin-top: 2px;
+  font-family: var(--fm);
+}
+
+/* ── 右侧主内容 ── */
+.settings-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 32px;
+}
+
+/* ── 设置面板（每个分类一个） ── */
+.settings-panel {
+  max-width: 760px;
+}
+.settings-panel + .settings-panel {
+  margin-top: 28px;
+}
+
+/* ── 区段头部 ── */
+.settings-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.settings-header h2 {
+  font-family: var(--fd);
+  font-size: var(--2xl);
+  line-height: 1.1;
+  margin: 0;
+  color: var(--fg);
+}
+.settings-header .settings-header-desc {
+  font-size: var(--xs);
+  color: var(--mut);
+  margin-top: 4px;
+}
+.settings-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ── 重置 / 保存 按钮 ── */
+.settings-reset-btn,
+.settings-save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--r);
+  font-size: var(--xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 140ms ease;
+  border: 1px solid var(--bdr);
+}
+.settings-reset-btn {
+  background: transparent;
+  color: var(--fg2);
+}
+.settings-reset-btn:hover {
+  background: var(--bgalt);
+  color: var(--fg);
+}
+.settings-save-btn {
+  background: var(--fg);
+  color: var(--bg);
+  border-color: var(--fg);
+}
+.settings-save-btn:hover {
+  opacity: 0.85;
+}
+.settings-save-btn:disabled,
+.settings-reset-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── 区段组 ── */
+.settings-section {
+  margin-bottom: 20px;
+}
+.settings-section-title {
+  font-size: var(--xs);
+  color: var(--mut);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--fm);
+  margin-bottom: 10px;
+}
+
+/* ── 卡片 ── */
+.settings-card {
+  background: var(--srf);
+  border: 1px solid var(--bdr);
+  border-radius: var(--rl);
+  overflow: hidden;
+}
+
+/* ── 表单行 ── */
+.settings-row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--bdr);
+}
+.settings-row:last-child {
+  border-bottom: none;
+}
+.settings-row-label {
+  font-size: var(--sm);
+  font-weight: 500;
+  color: var(--fg);
+}
+.settings-row-hint {
+  font-size: var(--xs);
+  color: var(--mut);
+  margin-top: 2px;
+}
+.settings-row-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* ── 统一 input / select 控件 ── */
+.settings-input,
+.settings-select,
+.settings-native-select {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--r);
+  font-size: var(--sm);
+  color: var(--fg);
+  background: var(--bg);
+  outline: none;
+  transition: border-color 140ms ease;
+  width: 100%;
+  max-width: 320px;
+}
+.settings-input:focus,
+.settings-select:focus,
+.settings-native-select:focus {
+  border-color: var(--fg);
+}
+.settings-input::placeholder {
+  color: var(--mut);
+}
+.settings-select,
+.settings-native-select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b6b6b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 32px;
+}
+
+.settings-subpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-card {
+  background: var(--srf);
+  border: 1px solid var(--bdr);
+  border-radius: var(--rl);
+  overflow: hidden;
+}
+
+.settings-inline-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--bdr);
+}
+
+.settings-inline-field:last-child {
+  border-bottom: none;
+}
+
+.settings-inline-field strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--fg);
+  font-size: var(--sm);
+}
+
+.settings-inline-field p {
+  margin: 0;
+  color: var(--mut);
+  font-size: var(--xs);
+  line-height: 1.55;
+}
+
+/* ── Toggle 开关 ── */
+.settings-toggle {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.settings-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.settings-toggle-track {
+  display: block;
+  width: 40px;
+  height: 22px;
+  background: var(--bgalt);
+  border: 1px solid var(--bdrs);
+  border-radius: 99px;
+  transition: all 200ms ease;
+  position: relative;
+}
+.settings-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 99px;
+  background: var(--mut);
+  transition: all 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.settings-toggle input:checked + .settings-toggle-track {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+.settings-toggle input:checked + .settings-toggle-track .settings-toggle-thumb {
+  left: 20px;
+  background: var(--srf);
+}
+
+/* ── 标签 / 开关行 ── */
+.settings-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--bdr);
+}
+.settings-switch-row:last-child {
+  border-bottom: none;
+}
+.settings-switch-row .switch-info {
+  flex: 1;
+}
+.settings-switch-row .switch-label {
+  font-size: var(--sm);
+  font-weight: 500;
+  color: var(--fg);
+}
+.settings-switch-row .switch-desc {
+  font-size: var(--xs);
+  color: var(--mut);
+  margin-top: 2px;
+}
+
+/* ── 状态 tag ── */
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: var(--xs);
+  font-weight: 500;
+}
+.status-tag.online {
+  background: var(--okl);
+  color: var(--ok);
+}
+.status-tag.offline {
+  background: var(--bgalt);
+  color: var(--mut);
+}
+.status-tag.error {
+  background: var(--errl);
+  color: var(--err);
+}
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  background: currentColor;
+}
+
+/* ── Provider 卡片网格 ── */
+.provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+.provider-card {
+  background: var(--srf);
+  border: 1px solid var(--bdr);
+  border-radius: var(--rl);
+  padding: 18px 20px;
+  transition: opacity 160ms ease;
+}
+.provider-card[data-on="false"] {
+  opacity: 0.55;
+}
+
+/* ── Provider 卡片头部 ── */
+.pc-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.pc-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: var(--srf);
+  font-weight: 700;
+  font-size: 17px;
+  flex-shrink: 0;
+}
+.pc-name {
+  font-size: var(--base);
+  font-weight: 600;
+  color: var(--fg);
+}
+.pc-sub {
+  font-size: var(--xs);
+  color: var(--mut);
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
+/* ── Provider 密钥行 ── */
+.pc-key {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bgalt);
+  border-radius: var(--r);
+  margin-bottom: 12px;
+}
+.pc-key .key-eyebrow {
+  font-size: 9px;
+  color: var(--mut);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--fm);
+  flex-shrink: 0;
+}
+.pc-key code {
+  flex: 1;
+  font-family: var(--fm);
+  font-size: var(--xs);
+  color: var(--fg2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pc-key .key-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  font-size: var(--xs);
+  border-radius: var(--rs);
+  border: 1px solid var(--bdr);
+  background: transparent;
+  color: var(--fg2);
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+.pc-key .key-edit-btn:hover {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* ── Provider 状态栏 ── */
+.pc-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  font-size: var(--xs);
+}
+.pc-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pc-stats .stat-label {
+  font-size: 9px;
+  color: var(--mut);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--fm);
+}
+.pc-stats .stat-value {
+  font-size: var(--sm);
+  font-weight: 600;
+  color: var(--fg);
+}
+
+/* ── 测试连接按钮 ── */
+.pc-test-btn {
+  width: 100%;
+  height: 32px;
+  margin-top: 12px;
+  border-radius: var(--r);
+  font-size: var(--xs);
+  font-weight: 600;
+  border: 1px solid var(--bdr);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: transparent;
+  color: var(--fg2);
+  transition: all 140ms ease;
+}
+.pc-test-btn:hover {
+  background: var(--bgalt);
+  color: var(--fg);
+}
+.pc-test-btn:disabled {
+  background: var(--bgalt);
+  color: var(--mut);
+  cursor: not-allowed;
+}
+
+/* ── 统计卡片行 ── */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+.stat-cell {
+  background: var(--srf);
+  border: 1px solid var(--bdr);
+  border-radius: var(--rl);
+  padding: 16px;
+}
+.stat-cell .label {
+  font-size: var(--xs);
+  color: var(--mut);
+  margin-bottom: 4px;
+}
+.stat-cell .value {
+  font-family: var(--fd);
+  font-size: var(--2xl);
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1.1;
+}
+
+/* ── 占位空态 ── */
+.settings-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  border: 1px dashed var(--bdr);
+  border-radius: var(--rl);
+}
+.settings-empty-icon {
+  color: var(--mut);
+  margin-bottom: 12px;
+}
+.settings-empty p {
+  font-size: var(--sm);
+  color: var(--mut);
+  margin: 0;
+  max-width: 320px;
+}
+
+/* ── 导航项 dot dirt 指示器 ── */
+.sn-dirty-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--acc);
+  margin-left: auto;
+  flex-shrink: 0;
+}
