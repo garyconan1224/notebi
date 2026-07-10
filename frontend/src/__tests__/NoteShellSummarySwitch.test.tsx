@@ -85,6 +85,27 @@ const MAIN_NOTE: ItemNote = {
   transcript: [],
 }
 
+const AUDIO_NOTE: ItemNote = {
+  frontmatter: {
+    title: '测试音频',
+    type: 'audio',
+    version: 1,
+    created_at: '2026-07-01T00:00:00Z',
+  },
+  source_md: '**[00:00]** 原始转写',
+  note_md: '---\ntitle: 测试音频\ntype: audio\nversion: 1\n---\n\n## 转写正文\n\n**[00:00]** 原始转写不应进入编辑器',
+  summaries: [],
+  note_dir: '',
+  media: { audio: '/static/audio.m4a' },
+  transcript: [{ t_sec: 0, t_str: '00:00', text: '原始转写不应进入编辑器' }],
+}
+
+const VIDEO_NOTE: ItemNote = {
+  ...AUDIO_NOTE,
+  frontmatter: { ...AUDIO_NOTE.frontmatter, title: '测试视频', type: 'video' },
+  media: { video: { url: '/static/video.mp4', duration: 60 } },
+}
+
 const SUMMARY_V0: ItemSummary = {
   summary_id: 'summary-v0',
   template: 'standard',
@@ -126,5 +147,25 @@ describe('NoteShell summary switching', () => {
 
     expectAnyEditorToContain('总结正文')
     expect(mocks.putItemNote).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['音频', AUDIO_NOTE],
+    ['视频', VIDEO_NOTE],
+  ])('%s笔记不把完整转写正文交给 Milkdown 编辑器', async (_label, mediaNote) => {
+    mocks.getItemNote.mockResolvedValue(mediaNote)
+    mocks.listSummaries.mockResolvedValue([])
+
+    render(
+      <MemoryRouter>
+        <NoteShell workspaceId="ws-1" itemId="item-1" />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('note-editor')).not.toBeNull()
+    })
+
+    expect(screen.getByTestId('note-editor').textContent).not.toContain('原始转写不应进入编辑器')
   })
 })

@@ -30,33 +30,6 @@ const FALLBACK_WAVEFORM_HEIGHTS = Array.from({ length: WAVEFORM_BARS }, (_, i) =
   return 0.3 + 0.7 * Math.abs(Math.sin(t * Math.PI * 2.4 + 0.5) * Math.cos(t * Math.PI * 1.1 + 0.3))
 })
 
-function extractWaveformPeaks(audioBuffer: AudioBuffer, bars: number): number[] {
-  const channelCount = Math.min(audioBuffer.numberOfChannels, 2)
-  const samplesPerBar = Math.max(1, Math.floor(audioBuffer.length / bars))
-  const peaks: number[] = []
-
-  for (let bar = 0; bar < bars; bar += 1) {
-    const start = bar * samplesPerBar
-    const end = Math.min(audioBuffer.length, start + samplesPerBar)
-    const sampleStep = Math.max(1, Math.floor((end - start) / 160))
-    let sum = 0
-    let count = 0
-
-    for (let channel = 0; channel < channelCount; channel += 1) {
-      const data = audioBuffer.getChannelData(channel)
-      for (let idx = start; idx < end; idx += sampleStep) {
-        const value = data[idx] ?? 0
-        sum += value * value
-        count += 1
-      }
-    }
-    peaks.push(count > 0 ? Math.sqrt(sum / count) : 0)
-  }
-
-  const max = Math.max(...peaks, 0.001)
-  return peaks.map((peak) => Math.max(0.16, Math.min(1, Math.pow(peak / max, 0.72))))
-}
-
 /* ── types ── */
 interface NoteAudioPanelProps {
   src: string
@@ -123,50 +96,8 @@ const NoteAudioPanel = forwardRef<NoteAudioPanelHandle, NoteAudioPanelProps>(
       if (a) setSpeed(a.playbackRate)
     }, [])
 
-    useEffect(() => {
-      let cancelled = false
-
-      async function loadWaveform() {
-        setWaveformHeights(FALLBACK_WAVEFORM_HEIGHTS)
-        if (!src || typeof window === 'undefined') return
-
-        const cacheKey = `nibi:audio-waveform:${WAVEFORM_BARS}:${src}`
-        try {
-          const cached = window.sessionStorage.getItem(cacheKey)
-          if (cached) {
-            const parsed = JSON.parse(cached) as number[]
-            if (Array.isArray(parsed) && parsed.length === WAVEFORM_BARS && !cancelled) {
-              setWaveformHeights(parsed)
-              return
-            }
-          }
-
-          const AudioContextCtor = window.AudioContext || (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-          if (!AudioContextCtor) return
-
-          const response = await fetch(src, { cache: 'force-cache' })
-          if (!response.ok) throw new Error('audio fetch failed')
-
-          const arrayBuffer = await response.arrayBuffer()
-          const context = new AudioContextCtor()
-          try {
-            const audioBuffer = await context.decodeAudioData(arrayBuffer.slice(0))
-            const peaks = extractWaveformPeaks(audioBuffer, WAVEFORM_BARS)
-            if (!cancelled) {
-              setWaveformHeights(peaks)
-              window.sessionStorage.setItem(cacheKey, JSON.stringify(peaks))
-            }
-          } finally {
-            void context.close()
-          }
-        } catch {
-          if (!cancelled) setWaveformHeights(FALLBACK_WAVEFORM_HEIGHTS)
-        }
-      }
-
-      void loadWaveform()
-      return () => { cancelled = true }
-    }, [src])
+    // 波形是装饰性信息；不要为生成它下载并解码整段本地音频。
+    useEffect(() => { setWaveformHeights(FALLBACK_WAVEFORM_HEIGHTS) }, [src])
 
     useEffect(() => { onTransportChange?.() }, [playing, progress, duration, muted, volume, speed, loop, waveformHeights, isPipActive, onTransportChange])
 

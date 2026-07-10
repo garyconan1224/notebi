@@ -59,6 +59,27 @@ function extractBody(noteMd: string): string {
   return idx >= 0 ? rest.slice(idx + 4) : noteMd
 }
 
+/**
+ * 音视频的 note.md 可能只有完整转写；这类内容由转写面板展示，
+ * 不应再整体交给 Milkdown，否则长音频会创建数千个编辑器节点。
+ */
+function extractEditableBody(noteMd: string, itemType: string): string {
+  const body = extractBody(noteMd)
+  if (itemType !== 'audio' && itemType !== 'video') return body
+
+  const transcriptHeading = /^##\s+转写正文\s*$/m.exec(body)
+  if (!transcriptHeading || transcriptHeading.index === undefined) return body
+
+  const before = body.slice(0, transcriptHeading.index).trim()
+  const afterTranscript = body.slice(transcriptHeading.index + transcriptHeading[0].length)
+  const nextSectionIndex = afterTranscript.search(/^##\s+/m)
+  const after = (nextSectionIndex >= 0
+    ? afterTranscript.slice(nextSectionIndex)
+    : '').trim()
+
+  return [before, after].filter(Boolean).join('\n\n')
+}
+
 /** type → 中文标签映射。 */
 const TYPE_LABEL: Record<string, string> = {
   text: '文本',
@@ -824,7 +845,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
       const data = await getItemNote(workspaceId, itemId)
       setNote(data)
       // 同步主笔记正文；AI 总结版本切换只做本地预览，不写回主笔记。
-      const body = extractBody(data.note_md)
+      const body = extractEditableBody(data.note_md, String(data.frontmatter?.type ?? ''))
       setEditingBody(body)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '加载笔记失败')
@@ -882,7 +903,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const handleSelectMainNote = useCallback(() => {
     if (!note) return
     setActiveSummaryId(undefined)
-    switchEditorBody(extractBody(note.note_md))
+    switchEditorBody(extractEditableBody(note.note_md, String(note.frontmatter?.type ?? '')))
   }, [note, switchEditorBody])
 
   const handleSelectSummary = useCallback((summary: ItemSummary) => {
