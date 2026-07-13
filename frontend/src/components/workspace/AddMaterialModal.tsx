@@ -130,6 +130,16 @@ const MORE_STYLES = [
   { id: 'science_popularization', label: '知识科普' },
 ] as const
 
+/** 音频勾选区分说话人后使用的专属总结方式；底层仍复用现有模板 ID。 */
+const SPEAKER_AWARE_STYLES = [
+  { id: 'detailed', label: '按说话人观点', desc: '按每位发言人整理观点、立场与依据' },
+  { id: 'meeting', label: '共识与行动', desc: '区分讨论、共识、分歧、决策与待办' },
+  { id: 'interview', label: '访谈观点整理', desc: '保留问答关系与各位嘉宾的核心观点' },
+  { id: 'actions', label: '决策与行动项', desc: '标注提出人、负责人、截止时间与完成标准' },
+] as const
+
+const SPEAKER_AWARE_STYLE_IDS = new Set<string>(SPEAKER_AWARE_STYLES.map((style) => style.id))
+
 /** 风格适用范围说明（hover ? 显示），内容来自后端 summary_templates.py */
 const STYLE_DESCRIPTIONS: Record<string, string> = {
   standard: '自适应教学笔记，短内容精简、长内容完整结构',
@@ -524,6 +534,20 @@ export function AddMaterialModal({
   ]
   const advancedSummary = advancedSummaryParts.join(' · ')
 
+  const speakerAwareAudio = showAudioNoteSettings && diarizeOn
+  const visiblePrimaryStyleOptions = speakerAwareAudio ? SPEAKER_AWARE_STYLES : primaryStyleOptions
+  const visibleMoreStyleOptions = speakerAwareAudio
+    ? styleOptions.filter((style) => !SPEAKER_AWARE_STYLE_IDS.has(style.id))
+    : moreStyleOptions
+
+  const handleDiarizeChange = (enabled: boolean) => {
+    setDiarizeOn(enabled)
+    if (showAudioNoteSettings) {
+      if (enabled) setNoteStyle(SPEAKER_AWARE_STYLES[0].id)
+      else if (SPEAKER_AWARE_STYLE_IDS.has(noteStyle)) setNoteStyle('standard')
+    }
+  }
+
   const doSniff = useCallback(async (url: string) => {
     try {
       setSniffFailed(false)
@@ -858,6 +882,7 @@ export function AddMaterialModal({
         note_media_kind: resolvedNoteKind,
         summary_template: noteStyle,
         diarize: diarizeOn,
+        ...(speakerAwareAudio ? { summary_mode: 'speaker_aware' as const } : {}),
         user_notes: userNotes,
       })
       toast.success('批量合集已创建', { description: `${result.items_added} 条内容已加入任务队列` })
@@ -909,6 +934,7 @@ export function AddMaterialModal({
               embed_frames: videoTask ? embedFrames : false,
               summary_template: noteStyle,
               diarize: resolvedNoteType === 'mixed' ? true : diarizeOn,
+              ...(resolvedNoteType === 'audio' && diarizeOn ? { summary_mode: 'speaker_aware' as const } : {}),
             },
             // 混合笔记：标记 note_media_kind
             ...(resolvedNoteType === 'mixed' ? { note_media_kind: 'mixed' } : {}),
@@ -968,7 +994,7 @@ export function AddMaterialModal({
         wsId, effectiveUrl, effectiveSniff?.title ?? undefined,
         embedFrames, targetWorkspaceKind === 'replica' ? 'replica_prompt' : 'vision', effInterval, effVisionModel,
         targetWorkspaceKind, selectedNoteType,
-        { diarize: selectedNoteType === 'mixed' ? true : diarizeOn, summary_template: noteStyle, user_notes: userNotes, ...(targetWorkspaceKind === 'replica' ? { replica_kind: replicaKind } : {}), ...(selectedNoteType === 'mixed' ? { note_media_kind: 'mixed' } : {}) },
+        { diarize: selectedNoteType === 'mixed' ? true : diarizeOn, summary_template: noteStyle, ...(speakerAwareAudio ? { summary_mode: 'speaker_aware' as const } : {}), user_notes: userNotes, ...(targetWorkspaceKind === 'replica' ? { replica_kind: replicaKind } : {}), ...(selectedNoteType === 'mixed' ? { note_media_kind: 'mixed' } : {}) },
       )
       toast.success(targetWorkspaceKind === 'replica' ? '复刻任务已创建' : '笔记生成中', { description: `${result.item_type} · ${effectiveUrl}` })
 
@@ -1576,7 +1602,7 @@ export function AddMaterialModal({
                     </div>
                     <div style={{ marginTop: 14 }}>
                       <div className="gen-field">
-                        <span className="gen-field-label">笔记风格</span>
+                        <span className="gen-field-label">{speakerAwareAudio ? '区分说话人的总结方式' : '笔记风格'}</span>
                         <Select value={noteStyle} onValueChange={setNoteStyle}>
                           <SelectTrigger style={{ fontSize: 13 }}>
                             <SelectValue placeholder="选择风格" />
@@ -1584,19 +1610,19 @@ export function AddMaterialModal({
                           <SelectContent>
                             <SelectGroup>
                               <SelectLabel style={{ fontSize: 11, color: 'var(--mut)' }}>常用风格</SelectLabel>
-                              {primaryStyleOptions.map(opt => (
+                              {visiblePrimaryStyleOptions.map(opt => (
                                 <SelectItem key={opt.id} value={opt.id}>
                                   {opt.label}
                                   <span style={{ fontSize: 11, color: 'var(--mut)', marginLeft: 6 }}>{opt.desc}</span>
                                 </SelectItem>
                               ))}
                             </SelectGroup>
-                            {moreStyleOptions.length > 0 && (
+                            {visibleMoreStyleOptions.length > 0 && (
                               <>
                                 <SelectSeparator />
                                 <SelectGroup>
-                                  <SelectLabel style={{ fontSize: 11, color: 'var(--mut)' }}>更多风格</SelectLabel>
-                                  {moreStyleOptions.map(opt => (
+                                  <SelectLabel style={{ fontSize: 11, color: 'var(--mut)' }}>{speakerAwareAudio ? '其他风格' : '更多风格'}</SelectLabel>
+                                  {visibleMoreStyleOptions.map(opt => (
                                     <SelectItem key={opt.id} value={opt.id}>
                                       {opt.label}
                                       <span style={{ fontSize: 11, color: 'var(--mut)', marginLeft: 6 }}>{opt.desc}</span>
@@ -1736,10 +1762,14 @@ export function AddMaterialModal({
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14 }}>
                       {showSpeakerSettings && (
                         <label className="gen-toggle">
-                          <Switch checked={diarizeOn} onCheckedChange={setDiarizeOn} />
+                          <Switch checked={diarizeOn} onCheckedChange={handleDiarizeChange} />
                           <span className="gen-toggle-text">
-                            <span className="gen-field-label">区分发言人</span>
-                            <span className="kw" style={{ fontSize: 11 }}>开启后在转写中标注不同说话人（实验功能）</span>
+                            <span className="gen-field-label">{showAudioNoteSettings ? '区分说话人' : '区分发言人'}</span>
+                            <span className="kw" style={{ fontSize: 11 }}>
+                              {showAudioNoteSettings
+                                ? '开启后使用区分说话人的总结方式，并在转写中标注不同说话人'
+                                : '开启后在转写中标注不同说话人（实验功能）'}
+                            </span>
                           </span>
                         </label>
                       )}

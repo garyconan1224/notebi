@@ -494,8 +494,14 @@ describe('AddMaterialModal', () => {
     expect(screen.queryByText('笔记里配图')).toBeNull()
     expect(screen.queryByText('视觉模型')).toBeNull()
     expect(screen.queryByText('取画面')).toBeNull()
-    expect(screen.getByText('区分发言人')).toBeTruthy()
+    expect(screen.getByText('区分说话人')).toBeTruthy()
     expect(screen.getByText('补充说明')).toBeTruthy()
+
+    const speakerSwitch = screen.getByRole('switch')
+    expect(speakerSwitch).toHaveProperty('ariaChecked', 'false')
+    fireEvent.click(speakerSwitch)
+    expect(screen.getByText('区分说话人的总结方式')).toBeTruthy()
+    expect(screen.getByText('按说话人观点')).toBeTruthy()
   })
 
   it('复刻设置展示取画面，不展示笔记专属项', () => {

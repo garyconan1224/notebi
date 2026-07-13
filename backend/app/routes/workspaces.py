@@ -705,6 +705,10 @@ class GenerateNoteRequest(BaseModel):
         default=False,
         description="是否区分发言人（VN5 启用；当前仅记录到 task payload）",
     )
+    summary_mode: str = Field(
+        default="general",
+        description="音频总结方式：general（普通）或 speaker_aware（区分说话人）",
+    )
     user_notes: str = Field(
         default="",
         description="用户补充说明，生成时附加给模型的上下文",
@@ -744,6 +748,7 @@ class BatchSourceImportRequest(BaseModel):
     note_media_kind: str = Field(default="video")
     summary_template: str = Field(default="standard")
     diarize: bool = Field(default=False)
+    summary_mode: str = Field(default="general")
     user_notes: str = Field(default="", max_length=8000)
 
 
@@ -1671,6 +1676,7 @@ def _create_batch_note_task(
         "kind_hint": item.type,
         "summary_template": req.summary_template or "standard",
         "diarize": req.diarize,
+        "summary_mode": req.summary_mode,
         "batch_source": {
             "source_type": req.source_type,
             "source_url": req.source_url,
@@ -3046,6 +3052,7 @@ def generate_note(workspace_id: str, req: GenerateNoteRequest) -> Dict[str, Any]
     # VN2: 透传笔记风格/发言人区分/用户补充说明（VN5 前后端联调时消费）
     _task_payload["summary_template"] = req.summary_template
     _task_payload["diarize"] = req.diarize
+    _task_payload["summary_mode"] = req.summary_mode
     if req.user_notes.strip():
         _task_payload["user_notes"] = req.user_notes.strip()
     try:
