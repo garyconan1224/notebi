@@ -173,6 +173,20 @@
   color: var(--ink-4);
 }
 
+.nsm-speaker-toggle {
+  gap: 7px;
+}
+
+.nsm-speaker-aware-note {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent-pink) 8%, var(--bg));
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 /* ── 模型双下拉 ────────────────────────────────────── */
 
 .nsm-model-row {

@@ -91,7 +91,7 @@ describe('NewSummaryModal', () => {
     }))
   })
 
-  it('音频允许选择区分说话人总结方式', () => {
+  it('音频默认使用普通总结，勾选后才显示区分说话人的专属方式', () => {
     const onSubmit = vi.fn()
     render(
       <NewSummaryModal
@@ -102,7 +102,11 @@ describe('NewSummaryModal', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('radio', { name: '区分说话人总结' }))
+    expect(screen.queryByText('区分说话人的总结方式')).toBeNull()
+    expect(screen.getByText('常用模板')).toBeTruthy()
+    fireEvent.click(screen.getByRole('checkbox', { name: '区分说话人' }))
+    expect(screen.getByText('区分说话人的总结方式')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /按说话人观点/ })).toBeTruthy()
     fireEvent.click(screen.getByText('生成'))
 
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({

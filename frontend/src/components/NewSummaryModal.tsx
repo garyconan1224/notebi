@@ -40,6 +40,16 @@ const MORE_STYLES: { value: string; label: string; desc: string }[] = [
   { value: 'science_popularization', label: '知识科普', desc: '通俗语言讲原理+类比+常见误区，适合科普' },
 ]
 
+/** 音频勾选“区分说话人”后，只展示与发言归属最相关的总结方式。 */
+const SPEAKER_AWARE_CARDS: { value: string; label: string; desc: string }[] = [
+  { value: 'detailed', label: '按说话人观点', desc: '按每位发言人整理观点、立场与依据' },
+  { value: 'meeting', label: '共识与行动', desc: '区分讨论、共识、分歧、决策与待办' },
+  { value: 'interview', label: '访谈观点整理', desc: '保留问答关系与各位嘉宾的核心观点' },
+  { value: 'actions', label: '决策与行动项', desc: '标注提出人、负责人、截止时间与完成标准' },
+]
+
+const SPEAKER_AWARE_VALUES = new Set(SPEAKER_AWARE_CARDS.map((card) => card.value))
+
 const TEMPLATE_ORDER = new Map(
   [...QUICK_CARDS, ...MORE_STYLES].map((style, index) => [style.value, index]),
 )
@@ -85,6 +95,15 @@ export function NewSummaryModal({
     setTemplate(value)
   }
 
+  const handleSpeakerAwareChange = (checked: boolean) => {
+    setSummaryMode(checked ? 'speaker_aware' : 'general')
+    if (checked) {
+      chooseTemplate(SPEAKER_AWARE_CARDS[0].value)
+    } else if (SPEAKER_AWARE_VALUES.has(template)) {
+      chooseTemplate(defaultTemplate || 'standard')
+    }
+  }
+
   useEffect(() => {
     let cancelled = false
     fetchTemplates('style_video_with_frames')
@@ -111,7 +130,11 @@ export function NewSummaryModal({
   }, [styleTemplates])
   const quickOptions = templateOptions.slice(0, 7)
   const moreOptions = templateOptions.slice(7)
-  const quickValues = new Set(quickOptions.map((c) => c.value))
+  const visibleQuickOptions = summaryMode === 'speaker_aware' ? SPEAKER_AWARE_CARDS : quickOptions
+  const visibleQuickValues = new Set(visibleQuickOptions.map((c) => c.value))
+  const visibleMoreOptions = summaryMode === 'speaker_aware'
+    ? templateOptions.filter((option) => !SPEAKER_AWARE_VALUES.has(option.value))
+    : moreOptions
 
   // ── 模型选择：复用 providerStore + configStore 记忆 ──
   const providers = useProviderStore((s) => s.providers)
@@ -193,39 +216,30 @@ export function NewSummaryModal({
         <div className="nsm-body">
           {allowSpeakerAware && (
             <div className="nsm-section">
-              <div className="nsm-section-label">总结方式</div>
-              <div className="nsm-model-row" role="radiogroup" aria-label="总结方式">
-                <label className="nsm-toggle-row">
-                  <input
-                    type="radio"
-                    name="summary-mode"
-                    checked={summaryMode === 'general'}
-                    onChange={() => setSummaryMode('general')}
-                  />
-                  <span className="nsm-toggle-label">普通总结</span>
-                </label>
-                <label className="nsm-toggle-row">
-                  <input
-                    type="radio"
-                    name="summary-mode"
-                    checked={summaryMode === 'speaker_aware'}
-                    onChange={() => setSummaryMode('speaker_aware')}
-                  />
-                  <span className="nsm-toggle-label">区分说话人总结</span>
-                </label>
-              </div>
+              <label className="nsm-toggle-row nsm-speaker-toggle">
+                <input
+                  type="checkbox"
+                  aria-label="区分说话人"
+                  checked={summaryMode === 'speaker_aware'}
+                  onChange={(event) => handleSpeakerAwareChange(event.target.checked)}
+                />
+                <span className="nsm-toggle-label">区分说话人</span>
+                <span className="nsm-toggle-hint">默认关闭</span>
+              </label>
               {summaryMode === 'speaker_aware' && (
-                <div style={{ fontSize: 12, color: '#888', marginTop: 6 }}>
-                  会按说话人整理观点、共识、分歧、决策和行动项；需要先完成说话人识别。
+                <div className="nsm-speaker-aware-note">
+                  将按说话人整理观点、共识、分歧、决策和行动项；需要先完成说话人识别。
                 </div>
               )}
             </div>
           )}
           {/* 常用模板卡片 */}
           <div className="nsm-section">
-            <div className="nsm-section-label">常用模板</div>
+            <div className="nsm-section-label">
+              {summaryMode === 'speaker_aware' ? '区分说话人的总结方式' : '常用模板'}
+            </div>
             <div className="nsm-grid">
-              {quickOptions.map((c) => (
+              {visibleQuickOptions.map((c) => (
                 <button
                   key={c.value}
                   className={`nsm-card ${template === c.value ? 'active' : ''}`}
@@ -243,25 +257,25 @@ export function NewSummaryModal({
             <div className="nsm-row">
               <span className="nsm-section-label" style={{ margin: 0 }}>更多模板：</span>
               <select
-                value={quickValues.has(template) ? '' : template}
+                value={visibleQuickValues.has(template) ? '' : template}
                 onChange={(e) => e.target.value && chooseTemplate(e.target.value)}
                 className="nsm-select"
               >
                 <option value="" disabled>选择其他模板</option>
-                {moreOptions.map((o) => (
+                {visibleMoreOptions.map((o) => (
                   <option key={o.value} value={o.value} title={o.desc}>{o.label}</option>
                 ))}
               </select>
               <span
-                title={moreOptions.find((o) => o.value === template)?.desc}
-                style={{ display: quickValues.has(template) ? 'none' : 'inline-flex', cursor: 'help' }}
+                title={visibleMoreOptions.find((o) => o.value === template)?.desc}
+                style={{ display: visibleQuickValues.has(template) ? 'none' : 'inline-flex', cursor: 'help' }}
               >
                 <HelpCircle size={14} style={{ opacity: 0.5 }} />
               </span>
             </div>
-            {!quickValues.has(template) && moreOptions.find((o) => o.value === template) && (
+            {!visibleQuickValues.has(template) && visibleMoreOptions.find((o) => o.value === template) && (
               <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
-                {moreOptions.find((o) => o.value === template)!.desc}
+                {visibleMoreOptions.find((o) => o.value === template)!.desc}
               </div>
             )}
           </div>
