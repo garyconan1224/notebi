@@ -52,7 +52,7 @@ _TRANSLATE_MODEL_CANDIDATES = (
     "Qwen/Qwen3-8B",
 )
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -4220,9 +4220,44 @@ class SpeakerMapRequest(BaseModel):
     speaker_map: Dict[str, str]
 
 
+def _regenerate_speaker_summaries(workspace_id: str, item_id: str) -> None:
+    """说话人改名后，异步追加新的区分说话人总结版本。"""
+    try:
+        rec = _store.get(workspace_id)
+        if rec is None:
+            return
+        item = _find_item(rec, item_id)
+        targets = [s for s in item.summaries if s.summary_mode == "speaker_aware"]
+        for previous in targets:
+            try:
+                refreshed = generate_summary(
+                    item,
+                    previous.template,
+                    previous.background_for_summary,
+                    summary_mode="speaker_aware",
+                )
+                refreshed.version = _store.next_version_for_template(
+                    workspace_id, item_id, previous.template,
+                )
+                _store.add_item_summary(workspace_id, item_id, refreshed)
+            except Exception:
+                logger.exception(
+                    "speaker-aware summary regeneration failed: workspace=%s item=%s template=%s",
+                    workspace_id,
+                    item_id,
+                    previous.template,
+                )
+    except Exception:
+        logger.exception(
+            "speaker-aware summary regeneration worker failed: workspace=%s item=%s",
+            workspace_id,
+            item_id,
+        )
+
+
 @router.patch("/{workspace_id}/items/{item_id}/speaker_map")
 def update_speaker_map(
-    workspace_id: str, item_id: str, req: SpeakerMapRequest
+    workspace_id: str, item_id: str, req: SpeakerMapRequest, background_tasks: BackgroundTasks
 ) -> Dict[str, Any]:
     """保存说话人名称映射到 item.results。"""
     rec = _store.get(workspace_id)
@@ -4232,7 +4267,20 @@ def update_speaker_map(
     results = dict(item.results or {})
     results["speaker_map"] = req.speaker_map
     _store.update_item(workspace_id, item_id, results=results)
-    return {"speaker_map": req.speaker_map}
+    has_speaker_summaries = any(
+        summary.summary_mode == "speaker_aware" for summary in item.summaries
+    )
+    if has_speaker_summaries:
+        background_tasks.add_task(_regenerate_speaker_summaries, workspace_id, item_id)
+    return {
+        "speaker_map": req.speaker_map,
+        "summary_refresh": {
+            "status": "queued" if has_speaker_summaries else "not_needed",
+            "reason": "说话人名称已更新，区分说话人总结将在后台生成新版本。"
+            if has_speaker_summaries
+            else "当前没有区分说话人总结需要更新。",
+        },
+    }
 
 
 class TranscriptSegmentEditRequest(BaseModel):

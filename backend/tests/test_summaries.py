@@ -147,6 +147,36 @@ class TestCreateSummary:
         assert mock_gen.call_args.kwargs["summary_mode"] == "speaker_aware"
 
     @patch("backend.app.routes.workspaces.generate_summary")
+    def test_speaker_map_queues_new_speaker_summary_version(
+        self, mock_gen: MagicMock, _patch_store: WorkspaceStore,
+    ) -> None:
+        item = _patch_store.get_item("ws-1", "item-1")
+        item.type = "audio"
+        item.results = {
+            "transcript_segments": [
+                {"t_sec": 0, "speaker": "SPEAKER_00", "text": "发言"},
+            ],
+        }
+        item.summaries.append(ItemSummary(
+            summary_id="speaker-v0", template="concise", version=0,
+            summary_mode="speaker_aware", content_md="旧总结",
+        ))
+        mock_gen.return_value = ItemSummary(
+            summary_id="speaker-v1", template="concise", version=0,
+            summary_mode="speaker_aware", content_md="新总结",
+        )
+
+        resp = client.patch("/workspaces/ws-1/items/item-1/speaker_map", json={
+            "speaker_map": {"SPEAKER_00": "主持人"},
+        })
+        assert resp.status_code == 200
+        assert resp.json()["summary_refresh"]["status"] == "queued"
+        assert mock_gen.call_args.kwargs["summary_mode"] == "speaker_aware"
+        summaries = _patch_store.get_item("ws-1", "item-1").summaries
+        assert [s.version for s in summaries] == [0, 1]
+        assert summaries[0].content_md == "旧总结"
+
+    @patch("backend.app.routes.workspaces.generate_summary")
     def test_llm_failure(self, mock_gen: MagicMock) -> None:
         mock_gen.side_effect = RuntimeError("未配置 chat model")
         resp = client.post("/workspaces/ws-1/items/item-1/summaries", json={

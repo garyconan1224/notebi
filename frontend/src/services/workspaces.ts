@@ -626,10 +626,11 @@ export async function updateSpeakerMap(
   workspaceId: string,
   itemId: string,
   speakerMap: Record<string, string>,
-): Promise<void> {
-  await http.patch(`${BASE}/${workspaceId}/items/${itemId}/speaker_map`, {
+): Promise<{ speaker_map: Record<string, string>; summary_refresh?: { status: string; reason: string } }> {
+  const { data } = await http.patch(`${BASE}/${workspaceId}/items/${itemId}/speaker_map`, {
     speaker_map: speakerMap,
   })
+  return data
 }
 
 /** PATCH /workspaces/{id}/items/{itemId}/transcript/segments/{idx} — 编辑单段转录文本 */

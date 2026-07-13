@@ -264,8 +264,12 @@ export default function AudioResultPage() {
     setSpeakerMap(updated) // optimistic
     setEditingSpeaker(null)
     try {
-      await updateSpeakerMap(workspaceId, itemId, updated)
-      toast.success('说话人标签已保存')
+      const saveResult = await updateSpeakerMap(workspaceId, itemId, updated)
+      toast.success(
+        saveResult.summary_refresh?.status === 'queued'
+          ? '说话人标签已保存，区分说话人总结正在生成新版本'
+          : '说话人标签已保存',
+      )
     } catch {
       setSpeakerMap(speakerMap) // rollback
       toast.error('保存失败，请重试')
