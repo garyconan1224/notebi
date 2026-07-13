@@ -1100,6 +1100,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   // VN4.3 新建总结（从 AI 工具菜单触发，复用 NewSummaryModal）
   const handleCreateSummary = useCallback(async (opts: {
     template: string; background: string; providerId: string; model: string; searchWeb: boolean
+    summaryMode: 'general' | 'speaker_aware'
   }) => {
     const templateName = tl(opts.template)
     setCreatingSummary(true)
@@ -1110,6 +1111,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         provider_id: opts.providerId,
         model: opts.model,
         search_web: opts.searchWeb,
+        summary_mode: opts.summaryMode,
       })
       showOperationNotice(`${templateName} v${s.version} 生成完成`, 'success')
       refreshSummaries()
@@ -2300,6 +2302,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         <NewSummaryModal
           creating={creatingSummary}
           defaultTemplate={note.summary_hint?.default_template}
+          allowSpeakerAware={isAudioNote}
           onSubmit={handleCreateSummary}
           onClose={() => setShowNewSummaryModal(false)}
         />

@@ -90,4 +90,23 @@ describe('NewSummaryModal', () => {
       model: 'Qwen/Qwen3-8B',
     }))
   })
+
+  it('音频允许选择区分说话人总结方式', () => {
+    const onSubmit = vi.fn()
+    render(
+      <NewSummaryModal
+        creating={false}
+        allowSpeakerAware
+        onSubmit={onSubmit}
+        onClose={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('radio', { name: '区分说话人总结' }))
+    fireEvent.click(screen.getByText('生成'))
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      summaryMode: 'speaker_aware',
+    }))
+  })
 })

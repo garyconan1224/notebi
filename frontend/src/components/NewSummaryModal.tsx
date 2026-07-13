@@ -49,8 +49,10 @@ const TEMPLATE_ORDER = new Map(
 interface NewSummaryModalProps {
   creating: boolean
   defaultTemplate?: string
+  allowSpeakerAware?: boolean
   onSubmit: (opts: {
     template: string
+    summaryMode: 'general' | 'speaker_aware'
     background: string
     providerId: string
     model: string
@@ -62,10 +64,12 @@ interface NewSummaryModalProps {
 export function NewSummaryModal({
   creating,
   defaultTemplate,
+  allowSpeakerAware = false,
   onSubmit,
   onClose,
 }: NewSummaryModalProps) {
   const [template, setTemplate] = useState(defaultTemplate || 'standard')
+  const [summaryMode, setSummaryMode] = useState<'general' | 'speaker_aware'>('general')
   const [background, setBackground] = useState('')
   const [searchWeb, setSearchWeb] = useState(false)
   const [styleTemplates, setStyleTemplates] = useState<VideoTemplateItem[]>([])
@@ -170,6 +174,7 @@ export function NewSummaryModal({
     setConfig({ summaryProviderId: effectiveProviderId, summaryModelId: effectiveModelId })
     onSubmit({
       template,
+      summaryMode,
       background,
       providerId: effectiveProviderId,
       model: effectiveModelId,
@@ -186,6 +191,36 @@ export function NewSummaryModal({
         </div>
 
         <div className="nsm-body">
+          {allowSpeakerAware && (
+            <div className="nsm-section">
+              <div className="nsm-section-label">总结方式</div>
+              <div className="nsm-model-row" role="radiogroup" aria-label="总结方式">
+                <label className="nsm-toggle-row">
+                  <input
+                    type="radio"
+                    name="summary-mode"
+                    checked={summaryMode === 'general'}
+                    onChange={() => setSummaryMode('general')}
+                  />
+                  <span className="nsm-toggle-label">普通总结</span>
+                </label>
+                <label className="nsm-toggle-row">
+                  <input
+                    type="radio"
+                    name="summary-mode"
+                    checked={summaryMode === 'speaker_aware'}
+                    onChange={() => setSummaryMode('speaker_aware')}
+                  />
+                  <span className="nsm-toggle-label">区分说话人总结</span>
+                </label>
+              </div>
+              {summaryMode === 'speaker_aware' && (
+                <div style={{ fontSize: 12, color: '#888', marginTop: 6 }}>
+                  会按说话人整理观点、共识、分歧、决策和行动项；需要先完成说话人识别。
+                </div>
+              )}
+            </div>
+          )}
           {/* 常用模板卡片 */}
           <div className="nsm-section">
             <div className="nsm-section-label">常用模板</div>

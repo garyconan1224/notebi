@@ -61,8 +61,9 @@ function templateLabel(id: string): string {
 
 /** 版本显示名：有自定义 name 则显示 name，否则 模板名 · v{n} */
 function versionLabel(s: ItemSummary): string {
-  if (s.name) return s.name
-  return `${templateLabel(s.template)} · v${s.version}`
+  const modeLabel = s.summary_mode === 'speaker_aware' ? ' · 区分说话人' : ''
+  if (s.name) return `${s.name}${modeLabel}`
+  return `${templateLabel(s.template)} · v${s.version}${modeLabel}`
 }
 
 /* ── Props ─────────────────────────────────────────────── */
@@ -74,11 +75,12 @@ interface SummariesTabProps {
   activeSummaryId?: string
   /** create/delete/rename 后通知父组件同步 summaries 列表 */
   onRefresh?: () => void
+  allowSpeakerAware?: boolean
 }
 
 /* ── 主组件 ────────────────────────────────────────────── */
 
-export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummaryId, onRefresh }: SummariesTabProps) {
+export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummaryId, onRefresh, allowSpeakerAware = false }: SummariesTabProps) {
   const navigate = useNavigate()
   const [summaries, setSummaries] = useState<ItemSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -139,6 +141,7 @@ export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummary
 
   const handleCreate = useCallback(async (opts: {
     template: string
+    summaryMode: 'general' | 'speaker_aware'
     background: string
     providerId: string
     model: string
@@ -156,6 +159,7 @@ export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummary
         provider_id: opts.providerId,
         model: opts.model,
         search_web: opts.searchWeb,
+        summary_mode: opts.summaryMode,
       })
       toast.success(`${templateLabel(s.template)} v${s.version} 生成完成`, { id: toastId })
       await refresh()
@@ -309,6 +313,7 @@ export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummary
           <NewSummaryModal
             creating={false}
             defaultTemplate={defaultTemplate}
+            allowSpeakerAware={allowSpeakerAware}
             onSubmit={handleCreate}
             onClose={() => setShowModal(false)}
           />
@@ -547,6 +552,7 @@ export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummary
         <NewSummaryModal
           creating={creatingTemplate !== null}
           defaultTemplate={defaultTemplate}
+          allowSpeakerAware={allowSpeakerAware}
           onSubmit={handleCreate}
           onClose={() => setShowModal(false)}
         />

@@ -159,7 +159,7 @@ describe('SummariesTab', () => {
         'item-1',
         'standard',
         '',
-        { provider_id: '', model: '', search_web: false },
+        { provider_id: '', model: '', search_web: false, summary_mode: 'general' },
       )
     })
   })
@@ -189,7 +189,7 @@ describe('SummariesTab', () => {
         'item-1',
         'tool_recommendation',
         '',
-        { provider_id: '', model: '', search_web: false },
+        { provider_id: '', model: '', search_web: false, summary_mode: 'general' },
       )
     })
   })

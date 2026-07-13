@@ -714,7 +714,7 @@ export default function AudioResultPage() {
         )}
 
         {activeTab === 'summary' && (
-          <SummariesTab workspaceId={workspaceId} itemId={itemId} />
+          <SummariesTab workspaceId={workspaceId} itemId={itemId} allowSpeakerAware />
         )}
 
         {activeTab === 'vocal' && (

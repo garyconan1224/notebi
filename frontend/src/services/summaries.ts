@@ -6,6 +6,7 @@ export interface ItemSummary {
   summary_id: string
   template: string
   version: number
+  summary_mode?: 'general' | 'speaker_aware'
   name: string
   background_for_summary: string
   content_md: string
@@ -30,7 +31,7 @@ export async function createSummary(
   itemId: string,
   template: string,
   background_for_summary = '',
-  options: { provider_id?: string; model?: string; search_web?: boolean } = {},
+  options: { provider_id?: string; model?: string; search_web?: boolean; summary_mode?: 'general' | 'speaker_aware' } = {},
 ): Promise<ItemSummary> {
   const { data } = await http.post<ItemSummary>(
     `/workspaces/${workspaceId}/items/${itemId}/summaries`,
@@ -40,6 +41,7 @@ export async function createSummary(
       provider_id: options.provider_id ?? '',
       model: options.model ?? '',
       search_web: options.search_web ?? false,
+      summary_mode: options.summary_mode ?? 'general',
     },
     { timeout: 180_000 },  // 强模型更慢，给 3 分钟
   )
