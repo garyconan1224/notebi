@@ -74,7 +74,7 @@ function buildResultPath(
   const detail: Record<string, string> = {
     video: 'video_detail',
     image: 'image_result',
-    audio: 'audio_detail',
+    audio: 'note',
     text: 'text_result',
   }
   return `/workspaces/${workspaceId}/items/${itemId}/${detail[itemType] ?? 'overview'}`

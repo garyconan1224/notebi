@@ -41,6 +41,8 @@ interface LNTranscriptPanelProps {
   sourceMd?: string
   /** 已有的译文缓存（key=目标语言，value={idx→text} 或 [{idx,text}]） */
   translations?: TranscriptTranslations | null
+  /** 说话人编号到用户自定义名称的映射。 */
+  speakerMap?: Record<string, string>
   title?: string
   countLabel?: string
 }
@@ -98,6 +100,7 @@ export default function LNTranscriptPanel({
   onSaved,
   sourceMd,
   translations,
+  speakerMap,
   title = '转录',
   countLabel,
 }: LNTranscriptPanelProps) {
@@ -359,7 +362,10 @@ export default function LNTranscriptPanel({
           {transcript.map((line, i) => {
             const isEditing = editingIdx === i
             const displayText = localEdits[i] ?? line.text
-            const speakerPrefix = line.speaker ? `[${line.speaker}] ` : ''
+            const speakerName = line.speaker
+              ? (speakerMap?.[line.speaker] || line.speaker.replace(/^SPEAKER_/, 'S'))
+              : ''
+            const speakerPrefix = speakerName ? `[${speakerName}] ` : ''
             const translatedText = localTranslations?.[i]
             const quoteText = mode === 'translated' || mode === 'bilingual'
               ? translatedText || displayText

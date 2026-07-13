@@ -207,6 +207,31 @@ class TestGetSummary:
         assert resp.status_code == 200
         assert resp.json()["content_md"] == "详细内容"
 
+    def test_audio_note_echoes_speaker_map(
+        self, _patch_store: WorkspaceStore, tmp_path: pathlib.Path,
+    ) -> None:
+        """音频 /note 刷新后应回显已保存的说话人名称映射。"""
+        import backend.app.routes.workspaces as ws_module
+
+        item = _patch_store.get_item("ws-1", "item-1")
+        item.type = "audio"
+        item.source_value = "/tmp/test.mp3"
+        item.results = {
+            "speaker_map": {"SPEAKER_00": "主持人"},
+            "transcript_segments": [
+                {"t_sec": 0, "speaker": "SPEAKER_00", "text": "开场"},
+            ],
+        }
+        note_dir = tmp_path / "note"
+        note_dir.mkdir()
+        (note_dir / "note.md").write_text("---\ntitle: 测试音频\n---\n正文\n", encoding="utf-8")
+
+        with patch.object(ws_module, "note_dir", return_value=note_dir):
+            resp = client.get("/workspaces/ws-1/items/item-1/note")
+
+        assert resp.status_code == 200
+        assert resp.json()["speaker_map"] == {"SPEAKER_00": "主持人"}
+
 
 # ── DELETE ──────────────────────────────────────────────────────
 

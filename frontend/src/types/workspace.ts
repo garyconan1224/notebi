@@ -183,6 +183,8 @@ export interface ItemNote {
   media: NoteMedia         // R3.1: 媒体 URL（实时从 results 提取）
   transcript: unknown      // R3.1: 转录数据（video/audio 时为 list）
   translations?: TranscriptTranslations | null
+  /** 音频说话人编号到用户名称的映射，刷新后用于字幕和总结入口回显。 */
+  speaker_map?: Record<string, string>
   summary_hint?: {
     content_category?: string
     default_template?: string

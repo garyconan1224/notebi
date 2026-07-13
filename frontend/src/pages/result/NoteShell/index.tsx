@@ -527,24 +527,34 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     setSaveStatus('idle')
   }, [])
 
-  // 按 template 分组（两层下拉用）
+  // 按「总结模式 + template」分组，避免普通总结与区分说话人总结混在一起。
   const templateGroups = useMemo(() => {
     const map = new Map<string, ItemSummary[]>()
     for (const s of summaries) {
-      const arr = map.get(s.template) ?? []
+      const key = `${s.summary_mode ?? 'general'}::${s.template}`
+      const arr = map.get(key) ?? []
       arr.push(s)
-      map.set(s.template, arr)
+      map.set(key, arr)
     }
     // 每组内按 version 排序
     for (const arr of map.values()) arr.sort((a, b) => a.version - b.version)
     return map
   }, [summaries])
 
+  const summaryGroupLabel = useCallback((key: string) => {
+    const [mode, template] = key.split('::', 2)
+    return mode === 'speaker_aware' ? `区分说话人 · ${tl(template)}` : tl(template)
+  }, [])
+
+  const summaryGroupKey = useCallback((summary: ItemSummary) => (
+    `${summary.summary_mode ?? 'general'}::${summary.template}`
+  ), [])
+
   const activeTemplate = useMemo(() => {
     if (!activeSummaryId) return templateGroups.keys().next().value ?? ''
     const s = summaries.find((x) => x.summary_id === activeSummaryId)
-    return s?.template ?? ''
-  }, [activeSummaryId, summaries, templateGroups])
+    return s ? summaryGroupKey(s) : ''
+  }, [activeSummaryId, summaries, summaryGroupKey, templateGroups])
 
   useEffect(() => {
     let cancelled = false
@@ -1238,7 +1248,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const hasTags = hasRenderableTags(tags)
   const activeSummary = summaries.find((x) => x.summary_id === activeSummaryId)
   const versionButtonLabel = activeSummary
-    ? `${tl(activeSummary.template)} · ${activeSummary.name || `v${activeSummary.version}`}`
+    ? `${summaryGroupLabel(summaryGroupKey(activeSummary))} · ${activeSummary.name || `v${activeSummary.version}`}`
     : `主笔记 v${noteVersion}`
 
   // 7.3: 视频笔记三列布局标志
@@ -1253,6 +1263,10 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const imageInfos = note.media?.image_infos ?? []
   const currentInfo = imageInfos[selectedImageIdx]
   const transcriptCount = transcriptLines.length
+  const speakerIds = Array.from(new Set(
+    transcriptLines.map((line) => String(line.speaker || '').trim()).filter(Boolean),
+  ))
+  const speakerNames = speakerIds.map((id) => note.speaker_map?.[id] || id.replace(/^SPEAKER_/, 'S'))
   const sourceLabel = sourceUrl ? platformLabelFromUrl(sourceUrl) : '本地素材'
   const effectiveVideoDuration = note.media?.video?.duration || videoDuration
   const effectiveAudioDuration = audioDuration
@@ -1272,6 +1286,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     mediaDuration ? { label: '时长', value: formatTimecode(mediaDuration) } : null,
     sourceMarker ? { label: '素材 ID', value: sourceMarker } : null,
     transcriptCount > 0 ? { label: '转写', value: `${transcriptCount} 条` } : null,
+    isAudioNote && speakerNames.length > 0 ? { label: '说话人', value: speakerNames.join(' / ') } : null,
     isVideoNote && videoFrames.length > 0 ? { label: '关键帧', value: `${videoFrames.length} 张` } : null,
     isImageNote && images.length > 0 ? { label: '图片', value: `${images.length} 张` } : null,
     summaries.length > 0 ? { label: '总结', value: `${summaries.length} 个版本` } : null,
@@ -1352,7 +1367,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                   [...templateGroups.entries()].map(([tmpl, versions], gi) => (
                     <div key={tmpl}>
                       {gi > 0 && <div className="nibi-note-version-divider" />}
-                      <div className="nibi-note-version-group">{tl(tmpl)}</div>
+                      <div className="nibi-note-version-group">{summaryGroupLabel(tmpl)}</div>
                       {versions.map((s) => {
                         const isActive = s.summary_id === activeSummaryId
                         const isRenaming = renameTargetId === s.summary_id
@@ -1828,7 +1843,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                             onClick={() => { const first = templateGroups.get(tmpl)?.[0]; if (first) handleSelectSummary(first) }}
                             style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: tmpl === activeTemplate ? 'var(--accl)' : 'var(--bgalt)', color: tmpl === activeTemplate ? 'var(--acc)' : 'var(--mut)', fontWeight: tmpl === activeTemplate ? 600 : 400 }}
                           >
-                            {tl(tmpl)}
+                            {summaryGroupLabel(tmpl)}
                           </button>
                         ))}
                       </div>
@@ -1851,12 +1866,18 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         </>
       ) : isAudioNote ? (
         <>
-        {/* ── 音频笔记两栏布局：.note-page（设计稿 pg-audio 对齐） ── */}
+        {/* ── 音频结果页：沿用 NoteShell 能力，按音频结果页视觉单页呈现 ── */}
+        <div className="nibi-audio-result-frame">
+          <nav className="nibi-audio-result-nav" aria-label="音频结果页导航">
+            <a href="#audio-transcript">转录 <span>{transcriptCount}</span></a>
+            <a href="#audio-summary">总结 <span>{summaries.length}</span></a>
+            <a href="#audio-note">笔记</a>
+          </nav>
         <div className={`nibi-note-page nibi-note-page--audio${isPip ? ' is-pip' : ''}`} ref={notePageRef} style={notePageStyle}>
 
           {/* ── 左栏：播放器 + 波形 + 控制 + 转录 ── */}
 	          <div className="nibi-note-left nibi-audio-left vm-ln-scope">
-            <div
+	            <div
               className={`nibi-audio-player-shell${isPip ? ' is-pip' : ''}${pipDragging ? ' is-dragging' : ''}`}
               style={isPip && pipPosition ? { width: pipWidth, left: pipPosition.x, top: pipPosition.y, right: 'auto', bottom: 'auto' } : undefined}
             >
@@ -1874,6 +1895,15 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                       <X size={13} />
                     </button>
                   </div>
+                </div>
+	              )}
+              {!isPip && (
+                <div className="nibi-audio-result-player-head">
+                  <div>
+                    <span className="nibi-audio-result-kicker">音频结果</span>
+                    <strong>{title || '未命名音频'}</strong>
+                  </div>
+                  <span>{sourceLabel}{effectiveAudioDuration ? ` · ${formatTimecode(effectiveAudioDuration)}` : ''}</span>
                 </div>
               )}
               <div className="nibi-audio-player-wrap">
@@ -1925,7 +1955,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
 	            )}
             {/* 转录 */}
             {!isPip && transcriptLines.length > 0 ? (
-              <div className="nibi-note-transcript-wrap">
+              <div id="audio-transcript" className="nibi-note-transcript-wrap">
                 <LNTranscriptPanel
                   transcript={transcriptLines}
                   currentTime={currentTime}
@@ -1934,6 +1964,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                   itemId={itemId}
                   onSaved={refreshAfterTranscriptEdit}
                   translations={note.translations ?? null}
+                  speakerMap={note.speaker_map}
                   title="转录文本"
                   countLabel={`${transcriptCount} 条`}
                 />
@@ -1972,7 +2003,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 {summaries.length > 0 && (() => {
 
                   return (
-                    <div className="note-section" style={{ marginTop: 16 }}>
+                    <div id="audio-summary" className="note-section" style={{ marginTop: 16 }}>
                       <h2>内容总结</h2>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12 }}>
                         {[...templateGroups.entries()].map(([tmpl]) => (
@@ -1982,7 +2013,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                             onClick={() => { const first = templateGroups.get(tmpl)?.[0]; if (first) handleSelectSummary(first) }}
                             style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: tmpl === activeTemplate ? 'var(--accl)' : 'var(--bgalt)', color: tmpl === activeTemplate ? 'var(--acc)' : 'var(--mut)', fontWeight: tmpl === activeTemplate ? 600 : 400 }}
                           >
-                            {tl(tmpl)}
+                            {summaryGroupLabel(tmpl)}
                           </button>
                         ))}
                       </div>
@@ -1990,7 +2021,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                   )
                 })()}
                 {/* 正文 */}
-                <div className="note-section" style={{ marginTop: summaries.length > 0 ? 0 : 16 }}>
+                <div id="audio-note" className="note-section" style={{ marginTop: summaries.length > 0 ? 0 : 16 }}>
                   <div className="nibi-note-editor-panel">
                     <MilkdownEditor key={milkdownKey} markdown={editingBody} onMarkdownChange={handleEditorChange} onSeek={handleSeek} />
                   </div>
@@ -2001,6 +2032,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
               {inlineTocNode}
             </div>
           </div>
+        </div>
         </div>
         </>
       ) : isImageNote ? (
@@ -2101,7 +2133,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                             onClick={() => { const first = templateGroups.get(tmpl)?.[0]; if (first) handleSelectSummary(first) }}
                             style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: tmpl === activeTemplate ? 'var(--accl)' : 'var(--bgalt)', color: tmpl === activeTemplate ? 'var(--acc)' : 'var(--mut)', fontWeight: tmpl === activeTemplate ? 600 : 400 }}
                           >
-                            {tl(tmpl)}
+                            {summaryGroupLabel(tmpl)}
                           </button>
                         ))}
                       </div>
@@ -2180,7 +2212,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                             onClick={() => { const first = templateGroups.get(tmpl)?.[0]; if (first) handleSelectSummary(first) }}
                             style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: tmpl === activeTemplate ? 'var(--accl)' : 'var(--bgalt)', color: tmpl === activeTemplate ? 'var(--acc)' : 'var(--mut)', fontWeight: tmpl === activeTemplate ? 600 : 400 }}
                           >
-                            {tl(tmpl)}
+                            {summaryGroupLabel(tmpl)}
                           </button>
                         ))}
                       </div>

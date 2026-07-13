@@ -487,7 +487,7 @@ export default function ResultsOverview() {
                     <div
                       key={idx}
                       className="ov-audio-seg-item"
-                      onClick={() => navigate(`/workspaces/${workspaceId}/items/${itemId}/audio_detail`)}
+                      onClick={() => navigate(`/workspaces/${workspaceId}/items/${itemId}/note`)}
                     >
                       <span className="ov-audio-seg-ts">{l.t_str || formatSec(l.t_sec ?? 0)}</span>
                       <span className="ov-audio-seg-text">{l.text?.slice(0, 50)}{l.text && l.text.length > 50 ? '…' : ''}</span>

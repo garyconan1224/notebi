@@ -29,7 +29,6 @@ const WorkspaceList = lazy(() => import('@/pages/WorkspacePage/WorkspaceList'))
 const TaskboardPage = lazy(() => import('@/pages/WorkspacePage/TaskboardPage'))
 const VideoResultPage = lazy(() => import('@/pages/result/VideoResultPage'))
 const ImageResultPage = lazy(() => import('@/pages/result/ImageResultPage'))
-const AudioResultPage = lazy(() => import('@/pages/result/AudioResultPage'))
 const TextResultPage = lazy(() => import('@/pages/result/TextResultPage'))
 const ResultsOverview = lazy(() => import('@/pages/result/ResultsOverview/index'))
 const FavoritesPage = lazy(() => import('@/pages/FavoritesPage/FavoritesPage'))
@@ -96,7 +95,8 @@ export const router = createBrowserRouter([
       },
       {
         path: 'workspaces/:workspaceId/items/:itemId/audio_detail',
-        element: withSuspense(<AudioResultPage />),
+        // 兼容旧链接；音频实际页面统一收敛到 /note。
+        loader: ({ params }) => redirect(`/workspaces/${params.workspaceId}/items/${params.itemId}/note`),
       },
       {
         path: 'workspaces/:workspaceId/items/:itemId/text_detail',
@@ -117,7 +117,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'workspaces/:workspaceId/items/:itemId/audio_result',
-        loader: ({ params }) => redirect(`/workspaces/${params.workspaceId}/items/${params.itemId}/audio_detail`),
+        loader: ({ params }) => redirect(`/workspaces/${params.workspaceId}/items/${params.itemId}/note`),
       },
       {
         path: 'workspaces/:workspaceId/items/:itemId/text_result',

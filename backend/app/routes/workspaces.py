@@ -5064,6 +5064,8 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
         "media": media,
         "transcript": transcript,
         "translations": results.get("translations", {}),
+        # 音频说话人改名需要随 /note 回显，保证刷新后字幕和总结入口仍使用用户名称。
+        "speaker_map": results.get("speaker_map", {}) if item_type == "audio" else {},
         "summary_hint": summary_hint,
     }
 
