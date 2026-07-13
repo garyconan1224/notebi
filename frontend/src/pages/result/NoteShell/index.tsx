@@ -1906,13 +1906,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         </>
       ) : isAudioNote ? (
         <>
-        {/* ── 音频结果页：沿用 NoteShell 能力，按音频结果页视觉单页呈现 ── */}
-        <div className="nibi-audio-result-frame">
-          <nav className="nibi-audio-result-nav" aria-label="音频结果页导航">
-            <a href="#audio-transcript">转录 <span>{transcriptCount}</span></a>
-            <a href="#audio-summary">总结 <span>{summaries.length}</span></a>
-            <a href="#audio-note">笔记</a>
-          </nav>
+        {/* ── 音频笔记两栏布局：播放器/转录 + 总结/笔记 ── */}
         <div className={`nibi-note-page nibi-note-page--audio${isPip ? ' is-pip' : ''}`} ref={notePageRef} style={notePageStyle}>
 
           {/* ── 左栏：播放器 + 波形 + 控制 + 转录 ── */}
@@ -2110,7 +2104,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
               {inlineTocNode}
             </div>
           </div>
-        </div>
         </div>
         </>
       ) : isImageNote ? (
