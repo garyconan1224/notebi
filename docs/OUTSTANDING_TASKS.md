@@ -2,13 +2,25 @@
 
 > 本文件是「下一步该做什么」的快照。写入前必须先 `git log --oneline -20` 对账，避免把已完成阶段当作待办。
 
-> ⚠️ **2026-06-05 当前有效待办（覆盖下方旧池）**：先**确认 M7 单素材笔记页（NoteShell）信息架构**，依据 [`docs/plans/track-K-M7-result-pages-redesign.md`](plans/track-K-M7-result-pages-redesign.md)；**本轮不开始搭建 / 不动代码**。下方 2026-05-29 任务池为历史快照，勿直接捡起执行。
+> ⚠️ **2026-07-12 当前有效待办（覆盖下方旧池）**：执行 [`docs/plans/audio-speaker-aware-result-page-2026-07-12.md`](plans/audio-speaker-aware-result-page-2026-07-12.md)。重点是区分说话人总结；遇到计划外事实必须停下来问用户。下方历史任务池勿直接捡起执行。
 
-Last updated: 2026-05-29（**当前阶段 = R21.P3.S3 followup 待 merge → 音视频端到端打通**）
+Last updated: 2026-07-12（**当前阶段 = 音频统一笔记页 / 区分说话人总结**）
 
 ---
 
 ## 🔴 当前阶段（一切让路）
+
+执行计划：[`docs/plans/audio-speaker-aware-result-page-2026-07-12.md`](plans/audio-speaker-aware-result-page-2026-07-12.md)
+
+- P0：区分说话人总结数据契约与流水线顺序
+- P0：说话人重命名后自动生成新总结版本，保留历史版本
+- P0：音频统一笔记页承载现有 NoteBi 能力
+- P0：真实波形、错误原因、指定功能移除
+- 强制停点：schema/迁移、依赖、计划外调用关系或跨媒体影响必须先问用户
+
+以下旧任务池仅作历史快照，不直接执行。
+
+> 以下为历史任务池，不是本轮执行入口：
 
 **R14~R21 全系列已合入 main（以 git log 为准）；分支 `fix/r21-p3-s3-followup`（R21.P3.S3 followup，preflight intent 链路修复 + av_combined 补图入口）已 `status: done`，下一步用户授权后本地 merge 到 `main`。不 push origin。**
 

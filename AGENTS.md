@@ -24,7 +24,7 @@ Do not read `docs/ROADMAP.md`, `docs/SPEC.md`, or the full `docs/EXECUTION_PLAN.
 
 ## Codex Role Boundary (Important, MUST read)
 
-**In this project, Codex is only responsible for inspection, testing, branch comparison, and next-step suggestions. It does NOT write new business features.**
+**默认情况下，Codex 只负责 inspection、testing、branch comparison 和 next-step suggestions，不写新业务功能。若用户在当前任务中明确授权 Codex 执行，则只可在该任务计划写明的范围内实现，并继续遵守停点求证规则。**
 
 ### Codex Can Do
 
@@ -35,9 +35,9 @@ Do not read `docs/ROADMAP.md`, `docs/SPEC.md`, or the full `docs/EXECUTION_PLAN.
 - Find and report potential issues (bugs, type errors, missing tests) — **but do not auto-fix**
 - Compare multiple agent branches, point out differences, let the user decide which to adopt
 
-### Codex Must NOT Do
+### Codex Must NOT Do（除非用户对当前任务明确授权）
 
-- ❌ **Write new business features** (API endpoints, frontend pages, data models, etc.)
+- ❌ **在未获得当前任务明确授权时写新业务功能**（API endpoints、frontend pages、data models 等）
 - ❌ Commit directly to the `main` branch
 - ❌ Apply / cherry-pick another agent's stash or commit
 - ❌ Treat another agent's worktree branch as `main` for rebasing
@@ -58,6 +58,8 @@ git branch --show-current
 ```
 
 **Single-Agent Serial Principle (since 2026-05-18)**: This project no longer runs agents in parallel. If `git status` shows uncommitted changes that don't belong to the current task, or the current branch doesn't match expectations — **stop immediately and ask the user**, do not continue.
+
+**用户明确授权后的停点规则**：即使本轮允许 Codex 执行，只要实际代码、数据结构、接口、依赖、范围或产品行为与计划不一致，也必须立即停下，用中文列出事实和选项，等待用户确认；不得自行想当然。
 
 ### Conflict Report Template
 
