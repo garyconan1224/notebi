@@ -132,11 +132,32 @@ export function NewSummaryModal({
     (p) => p.enabled && (p.capabilities ?? []).includes('chat'),
   )
 
+  // 独立拆分后的 NoteBi 可能只迁移了 API Key，没有迁移浏览器里的模型选择。
+  // 优先恢复用户上次选择，其次使用后端默认 provider，最后选择第一个可用 chat provider。
+  const effectiveProviderId =
+    (providerId && chatProviders.some((p) => p.id === providerId) ? providerId : '') ||
+    chatProviders.find((p) => p.id === savedProviderId)?.id ||
+    chatProviders.find((p) => Boolean(p.default_models?.chat?.trim()))?.id ||
+    chatProviders[0]?.id ||
+    ''
+
   // 当前 provider 的模型列表
-  const models: Model[] = providerId ? providerModels[providerId] ?? [] : []
+  const models: Model[] = effectiveProviderId ? providerModels[effectiveProviderId] ?? [] : []
   // 只保留能做文字总结的模型：capabilities 含 'chat'；无标签的旧数据放行
   const textModels = models.filter((m) => !m.capabilities || m.capabilities.includes('chat'))
-  const isLoading = providerId ? !!modelsLoading[providerId] : false
+  const isLoading = effectiveProviderId ? !!modelsLoading[effectiveProviderId] : false
+
+  // 模型列表到达后，恢复已保存模型；没有保存值时使用 provider 默认模型，
+  // 再没有则选第一个可用 chat 模型，避免把“已配置 API Key”误报成“未配置 LLM”。
+  const providerDefault = providers
+    .find((p) => p.id === effectiveProviderId)
+    ?.default_models?.chat?.trim()
+  const effectiveModelId =
+    textModels.some((m) => m.id === modelId)
+      ? modelId
+      : textModels.find((m) => m.id === providerDefault)?.id ??
+        textModels[0]?.id ??
+        ''
 
   // 切换 provider 时清空 model
   const handleProviderChange = (id: string) => {
@@ -146,12 +167,12 @@ export function NewSummaryModal({
 
   const handleGenerate = () => {
     // 记忆本次选择
-    setConfig({ summaryProviderId: providerId, summaryModelId: modelId })
+    setConfig({ summaryProviderId: effectiveProviderId, summaryModelId: effectiveModelId })
     onSubmit({
       template,
       background,
-      providerId,
-      model: modelId,
+      providerId: effectiveProviderId,
+      model: effectiveModelId,
       searchWeb,
     })
   }
@@ -215,7 +236,7 @@ export function NewSummaryModal({
             <div className="nsm-section-label">模型</div>
             <div className="nsm-model-row">
               <select
-                value={providerId}
+                value={effectiveProviderId}
                 onChange={(e) => handleProviderChange(e.target.value)}
                 className="nsm-select"
               >
@@ -225,9 +246,9 @@ export function NewSummaryModal({
                 ))}
               </select>
               <select
-                value={modelId}
+                value={effectiveModelId}
                 onChange={(e) => setModelId(e.target.value)}
-                disabled={!providerId || isLoading}
+                disabled={!effectiveProviderId || isLoading}
                 className="nsm-select"
               >
                 <option value="">

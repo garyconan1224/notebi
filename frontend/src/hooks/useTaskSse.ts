@@ -4,7 +4,7 @@ import { isTaskTerminal } from '@/types/task'
 import type { TaskRecord } from '@/types/task'
 import { toast } from 'sonner'
 
-const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL ?? 'http://127.0.0.1:8000'
+const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL ?? 'http://127.0.0.1:8001'
 
 /**
  * SSE 事件 payload 形状（与后端 `/pipeline/tasks/{id}/events` 对齐）。

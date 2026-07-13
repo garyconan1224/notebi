@@ -184,7 +184,7 @@ function formatBytes(bytes: number): string {
 }
 
 /** 后端地址（与 .env 默认一致） */
-const BACKEND_ADDR = `127.0.0.1:${import.meta.env.VITE_BACKEND_PORT ?? '8000'}`
+const BACKEND_ADDR = `127.0.0.1:${import.meta.env.VITE_BACKEND_PORT ?? '8001'}`
 
 export function AppShell({ children }: AppShellProps) {
   const location = useLocation()

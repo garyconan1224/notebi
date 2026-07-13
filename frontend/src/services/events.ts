@@ -10,7 +10,7 @@
  * 端点就绪后仅需替换 `url` 即可接入，不需修改业务代码。
  */
 
-const BASE = import.meta.env.VITE_BACKEND_BASE_URL ?? 'http://127.0.0.1:8000'
+const BASE = import.meta.env.VITE_BACKEND_BASE_URL ?? 'http://127.0.0.1:8001'
 
 export interface SseHandlers<T = unknown> {
   /** 默认 message 事件回调（解析为 T） */
@@ -22,6 +22,7 @@ export interface SseHandlers<T = unknown> {
   /** 连接成功建立时回调 */
   onOpen?: () => void
 }
+
 
 export interface SseSubscription {
   /** 手动关闭连接 */
@@ -106,4 +107,3 @@ export function subscribeMessages<T = unknown>(
   const sub = subscribeSse<T>(path, { onMessage, onError })
   return () => sub.close()
 }
-

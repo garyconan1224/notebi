@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const BASE = import.meta.env.VITE_BACKEND_BASE_URL ?? 'http://127.0.0.1:8000'
+const BASE = import.meta.env.VITE_BACKEND_BASE_URL ?? 'http://127.0.0.1:8001'
 
 export const http = axios.create({ baseURL: BASE, timeout: 15000 })
 
@@ -19,4 +19,3 @@ http.interceptors.response.use(
 )
 
 export default http
-

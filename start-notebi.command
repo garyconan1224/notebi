@@ -49,6 +49,7 @@ set_env_value "VITE_BACKEND_BASE_URL" "http://127.0.0.1:$BACKEND_PORT"
 export VITE_PRODUCT_MODE="notebi"
 export BACKEND_PORT
 export VITE_PORT
+export VITE_BACKEND_PORT="$BACKEND_PORT"
 export VITE_BACKEND_BASE_URL="http://127.0.0.1:$BACKEND_PORT"
 
 if [[ "${1:-}" == "--prepare-only" ]]; then

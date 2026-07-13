@@ -16,8 +16,8 @@ export default defineConfig(({ mode }) => {
     ...loadEnv(mode, rootEnvDir, ''),
     ...loadEnv(mode, __dirname, ''),
   }
-  const apiBaseUrl = env.VITE_BACKEND_BASE_URL || 'http://127.0.0.1:8000'
-  const devPort = Number(env.VITE_PORT) || 5177
+  const apiBaseUrl = env.VITE_BACKEND_BASE_URL || 'http://127.0.0.1:8001'
+  const devPort = Number(env.VITE_PORT) || 5181
 
   return {
     plugins: [react(), tailwindcss()],

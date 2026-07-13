@@ -20,6 +20,8 @@ export interface ProviderItem {
   has_api_key: boolean // 后端标志：是否已配置 api_key（不下发明文）
   /** 后端 capabilities 元组；Models 页用于过滤（chat/vision/…） */
   capabilities?: string[]
+  /** 后端为各能力保存的默认模型；summary 弹窗用于恢复已配置的 chat 模型 */
+  default_models?: Record<string, string>
   logo?: string       // 可选 logo URL
 }
 
@@ -197,4 +199,3 @@ export const useProviderStore = create<ProviderStoreState>()(
     },
   ),
 )
-
