@@ -70,7 +70,7 @@ export function TaskDetails({ type, taskId, params, onChange }: TaskDetailsProps
       />
     )
   }
-  if ((type === 'video' || type === 'audio') && taskId === 'music_analysis') {
+  if (type === 'video' && taskId === 'music_analysis') {
     return (
       <MusicAnalysisDetails
         params={params as unknown as MusicAnalysisParams}
@@ -381,7 +381,7 @@ function AudioAsrDetails({
   )
 }
 
-// ── 视频/音频 · 音乐分析 ────────────────────────────────
+// ── 视频 · 音乐分析 ───────────────────────────────────
 function MusicAnalysisDetails({
   params,
   onChange,

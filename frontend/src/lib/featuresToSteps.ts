@@ -39,7 +39,6 @@ export const FEATURES_BY_TYPE: Record<ItemType, FeatureDef[]> = {
     { id: 'transcribe_summary', label: '转写+总结', defaultChecked: true },
     { id: 'speaker_diarize', label: '说话人音色', defaultChecked: false },
     { id: 'subtitle_export', label: '字幕导出', defaultChecked: true },
-    { id: 'music_analysis', label: '音乐分析', defaultChecked: false },
   ],
   image: [
     { id: 'describe', label: '内容识别', defaultChecked: true },
@@ -118,7 +117,7 @@ export function getAllFeatures(type: ItemType): Feature[] {
 
 /** 分析范围 → 允许的 feature 子集 */
 export const FEATURES_BY_SCOPE: Record<AnalysisScope, Feature[]> = {
-  audio_only: ['transcribe_summary', 'speaker_diarize', 'subtitle_export', 'music_analysis'],
+  audio_only: ['transcribe_summary', 'speaker_diarize', 'subtitle_export'],
   visual_only: ['visual_prompt', 'video_summary'],
 }
 
@@ -131,8 +130,6 @@ export const FEATURES_BY_SCOPE_V2: Record<AnalysisScope, FeatureDef[]> = {
   audio_only: [
     { id: 'transcribe_summary', label: '人声转写+总结', defaultChecked: true,
       hint: 'Whisper 转写 + LLM 总结，细调里选模板、音色、字幕' },
-    { id: 'music_analysis',     label: '音乐分析',       defaultChecked: false,
-      hint: 'BPM / 调性 / 乐器 / 风格 + 可选 Suno 提示词' },
   ],
 }
 

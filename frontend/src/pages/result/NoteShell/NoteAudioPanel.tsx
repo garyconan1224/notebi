@@ -2,7 +2,7 @@
  * NoteAudioPanel — 音频播放器（Stage 2 重写）。
  *
  * 自定义 transport（仿 LNVideoPanel 模式）：事件驱动 state、
- * 装饰性波形条 + 进度 fill、±10s/倍速/音量、进度拖拽 seek。
+ * 真实音频峰值波形 + 进度 fill、±10s/倍速/音量、进度拖拽 seek。
  *
  * 设计稿 pg-audio 对齐。
  */
@@ -30,9 +30,18 @@ const FALLBACK_WAVEFORM_HEIGHTS = Array.from({ length: WAVEFORM_BARS }, (_, i) =
   return 0.3 + 0.7 * Math.abs(Math.sin(t * Math.PI * 2.4 + 0.5) * Math.cos(t * Math.PI * 1.1 + 0.3))
 })
 
+function normalizeWaveform(values: number[] | null | undefined): number[] {
+  const clean = (values ?? []).filter((value) => Number.isFinite(value) && value >= 0)
+  if (clean.length === 0) return []
+  const maximum = Math.max(...clean, 0)
+  if (maximum <= 0) return []
+  return clean.map((value) => Math.min(1, Math.max(0.03, value / maximum)))
+}
+
 /* ── types ── */
 interface NoteAudioPanelProps {
   src: string
+  waveform?: number[] | null
   onTimeUpdate?: (currentTime: number) => void
   onDurationChange?: (duration: number) => void
   onTransportChange?: () => void
@@ -51,7 +60,7 @@ export interface NoteAudioPanelHandle {
 }
 
 const NoteAudioPanel = forwardRef<NoteAudioPanelHandle, NoteAudioPanelProps>(
-  ({ src, onTimeUpdate, onDurationChange, onTransportChange, isPipActive, onTogglePip }, ref) => {
+    ({ src, waveform, onTimeUpdate, onDurationChange, onTransportChange, isPipActive, onTogglePip }, ref) => {
     const audioRef = useRef<HTMLAudioElement>(null)
     const progressRef = useRef<HTMLDivElement>(null)
     const volumeSliderRef = useRef<HTMLDivElement>(null)
@@ -63,7 +72,10 @@ const NoteAudioPanel = forwardRef<NoteAudioPanelHandle, NoteAudioPanelProps>(
     const [volume, setVolume] = useState(1)
     const [speed, setSpeed] = useState(1)
     const [loop, setLoop] = useState(false)
-    const [waveformHeights, setWaveformHeights] = useState(FALLBACK_WAVEFORM_HEIGHTS)
+    const [waveformHeights, setWaveformHeights] = useState(() => {
+      const realWaveform = normalizeWaveform(waveform)
+      return realWaveform.length > 0 ? realWaveform : FALLBACK_WAVEFORM_HEIGHTS
+    })
 
     /* ── audio 原生事件驱动 state ── */
     const handlePlay = useCallback(() => setPlaying(true), [])
@@ -96,8 +108,10 @@ const NoteAudioPanel = forwardRef<NoteAudioPanelHandle, NoteAudioPanelProps>(
       if (a) setSpeed(a.playbackRate)
     }, [])
 
-    // 波形是装饰性信息；不要为生成它下载并解码整段本地音频。
-    useEffect(() => { setWaveformHeights(FALLBACK_WAVEFORM_HEIGHTS) }, [src])
+    useEffect(() => {
+      const realWaveform = normalizeWaveform(waveform)
+      setWaveformHeights(realWaveform.length > 0 ? realWaveform : FALLBACK_WAVEFORM_HEIGHTS)
+    }, [src, waveform])
 
     useEffect(() => { onTransportChange?.() }, [playing, progress, duration, muted, volume, speed, loop, waveformHeights, isPipActive, onTransportChange])
 

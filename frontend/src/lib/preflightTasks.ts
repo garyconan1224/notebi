@@ -187,11 +187,7 @@ const DEFAULTS_BY_TYPE_AND_ID: Record<
   },
   audio: {
     asr_summary: { ...DEFAULT_AUDIO_ASR },
-    vocal_separation: { enabled: false },
     subtitle_file: { enabled: true },
-    music_analysis: { ...DEFAULT_MUSIC_ANALYSIS },
-    music_transcribe: { enabled: false },
-    prompt_generation: { enabled: false },
   },
   image: {
     describe: { enabled: true },
@@ -287,11 +283,7 @@ export function getTopLevelTasks(type: ItemType): TopLevelTask[] {
     case 'audio':
       return [
         { id: 'asr_summary', label: '人声内容总结', desc: 'Whisper 转写 + LLM 总结' },
-        { id: 'vocal_separation', label: '输出人声音频', desc: '分离人声与伴奏' },
         { id: 'subtitle_file', label: '生成字幕文件', desc: '.srt / .txt 导出' },
-        { id: 'music_analysis', label: '音乐分析', desc: 'BPM / 乐器 / Suno-Udio 提示词' },
-        { id: 'music_transcribe', label: '音乐转写', desc: '背景音乐旋律转 MIDI/乐谱' },
-        { id: 'prompt_generation', label: '提示词输出', desc: '基于内容生成创作提示词' },
       ]
     case 'image':
       return [

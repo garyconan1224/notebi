@@ -2790,11 +2790,7 @@ def _bridge_to_pipeline_payload(
             _copy_task_config(payload, "asr", tasks, "asr_summary", "asr")
             _copy_task_config(payload, "voiceprint", tasks, "voiceprint")
             _copy_task_config(payload, "srt", tasks, "subtitle_file", "srt")
-        _copy_task_config(payload, "music", tasks, "music_analysis", "music")
-        # 以下三个前端任务 ID 透传到 payload，Tier B 后端未实现
-        _copy_task_config(payload, "vocal_separation", tasks, "vocal_separation")
-        _copy_task_config(payload, "music_transcribe", tasks, "music_transcribe")
-        _copy_task_config(payload, "prompt_generation", tasks, "prompt_generation")
+        # 音频笔记不进入音乐/复刻能力；旧配置字段不再透传，避免历史设置重新触发这些流程。
         # R21.P3.S1: 透传 preflight 新字段（background_for_recognition）
         _preflight = tasks.get("preflight")
         if isinstance(_preflight, dict):
@@ -5041,6 +5037,7 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
 
     elif item_type == "audio":
         media["audio"] = _note_audio_url(workspace_id, item, results, frontmatter)
+        media["waveform"] = results.get("waveform_peaks") or []
         # transcript：统一规范成 [{t_sec, t_str, text}]
         transcript = _note_transcript(results, nd)
 

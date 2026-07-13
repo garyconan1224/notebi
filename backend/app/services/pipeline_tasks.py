@@ -6,6 +6,7 @@ import base64
 import hashlib
 import json
 import re
+import struct
 import subprocess
 import threading
 import time
@@ -27,11 +28,9 @@ from shared.settings_store import load_settings
 from shared.storyboard_generator import run_storyboard_generation
 from shared.text_loader import TextDocument, TextLoaderError, load_auto, load_url
 from shared.audio_analyzer import (
-    analyze_music,
     assign_speakers_to_segments,
     export_srt,
     export_txt,
-    generate_music_prompt,
     run_diarization,
     run_vad,
 )
@@ -354,6 +353,75 @@ def _extract_audio_from_video(
     if log_fn:
         log_fn(f"🎵 音频提取完成: {output_path.name} ({output_path.stat().st_size // 1024} KB)")
     return output_path
+
+
+def _extract_waveform_peaks(
+    audio_path: Path,
+    duration_sec: float,
+    *,
+    bars: int = 240,
+    sample_rate: int = 8000,
+    log_fn: Optional[Any] = None,
+) -> List[float]:
+    """从真实音频 PCM 流计算归一化 RMS peaks，不把整段音频读入内存。
+
+    ffmpeg 只输出单声道低采样率 PCM，按固定柱数在线聚合；失败时返回空列表，
+    由前端显示明确的波形不可用状态，而不是把随机装饰波形当成真实结果。
+    """
+    if not audio_path.is_file() or bars <= 0:
+        return []
+    cmd = [
+        "ffmpeg", "-v", "error", "-i", str(audio_path),
+        "-vn", "-ac", "1", "-ar", str(sample_rate), "-f", "s16le", "pipe:1",
+    ]
+    try:
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except (OSError, ValueError):
+        return []
+
+    sum_squares = [0.0] * bars
+    counts = [0] * bars
+    sample_index = 0
+    expected_samples = int(duration_sec * sample_rate) if duration_sec > 0 else 0
+    samples_per_bar = max(1, (expected_samples + bars - 1) // bars) if expected_samples else 1
+    deadline = time.monotonic() + 180
+
+    try:
+        assert process.stdout is not None
+        while True:
+            if time.monotonic() > deadline:
+                process.kill()
+                return []
+            chunk = process.stdout.read(32768)
+            if not chunk:
+                break
+            usable = len(chunk) - (len(chunk) % 2)
+            for (sample,) in struct.iter_unpack("<h", chunk[:usable]):
+                idx = min(bars - 1, sample_index // samples_per_bar)
+                sum_squares[idx] += float(sample * sample)
+                counts[idx] += 1
+                sample_index += 1
+        return_code = process.wait(timeout=5)
+        if return_code != 0:
+            return []
+    except (OSError, subprocess.TimeoutExpired):
+        try:
+            process.kill()
+        except OSError:
+            pass
+        return []
+
+    peaks = [
+        (sum_squares[idx] / counts[idx]) ** 0.5 if counts[idx] else 0.0
+        for idx in range(bars)
+    ]
+    maximum = max(peaks, default=0.0)
+    if maximum <= 0:
+        return []
+    normalized = [round(min(1.0, max(0.03, value / maximum)), 4) for value in peaks]
+    if log_fn:
+        log_fn(f"📈 真实波形生成完成：{len(normalized)} 个峰值")
+    return normalized
 
 
 def _detect_video_template(
@@ -4300,21 +4368,17 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         return default
 
     asr_params = payload.get("asr") if isinstance(payload.get("asr"), dict) else {}
-    music_params = payload.get("music") if isinstance(payload.get("music"), dict) else {}
     subtitle_params = payload.get("srt") if isinstance(payload.get("srt"), dict) else {}
 
     whisper_lang = str(asr_params.get("whisper_lang") or "auto").strip().lower()
     asr_enabled = _task_enabled("asr", True)
     diarization_enabled = _task_enabled("voiceprint", False)
     summary_mode = str(payload.get("summary_mode") or "general").strip() or "general"
-    music_enabled = _task_enabled("music", False)
     subtitle_enabled = _task_enabled("srt", True)
-    _music_confirmed = bool(payload.get("music_mode_confirmed"))
 
     log(
         f"🎵 audio_task | source_type={source_type} | source={source[:80]} | "
-        f"lang={whisper_lang} | diarize={diarization_enabled} | music={music_enabled} | "
-        f"subtitle={subtitle_enabled}" + (f" | music_confirmed" if _music_confirmed else "")
+        f"lang={whisper_lang} | diarize={diarization_enabled} | subtitle={subtitle_enabled}"
     )
 
     # ── 1. FETCH ────────────────────────────────────────────
@@ -4339,7 +4403,7 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         audio_filename = url_path.split("/")[-1] or "audio.mp3"
         audio_local_path = audio_dir / f"{task_id}_{audio_filename}"
         _is_platform = is_platform_url(source)
-        if _music_confirmed and audio_local_path.exists():
+        if audio_local_path.exists():
             log("📦 音频文件已存在（重跑），跳过下载")
             audio_bytes = audio_local_path.read_bytes()
         elif _is_platform:
@@ -4383,11 +4447,8 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
             raise RuntimeError(f"本地音频不存在：{source}")
         audio_bytes = local.read_bytes()
         audio_filename = local.name
-        if _music_confirmed:
-            audio_local_path = local  # 重跑直接用原路径
-        else:
-            audio_local_path = audio_dir / f"{task_id}_{audio_filename}"
-            audio_local_path.write_bytes(audio_bytes)
+        audio_local_path = audio_dir / f"{task_id}_{audio_filename}"
+        audio_local_path.write_bytes(audio_bytes)
 
     # 推断 MIME
     guessed, _ = mimetypes.guess_type(audio_filename)
@@ -4408,30 +4469,13 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         f"speech={vad_result.total_speech_duration:.1f}s / total={vad_result.total_duration:.1f}s"
         f" ({speech_ratio:.1%})"
     )
-    # A3: 无人声占比 > 80% + 未启用音乐分析 + 非已确认重跑 → 弹窗等用户确认
-    _music_confirmed = bool(payload.get("music_mode_confirmed"))
-    if speech_ratio < 0.2 and not music_enabled and not _music_confirmed:
-        runner.append_log(
-            task_id,
-            f"🎵 人声占比仅 {speech_ratio:.1%}（< 20%），等待用户确认是否切换音乐分析模式",
-            level="warning",
-        )
-        partial_result = {
-            "awaiting_confirm": True,
-            "speech_ratio": round(speech_ratio, 3),
-            "total_duration": round(vad_result.total_duration, 2),
-            "vad": vad_result.to_dict(),
-        }
-        runner.store.update(
-            task_id,
-            status=TaskStatus.AWAITING_CONFIRM.value,
-            progress=0.18,
-            result=partial_result,
-        )
-        return partial_result
-
-    # 若无人声 + ASR 仍开启，按 spec 跳过 ASR（避免空 LLM 调用）
-    skip_asr = (not vad_result.has_speech) or (not asr_enabled) or _music_confirmed
+    waveform_peaks = _extract_waveform_peaks(
+        audio_local_path,
+        float(vad_result.total_duration or 0),
+        log_fn=log,
+    )
+    # 无人声时仍完成音频笔记流程，只跳过 ASR；不再切换到音乐模式。
+    skip_asr = (not vad_result.has_speech) or (not asr_enabled)
 
     # ── 2. TRANSCRIBE ────────────────────────────────────────
     runner.store.update(task_id, status=TaskStatus.ASR.value)
@@ -4563,65 +4607,6 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
 
     subtitle_paths: Dict[str, str] = {}
 
-    # ── 3.6 音乐分析（N8 / A3）──────────────────────────────
-    music_dict: Optional[Dict[str, Any]] = None
-    _run_music = music_enabled or _music_confirmed
-    if _run_music:
-        runner.set_progress(task_id, 0.82, "音乐特征分析（librosa）...")
-        music_features = analyze_music(audio_local_path)
-        if music_features is None:
-            log("⚠️  音乐分析未执行（librosa 不可用或文件读取失败）")
-        else:
-            log(
-                f"🎼 BPM={music_features.bpm:.1f} | key={music_features.key} | "
-                f"duration={music_features.duration:.1f}s"
-            )
-            # LLM 生成 Suno/Udio 提示词（若有 api_key）
-            if api_key:
-                runner.set_progress(task_id, 0.86, "生成音乐提示词...")
-                registry = create_default_registry()
-                profile = registry.resolve_default_profile(settings, "chat")
-                provider = registry.build(profile)
-                music_chat_model = (
-                    str(payload.get("text_model") or "").strip()
-                    or (getattr(settings, "text_model", "") or "").strip()
-                    or "Qwen/Qwen2.5-7B-Instruct"
-                )
-
-                def _music_llm(system: str, user: str) -> str:
-                    return provider.chat(
-                        ChatRequest(
-                            model=music_chat_model,
-                            messages=[
-                                {"role": "system", "content": system},
-                                {"role": "user", "content": user},
-                            ],
-                            temperature=0.5,
-                            max_tokens=400,
-                        )
-                    )
-
-                music_features = generate_music_prompt(music_features, _music_llm)
-            music_dict = music_features.to_dict()
-
-            # A3.3: 多段音乐 6 维度切分
-            if _music_confirmed:
-                try:
-                    from shared.audio_analyzer import segment_audio, analyze_music_segments
-                    runner.set_progress(task_id, 0.89, "多段音乐特征切分...")
-                    boundaries = segment_audio(str(audio_local_path))
-                    if len(boundaries) > 1:
-                        segments = analyze_music_segments(str(audio_local_path), boundaries)
-                        music_dict["segments"] = [s.to_dict() for s in segments]
-                        music_dict["music_mode"] = True
-                        log(f"🎵 多段分析完成，共 {len(segments)} 个片段")
-                    else:
-                        music_dict["music_mode"] = True
-                        log("🎵 未检测到分段边界，使用整体分析")
-                except Exception as seg_err:
-                    music_dict["music_mode"] = True
-                    log(f"⚠️  多段切分失败（{seg_err}），已回退整体分析")
-
     # ── 3.7 字幕导出（N8）──────────────────────────────────
     # R18: 专有名词修正 + include_timestamps 开关
     proper_nouns = str(payload.get("proper_nouns") or "").strip()
@@ -4707,6 +4692,7 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         "source_type": source_type,
         **yt_dlp_meta,
         "duration_sec": audio_duration_sec,
+        "waveform_peaks": waveform_peaks,
         "transcript": transcript_text,
         "transcript_segments": transcript_segments,
         "summary": summary,
@@ -4726,9 +4712,6 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         },
         "vad": vad_result.to_dict(),
         "diarization": diarization_dict,
-        "music": music_dict,
-        "music_segments": music_dict.get("segments", []) if music_dict else [],
-        "music_mode": bool(_music_confirmed or (music_dict and music_dict.get("music_mode"))),
         "subtitle_paths": subtitle_paths,
     }
     json_path = audio_dir / f"{task_id}.json"

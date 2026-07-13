@@ -161,6 +161,7 @@ export interface NoteMedia {
   video?: { url: string; duration: number }  // video 类型
   frames?: { sec: number; url: string }[]    // video 类型：关键帧
   audio?: string           // audio 类型：音频 URL
+  waveform?: number[]      // audio 类型：真实音频内容归一化峰值
 }
 
 export interface TranscriptTranslationSegment {

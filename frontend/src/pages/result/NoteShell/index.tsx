@@ -15,7 +15,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Bold, BookOpenCheck, Brain, Camera, Check, ChevronDown, Code2, Download, ExternalLink, FileDown, FileText, FileType, Image, Italic, List, MessageCircle, Minus, Pause, Pencil, Play, Plus, Presentation, Sparkles, Strikethrough, Subtitles, Trash2, Type, Underline, X } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { downloadItemNoteExport, exportItemNoteObsidian, getItemNote, putItemNote, type ItemNoteExportFormat } from '@/services/workspaces'
+import { downloadItemNoteExport, exportItemNoteObsidian, getItemNote, putItemNote, updateSpeakerMap, type ItemNoteExportFormat } from '@/services/workspaces'
 import type { VideoResultTranscriptLine } from '@/services/workspaces'
 import type { ItemNote } from '@/types/workspace'
 import { createSummary, deleteSummary, listSummaries, renameSummary, type ItemSummary } from '@/services/summaries'
@@ -371,6 +371,13 @@ function sourceMarkerFromUrl(url?: string): string | null {
   }
 }
 
+const AUDIO_SPEAKER_COLORS = ['#4f8fd8', '#d45b86', '#3f9a73', '#d58a3e', '#8364c5', '#aa9a32']
+function audioSpeakerColor(speakerId: string): string {
+  let hash = 0
+  for (const ch of speakerId) hash = (hash * 31 + ch.charCodeAt(0)) | 0
+  return AUDIO_SPEAKER_COLORS[Math.abs(hash) % AUDIO_SPEAKER_COLORS.length]
+}
+
 function isCanceledExportError(error: unknown): boolean {
   const err = error as { code?: string; name?: string; message?: string }
   return err?.code === 'ERR_CANCELED'
@@ -432,6 +439,9 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const navigate = useNavigate()
 
   const [note, setNote] = useState<ItemNote | null>(null)
+  const [speakerMap, setSpeakerMap] = useState<Record<string, string>>({})
+  const [editingSpeakerId, setEditingSpeakerId] = useState<string | null>(null)
+  const [editingSpeakerName, setEditingSpeakerName] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [chatOpen] = useState(false)
@@ -571,6 +581,10 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   useEffect(() => {
     window.localStorage.setItem(EDITOR_PREFS_STORAGE_KEY, JSON.stringify(editorPrefs))
   }, [editorPrefs])
+
+  useEffect(() => {
+    setSpeakerMap(note?.speaker_map ?? {})
+  }, [note?.speaker_map])
 
   useEffect(() => {
     return () => {
@@ -1266,7 +1280,26 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const speakerIds = Array.from(new Set(
     transcriptLines.map((line) => String(line.speaker || '').trim()).filter(Boolean),
   ))
-  const speakerNames = speakerIds.map((id) => note.speaker_map?.[id] || id.replace(/^SPEAKER_/, 'S'))
+  const speakerNames = speakerIds.map((id) => speakerMap[id] || id.replace(/^SPEAKER_/, 'S'))
+  const handleSpeakerRename = async (speakerId: string, nextName: string) => {
+    const trimmed = nextName.trim()
+    setEditingSpeakerId(null)
+    if (!trimmed || trimmed === speakerId || trimmed === (speakerMap[speakerId] || '')) return
+    const previous = speakerMap
+    const updated = { ...speakerMap, [speakerId]: trimmed }
+    setSpeakerMap(updated)
+    try {
+      const result = await updateSpeakerMap(workspaceId, itemId, updated)
+      toast.success(
+        result.summary_refresh?.status === 'queued'
+          ? '说话人已更新，区分说话人总结正在生成新版本'
+          : '说话人已更新',
+      )
+    } catch {
+      setSpeakerMap(previous)
+      toast.error('说话人保存失败，请重试')
+    }
+  }
   const sourceLabel = sourceUrl ? platformLabelFromUrl(sourceUrl) : '本地素材'
   const effectiveVideoDuration = note.media?.video?.duration || videoDuration
   const effectiveAudioDuration = audioDuration
@@ -1910,6 +1943,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 <NoteAudioPanel
                   ref={audioRef}
                   src={note.media!.audio!}
+                  waveform={note.media?.waveform}
 	                  onTimeUpdate={handleTimeUpdate}
 	                  onDurationChange={handleAudioDurationChange}
 	                  onTransportChange={handleAudioTransportChange}
@@ -1955,8 +1989,45 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
 	            )}
             {/* 转录 */}
             {!isPip && transcriptLines.length > 0 ? (
-              <div id="audio-transcript" className="nibi-note-transcript-wrap">
-                <LNTranscriptPanel
+                  <div id="audio-transcript" className="nibi-note-transcript-wrap">
+                    {speakerIds.length > 0 && (
+                      <div className="nibi-audio-speaker-chips" aria-label="说话人">
+                        <span className="nibi-audio-speaker-title">说话人</span>
+                        {speakerIds.map((speakerId) => {
+                          const displayName = speakerMap[speakerId] || speakerId.replace(/^SPEAKER_/, 'S')
+                          const isEditing = editingSpeakerId === speakerId
+                          return isEditing ? (
+                            <input
+                              key={speakerId}
+                              className="nibi-audio-speaker-input"
+                              autoFocus
+                              value={editingSpeakerName}
+                              onChange={(event) => setEditingSpeakerName(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') void handleSpeakerRename(speakerId, editingSpeakerName)
+                                if (event.key === 'Escape') setEditingSpeakerId(null)
+                              }}
+                              onBlur={() => void handleSpeakerRename(speakerId, editingSpeakerName)}
+                            />
+                          ) : (
+                            <button
+                              key={speakerId}
+                              className="nibi-audio-speaker-chip"
+                              style={{ '--speaker-color': audioSpeakerColor(speakerId) } as CSSProperties}
+                              title="点击重命名说话人"
+                              onClick={() => {
+                                setEditingSpeakerId(speakerId)
+                                setEditingSpeakerName(speakerMap[speakerId] || '')
+                              }}
+                            >
+                              <span className="nibi-audio-speaker-dot" />
+                              {displayName}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                    <LNTranscriptPanel
                   transcript={transcriptLines}
                   currentTime={currentTime}
                   onSeek={handleSeek}
@@ -1964,7 +2035,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                   itemId={itemId}
                   onSaved={refreshAfterTranscriptEdit}
                   translations={note.translations ?? null}
-                  speakerMap={note.speaker_map}
+                  speakerMap={speakerMap}
                   title="转录文本"
                   countLabel={`${transcriptCount} 条`}
                 />

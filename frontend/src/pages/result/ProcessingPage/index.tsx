@@ -10,7 +10,6 @@ import { getPipelineTask } from '@/services/pipeline'
 import { categorizeError } from '@/lib/errorCategories'
 import { platformPrefixFromUrl } from '@/lib/platformPrefix'
 import { inferContentTags } from '@/lib/contentTags'
-import MusicModeConfirmModal from '@/components/workspace/MusicModeConfirmModal'
 import {
   Dialog,
   DialogContent,
@@ -154,10 +153,6 @@ export default function ProcessingPage() {
   const isCancelled = status === 'CANCELLED'
   const isSuccess = status === 'SUCCESS'
 
-  // A3: 音乐模式确认弹窗
-  const [dismissedMusicModalTaskId, setDismissedMusicModalTaskId] = useState<string | null>(null)
-  const showMusicModal = status === 'AWAITING_CONFIRM' && dismissedMusicModalTaskId !== taskId
-
   // R18.1.3: 任务失败弹窗
   const [showFailModal, setShowFailModal] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -169,17 +164,6 @@ export default function ProcessingPage() {
     }
     prevStatusRef.current = status
   }, [status])
-
-  const handleMusicConfirmed = () => {
-    setDismissedMusicModalTaskId(taskId)
-    toast.success('已切换为音乐分析模式，任务继续执行')
-  }
-
-  const handleMusicCancelled = () => {
-    setDismissedMusicModalTaskId(taskId)
-    if (taskId) cancelTask(taskId)
-    toast.info('任务已取消，可在素材设置中手动勾选「音乐分析」后重跑')
-  }
 
   // F3.5: 任务卡住检测（非终结态 > 10 分钟无 updated_at 变化 → 警告）
   const lastActivityRef = useRef<number | null>(null)
@@ -500,7 +484,7 @@ export default function ProcessingPage() {
             </div>
           )}
 
-          {/* AWAITING_CONFIRM: 等待用户确认音乐模式 */}
+          {/* 兼容旧任务状态：新音频流程不会再进入此状态 */}
           {status === 'AWAITING_CONFIRM' && (
             <div className="proc-confirm">
               <div className="proc-confirm-title">
@@ -558,19 +542,6 @@ export default function ProcessingPage() {
         </div>
 
       </div>
-
-      {/* A3: VAD 无人声 → 音乐模式确认弹窗 */}
-      <MusicModeConfirmModal
-        open={showMusicModal}
-        onOpenChange={(open) => {
-          setDismissedMusicModalTaskId(open ? null : taskId)
-        }}
-        taskId={taskId}
-        speechRatio={(task?.result?.speech_ratio as number) ?? 0}
-        totalDuration={(task?.result?.total_duration as number) ?? 0}
-        onConfirmed={handleMusicConfirmed}
-        onCancelled={handleMusicCancelled}
-      />
 
       {/* R18.1.3: 任务失败详情弹窗 */}
       <Dialog open={showFailModal} onOpenChange={setShowFailModal}>

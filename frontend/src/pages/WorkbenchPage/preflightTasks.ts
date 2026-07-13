@@ -114,11 +114,6 @@ export const TASK_GROUPS: Record<MediaKind, TaskGroup[]> = {
           default: 'concise' },
       ],
     },
-    { id: 'music', label: '音乐分析', sub: 'BPM / 调性 / 乐器', default: false,
-      children: [
-        { id: 'music_suno', label: '生成 Suno / Udio 格式提示词', type: 'check', default: true },
-      ],
-    },
   ],
   image: [
     { id: 'describe', label: '内容识别描述', sub: '主体 / 场景 / 色调 / 构图 / 风格', default: true },

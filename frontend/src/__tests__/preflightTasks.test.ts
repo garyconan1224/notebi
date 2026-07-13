@@ -157,9 +157,9 @@ describe('buildInitialTasks', () => {
     expect(tasks.summary.summary_path).toBe('音视频综合')
   })
 
-  it('audio 初始化 2 个任务', () => {
+  it('audio 初始化仅保留转写总结任务', () => {
     const tasks = buildInitialTasks('audio')
-    expect(Object.keys(tasks)).toHaveLength(2)
+    expect(Object.keys(tasks)).toHaveLength(1)
     expect(tasks.transcribe_summary.on).toBe(true)
     expect(tasks.transcribe_summary.summary_template).toBe('concise')
   })

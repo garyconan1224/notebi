@@ -75,12 +75,6 @@ export async function retryPipelineTask(taskId: string) {
   return res.data
 }
 
-/** A3: 用户确认无人声音频切换为音乐分析模式 */
-export async function confirmMusicMode(taskId: string) {
-  const res = await http.post(`${PIPELINE_TASKS_URL}/${taskId}/confirm-music`)
-  return res.data
-}
-
 // ── Phase R: note 任务创建 ──────────────────────────────────
 
 export interface NotePreflightOverrides {
