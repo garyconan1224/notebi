@@ -7,8 +7,9 @@ import PerformanceTierPage from './PerformanceTierPage'
 import { useSettingsShellStore } from '@/store/settingsShellStore'
 import { CARD_COLUMN_OPTIONS, useLibraryStore, type CardColumns } from '@/store/libraryStore'
 import { isFeatureEnabled } from '@/config/product'
+import { AUDIO_ERROR_GUIDANCE } from '@/lib/errorCategories'
 
-type TabKey = 'performance' | 'display' | 'screenshot' | 'transcriber' | 'prompt' | 'defaults'
+type TabKey = 'performance' | 'display' | 'screenshot' | 'transcriber' | 'prompt' | 'defaults' | 'audio-errors'
 
 /**
  * 分析默认偏好（SPEC §3.5 第 4 页）。
@@ -111,6 +112,12 @@ export default function AnalysisDefaultsPage() {
         >
           任务默认勾选
         </TabBtn>
+        <TabBtn
+          active={tab === 'audio-errors'}
+          onClick={() => setTab('audio-errors')}
+        >
+          音频错误说明
+        </TabBtn>
       </div>
 
       {/* 内容区：只渲染激活的子页面 */}
@@ -121,7 +128,32 @@ export default function AnalysisDefaultsPage() {
         {tab === 'transcriber' && <TranscriberPage />}
         {showPromptTab && tab === 'prompt' && <PromptFormatPage />}
         {tab === 'defaults' && <TaskDefaultsPlaceholder />}
+        {tab === 'audio-errors' && <AudioErrorGuidancePanel />}
       </div>
+    </div>
+  )
+}
+
+function AudioErrorGuidancePanel() {
+  return (
+    <div className="settings-subpanel">
+      <section className="settings-card">
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">音频笔记错误说明</div>
+            <p className="settings-row-hint">结果页会根据错误原因给出同样的分类和处理建议。</p>
+          </div>
+        </div>
+        <div style={{ display: 'grid', gap: 10 }}>
+          {AUDIO_ERROR_GUIDANCE.map((item) => (
+            <div key={item.title} style={{ padding: '12px 14px', border: '1px solid var(--bdr)', borderRadius: 10, background: 'var(--bgalt)' }}>
+              <strong style={{ display: 'block', marginBottom: 4 }}>{item.title}</strong>
+              <div style={{ color: 'var(--mut)', fontSize: 12, lineHeight: 1.6 }}>可能原因：{item.cause}</div>
+              <div style={{ color: 'var(--fg2)', fontSize: 12, lineHeight: 1.6 }}>处理建议：{item.action}</div>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   )
 }

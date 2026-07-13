@@ -37,6 +37,7 @@ import { FloatingAskAi } from './FloatingAskAi'
 import { useLnEditorStore } from '@/store/lnEditorStore'
 import { SourceMdModal } from './SourceMdModal'
 import { withStatusToast } from '@/lib/statusToast'
+import { categorizeError } from '@/lib/errorCategories'
 
 type NoteExportBusy = ItemNoteExportFormat | 'markdown' | 'obsidian' | 'transcript' | 'source_md'
 type OperationNoticeTone = 'loading' | 'success' | 'error' | 'info'
@@ -1235,11 +1236,17 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     )
   }
   if (error || !note) {
+    const categorized = categorizeError(error)
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100%', gap: 12 }}>
-        <span style={{ color: 'var(--err)', fontWeight: 600 }}>
-          {error ?? '没有可显示的笔记'}
-        </span>
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100%', gap: 10, padding: 24, textAlign: 'center' }}>
+        <strong style={{ color: 'var(--err)', fontWeight: 800 }}>{categorized.friendlyMessage}</strong>
+        <span style={{ maxWidth: 520, color: 'var(--mut)', fontSize: 13, lineHeight: 1.6 }}>{categorized.suggestion}</span>
+        {error && (
+          <details style={{ maxWidth: 620, color: 'var(--mut)', fontSize: 11, textAlign: 'left' }}>
+            <summary style={{ cursor: 'pointer' }}>查看原始错误</summary>
+            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{error}</pre>
+          </details>
+        )}
         <button className="btn-ghost" style={{ padding: '6px 12px' }} onClick={() => navigate(-1)}>
           <ArrowLeft size={14} /> 返回
         </button>
