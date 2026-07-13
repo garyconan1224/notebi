@@ -81,12 +81,16 @@ priority: P0
 
 验证：`./.venv/bin/pytest -q backend/tests/test_item_summary.py backend/tests/test_summary_generator.py backend/tests/test_summaries.py` → 74 passed（1 个既有 Starlette/httpx deprecation warning）。
 
-### P0-C：区分说话人总结后端链路（进行中）
+### P0-C：区分说话人总结后端链路（基础链路已完成）
 
 - 调整音频任务顺序：转写 → 说话人识别（若启用）→ 根据总结方式生成总结。
 - 普通总结继续使用不带说话人信息的现有路径。
 - 区分说话人总结按说话人分组生成：发言、观点、共识/分歧、决策、行动项均保留说话人归属和时间码。
 - 没有识别结果时不得伪造说话人；返回明确状态和原因。
+
+已落地：音频流水线在显式 `summary_mode=speaker_aware` 时先执行说话人识别，再生成带说话人标签的摘要；默认 `general` 行为保持不变。`summary_mode` 已从 `transcribe_summary` 配置透传到任务。
+
+验证：`./.venv/bin/python -m py_compile ...` 通过；音频/混合笔记/总结回归 19 passed。
 
 ### P0-D：说话人重命名与自动新版本
 

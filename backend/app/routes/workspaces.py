@@ -2778,7 +2778,7 @@ def _bridge_to_pipeline_payload(
             _copy_task_config(payload, "voiceprint", ts, "speaker_diarize")
             _copy_task_config(payload, "srt", ts, "subtitle_export")
             # 顶层参数直接透传
-            for k in ("proper_nouns", "include_timestamps", "summary_template"):
+            for k in ("proper_nouns", "include_timestamps", "summary_template", "summary_mode"):
                 v = ts.get(k)
                 if v is not None and v != "":
                     payload[k] = v

@@ -4306,6 +4306,7 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
     whisper_lang = str(asr_params.get("whisper_lang") or "auto").strip().lower()
     asr_enabled = _task_enabled("asr", True)
     diarization_enabled = _task_enabled("voiceprint", False)
+    summary_mode = str(payload.get("summary_mode") or "general").strip() or "general"
     music_enabled = _task_enabled("music", False)
     subtitle_enabled = _task_enabled("srt", True)
     _music_confirmed = bool(payload.get("music_mode_confirmed"))
@@ -4472,9 +4473,24 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         except (RuntimeError, FileNotFoundError) as err:
             raise RuntimeError(f"ASR 全部失败，无法转写音频：{err}") from err
 
-    # ── 3. SUMMARIZE ─────────────────────────────────────────
+    # ── 3. 说话人分离（N8）──────────────────────────────────
+    # 区分说话人总结必须先得到 diarization，再把标签送入 LLM。
+    diarization_dict: Optional[Dict[str, Any]] = None
+    if diarization_enabled and vad_result.has_speech:
+        runner.set_progress(task_id, 0.68, "说话人分离（pyannote）...")
+        log("🎤 说话人分离中（pyannote.audio）")
+        diar = run_diarization(audio_local_path)
+        if diar is None:
+            log("⚠️  说话人分离未执行（缺 HF_TOKEN / 模型协议未同意 / 包不可用）")
+        else:
+            diarization_dict = diar.to_dict()
+            log(f"✅ 检测到 {diar.num_speakers} 个说话人，{len(diar.segments)} 段")
+            if transcript_segments:
+                transcript_segments = assign_speakers_to_segments(transcript_segments, diar)
+
+    # ── 4. SUMMARIZE ─────────────────────────────────────────
     runner.store.update(task_id, status=TaskStatus.SUM.value)
-    runner.set_progress(task_id, 0.70, "生成摘要中...")
+    runner.set_progress(task_id, 0.72, "生成摘要中...")
     summary = ""
 
     if transcript_text and api_key:
@@ -4491,43 +4507,61 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
             try:
                 # R18: 优先使用 summary_template（新模板系统）
                 summary_template_id = str(payload.get("summary_template") or "").strip()
+                summary_input = transcript_text[:12000]
+                if summary_mode == "speaker_aware":
+                    labeled_lines = []
+                    for seg in transcript_segments:
+                        if not isinstance(seg, dict) or not str(seg.get("speaker") or "").strip():
+                            continue
+                        text = str(seg.get("edited_text") or seg.get("text") or "").strip()
+                        if not text:
+                            continue
+                        ts = str(seg.get("t_str") or "").strip()
+                        if not ts:
+                            sec = int(float(seg.get("t_sec") or seg.get("start") or 0))
+                            ts = f"{sec // 60:02d}:{sec % 60:02d}"
+                        labeled_lines.append(f"[{ts}] {seg['speaker']}：{text}")
+                    if not labeled_lines:
+                        log("⚠️  区分说话人总结跳过：没有可用的说话人标签")
+                        summary_input = ""
+                    else:
+                        summary_input = "\n".join(labeled_lines)[:12000]
                 summary_max_tokens = 1200
-                if summary_template_id:
+                if summary_input and summary_template_id:
                     from backend.app.services.summary_templates import get_template
                     tpl = get_template(summary_template_id)
-                    prompt = tpl.user_prompt.replace("{transcript}", transcript_text[:12000])
+                    prompt = tpl.user_prompt.replace("{transcript}", summary_input)
+                    if summary_mode == "speaker_aware":
+                        prompt = (
+                            "请保留每段内容对应的说话人，分别整理观点、共识、分歧、决策和行动项。\n\n"
+                            + prompt
+                        )
                     summary_max_tokens = 3000
                     log(f"📝 LLM 总结 | template={tpl.label} ({summary_template_id})")
-                else:
-                    prompt = f"请将以下音频转写内容总结为 100-200 字的中文摘要：\n\n{transcript_text[:3000]}"
+                elif summary_input:
+                    prompt = f"请将以下音频转写内容总结为 100-200 字的中文摘要：\n\n{summary_input[:3000]}"
+                    if summary_mode == "speaker_aware":
+                        prompt = (
+                            "请按说话人分别归纳观点，并标出共识、分歧和行动项。\n\n"
+                            + prompt
+                        )
                     log("📝 LLM 总结 | template=default (100-200字摘要)")
-                summary = provider.chat(
-                    ChatRequest(
-                        model=chat_model,
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=0.3,
-                        max_tokens=summary_max_tokens,
+                else:
+                    prompt = ""
+                if prompt:
+                    summary = provider.chat(
+                        ChatRequest(
+                            model=chat_model,
+                            messages=[{"role": "user", "content": prompt}],
+                            temperature=0.3,
+                            max_tokens=summary_max_tokens,
+                        )
                     )
-                )
-                log(f"📋 摘要生成完成，{len(summary)} 字符")
+                    log(f"📋 摘要生成完成，{len(summary)} 字符")
             except Exception as err:
                 log(f"⚠️  摘要生成失败：{err}")
 
     subtitle_paths: Dict[str, str] = {}
-
-    # ── 3.5 说话人分离（N8）──────────────────────────────────
-    diarization_dict: Optional[Dict[str, Any]] = None
-    if diarization_enabled and vad_result.has_speech:
-        runner.set_progress(task_id, 0.75, "说话人分离（pyannote）...")
-        log("🎤 说话人分离中（pyannote.audio）")
-        diar = run_diarization(audio_local_path)
-        if diar is None:
-            log("⚠️  说话人分离未执行（缺 HF_TOKEN / 模型协议未同意 / 包不可用）")
-        else:
-            diarization_dict = diar.to_dict()
-            log(f"✅ 检测到 {diar.num_speakers} 个说话人，{len(diar.segments)} 段")
-            if transcript_segments:
-                transcript_segments = assign_speakers_to_segments(transcript_segments, diar)
 
     # ── 3.6 音乐分析（N8 / A3）──────────────────────────────
     music_dict: Optional[Dict[str, Any]] = None
@@ -4676,6 +4710,7 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         "transcript": transcript_text,
         "transcript_segments": transcript_segments,
         "summary": summary,
+        "summary_mode": summary_mode,
         "audio": {
             "title": audio_title,
             "filename": audio_filename,
