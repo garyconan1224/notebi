@@ -4630,6 +4630,7 @@ class SummaryCreateRequest(BaseModel):
     """生成总结请求体。"""
 
     template: str = Field(..., description="模板 id（concise / detailed / ...）")
+    summary_mode: str = Field("general", description="总结方式：general | speaker_aware")
     background_for_summary: str = Field("", description="总结用背景信息（可选）")
     provider_id: str = Field("", description="指定 provider（空 = 默认）")
     model: str = Field("", description="指定模型（空 = provider 默认）")
@@ -4641,6 +4642,14 @@ def _ensure_valid_template(template_id: str) -> None:
         raise HTTPException(
             status_code=400,
             detail=f"未知模板: {template_id}，可用: {', '.join(list_template_ids())}",
+        )
+
+
+def _ensure_valid_summary_mode(summary_mode: str) -> None:
+    if summary_mode not in {"general", "speaker_aware"}:
+        raise HTTPException(
+            status_code=400,
+            detail="未知总结方式，支持 general（普通总结）或 speaker_aware（区分说话人总结）",
         )
 
 
@@ -4680,6 +4689,7 @@ async def create_summary(
     from fastapi.concurrency import run_in_threadpool
 
     _ensure_valid_template(req.template)
+    _ensure_valid_summary_mode(req.summary_mode)
     rec = _store.get(workspace_id)
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
@@ -4694,6 +4704,20 @@ async def create_summary(
                 item.results = dict(task.result)
                 break
 
+    if req.summary_mode == "speaker_aware":
+        if item.type != "audio":
+            raise HTTPException(status_code=400, detail="区分说话人总结仅支持音频素材")
+        segments = item.results.get("transcript_segments") if item.results else None
+        has_speaker_segments = any(
+            isinstance(seg, dict) and str(seg.get("speaker") or "").strip()
+            for seg in (segments or [])
+        )
+        if not has_speaker_segments:
+            raise HTTPException(
+                status_code=409,
+                detail="当前音频没有可用的说话人识别结果，无法生成区分说话人总结。请先启用说话人识别并重新分析。",
+            )
+
     # R3.2: 视频素材物化 frames（标准总结嵌关键帧需要）
     # R3.4 fix: 传 json_output_basenames 做 preferred 过滤，防多视频工作区帧串台
     if item.type == "video" and item.results and not item.results.get("frames"):
@@ -4705,6 +4729,7 @@ async def create_summary(
     def _do_generate() -> ItemSummary:
         summary = generate_summary(
             item, req.template, req.background_for_summary,
+            summary_mode=req.summary_mode,
             provider_id=req.provider_id,
             model=req.model,
             search_web=req.search_web,

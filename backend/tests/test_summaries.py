@@ -115,6 +115,37 @@ class TestCreateSummary:
         assert resp.status_code == 400
         assert "未知模板" in resp.json()["detail"]
 
+    def test_speaker_aware_requires_audio(self) -> None:
+        resp = client.post("/workspaces/ws-1/items/item-1/summaries", json={
+            "template": "concise",
+            "summary_mode": "speaker_aware",
+        })
+        assert resp.status_code == 400
+        assert "仅支持音频" in resp.json()["detail"]
+
+    @patch("backend.app.routes.workspaces.generate_summary")
+    def test_speaker_aware_mode_passed_to_generator(
+        self, mock_gen: MagicMock, _patch_store: WorkspaceStore,
+    ) -> None:
+        item = _patch_store.get_item("ws-1", "item-1")
+        item.type = "audio"
+        item.results = {
+            "transcript_segments": [
+                {"t_sec": 0, "speaker": "SPEAKER_00", "text": "发言"},
+            ],
+        }
+        mock_gen.return_value = ItemSummary(
+            summary_id="speaker-summary", template="concise", version=0,
+            summary_mode="speaker_aware", content_md="按说话人总结",
+        )
+        resp = client.post("/workspaces/ws-1/items/item-1/summaries", json={
+            "template": "concise",
+            "summary_mode": "speaker_aware",
+        })
+        assert resp.status_code == 201
+        assert resp.json()["summary_mode"] == "speaker_aware"
+        assert mock_gen.call_args.kwargs["summary_mode"] == "speaker_aware"
+
     @patch("backend.app.routes.workspaces.generate_summary")
     def test_llm_failure(self, mock_gen: MagicMock) -> None:
         mock_gen.side_effect = RuntimeError("未配置 chat model")

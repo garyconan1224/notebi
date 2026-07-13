@@ -18,6 +18,7 @@ class TestItemSummaryRoundtrip:
             summary_id="abc-123",
             template="concise",
             version=1,
+            summary_mode="speaker_aware",
             background_for_summary="这是背景",
             content_md="# 摘要\n\n内容",
             model_used="openai/gpt-4o",
@@ -27,6 +28,7 @@ class TestItemSummaryRoundtrip:
         assert d["summary_id"] == "abc-123"
         assert d["template"] == "concise"
         assert d["version"] == 1
+        assert d["summary_mode"] == "speaker_aware"
         assert d["background_for_summary"] == "这是背景"
         assert d["content_md"] == "# 摘要\n\n内容"
         assert d["model_used"] == "openai/gpt-4o"
@@ -35,6 +37,7 @@ class TestItemSummaryRoundtrip:
         assert s2.summary_id == s.summary_id
         assert s2.template == s.template
         assert s2.version == s.version
+        assert s2.summary_mode == s.summary_mode
         assert s2.content_md == s.content_md
         assert s2.model_used == s.model_used
 
@@ -42,6 +45,7 @@ class TestItemSummaryRoundtrip:
         """缺失字段用默认值填充。"""
         s = ItemSummary.from_dict({"summary_id": "x", "template": "detailed", "version": 2})
         assert s.background_for_summary == ""
+        assert s.summary_mode == "general"
         assert s.content_md == ""
         assert s.model_used == ""
         assert s.created_at  # 非空，自动生成

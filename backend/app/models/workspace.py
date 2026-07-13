@@ -113,6 +113,7 @@ class ItemSummary:
     summary_id: str  # uuid4
     template: str  # 模板 id（concise / detailed / ...）
     version: int  # 同 template 自增，0, 1, 2, 3 ...
+    summary_mode: str = "general"  # general | speaker_aware
     name: str = ""  # 用户自定义版本名（空则用默认标签）
     background_for_summary: str = ""  # 这次生成用的「总结用背景」
     content_md: str = ""  # LLM 产出的 markdown
@@ -128,6 +129,7 @@ class ItemSummary:
             summary_id=str(data.get("summary_id") or ""),
             template=str(data.get("template") or "concise"),
             version=int(data.get("version") if data.get("version") is not None else 0),
+            summary_mode=str(data.get("summary_mode") or "general"),
             name=str(data.get("name") or ""),
             background_for_summary=str(data.get("background_for_summary") or ""),
             content_md=str(data.get("content_md") or ""),

@@ -106,6 +106,32 @@ def _image_text_as_plain_text(item: WorkspaceItem) -> str:
     return "\n\n".join(part for part in (source_text, composed_md, image_notes) if part.strip())
 
 
+def _speaker_aware_transcript(item: WorkspaceItem) -> str:
+    """按时间顺序构造带说话人标签的音频材料，供区分说话人总结使用。"""
+    results = item.results or {}
+    raw_segments = results.get("transcript_segments") or []
+    if not isinstance(raw_segments, list):
+        return ""
+    speaker_map = results.get("speaker_map") or {}
+    if not isinstance(speaker_map, dict):
+        speaker_map = {}
+    lines: List[str] = []
+    for seg in raw_segments:
+        if not isinstance(seg, dict):
+            continue
+        text = str(seg.get("edited_text") or seg.get("text") or "").strip()
+        speaker_id = str(seg.get("speaker") or "").strip()
+        if not text or not speaker_id:
+            continue
+        label = str(speaker_map.get(speaker_id) or speaker_id)
+        ts = str(seg.get("t_str") or "").strip()
+        if not ts:
+            sec = int(float(seg.get("t_sec") or seg.get("start") or 0))
+            ts = f"{sec // 60:02d}:{sec % 60:02d}"
+        lines.append(f"[{ts}] {label}：{text}")
+    return "\n".join(lines)
+
+
 def _summary_source_text(item: WorkspaceItem) -> str:
     results = item.results or {}
     if _is_image_text_item(item):
@@ -365,6 +391,7 @@ def build_prompt(
     item: WorkspaceItem,
     template_id: str,
     background: str = "",
+    summary_mode: str = "general",
     embed_frames: bool = True,
     max_embed_frames: int = 0,
 ) -> Tuple[str, str]:
@@ -420,6 +447,15 @@ def build_prompt(
     else:
         transcript = plain_text
 
+    if summary_mode == "speaker_aware" and item.type == "audio":
+        speaker_transcript = _speaker_aware_transcript(item)
+        if speaker_transcript:
+            transcript = speaker_transcript
+            system_prompt = (
+                f"{system_prompt}\n"
+                "这是区分说话人总结。必须保留每位说话人的观点归属，明确区分观点、共识、分歧、决策和行动项；"
+                "不要把不同说话人的内容合并成无归属的叙述。引用具体发言时保留 [mm:ss] 时间码。"
+            )
     user_prompt = tpl.user_prompt.format(transcript=transcript)
 
     # R3.6: 计算视频时长（供后续 metadata 和配图 cap 使用）
@@ -895,6 +931,7 @@ def generate_summary(
     item: WorkspaceItem,
     template_id: str,
     background: str = "",
+    summary_mode: str = "general",
     provider_id: str = "",
     model: str = "",
     search_web: bool = False,
@@ -931,6 +968,7 @@ def generate_summary(
 
     system_prompt, user_prompt = build_prompt(
         item, template_id, background,
+        summary_mode=summary_mode,
         embed_frames=embed_frames, max_embed_frames=max_embed_frames,
     )
 
@@ -962,6 +1000,7 @@ def generate_summary(
         summary_id=str(uuid.uuid4()),
         template=template_id,
         version=0,  # 调用方负责设置正确 version
+        summary_mode=summary_mode,
         background_for_summary=background,
         content_md=content_md,
         model_used=model_used,

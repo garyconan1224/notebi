@@ -70,14 +70,18 @@ priority: P0
 - 更新 `docs/AI_HANDOFF.md`、`docs/EXECUTION_PLAN.md`、`docs/OUTSTANDING_TASKS.md` 当前指针。
 - 将“实际情况与计划不一致必须停下来问用户”写入项目规则和 Codex 记忆。
 
-### P0-B：先锁定数据契约，不先做视觉大改
+### P0-B：先锁定数据契约，不先做视觉大改（已完成）
 
 - 确认总结请求携带 `summary_mode` 与 `template_id`。
 - 确认普通总结和区分说话人总结共用现有模板体系。
 - 确认总结版本是否已有可复用 metadata；优先复用现有结构。
 - 如果必须修改数据库 schema、迁移或持久化契约，立即停下询问用户，不自行决定。
 
-### P0-C：区分说话人总结后端链路
+实际核对结果：总结版本当前保存在工作空间 JSON 的 `ItemSummary`，不是 SQLite schema；本阶段新增兼容的 `summary_mode` 字段，不需要数据库迁移。
+
+验证：`./.venv/bin/pytest -q backend/tests/test_item_summary.py backend/tests/test_summary_generator.py backend/tests/test_summaries.py` → 74 passed（1 个既有 Starlette/httpx deprecation warning）。
+
+### P0-C：区分说话人总结后端链路（进行中）
 
 - 调整音频任务顺序：转写 → 说话人识别（若启用）→ 根据总结方式生成总结。
 - 普通总结继续使用不带说话人信息的现有路径。

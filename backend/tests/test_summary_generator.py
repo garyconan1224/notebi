@@ -102,6 +102,23 @@ class TestBuildPrompt:
         assert "[00:42]" not in usr_p
         assert "外观对比" in usr_p
 
+    def test_speaker_aware_prompt_keeps_speaker_and_timestamp(self) -> None:
+        item = _make_item(
+            type="audio",
+            results={
+                "transcript": "主持人开场 嘉宾补充",
+                "transcript_segments": [
+                    {"t_sec": 0, "t_str": "00:00", "speaker": "SPEAKER_00", "text": "主持人开场"},
+                    {"t_sec": 12, "t_str": "00:12", "speaker": "SPEAKER_01", "text": "嘉宾补充"},
+                ],
+                "speaker_map": {"SPEAKER_00": "主持人", "SPEAKER_01": "嘉宾 A"},
+            },
+        )
+        sys_p, usr_p = build_prompt(item, "concise", summary_mode="speaker_aware")
+        assert "区分说话人总结" in sys_p
+        assert "[00:00] 主持人：主持人开场" in usr_p
+        assert "[00:12] 嘉宾 A：嘉宾补充" in usr_p
+
     def test_image_text_standard_uses_image_note_prompt(self) -> None:
         """图文 standard 总结应使用 source.md 材料，不走视频时间轴模板。"""
         item = _make_item(
@@ -197,6 +214,21 @@ class TestGenerateSummary:
         assert result.background_for_summary == "背景"
         assert result.summary_id  # uuid 非空
         assert result.version == 0  # 默认 0，调用方负责覆盖
+
+    @patch("backend.app.services.summary_generator._call_llm")
+    def test_speaker_aware_summary_records_mode(self, mock_llm: MagicMock) -> None:
+        mock_llm.return_value = ("speaker summary", "model")
+        item = _make_item(
+            type="audio",
+            results={
+                "transcript_segments": [
+                    {"t_sec": 0, "speaker": "SPEAKER_00", "text": "发言"},
+                ],
+                "speaker_map": {"SPEAKER_00": "主持人"},
+            },
+        )
+        result = generate_summary(item, "concise", summary_mode="speaker_aware")
+        assert result.summary_mode == "speaker_aware"
 
     @patch("backend.app.services.summary_generator._call_llm")
     def test_llm_called_with_correct_prompts(self, mock_llm: MagicMock) -> None:
