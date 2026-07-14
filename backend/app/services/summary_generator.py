@@ -107,7 +107,7 @@ def _image_text_as_plain_text(item: WorkspaceItem) -> str:
 
 
 def _speaker_aware_transcript(item: WorkspaceItem) -> str:
-    """按时间顺序构造带说话人标签的音频材料，供区分说话人总结使用。"""
+    """按时间顺序构造带说话人标签的音视频材料，供逐人总结使用。"""
     results = item.results or {}
     raw_segments = results.get("transcript_segments") or []
     if not isinstance(raw_segments, list):
@@ -994,7 +994,23 @@ def generate_summary(
     # 区分说话人模式会为每段增加时间和说话人标签；长文阈值必须按实际
     # 送入分层管线的材料计算，而不是只看未标注的 transcript 字符数。
     summary_source = speaker_source or long_source
-    if item.type == "audio" and len(summary_source) > 12000:
+    frame_context = ""
+    if item.type == "video" and embed_frames:
+        frame_lines: List[str] = []
+        for frame in _collect_frames(item):
+            sec = int(float(frame.get("sec") or 0))
+            hours, remainder = divmod(max(0, sec), 3600)
+            minutes, seconds = divmod(remainder, 60)
+            timestamp = (
+                f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+                if hours else f"{minutes:02d}:{seconds:02d}"
+            )
+            desc = str(frame.get("desc") or "").strip()
+            if desc:
+                frame_lines.append(f"[{timestamp}] {desc}")
+        frame_context = "\n".join(frame_lines)
+    if item.type in {"audio", "video"} and len(summary_source) > 12000:
+        # 延迟导入，避免 summary_generator 与 pipeline_tasks 的循环导入。
         from backend.app.services.pipeline_tasks import _generate_audio_summary
 
         coverage: Dict[str, Any] = {}
@@ -1008,6 +1024,8 @@ def generate_summary(
                 "text_model": model,
                 "summary_background": background,
                 "summary_context": summary_context,
+                "frame_context": frame_context,
+                "embed_frames": embed_frames,
             },
             transcript_text=long_source,
             transcript_segments=transcript_segments,
@@ -1015,6 +1033,10 @@ def generate_summary(
             log=logger.info,
             coverage=coverage,
         )
+        if item.type == "video" and embed_frames:
+            from backend.app.services.frame_placeholder import resolve_frame_placeholders
+
+            content_md = resolve_frame_placeholders(content_md, _collect_frames(item))
         return ItemSummary(
             summary_id=str(uuid.uuid4()),
             template=template_id,

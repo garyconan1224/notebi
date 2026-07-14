@@ -59,7 +59,9 @@ def test_speaker_aware_business_templates_have_evidence_contracts():
     for template_id, required_terms in expectations.items():
         template = get_template(template_id)
         assert template.speaker_aware_only is True
-        assert template.style_categories == ("style_audio",)
+        assert "style_audio" in template.style_categories
+        assert "style_video_with_frames" in template.style_categories
+        assert "style_video_text_only" in template.style_categories
         for term in required_terms:
             assert term in template.system_prompt, f"{template_id} 缺少「{term}」"
         assert "不得编造" in template.system_prompt
@@ -81,6 +83,8 @@ def test_speaker_template_override_preserves_scope(monkeypatch):
     template = get_template("speaker_meeting")
 
     assert template.label == "我的会议纪要"
-    assert template.style_categories == ("style_audio",)
+    assert "style_audio" in template.style_categories
+    assert "style_video_with_frames" in template.style_categories
+    assert "style_video_text_only" in template.style_categories
     assert template.speaker_aware_only is True
     assert "说话人与证据规则" in template.system_prompt

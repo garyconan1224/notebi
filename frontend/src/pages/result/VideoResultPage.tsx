@@ -203,6 +203,10 @@ export default function VideoResultPage() {
   const result = fetchState.kind === 'ready' ? fetchState.data : null
   const frames = useMemo(() => (result?.is_demo ? [] : result?.frames ?? []), [result])
   const transcript = useMemo(() => (result?.is_demo ? [] : result?.transcript ?? []), [result])
+  const hasSpeakerTranscript = useMemo(
+    () => transcript.some((line) => Boolean(String(line.speaker ?? '').trim())),
+    [transcript],
+  )
   const totalSec = result?.tracks_meta.total_sec ?? 0
   const isLearning = result?.intent === 'learning'
   const showReplicaMode = allowReplicaTools && !isLearning
@@ -797,7 +801,12 @@ export default function VideoResultPage() {
         <div className="vd-subtitle-content">
           {contentTab === 'summary' ? (
             <div style={{ flex: 1, overflow: 'hidden' }}>
-              <SummariesTab workspaceId={workspaceId} itemId={itemId} />
+              <SummariesTab
+                workspaceId={workspaceId}
+                itemId={itemId}
+                allowSpeakerAware={hasSpeakerTranscript}
+                templateCategory="style_video_with_frames"
+              />
             </div>
           ) : (
           <>
@@ -1228,7 +1237,12 @@ export default function VideoResultPage() {
 
           {contentTab === 'summary' ? (
           <div className="vd-summary-pane">
-            <SummariesTab workspaceId={workspaceId} itemId={itemId} />
+            <SummariesTab
+              workspaceId={workspaceId}
+              itemId={itemId}
+              allowSpeakerAware={hasSpeakerTranscript}
+              templateCategory="style_video_with_frames"
+            />
           </div>
           ) : (
           <>
@@ -1293,7 +1307,12 @@ export default function VideoResultPage() {
           </>
         ) : (
           <div className="vd-summary-pane">
-            <SummariesTab workspaceId={workspaceId} itemId={itemId} />
+            <SummariesTab
+              workspaceId={workspaceId}
+              itemId={itemId}
+              allowSpeakerAware={hasSpeakerTranscript}
+              templateCategory="style_video_with_frames"
+            />
           </div>
         )}
       </div>

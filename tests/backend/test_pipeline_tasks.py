@@ -143,6 +143,41 @@ def test_find_visual_json_paths_for_videos_filters_unrelated_workspace_json(tmp_
     assert _find_visual_json_paths_for_videos(tmp_path, [current_video]) == [current_json]
 
 
+def test_maybe_diarize_video_segments_maps_speakers_and_cleans_audio(tmp_path: Path) -> None:
+    """视频开启区分说话人后，应提取临时音轨、映射标签并清理临时文件。"""
+    from backend.app.services.pipeline_tasks import _maybe_diarize_video_segments
+
+    video_path = tmp_path / "interview.mp4"
+    audio_path = tmp_path / "interview_diarization.wav"
+    segments = [{"start": 0.0, "end": 1.0, "text": "你好"}]
+    diarization = MagicMock(name="diarization")
+    labeled = [{**segments[0], "speaker": "SPEAKER_00"}]
+    log = MagicMock()
+
+    def fake_extract(_video: Path, output: Path, log_fn: Any = None) -> Path:
+        output.write_bytes(b"wav")
+        return output
+
+    with (
+        patch("backend.app.services.pipeline_tasks._extract_audio_from_video", side_effect=fake_extract),
+        patch("backend.app.services.pipeline_tasks.run_diarization", return_value=diarization) as diarize,
+        patch("backend.app.services.pipeline_tasks.assign_speakers_to_segments", return_value=labeled) as assign,
+    ):
+        result = _maybe_diarize_video_segments(
+            video_path,
+            segments,
+            enabled=True,
+            speaker_count=2,
+            audio_dir=tmp_path,
+            log=log,
+        )
+
+    assert result == labeled
+    diarize.assert_called_once_with(audio_path, num_speakers=2)
+    assign.assert_called_once_with(segments, diarization)
+    assert not audio_path.exists()
+
+
 # ── 场景 A：仅下载 ─────────────────────────────────────────────────────────
 
 class TestScenarioA:
@@ -843,6 +878,27 @@ class TestVideoSummaryOutputFormat:
             transcript, output_format="summary",
         )
         assert unknown == explicit
+
+    def test_long_video_summary_prompt_is_not_hard_truncated(self) -> None:
+        """旧字幕总结 prompt 也不能静默丢弃后半段视频转写。"""
+        from backend.app.services.pipeline_tasks import _build_video_summary_prompt
+
+        transcript = "开头" + "中间内容" * 4000 + "视频最后一句不能丢"
+        prompt = _build_video_summary_prompt(transcript)
+
+        assert transcript in prompt
+        assert "已截断前 12000" not in prompt
+
+    def test_video_frame_context_is_scoped_to_summary_chunk_time_range(self) -> None:
+        """长视频分层时只把当前时间段的画面证据注入对应分块。"""
+        from backend.app.services.pipeline_tasks import _frame_context_for_range
+
+        frame_context = "[00:10] 开场标题\n[00:20] 产品界面\n[00:40] 片尾字幕"
+
+        assert _frame_context_for_range(frame_context, "00:00", "00:25") == (
+            "[00:10] 开场标题\n[00:20] 产品界面"
+        )
+        assert _frame_context_for_range(frame_context, "00:30", "00:45") == "[00:40] 片尾字幕"
 
     def test_subtitle_summary_with_output_format_key_points(self, tmp_path: Path) -> None:
         """路径 1 携带 output_format='key_points' 应被正确传给 prompt 构建。"""

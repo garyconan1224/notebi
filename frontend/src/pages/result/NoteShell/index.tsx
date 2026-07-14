@@ -2438,7 +2438,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         <NewSummaryModal
           creating={creatingSummary}
           defaultTemplate={note.summary_hint?.default_template}
-          allowSpeakerAware={isAudioNote}
+          allowSpeakerAware={isAudioNote || (isVideoNote && speakerIds.length > 0)}
           speakerAwareAvailable={speakerIds.length > 0}
           templateCategory={isAudioNote ? 'style_audio' : 'style_video_with_frames'}
           onSubmit={handleCreateSummary}

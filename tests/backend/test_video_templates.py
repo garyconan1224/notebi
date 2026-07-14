@@ -40,23 +40,27 @@ def test_get_all_templates_includes_builtins(client: TestClient) -> None:
     assert len(builtins) == 9
 
 
-def test_audio_style_templates_include_speaker_business_templates_only_in_audio(
+def test_media_style_templates_include_speaker_business_templates(
     client: TestClient,
 ) -> None:
     audio = client.get("/templates", params={"category": "style_audio"})
     video = client.get("/templates", params={"category": "style_video_with_frames"})
+    video_text = client.get("/templates", params={"category": "style_video_text_only"})
 
     assert audio.status_code == 200
     assert video.status_code == 200
+    assert video_text.status_code == 200
     audio_items = {item["template_id"]: item for item in audio.json()}
     video_ids = {item["template_id"] for item in video.json()}
+    video_text_ids = {item["template_id"] for item in video_text.json()}
     expected = {
         "speaker_meeting",
         "speaker_interview",
         "speaker_customer_reception",
     }
     assert expected <= set(audio_items)
-    assert expected.isdisjoint(video_ids)
+    assert expected <= video_ids
+    assert expected <= video_text_ids
     assert all(audio_items[template_id]["speaker_aware_only"] for template_id in expected)
     assert all(audio_items[template_id]["group"] == "speaker_aware" for template_id in expected)
 

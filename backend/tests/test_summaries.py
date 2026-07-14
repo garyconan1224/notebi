@@ -115,13 +115,37 @@ class TestCreateSummary:
         assert resp.status_code == 400
         assert "未知模板" in resp.json()["detail"]
 
-    def test_speaker_aware_requires_audio(self) -> None:
+    def test_speaker_aware_requires_speaker_segments(self) -> None:
         resp = client.post("/workspaces/ws-1/items/item-1/summaries", json={
             "template": "concise",
             "summary_mode": "speaker_aware",
         })
-        assert resp.status_code == 400
-        assert "仅支持音频" in resp.json()["detail"]
+        assert resp.status_code == 409
+        assert "说话人识别" in resp.json()["detail"]
+
+    @patch("backend.app.routes.workspaces.generate_summary")
+    def test_speaker_aware_mode_accepts_video_with_speaker_segments(
+        self, mock_gen: MagicMock, _patch_store: WorkspaceStore,
+    ) -> None:
+        item = _patch_store.get_item("ws-1", "item-1")
+        item.results = {
+            "transcript_segments": [
+                {"start": 0, "speaker": "SPEAKER_00", "text": "视频主持人发言"},
+            ],
+        }
+        mock_gen.return_value = ItemSummary(
+            summary_id="video-speaker-summary", template="speaker_meeting", version=0,
+            summary_mode="speaker_aware", content_md="视频逐人总结",
+        )
+
+        resp = client.post("/workspaces/ws-1/items/item-1/summaries", json={
+            "template": "speaker_meeting",
+            "summary_mode": "speaker_aware",
+        })
+
+        assert resp.status_code == 201
+        assert resp.json()["summary_mode"] == "speaker_aware"
+        assert mock_gen.call_args.kwargs["summary_mode"] == "speaker_aware"
 
     @patch("backend.app.routes.workspaces.generate_summary")
     def test_speaker_aware_mode_passed_to_generator(

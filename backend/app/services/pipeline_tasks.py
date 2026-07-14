@@ -356,6 +356,34 @@ def _extract_audio_from_video(
     return output_path
 
 
+def _maybe_diarize_video_segments(
+    video_path: Path,
+    segments: List[Dict[str, Any]],
+    *,
+    enabled: bool,
+    speaker_count: Optional[int],
+    audio_dir: Path,
+    log: Callable[[str], None],
+) -> List[Dict[str, Any]]:
+    """为视频音轨补充说话人标签；失败时保留完整转写并允许用户重试。"""
+    if not enabled or not segments:
+        return segments
+    audio_path = audio_dir / f"{video_path.stem}_diarization.wav"
+    try:
+        log("🗣️ 视频说话人识别中...")
+        _extract_audio_from_video(video_path, audio_path, log_fn=log)
+        diarization = run_diarization(audio_path, num_speakers=speaker_count)
+        labeled = assign_speakers_to_segments(segments, diarization)
+        labeled_count = sum(1 for seg in labeled if str(seg.get("speaker") or "").strip())
+        log(f"✅ 视频说话人识别完成 | {labeled_count}/{len(labeled)} 段已标注")
+        return labeled
+    except (DiarizationError, RuntimeError, OSError) as exc:
+        log(f"⚠️ 视频说话人识别失败，保留无标签转写：{exc}")
+        return segments
+    finally:
+        audio_path.unlink(missing_ok=True)
+
+
 def _extract_waveform_peaks(
     audio_path: Path,
     duration_sec: float,
@@ -503,16 +531,14 @@ def _build_video_summary_prompt(
     }.get(depth, "请适度展开，总字数 300-500 字。")
 
     # 超长文本截断（LLM context 保护）
-    max_chars = 12000
-    truncated = transcript[:max_chars] if len(transcript) > max_chars else transcript
-    suffix = "\n\n（注：转写文本过长，已截断前 12000 字符）" if len(transcript) > max_chars else ""
+    # 不在入口处截断转写；长视频由统一分层总结管线负责拆分与覆盖校验。
 
     return (
         f"{format_instruction}\n\n"
         f"{template_instruction}\n"
         f"{depth_hint}\n\n"
         f"请用中文输出。\n\n"
-        f"---\n转写文本：\n{truncated}{suffix}"
+        f"---\n转写文本：\n{transcript}"
     )
 
 
@@ -857,6 +883,7 @@ def _run_subtitle_summary(
     summary_depth = str(payload.get("summary_depth") or "normal").strip()
     output_format = str(payload.get("output_format") or "summary").strip()
     summary = ""
+    summary_coverage: Dict[str, Any] = {}
 
     # V3.3: auto-detect video template
     detected_template = ""
@@ -881,12 +908,28 @@ def _run_subtitle_summary(
             runner.set_progress(task_id, 0.98, "LLM 生成摘要...")
             # R18: 优先使用 summary_template（新模板系统）
             summary_template_id = str(payload.get("summary_template") or "").strip()
-            summary_max_tokens = 1200
-            if summary_template_id:
+            summary_mode = str(payload.get("summary_mode") or "general").strip()
+            if len(transcript_text) > 12000:
+                summary = _generate_audio_summary(
+                    payload={
+                        "summary_template": summary_template_id or "concise",
+                        "text_model": text_model,
+                        "summary_context": str(payload.get("summary_context") or ""),
+                    },
+                    transcript_text=transcript_text,
+                    transcript_segments=transcript_segments,
+                    summary_mode=summary_mode,
+                    log=log,
+                    coverage=summary_coverage,
+                )
+                log(
+                    f"📝 长视频分层总结完成 | chunks={summary_coverage.get('chunk_count', 0)} "
+                    f"| chars={len(summary)}"
+                )
+            elif summary_template_id:
                 from backend.app.services.summary_templates import get_template
                 tpl = get_template(summary_template_id)
-                prompt = tpl.user_prompt.replace("{transcript}", transcript_text[:12000])
-                summary_max_tokens = 3000
+                prompt = tpl.user_prompt.replace("{transcript}", transcript_text)
                 log(f"📝 LLM 总结 | template={tpl.label} ({summary_template_id})")
             else:
                 prompt = _build_video_summary_prompt(
@@ -894,25 +937,26 @@ def _run_subtitle_summary(
                 )
                 log(f"📝 LLM 总结 | template={video_template} | depth={summary_depth} | format={output_format}")
 
-            settings = load_settings()
-            registry = create_default_registry()
-            profile = registry.resolve_default_profile(settings, "chat")
-            provider = registry.build(profile)
-            chat_model = text_model or str(
-                getattr(profile.default_models, "chat", None) or ""
-            ).strip()
-            if chat_model:
-                summary = provider.chat(
-                    ChatRequest(
-                        model=chat_model,
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=0.3,
-                        max_tokens=summary_max_tokens,
+            if len(transcript_text) <= 12000:
+                settings = load_settings()
+                registry = create_default_registry()
+                profile = registry.resolve_default_profile(settings, "chat")
+                provider = registry.build(profile)
+                chat_model = text_model or str(
+                    getattr(profile.default_models, "chat", None) or ""
+                ).strip()
+                if chat_model:
+                    summary = provider.chat(
+                        ChatRequest(
+                            model=chat_model,
+                            messages=[{"role": "user", "content": prompt}],
+                            temperature=0.3,
+                            max_tokens=3000,
+                        )
                     )
-                )
-                log(f"✅ 摘要生成完成 | {len(summary)} 字符")
-            else:
-                log("⚠️  未配置 text_model，跳过 LLM 总结")
+                    log(f"✅ 摘要生成完成 | {len(summary)} 字符")
+                else:
+                    log("⚠️  未配置 text_model，跳过 LLM 总结")
         except Exception as e:
             log(f"⚠️  LLM 总结失败: {e}")
     else:
@@ -936,6 +980,7 @@ def _run_subtitle_summary(
         "transcript_text": transcript_text,  # 保留原始文本供备用
         "transcript_segments": transcript_segments,
         "summary": summary,
+        "summary_coverage": summary_coverage,
         "video_template": video_template,
         "detected_template": detected_template,
         "output_format": output_format,
@@ -1083,9 +1128,9 @@ def _build_combined_summary_prompt(
         parts.append(f"\n## 原帖正文（背景上下文）\n\n{tweet_text[:4000]}")
 
     if transcript_text.strip():
-        parts.append(f"\n## 音频转写文本\n\n{transcript_text[:8000]}")
+        parts.append(f"\n## 音频转写文本\n\n{transcript_text}")
     if frame_descriptions.strip():
-        parts.append(f"\n## 画面描述\n\n{frame_descriptions[:8000]}")
+        parts.append(f"\n## 画面描述\n\n{frame_descriptions}")
 
     parts.append("\n请生成综合总结：")
     return "\n".join(parts)
@@ -1126,7 +1171,6 @@ def handle_analyze_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any
     vision_model = str(payload.get("vision_model") or "").strip() or settings.vision_model
     text_model = str(payload.get("text_model") or "").strip() or settings.text_model
     proxy = str(payload.get("proxy") or "").strip()
-
     # 日志：记录收到的模型和代理配置
     runner.append_log(
         task_id,
@@ -2616,6 +2660,14 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
     vision_model = str(payload.get("vision_model") or "").strip() or settings.vision_model
     text_model = str(payload.get("text_model") or "").strip() or settings.text_model
     proxy = str(payload.get("proxy") or "").strip()
+    summary_mode = str(payload.get("summary_mode") or "general").strip() or "general"
+    video_speaker_requested = bool(payload.get("diarize")) or summary_mode == "speaker_aware"
+    speaker_count_raw = payload.get("speaker_count")
+    speaker_count = (
+        int(speaker_count_raw)
+        if speaker_count_raw is not None and str(speaker_count_raw).strip()
+        else None
+    )
 
     # 日志：记录收到的文本/视觉模型和代理配置（音频模型已弃用，改用本地 faster-whisper）
     runner.append_log(
@@ -2639,6 +2691,7 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
     analysis_text = ""
     markdown = ""
     note_body = ""
+    summary_coverage: Dict[str, Any] = {}
     download_save_path = ""
     # PROBE 结果（download 后由内容识别填充）
     note_kind = "text"  # 默认；PROBE 后可能变为 image_text / mixed / video / audio
@@ -2987,6 +3040,14 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
                 cc_result = _try_cc_subtitle(payload, log_fn)
                 if cc_result:
                     _cc_text, _cc_segments, _cc_meta = cc_result
+                    _cc_segments = _maybe_diarize_video_segments(
+                        Path(video_file),
+                        _cc_segments,
+                        enabled=video_speaker_requested,
+                        speaker_count=speaker_count,
+                        audio_dir=project_json_dir,
+                        log=log_fn,
+                    )
                     _monotonic_progress(0.30, "字幕已就绪，跳过转录")
                     return _cc_text, _cc_segments
 
@@ -3029,6 +3090,14 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
                         "🔇 该视频无音轨（或无有效语音），已跳过语音转写，"
                         "将使用画面分析生成笔记。",
                     )
+                _segments = _maybe_diarize_video_segments(
+                    Path(video_file),
+                    _segments,
+                    enabled=video_speaker_requested,
+                    speaker_count=speaker_count,
+                    audio_dir=project_json_dir,
+                    log=log_fn,
+                )
                 return _text, _segments
 
             futures["transcribe"] = _pool.submit(_run_transcribe)
@@ -3293,10 +3362,12 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
                 _tmp_item, summary_template_id,
                 embed_frames=_embed_frames,
                 max_embed_frames=_max_embed,
+                summary_mode=summary_mode,
                 background=_tweet_for_standard if _tweet_for_standard.strip() else "",
             )
             if _std_summary and _std_summary.content_md:
                 note_body = _std_summary.content_md
+                summary_coverage = dict(_std_summary.coverage or {})
                 runner.append_log(task_id, f"📖 标准总结生成完成（{len(note_body)} 字）")
             else:
                 runner.append_log(task_id, "⚠️ 标准总结返回为空，回退到默认摘要")
@@ -3311,6 +3382,8 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         "markdown":              markdown,
         "llm_summary":           llm_summary,
         "note_body":             note_body,  # R3.5: standard 总结作为 note.md 默认正文
+        "summary_mode":          summary_mode,
+        "summary_coverage":      summary_coverage,
         "completed_steps":       completed_steps,
         "video_file":            download_save_path,
         "json_outputs":          [str(p.resolve()) for p in json_paths],
@@ -4425,6 +4498,28 @@ def _parse_summary_timestamp(value: str) -> Optional[int]:
     return None
 
 
+def _frame_context_for_range(
+    frame_context: str,
+    start_time: str,
+    end_time: str,
+) -> str:
+    """按分层分段时间范围检索对应画面证据，避免每个分段重复注入全视频帧。"""
+    start = _parse_summary_timestamp(start_time)
+    end = _parse_summary_timestamp(end_time or start_time)
+    if start is None:
+        return ""
+    end = end if end is not None else start
+    matched: List[str] = []
+    for line in frame_context.splitlines():
+        match = re.match(r"^\[([^\]]+)\]\s*(.+)$", line.strip())
+        if not match:
+            continue
+        timestamp = _parse_summary_timestamp(match.group(1).strip())
+        if timestamp is not None and start <= timestamp <= end:
+            matched.append(line.strip())
+    return "\n".join(matched)
+
+
 def _summary_required_sections(system_prompt: str) -> List[str]:
     return [
         match.strip()
@@ -4546,7 +4641,7 @@ def _generate_audio_summary(
     progress: Optional[Callable[[float, str], None]] = None,
     coverage: Optional[Dict[str, Any]] = None,
 ) -> str:
-    """用完整转录生成 V0；长音频先分块，再汇总所有分块结果。"""
+    """用完整转录生成 V0；长音视频先分块，再汇总所有分块结果。"""
     source = _audio_summary_source(transcript_text, transcript_segments, summary_mode)
     if not source:
         if summary_mode == "speaker_aware":
@@ -4613,6 +4708,14 @@ def _generate_audio_summary(
     log(f"📝 LLM 总结 | template={template.label} ({template_id}) | chunks={len(chunks)}")
 
     summary_context = str(payload.get("summary_context") or payload.get("summary_background") or "").strip()
+    frame_context = str(payload.get("frame_context") or "").strip()
+    media_frame_rule = ""
+    if frame_context and bool(payload.get("embed_frames", True)):
+        media_frame_rule = (
+            "\n\n【视频画面证据规则】\n"
+            "以下画面描述只用于补充对应时间段的视觉信息；必须以转写为主，不能把画面推测写成事实。"
+            "如画面有助于理解，可在对应小节末尾使用真实时间占位符 *FRAME-[mm:ss]；没有价值时不要配图。"
+        )
     context_instruction = (
         f"【用户提供的总结背景】\n{summary_context}\n\n"
         if summary_context
@@ -4657,12 +4760,22 @@ def _generate_audio_summary(
                 f"，时间范围 {manifest_entry['start_time']}–"
                 f"{manifest_entry['end_time'] or manifest_entry['start_time']}"
             )
+        chunk_visual_context = _frame_context_for_range(
+            frame_context,
+            str(manifest_entry.get("start_time") or ""),
+            str(manifest_entry.get("end_time") or ""),
+        )
         chunk_prompt = (
             f"这是完整音频的第 {index}/{len(chunks)} 段，分段 ID：{chunk_id}{time_range}。"
             "请忠于本段提取主题、关键问答、事实、观点、结论、异议和行动项，保留原文中的说话人和时间证据；"
             "按主题合并连续短句，不要逐句或逐行复述，不要套用最终总结模板的全部章节。"
             "输出控制在 1200 个中文字符左右，并在最后一行输出"
             f" `<!-- CHUNK_COMPLETE:{chunk_id} -->`；不要假设其他分段内容。\n\n"
+            + (
+                f"\n\n【本段对应画面证据】\n{chunk_visual_context}"
+                if chunk_visual_context else ""
+            )
+            + "\n\n"
             + chunk
         )
         partial = provider.chat(ChatRequest(
@@ -4729,12 +4842,18 @@ def _generate_audio_summary(
         + "下面是覆盖整段音频、按时间顺序生成的分段摘要。请综合全部分段，去重但不要遗漏后半程内容，"
         "并严格按所选模板输出最终 Markdown。按主题合并连续短句，不要把每个转写短句逐行扩写为问答。"
         f"必须逐个覆盖这些分段 ID：{', '.join(chunk_ids)}，并输出模板要求的全部章节后正常收尾。\n\n"
+        + media_frame_rule
+        + (
+            f"\n\n【全视频画面证据索引】\n{frame_context}"
+            if frame_context else ""
+        )
+        + "\n\n"
         + template.user_prompt.replace("{transcript}", combined)
     )
     summary = provider.chat(ChatRequest(
         model=chat_model,
         messages=[
-            {"role": "system", "content": template.system_prompt},
+            {"role": "system", "content": template.system_prompt + media_frame_rule},
             {"role": "user", "content": final_prompt},
         ],
         temperature=0.3,

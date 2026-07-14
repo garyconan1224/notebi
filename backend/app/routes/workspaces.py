@@ -2912,8 +2912,12 @@ def _bridge_to_pipeline_payload(
                 _pf["max_embed_frames"] = _summary_cfg["max_embed_frames"]
             if _summary_cfg.get("summary_template"):
                 payload["summary_template"] = _summary_cfg["summary_template"]
+            if _summary_cfg.get("summary_mode"):
+                payload["summary_mode"] = _summary_cfg["summary_mode"]
             if "diarize" in _summary_cfg:
                 payload["diarize"] = _summary_cfg["diarize"]
+            if _summary_cfg.get("speaker_count") is not None:
+                payload["speaker_count"] = _summary_cfg["speaker_count"]
         if bg.get("frame_interval_sec") is not None:
             _pf["frame_prompt"] = {
                 "mode": "interval",
@@ -2959,8 +2963,12 @@ def _bridge_to_pipeline_payload(
             _pf["max_embed_frames"] = _summary_cfg["max_embed_frames"]
         if _summary_cfg.get("summary_template"):
             payload["summary_template"] = _summary_cfg["summary_template"]
+        if _summary_cfg.get("summary_mode"):
+            payload["summary_mode"] = _summary_cfg["summary_mode"]
         if "diarize" in _summary_cfg:
             payload["diarize"] = _summary_cfg["diarize"]
+        if _summary_cfg.get("speaker_count") is not None:
+            payload["speaker_count"] = _summary_cfg["speaker_count"]
     if bg.get("frame_interval_sec") is not None:
         _pf["frame_prompt"] = {
             "mode": "interval",
@@ -4816,8 +4824,8 @@ async def create_summary(
                 break
 
     if req.summary_mode == "speaker_aware":
-        if item.type != "audio":
-            raise HTTPException(status_code=400, detail="区分说话人总结仅支持音频素材")
+        if item.type not in {"audio", "video"}:
+            raise HTTPException(status_code=400, detail="区分说话人总结仅支持音频或视频素材")
         segments = item.results.get("transcript_segments") if item.results else None
         has_speaker_segments = any(
             isinstance(seg, dict) and str(seg.get("speaker") or "").strip()
@@ -4826,7 +4834,7 @@ async def create_summary(
         if not has_speaker_segments:
             raise HTTPException(
                 status_code=409,
-                detail="当前音频没有可用的说话人识别结果，无法生成区分说话人总结。请先启用说话人识别并重新分析。",
+                detail="当前素材没有可用的说话人识别结果，无法生成区分说话人总结。请先启用说话人识别并重新分析。",
             )
 
     # R3.2: 视频素材物化 frames（标准总结嵌关键帧需要）

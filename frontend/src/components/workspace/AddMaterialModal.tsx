@@ -541,16 +541,16 @@ export function AddMaterialModal({
   ]
   const advancedSummary = advancedSummaryParts.join(' · ')
 
-  const speakerAwareAudio = showAudioNoteSettings && diarizeOn
+  const speakerAwareMedia = (showAudioNoteSettings || showVideoNoteSettings) && diarizeOn
   const selectedSpeakerCount = speakerCount === 'auto' ? undefined : Number(speakerCount)
-  const visiblePrimaryStyleOptions = speakerAwareAudio ? SPEAKER_AWARE_STYLES : primaryStyleOptions
-  const visibleMoreStyleOptions = speakerAwareAudio
+  const visiblePrimaryStyleOptions = speakerAwareMedia ? SPEAKER_AWARE_STYLES : primaryStyleOptions
+  const visibleMoreStyleOptions = speakerAwareMedia
     ? styleOptions.filter((style) => !SPEAKER_AWARE_STYLE_IDS.has(style.id))
     : moreStyleOptions
 
   const handleDiarizeChange = (enabled: boolean) => {
     setDiarizeOn(enabled)
-    if (showAudioNoteSettings) {
+    if (showAudioNoteSettings || showVideoNoteSettings) {
       if (enabled) setNoteStyle(SPEAKER_AWARE_STYLES[0].id)
       else if (SPEAKER_AWARE_STYLE_IDS.has(noteStyle)) setNoteStyle('standard')
     }
@@ -891,7 +891,7 @@ export function AddMaterialModal({
         summary_template: noteStyle,
         diarize: diarizeOn,
         ...(selectedSpeakerCount ? { speaker_count: selectedSpeakerCount } : {}),
-        ...(speakerAwareAudio ? { summary_mode: 'speaker_aware' as const } : {}),
+        ...(speakerAwareMedia ? { summary_mode: 'speaker_aware' as const } : {}),
         user_notes: userNotes,
       })
       toast.success('批量合集已创建', { description: `${result.items_added} 条内容已加入任务队列` })
@@ -943,10 +943,10 @@ export function AddMaterialModal({
               embed_frames: videoTask ? embedFrames : false,
               summary_template: noteStyle,
               diarize: resolvedNoteType === 'mixed' ? true : diarizeOn,
-              ...(resolvedNoteType === 'audio' && diarizeOn && selectedSpeakerCount
+              ...(((resolvedNoteType === 'audio' || resolvedNoteType === 'video') && diarizeOn && selectedSpeakerCount)
                 ? { speaker_count: selectedSpeakerCount }
                 : {}),
-              ...(resolvedNoteType === 'audio' && diarizeOn ? { summary_mode: 'speaker_aware' as const } : {}),
+              ...((resolvedNoteType === 'audio' || resolvedNoteType === 'video') && diarizeOn ? { summary_mode: 'speaker_aware' as const } : {}),
             },
             // 混合笔记：标记 note_media_kind
             ...(resolvedNoteType === 'mixed' ? { note_media_kind: 'mixed' } : {}),
@@ -1006,7 +1006,7 @@ export function AddMaterialModal({
         wsId, effectiveUrl, effectiveSniff?.title ?? undefined,
         embedFrames, targetWorkspaceKind === 'replica' ? 'replica_prompt' : 'vision', effInterval, effVisionModel,
         targetWorkspaceKind, selectedNoteType,
-        { diarize: selectedNoteType === 'mixed' ? true : diarizeOn, ...(speakerAwareAudio && selectedSpeakerCount ? { speaker_count: selectedSpeakerCount } : {}), summary_template: noteStyle, ...(speakerAwareAudio ? { summary_mode: 'speaker_aware' as const } : {}), user_notes: userNotes, ...(targetWorkspaceKind === 'replica' ? { replica_kind: replicaKind } : {}), ...(selectedNoteType === 'mixed' ? { note_media_kind: 'mixed' } : {}) },
+        { diarize: selectedNoteType === 'mixed' ? true : diarizeOn, ...(speakerAwareMedia && selectedSpeakerCount ? { speaker_count: selectedSpeakerCount } : {}), summary_template: noteStyle, ...(speakerAwareMedia ? { summary_mode: 'speaker_aware' as const } : {}), user_notes: userNotes, ...(targetWorkspaceKind === 'replica' ? { replica_kind: replicaKind } : {}), ...(selectedNoteType === 'mixed' ? { note_media_kind: 'mixed' } : {}) },
       )
       toast.success(targetWorkspaceKind === 'replica' ? '复刻任务已创建' : '笔记生成中', { description: `${result.item_type} · ${effectiveUrl}` })
 
@@ -1614,7 +1614,7 @@ export function AddMaterialModal({
                     </div>
                     <div style={{ marginTop: 14 }}>
                       <div className="gen-field">
-                        <span className="gen-field-label">{speakerAwareAudio ? '区分说话人的总结方式' : '笔记风格'}</span>
+                        <span className="gen-field-label">{speakerAwareMedia ? '区分说话人的总结方式' : '笔记风格'}</span>
                         <Select value={noteStyle} onValueChange={setNoteStyle}>
                           <SelectTrigger style={{ fontSize: 13 }}>
                             <SelectValue placeholder="选择风格" />
@@ -1633,7 +1633,7 @@ export function AddMaterialModal({
                               <>
                                 <SelectSeparator />
                                 <SelectGroup>
-                                  <SelectLabel style={{ fontSize: 11, color: 'var(--mut)' }}>{speakerAwareAudio ? '其他风格' : '更多风格'}</SelectLabel>
+                                  <SelectLabel style={{ fontSize: 11, color: 'var(--mut)' }}>{speakerAwareMedia ? '其他风格' : '更多风格'}</SelectLabel>
                                   {visibleMoreStyleOptions.map(opt => (
                                     <SelectItem key={opt.id} value={opt.id}>
                                       {opt.label}
@@ -1785,7 +1785,7 @@ export function AddMaterialModal({
                               </span>
                             </span>
                           </label>
-                          {speakerAwareAudio && (
+                          {speakerAwareMedia && (
                             <div className="gen-field">
                               <span className="gen-field-label">预计说话人数</span>
                               <Select

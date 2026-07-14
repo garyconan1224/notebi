@@ -128,10 +128,9 @@ def llm_split_chapters(
 
 def llm_global_summary(transcript_text: str, api_key: str) -> str:
     """用 LLM 生成全局摘要。"""
-    truncated = transcript_text[:8000]
     prompt = f"""请将以下视频转写内容总结为 150-300 字的中文教学摘要，突出核心知识点和学习要点：
 
-{truncated}
+{transcript_text}
 
 只输出摘要文本，不要标题或格式。"""
 

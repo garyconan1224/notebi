@@ -22,6 +22,7 @@ import {
   type ItemSummary,
 } from '@/services/summaries'
 import { getItemNote } from '@/services/workspaces'
+import type { TemplateCategory } from '@/services/templates'
 import { withStatusToast } from '@/lib/statusToast'
 
 import { flattenText, MarkdownToc, slugify } from './MarkdownToc'
@@ -79,11 +80,12 @@ interface SummariesTabProps {
   /** create/delete/rename 后通知父组件同步 summaries 列表 */
   onRefresh?: () => void
   allowSpeakerAware?: boolean
+  templateCategory?: TemplateCategory
 }
 
 /* ── 主组件 ────────────────────────────────────────────── */
 
-export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummaryId, onRefresh, allowSpeakerAware = false }: SummariesTabProps) {
+export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummaryId, onRefresh, allowSpeakerAware = false, templateCategory }: SummariesTabProps) {
   const navigate = useNavigate()
   const [summaries, setSummaries] = useState<ItemSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -317,7 +319,7 @@ export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummary
             creating={false}
             defaultTemplate={defaultTemplate}
             allowSpeakerAware={allowSpeakerAware}
-            templateCategory={allowSpeakerAware ? 'style_audio' : 'style_video_with_frames'}
+            templateCategory={templateCategory ?? (allowSpeakerAware ? 'style_audio' : 'style_video_with_frames')}
             onSubmit={handleCreate}
             onClose={() => setShowModal(false)}
           />
@@ -557,7 +559,7 @@ export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummary
           creating={creatingTemplate !== null}
           defaultTemplate={defaultTemplate}
           allowSpeakerAware={allowSpeakerAware}
-          templateCategory={allowSpeakerAware ? 'style_audio' : 'style_video_with_frames'}
+          templateCategory={templateCategory ?? (allowSpeakerAware ? 'style_audio' : 'style_video_with_frames')}
           onSubmit={handleCreate}
           onClose={() => setShowModal(false)}
         />

@@ -311,7 +311,7 @@ TEMPLATES: dict[str, SummaryTemplate] = {
         ),
         user_prompt="请按区分说话人的会议纪要模板整理以下完整转写：\n\n{transcript}",
         output_format="markdown",
-        style_categories=("style_audio",),
+        style_categories=("style_audio", "style_video_with_frames", "style_video_text_only"),
         speaker_aware_only=True,
     ),
     "speaker_interview": SummaryTemplate(
@@ -332,7 +332,7 @@ TEMPLATES: dict[str, SummaryTemplate] = {
         ),
         user_prompt="请按区分说话人的线下采访模板整理以下完整转写：\n\n{transcript}",
         output_format="markdown",
-        style_categories=("style_audio",),
+        style_categories=("style_audio", "style_video_with_frames", "style_video_text_only"),
         speaker_aware_only=True,
     ),
     "speaker_customer_reception": SummaryTemplate(
@@ -355,7 +355,7 @@ TEMPLATES: dict[str, SummaryTemplate] = {
         ),
         user_prompt="请按区分说话人的客户接待模板整理以下完整转写：\n\n{transcript}",
         output_format="markdown",
-        style_categories=("style_audio",),
+        style_categories=("style_audio", "style_video_with_frames", "style_video_text_only"),
         speaker_aware_only=True,
     ),
 }

@@ -331,6 +331,38 @@ class TestGenerateSummary:
         mock_one_shot.assert_not_called()
 
     @patch("backend.app.services.summary_generator._call_llm")
+    @patch("backend.app.services.pipeline_tasks._generate_audio_summary")
+    def test_long_video_uses_same_hierarchical_pipeline(
+        self,
+        mock_long_summary: MagicMock,
+        mock_one_shot: MagicMock,
+    ) -> None:
+        """视频长转写与音频使用同一套分层、覆盖校验管线。"""
+        mock_long_summary.return_value = "# 视频分层总结"
+        mock_one_shot.side_effect = AssertionError("长视频不应走单次 LLM")
+        item = _make_item(
+            type="video",
+            results={
+                "transcript": "视频转写" * 4000,
+                "transcript_segments": [
+                    {"start": 0, "speaker": "SPEAKER_00", "text": "开场" * 7000},
+                    {"start": 60, "speaker": "SPEAKER_01", "text": "后半程" * 7000},
+                ],
+                "frames": [
+                    {"sec": 10, "description": "演示界面", "image_path": "/tmp/frame.jpg"},
+                ],
+            },
+        )
+
+        result = generate_summary(item, "speaker_meeting", summary_mode="speaker_aware")
+
+        assert result.content_md == "# 视频分层总结"
+        mock_long_summary.assert_called_once()
+        assert mock_long_summary.call_args.kwargs["summary_mode"] == "speaker_aware"
+        assert mock_long_summary.call_args.kwargs["payload"]["frame_context"]
+        mock_one_shot.assert_not_called()
+
+    @patch("backend.app.services.summary_generator._call_llm")
     def test_llm_called_with_correct_prompts(self, mock_llm: MagicMock) -> None:
         mock_llm.return_value = ("output", "model")
         item = _make_item()
