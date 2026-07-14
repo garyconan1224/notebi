@@ -119,6 +119,7 @@ class ItemSummary:
     background_for_summary: str = ""  # 这次生成用的「总结用背景」
     content_md: str = ""  # LLM 产出的 markdown
     model_used: str = ""  # provider/model（审计用）
+    coverage: Dict[str, Any] = field(default_factory=dict)  # 长内容分块与覆盖审计
     created_at: str = field(default_factory=_now_iso)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -135,6 +136,7 @@ class ItemSummary:
             background_for_summary=str(data.get("background_for_summary") or ""),
             content_md=str(data.get("content_md") or ""),
             model_used=str(data.get("model_used") or ""),
+            coverage=dict(data.get("coverage") or {}),
             created_at=str(data.get("created_at") or _now_iso()),
         )
 

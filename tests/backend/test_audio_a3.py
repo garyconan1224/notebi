@@ -447,6 +447,79 @@ def test_long_audio_summary_repairs_missing_chunk_after_coverage_audit() -> None
     assert coverage["missing_chunk_ids"] == []
 
 
+def test_speaker_summary_rejects_false_positive_audit_and_supplements_all_chunks() -> None:
+    """模型即使谎报全覆盖，缺章节/缺时间区间也不能标记 complete。"""
+    from backend.app.services.pipeline_tasks import _generate_audio_summary
+
+    profile = SimpleNamespace(id="provider", default_models=SimpleNamespace(chat="chat-model"))
+    provider = MagicMock()
+
+    def fake_chat(request):
+        prompt = request.messages[-1]["content"]
+        if "覆盖审计" in prompt:
+            return json.dumps({
+                "covered_chunk_ids": ["C001", "C002"],
+                "missing_chunk_ids": [],
+                "missing_facts": {},
+            }, ensure_ascii=False)
+        if "修复当前总结" in prompt:
+            return "## 采访概览\n\n[00:00] 只有开头，仍在表格中途"
+        if "覆盖整段音频" in prompt:
+            return "## 采访概览\n\n[00:00] 只有开头，仍在表格中途"
+        if "分段 ID：C001" in prompt:
+            return "[00:00] 主持人：开场事实"
+        if "分段 ID：C002" in prompt:
+            return "[01:00:00] 嘉宾：后半程事实 TAIL-FACT"
+        raise AssertionError(f"unexpected prompt: {prompt[:120]}")
+
+    provider.chat.side_effect = fake_chat
+    registry = MagicMock()
+    registry.resolve_default_profile.return_value = profile
+    registry.build.return_value = provider
+    coverage: dict = {}
+    segments = [
+        {"start": index, "speaker": "主持人", "text": "开场内容" * 8}
+        for index in range(100)
+    ] + [
+        {"start": 3600 + index, "speaker": "嘉宾", "text": ("后半程内容" * 8) + " TAIL-FACT"}
+        for index in range(100)
+    ]
+
+    with (
+        patch("backend.app.services.pipeline_tasks.create_default_registry", return_value=registry),
+        patch(
+            "backend.app.services.pipeline_tasks.load_settings",
+            return_value=SimpleNamespace(text_model="", providers=[]),
+        ),
+        patch(
+            "backend.app.services.pipeline_tasks._chunk_audio_summary_source",
+            side_effect=lambda source: ["\n".join(source.splitlines()[:100]), "\n".join(source.splitlines()[100:])],
+        ),
+    ):
+        summary = _generate_audio_summary(
+            payload={"summary_template": "speaker_interview"},
+            transcript_text="",
+            transcript_segments=segments,
+            summary_mode="speaker_aware",
+            log=lambda _message: None,
+            coverage=coverage,
+        )
+
+    assert "C001" in summary
+    assert "C002" in summary
+    assert "TAIL-FACT" in summary
+    assert coverage["status"] == "supplemented"
+    assert coverage["missing_chunk_ids"] == []
+    assert coverage["supplemented_chunk_ids"] == ["C001", "C002"]
+    assert "Q&A 时间线" in coverage["structural_missing_sections"]
+    assert coverage["deterministic_missing_chunk_ids"] == ["C002"]
+    assert coverage["partial_boundary_fallback_ids"] == ["C001", "C002"]
+    assert coverage["partial_retry_ids"] == ["C001", "C002"]
+    assert coverage["raw_fallback_chunk_ids"] == ["C001", "C002"]
+    assert "分段边界原文" in summary
+    assert "未验证分段的完整原转写" in summary
+
+
 # ── 旧 music_mode_confirmed 参数兼容 ───────────────────────────
 
 def test_music_confirmed_is_ignored(tmp_path: Path) -> None:

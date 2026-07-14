@@ -974,6 +974,50 @@ def generate_summary(
             search_results = search_web_context(query.strip(), max_results=5)
             search_context = format_search_context(search_results)
 
+    raw_transcript = (item.results or {}).get("transcript", "")
+    if isinstance(raw_transcript, list):
+        long_source = "\n".join(
+            str(segment.get("edited_text") or segment.get("text") or "")
+            for segment in raw_transcript
+            if isinstance(segment, dict)
+        )
+    else:
+        long_source = str(raw_transcript or "")
+    transcript_segments = (item.results or {}).get("transcript_segments", [])
+    if not isinstance(transcript_segments, list):
+        transcript_segments = []
+    if item.type == "audio" and len(long_source) > 12000:
+        from backend.app.services.pipeline_tasks import _generate_audio_summary
+
+        coverage: Dict[str, Any] = {}
+        summary_context = "\n\n".join(
+            part for part in (background.strip(), search_context.strip()) if part
+        )
+        content_md = _generate_audio_summary(
+            payload={
+                "summary_template": template_id,
+                "provider_id": provider_id,
+                "text_model": model,
+                "summary_background": background,
+                "summary_context": summary_context,
+            },
+            transcript_text=long_source,
+            transcript_segments=transcript_segments,
+            summary_mode=summary_mode,
+            log=logger.info,
+            coverage=coverage,
+        )
+        return ItemSummary(
+            summary_id=str(uuid.uuid4()),
+            template=template_id,
+            version=0,
+            summary_mode=summary_mode,
+            background_for_summary=background,
+            content_md=content_md,
+            model_used=str(coverage.get("model_used") or ""),
+            coverage=coverage,
+        )
+
     system_prompt, user_prompt = build_prompt(
         item, template_id, background,
         summary_mode=summary_mode,

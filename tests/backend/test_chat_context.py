@@ -132,3 +132,39 @@ def test_build_context_all_ids_miss_returns_empty_prompt():
     ctx = build_item_context(ws, ["nope_1", "nope_2"])
     assert ctx.system_prompt == ""
     assert ctx.used_item_ids == []
+
+
+def test_long_audio_context_retrieves_late_query_evidence():
+    """问长音频后半程的问题时，不能仍只截取转写开头。"""
+    segments = [
+        {
+            "start": index * 30,
+            "speaker": "SPEAKER_00",
+            "text": f"普通讨论内容第 {index} 段，介绍模型训练经验。",
+        }
+        for index in range(180)
+    ]
+    segments[-2]["text"] = "量子海豚计划的最终结论是暂停上线，等安全评审完成。"
+    item = WorkspaceItem(
+        item_id="audio-long",
+        type="audio",
+        source="local",
+        source_value="/long.m4a",
+        name="四小时访谈",
+        results={
+            "summary": "访谈讨论了人工智能。",
+            "transcript": " ".join(str(seg["text"]) for seg in segments),
+            "transcript_segments": segments,
+            "speaker_map": {"SPEAKER_00": "姚老师"},
+        },
+    )
+    ws = _make_workspace([item])
+
+    ctx = build_item_context(ws, [item.item_id], query="量子海豚计划最后为什么暂停上线？")
+
+    assert ctx.truncated is False
+    assert ctx.used_item_ids == [item.item_id]
+    assert "检索到的转写证据" in ctx.system_prompt
+    assert "量子海豚计划的最终结论" in ctx.system_prompt
+    assert "姚老师" in ctx.system_prompt
+    assert "01:29:00" in ctx.system_prompt

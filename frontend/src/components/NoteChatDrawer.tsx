@@ -17,6 +17,8 @@ export interface NoteChatDrawerProps {
   workspaceId: string
   /** 前端构建的 system prompt，锁定问答上下文 */
   systemPrompt: string
+  /** 后端按当前问题从这些素材的完整转写中检索相关证据。 */
+  itemIds?: string[]
   /** 作用域提示文案（显示在消息区上方） */
   scopeHint: string
   /** 'drawer' = FAB + 浮动抽屉；'inline' = 仅内嵌内容（由父容器控制尺寸） */
@@ -33,6 +35,7 @@ export interface NoteChatDrawerProps {
 export default function NoteChatDrawer({
   workspaceId,
   systemPrompt,
+  itemIds = [],
   scopeHint,
   mode = 'drawer',
   onClose,
@@ -88,6 +91,7 @@ export default function NoteChatDrawer({
         prompt,
         chat_id: chatId ?? undefined,
         system_prompt: systemPrompt,
+        item_ids: itemIds,
       })
       setChatId(turn.chat_id)
 
@@ -114,7 +118,7 @@ export default function NoteChatDrawer({
       setStreaming(false)
       setHistory((h) => h.filter((m) => m.message_id !== optimisticUser.message_id))
     }
-  }, [input, streaming, workspaceId, chatId, systemPrompt])
+  }, [input, streaming, workspaceId, chatId, systemPrompt, itemIds])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {

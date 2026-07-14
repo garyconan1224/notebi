@@ -6,6 +6,7 @@ import NoteChatDrawer from '@/components/NoteChatDrawer'
 interface FloatingAskAiProps {
   workspaceId: string
   systemPrompt: string
+  itemIds?: string[]
   scopeHint: string
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -19,6 +20,7 @@ interface FloatingAskAiProps {
 export function FloatingAskAi({
   workspaceId,
   systemPrompt,
+  itemIds,
   scopeHint,
   open: controlledOpen,
   onOpenChange,
@@ -108,6 +110,7 @@ export function FloatingAskAi({
             <NoteChatDrawer
               workspaceId={workspaceId}
               systemPrompt={systemPrompt}
+              itemIds={itemIds}
               scopeHint={scopeHint}
               mode="inline"
             />

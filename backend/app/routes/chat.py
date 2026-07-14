@@ -48,20 +48,24 @@ def _require_workspace(workspace_id: str) -> None:
 def create_chat_turn(workspace_id: str, req: ChatCreateRequest) -> Dict[str, Any]:
     _require_workspace(workspace_id)
 
-    # B-8: 前端直接传 system_prompt 时优先使用（LN 上下文注入）
+    # 前端正文上下文与后端按问题检索的素材证据可以同时使用：
+    # 正文保留用户编辑结果，item_ids 则避免把整份长转写塞进每次请求。
     workspace = _workspaces.get(workspace_id)
     assert workspace is not None  # _require_workspace 已校验
 
-    if req.system_prompt:
-        final_system_prompt = req.system_prompt
-        truncated = False
-        used_ids: List[str] = []
-    else:
-        # N6: 根据 item_ids 拼 system prompt（空 list → ctx.system_prompt = ""）
-        ctx = build_item_context(workspace, list(req.item_ids or []))
-        final_system_prompt = ctx.system_prompt or None
-        truncated = ctx.truncated
-        used_ids = ctx.used_item_ids
+    ctx = build_item_context(
+        workspace,
+        list(req.item_ids or []),
+        query=req.prompt,
+    )
+    prompt_parts = [
+        part.strip()
+        for part in (req.system_prompt or "", ctx.system_prompt)
+        if part and part.strip()
+    ]
+    final_system_prompt = "\n\n".join(prompt_parts) or None
+    truncated = ctx.truncated
+    used_ids: List[str] = ctx.used_item_ids
 
     try:
         turn = _runner.start_turn(

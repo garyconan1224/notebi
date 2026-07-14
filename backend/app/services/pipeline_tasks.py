@@ -4411,6 +4411,65 @@ def _audio_chunk_manifest(chunks: List[str]) -> List[Dict[str, Any]]:
     return manifest
 
 
+def _parse_summary_timestamp(value: str) -> Optional[int]:
+    parts = value.split(":")
+    try:
+        if len(parts) == 2:
+            minutes, seconds = (int(part) for part in parts)
+            return minutes * 60 + seconds
+        if len(parts) == 3:
+            hours, minutes, seconds = (int(part) for part in parts)
+            return hours * 3600 + minutes * 60 + seconds
+    except ValueError:
+        return None
+    return None
+
+
+def _summary_required_sections(system_prompt: str) -> List[str]:
+    return [
+        match.strip()
+        for match in re.findall(r"^##\s+(.+?)\s*$", system_prompt, flags=re.MULTILINE)
+        if match.strip()
+    ]
+
+
+def _summary_missing_sections(summary: str, required_sections: List[str]) -> List[str]:
+    headings = [
+        match.strip()
+        for match in re.findall(r"^##\s+(.+?)\s*$", summary, flags=re.MULTILINE)
+    ]
+    return [
+        section
+        for section in required_sections
+        if not any(section == heading or section in heading for heading in headings)
+    ]
+
+
+def _summary_missing_time_chunks(
+    summary: str,
+    manifest: List[Dict[str, Any]],
+) -> List[str]:
+    timestamps = []
+    for match in re.finditer(
+        r"(?<!\d)(?:(\d{1,2}):)?([0-5]?\d):([0-5]\d)(?!\d)",
+        summary,
+    ):
+        hours = int(match.group(1) or 0)
+        timestamps.append(hours * 3600 + int(match.group(2)) * 60 + int(match.group(3)))
+
+    missing: List[str] = []
+    for entry in manifest:
+        start = _parse_summary_timestamp(str(entry.get("start_time") or ""))
+        end = _parse_summary_timestamp(str(entry.get("end_time") or ""))
+        if start is None:
+            continue
+        if end is None:
+            end = start
+        if not any(start <= timestamp <= end for timestamp in timestamps):
+            missing.append(str(entry["chunk_id"]))
+    return missing
+
+
 def _parse_audio_coverage_audit(raw: str, expected_ids: List[str]) -> Dict[str, Any]:
     match = re.search(r"\{.*\}", raw, flags=re.DOTALL)
     if not match:
@@ -4496,7 +4555,20 @@ def _generate_audio_summary(
 
     settings = load_settings()
     registry = create_default_registry()
-    profile = registry.resolve_default_profile(settings, "chat")
+    provider_id = str(payload.get("provider_id") or "").strip()
+    if provider_id:
+        profile = next(
+            (
+                candidate
+                for candidate in settings.providers
+                if candidate.id == provider_id and candidate.enabled
+            ),
+            None,
+        )
+        if profile is None:
+            raise RuntimeError(f"provider 不存在或未启用: {provider_id}")
+    else:
+        profile = registry.resolve_default_profile(settings, "chat")
     provider = registry.build(profile)
     defaults = getattr(profile, "default_models", None)
     default_chat = (
@@ -4525,6 +4597,7 @@ def _generate_audio_summary(
         return ""
     manifest = _audio_chunk_manifest(chunks)
     chunk_ids = [entry["chunk_id"] for entry in manifest]
+    profile_id = str(getattr(profile, "id", "") or provider_id or "default")
     if coverage is not None:
         coverage.clear()
         coverage.update({
@@ -4532,15 +4605,22 @@ def _generate_audio_summary(
             "chunk_count": len(chunks),
             "chunk_ids": chunk_ids,
             "chunks": manifest,
+            "model_used": f"{profile_id}/{chat_model}",
             "audit_passes": 0,
             "missing_chunk_ids": [],
             "status": "complete" if len(chunks) == 1 else "pending_audit",
         })
     log(f"📝 LLM 总结 | template={template.label} ({template_id}) | chunks={len(chunks)}")
 
-    speaker_instruction = ""
+    summary_context = str(payload.get("summary_context") or payload.get("summary_background") or "").strip()
+    context_instruction = (
+        f"【用户提供的总结背景】\n{summary_context}\n\n"
+        if summary_context
+        else ""
+    )
+    speaker_instruction = context_instruction
     if summary_mode == "speaker_aware":
-        speaker_instruction = (
+        speaker_instruction += (
             "请保留每段内容对应的说话人，分别整理观点、共识、分歧、决策和行动项。\n\n"
         )
 
@@ -4560,6 +4640,14 @@ def _generate_audio_summary(
         return summary
 
     partials: List[str] = []
+    partial_boundary_fallback_ids: List[str] = []
+    partial_retry_ids: List[str] = []
+    raw_fallback_chunk_ids: List[str] = []
+    chunk_system_prompt = (
+        "你是严格的长音频分段事实提取器。只整理当前分段，用紧凑 Markdown 输出："
+        "本段主题、关键问答/各方观点、明确结论或行动、分歧与未决问题、带说话人和时间的证据。"
+        "禁止把每个转写短句扩写成一行问答，禁止编造。"
+    )
     total_calls = len(chunks) + 3
     for index, (chunk, manifest_entry) in enumerate(zip(chunks, manifest), start=1):
         chunk_id = manifest_entry["chunk_id"]
@@ -4571,19 +4659,59 @@ def _generate_audio_summary(
             )
         chunk_prompt = (
             f"这是完整音频的第 {index}/{len(chunks)} 段，分段 ID：{chunk_id}{time_range}。"
-            "请忠于本段提取主题、关键事实、观点、结论与行动项，保留原文中的说话人和时间证据；"
-            "不要假设其他分段内容。\n\n"
+            "请忠于本段提取主题、关键问答、事实、观点、结论、异议和行动项，保留原文中的说话人和时间证据；"
+            "按主题合并连续短句，不要逐句或逐行复述，不要套用最终总结模板的全部章节。"
+            "输出控制在 1200 个中文字符左右，并在最后一行输出"
+            f" `<!-- CHUNK_COMPLETE:{chunk_id} -->`；不要假设其他分段内容。\n\n"
             + chunk
         )
-        partials.append(provider.chat(ChatRequest(
+        partial = provider.chat(ChatRequest(
             model=chat_model,
             messages=[
-                {"role": "system", "content": template.system_prompt},
+                {"role": "system", "content": chunk_system_prompt},
                 {"role": "user", "content": speaker_instruction + chunk_prompt},
             ],
             temperature=0.2,
-            max_tokens=1800,
-        )))
+            max_tokens=2000,
+        ))
+        marker = f"<!-- CHUNK_COMPLETE:{chunk_id} -->"
+        if marker not in partial:
+            partial_boundary_fallback_ids.append(chunk_id)
+            partial_retry_ids.append(chunk_id)
+            retry_prompt = (
+                f"分段 ID：{chunk_id} 的上一次摘要没有正常收尾。请重新提取本段最重要的信息，"
+                "最多 700 个中文字符；只保留主题、关键观点/事实、明确结论或行动、分歧，"
+                "每项附说话人和时间。禁止逐句复述。"
+                f"最后一行必须是 `{marker}`。\n\n{chunk}"
+            )
+            retried = provider.chat(ChatRequest(
+                model=chat_model,
+                messages=[
+                    {"role": "system", "content": chunk_system_prompt},
+                    {"role": "user", "content": speaker_instruction + retry_prompt},
+                ],
+                temperature=0.1,
+                max_tokens=1500,
+            ))
+            if marker in retried:
+                partial = retried
+            else:
+                raw_fallback_chunk_ids.append(chunk_id)
+                partial = (
+                    retried.rstrip()
+                    + "\n\n#### 未验证分段的完整原转写\n\n```text\n"
+                    + chunk
+                    + "\n```"
+                )
+        source_lines = [line for line in chunk.splitlines() if line.strip()]
+        if source_lines:
+            partial = (
+                partial.rstrip()
+                + "\n\n#### 分段边界原文（完整性兜底）\n"
+                + f"- 开始：{source_lines[0]}\n"
+                + f"- 结束：{source_lines[-1]}"
+            )
+        partials.append(partial)
         if progress:
             progress(index / total_calls, f"摘要分块 {index}/{len(chunks)}")
 
@@ -4599,7 +4727,8 @@ def _generate_audio_summary(
     final_prompt = (
         speaker_instruction
         + "下面是覆盖整段音频、按时间顺序生成的分段摘要。请综合全部分段，去重但不要遗漏后半程内容，"
-        f"并严格按所选模板输出最终 Markdown。必须逐个覆盖这些分段 ID：{', '.join(chunk_ids)}。\n\n"
+        "并严格按所选模板输出最终 Markdown。按主题合并连续短句，不要把每个转写短句逐行扩写为问答。"
+        f"必须逐个覆盖这些分段 ID：{', '.join(chunk_ids)}，并输出模板要求的全部章节后正常收尾。\n\n"
         + template.user_prompt.replace("{transcript}", combined)
     )
     summary = provider.chat(ChatRequest(
@@ -4609,7 +4738,7 @@ def _generate_audio_summary(
             {"role": "user", "content": final_prompt},
         ],
         temperature=0.3,
-        max_tokens=4000,
+        max_tokens=8000,
     ))
     if progress:
         progress((len(chunks) + 1) / total_calls, "校验摘要覆盖范围")
@@ -4622,19 +4751,34 @@ def _generate_audio_summary(
         expected_ids=chunk_ids,
     )
     audit_passes = 1
-    missing_ids = audit["missing_chunk_ids"]
-    if missing_ids:
-        log(f"⚠️  摘要覆盖审计发现遗漏分段：{', '.join(missing_ids)}，自动修复")
+    required_sections = _summary_required_sections(template.system_prompt)
+    structural_missing = _summary_missing_sections(summary, required_sections)
+    deterministic_missing = (
+        _summary_missing_time_chunks(summary, manifest)
+        if summary_mode == "speaker_aware"
+        else []
+    )
+    missing_ids = list(dict.fromkeys(audit["missing_chunk_ids"] + deterministic_missing))
+    if missing_ids or structural_missing:
+        issue_parts = []
+        if missing_ids:
+            issue_parts.append(f"遗漏分段：{', '.join(missing_ids)}")
+        if structural_missing:
+            issue_parts.append(f"缺少模板章节：{', '.join(structural_missing)}")
+        log(f"⚠️  摘要确定性校验未通过（{'；'.join(issue_parts)}），自动修复")
         missing_sections = "\n\n".join(
             f"### {entry['chunk_id']}\n{partial}"
             for entry, partial in zip(manifest, partials)
-            if entry["chunk_id"] in missing_ids
+            if entry["chunk_id"] in missing_ids or structural_missing
         )
         facts = json.dumps(audit.get("missing_facts") or {}, ensure_ascii=False)
         repair_prompt = (
             "请修复当前总结：保持所选模板和已有正确内容，把覆盖校验指出的遗漏事实自然补入对应章节。"
+            "必须输出模板要求的全部章节并正常收尾，不得在表格行或句子中途结束；"
+            "按主题合并连续短句，不要把每个转写短句逐行扩写为问答；"
             "不得删除已有的时间证据、说话人归属、决定或行动项；只输出修复后的完整 Markdown。"
-            f"\n\n遗漏分段：{', '.join(missing_ids)}"
+            f"\n\n遗漏分段：{', '.join(missing_ids) or '无'}"
+            f"\n缺少模板章节：{', '.join(structural_missing) or '无'}"
             f"\n遗漏事实：{facts}"
             f"\n\n当前总结：\n{summary}"
             f"\n\n遗漏分段摘要：\n{missing_sections}"
@@ -4646,7 +4790,7 @@ def _generate_audio_summary(
                 {"role": "user", "content": repair_prompt},
             ],
             temperature=0.2,
-            max_tokens=4500,
+            max_tokens=8000,
         ))
         if progress:
             progress((len(chunks) + 2) / total_calls, "复审摘要覆盖范围")
@@ -4658,17 +4802,44 @@ def _generate_audio_summary(
             expected_ids=chunk_ids,
         )
         audit_passes = 2
-        missing_ids = audit["missing_chunk_ids"]
+        structural_missing = _summary_missing_sections(summary, required_sections)
+        deterministic_missing = (
+            _summary_missing_time_chunks(summary, manifest)
+            if summary_mode == "speaker_aware"
+            else []
+        )
+        missing_ids = list(dict.fromkeys(audit["missing_chunk_ids"] + deterministic_missing))
 
     status = "complete"
-    if missing_ids:
-        log(f"⚠️  复审仍无法确认分段覆盖，附加原分段要点：{', '.join(missing_ids)}")
-        supplements = "\n\n".join(
-            f"### {entry['chunk_id']} 补充\n{partial}"
-            for entry, partial in zip(manifest, partials)
-            if entry["chunk_id"] in missing_ids
+    supplemented_ids: List[str] = []
+    if missing_ids or structural_missing:
+        # 缺失大半模板章节通常表示输出 token 截断。此时不保留残缺表格，直接回退到
+        # 覆盖全部分块的确定性组合；少量缺口则只补相应分块。
+        structural_failure = bool(structural_missing)
+        supplemented_ids = list(
+            chunk_ids
+            if structural_failure
+            else dict.fromkeys(missing_ids + raw_fallback_chunk_ids)
         )
-        summary = summary.rstrip() + "\n\n## 覆盖校验补充\n\n" + supplements
+        if not supplemented_ids:
+            supplemented_ids = list(chunk_ids)
+        log(
+            "⚠️  复审仍无法确认完整性，使用分段摘要安全网："
+            + ", ".join(supplemented_ids)
+        )
+        supplements = "\n\n".join(
+            f"### {entry['chunk_id']}（{entry['start_time']}–{entry['end_time']}）\n{partial}"
+            for entry, partial in zip(manifest, partials)
+            if entry["chunk_id"] in supplemented_ids
+        )
+        if structural_failure:
+            summary = (
+                "# 完整分段摘要（模板汇总未通过完整性校验）\n\n"
+                "以下内容按原音频时间顺序覆盖全部分段。\n\n"
+                + supplements
+            )
+        else:
+            summary = summary.rstrip() + "\n\n## 覆盖校验补充\n\n" + supplements
         status = "supplemented"
         missing_ids = []
 
@@ -4676,6 +4847,12 @@ def _generate_audio_summary(
         coverage.update({
             "audit_passes": audit_passes,
             "missing_chunk_ids": missing_ids,
+            "deterministic_missing_chunk_ids": deterministic_missing,
+            "structural_missing_sections": structural_missing,
+            "supplemented_chunk_ids": supplemented_ids,
+            "partial_boundary_fallback_ids": partial_boundary_fallback_ids,
+            "partial_retry_ids": partial_retry_ids,
+            "raw_fallback_chunk_ids": raw_fallback_chunk_ids,
             "status": status,
         })
     if progress:

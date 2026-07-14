@@ -241,6 +241,51 @@ class TestGenerateSummary:
         assert result.summary_mode == "speaker_aware"
 
     @patch("backend.app.services.summary_generator._call_llm")
+    @patch("backend.app.services.pipeline_tasks._generate_audio_summary")
+    def test_long_audio_uses_hierarchical_coverage_pipeline(
+        self,
+        mock_long_summary: MagicMock,
+        mock_one_shot: MagicMock,
+    ) -> None:
+        """长音频新建总结不能退回单次全量 prompt。"""
+        def fake_long_summary(**kwargs: object) -> str:
+            coverage = kwargs["coverage"]
+            assert isinstance(coverage, dict)
+            coverage.update({
+                "source_chars": 13001,
+                "chunk_count": 2,
+                "status": "complete",
+                "model_used": "provider/long-model",
+            })
+            return "# 分层总结\n\n完整覆盖"
+
+        mock_long_summary.side_effect = fake_long_summary
+        mock_one_shot.side_effect = AssertionError("长音频不应走单次 LLM")
+        item = _make_item(
+            type="audio",
+            results={"transcript": "长" * 13001, "transcript_segments": []},
+        )
+
+        result = generate_summary(
+            item,
+            "speaker_meeting",
+            background="内部会议",
+            summary_mode="speaker_aware",
+            provider_id="provider",
+            model="long-model",
+        )
+
+        assert result.content_md == "# 分层总结\n\n完整覆盖"
+        assert result.coverage["chunk_count"] == 2
+        assert result.coverage["status"] == "complete"
+        assert result.model_used == "provider/long-model"
+        mock_one_shot.assert_not_called()
+        payload = mock_long_summary.call_args.kwargs["payload"]
+        assert payload["provider_id"] == "provider"
+        assert payload["text_model"] == "long-model"
+        assert payload["summary_background"] == "内部会议"
+
+    @patch("backend.app.services.summary_generator._call_llm")
     def test_llm_called_with_correct_prompts(self, mock_llm: MagicMock) -> None:
         mock_llm.return_value = ("output", "model")
         item = _make_item()

@@ -291,18 +291,14 @@ function formatTranscriptForPrompt(raw: unknown): string {
     .join('\n')
 }
 
-function buildChatSystemPrompt(body: string, transcript: unknown): string {
+function buildChatSystemPrompt(body: string): string {
   const parts = [
-    '你正在协助用户理解一篇单素材笔记。回答时只能基于下方 note.md 正文和转录上下文，不要编造笔记里没有的信息。',
+    '你正在协助用户理解一篇单素材笔记。回答时只能基于下方 note.md 正文和后端检索到的转录证据，不要编造素材里没有的信息。',
     '',
     '【note.md 正文】',
     body || '（暂无笔记内容）',
   ]
-  const transcriptText = formatTranscriptForPrompt(transcript)
-  if (transcriptText) {
-    parts.push('', '【转录上下文】', transcriptText)
-  }
-  parts.push('', '回答指引：基于上述笔记作答；如果用户问到时间点，请引用对应转录；回答使用中文。')
+  parts.push('', '回答指引：结合检索到的转录证据作答；如果用户问到时间点，请引用对应转录；回答使用中文。')
   return parts.join('\n')
 }
 
@@ -955,8 +951,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   }, [currentBody, seedVersion])
 
   const chatSystemPrompt = useMemo(
-    () => buildChatSystemPrompt(currentBody, note?.transcript),
-    [currentBody, note?.transcript],
+    () => buildChatSystemPrompt(currentBody),
+    [currentBody],
   )
 
   const handleExportMarkdown = useCallback(async () => {
@@ -2380,7 +2376,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 <NoteChatDrawer
                   workspaceId={workspaceId}
                   systemPrompt={chatSystemPrompt}
-                  scopeHint="仅基于当前 note.md 与转录上下文回答"
+                  itemIds={[itemId]}
+                  scopeHint="基于当前 note.md，并按问题检索完整转录证据"
                   mode="inline"
                 />
               </div>
@@ -2408,7 +2405,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         <FloatingAskAi
           workspaceId={workspaceId}
           systemPrompt={chatSystemPrompt}
-          scopeHint="仅基于当前 note.md 与转录上下文回答"
+          itemIds={[itemId]}
+          scopeHint="基于当前 note.md，并按问题检索完整转录证据"
           open={askAiOpen}
           onOpenChange={setAskAiOpen}
           hideTrigger

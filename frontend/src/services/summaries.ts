@@ -11,6 +11,15 @@ export interface ItemSummary {
   background_for_summary: string
   content_md: string
   model_used: string
+  coverage?: {
+    source_chars?: number
+    chunk_count?: number
+    chunk_ids?: string[]
+    audit_passes?: number
+    missing_chunk_ids?: string[]
+    status?: 'complete' | 'supplemented' | 'pending_audit'
+    model_used?: string
+  }
   created_at: string
 }
 
@@ -25,7 +34,7 @@ export async function listSummaries(
   return data
 }
 
-/** POST 同步生成一份总结（可能耗时 5-15s）。 */
+/** POST 同步生成一份总结；4 小时素材的分层覆盖审计实测可能超过 10 分钟。 */
 export async function createSummary(
   workspaceId: string,
   itemId: string,
@@ -43,7 +52,7 @@ export async function createSummary(
       search_web: options.search_web ?? false,
       summary_mode: options.summary_mode ?? 'general',
     },
-    { timeout: 180_000 },  // 强模型更慢，给 3 分钟
+    { timeout: 1_800_000 },
   )
   return data
 }
