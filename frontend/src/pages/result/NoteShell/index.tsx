@@ -217,6 +217,14 @@ function compactText(text: string, max = 42): string {
   return `${normalized.slice(0, max)}...`
 }
 
+function buildChapterSummary(text: string, max = 42): string {
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  if (!normalized) return '暂无内容提要'
+  // 优先取一个完整短句，避免关键时间点卡片直接展示整段逐字稿。
+  const sentence = normalized.match(/^(.{12,}?)(?:[。！？!?；;]|$)/)?.[1]?.trim()
+  return compactText(sentence || normalized, max)
+}
+
 function extractAudioKeywords(text: string, max = 4): string[] {
   const scores = new Map<string, number>()
   const normalized = text
@@ -272,7 +280,7 @@ function buildAudioChapters(transcript: VideoResultTranscriptLine[]): AudioChapt
       start: group[0]?.t_sec ?? firstTime,
       end: nextStart ?? lastTime,
       title: keywords.length > 0 ? keywords.slice(0, 3).join(' / ') : compactText(text, 18),
-      summary: compactText(text, 54),
+      summary: buildChapterSummary(text),
       keywords,
     }
   })

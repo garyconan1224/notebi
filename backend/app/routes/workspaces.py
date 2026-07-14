@@ -80,6 +80,7 @@ from backend.app.services.note_exporter import build_note_export_response
 from backend.app.services.speaker_labels import (
     SPEAKER_ROLE_OPTIONS,
     apply_speaker_map,
+    apply_speaker_renames,
 )
 from backend.app.services.summary_generator import generate_summary
 from backend.app.services.summary_templates import list_template_ids
@@ -5060,6 +5061,20 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
     if note_path.exists():
         note_md = note_path.read_text(encoding="utf-8")
 
+    # 主笔记与历史总结文件可能由旧版本生成，文件里仍保留 SPEAKER_00/01。
+    # 读取时再次按当前映射规范化，保证刷新、切换版本和编辑入口看到的都是同一套姓名。
+    results = item.results or {}
+    item_type = item.type  # "image" | "video" | "audio" | "text"
+    raw_speaker_map = results.get("speaker_map") or {}
+    current_speaker_map = (
+        raw_speaker_map
+        if item_type in {"audio", "video"} and isinstance(raw_speaker_map, dict)
+        else {}
+    )
+    note_md = apply_speaker_renames(
+        note_md, current_speaker_map, current_speaker_map
+    )
+
     # 解析 frontmatter（从 note_md 提取 YAML）
     frontmatter: Dict[str, Any] = {}
     if note_md.startswith("---\n"):
@@ -5087,12 +5102,14 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
             "template": template,
             "version": version,
             "path": str(rel),
-            "content": sm_path.read_text(encoding="utf-8"),
+            "content": apply_speaker_renames(
+                sm_path.read_text(encoding="utf-8"),
+                current_speaker_map,
+                current_speaker_map,
+            ),
         })
 
     # ── R3.1: 从 results 实时提取 media URL + transcript ──
-    results = item.results or {}
-    item_type = item.type  # "image" | "video" | "audio" | "text"
     media: Dict[str, Any] = {}
     transcript: Any = None
 

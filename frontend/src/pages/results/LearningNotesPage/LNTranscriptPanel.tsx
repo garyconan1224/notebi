@@ -18,12 +18,12 @@ const TRANSLATE_LANGS: { value: string; label: string }[] = [
 const langLabel = (lang: string) => TRANSLATE_LANGS.find((l) => l.value === lang)?.label ?? lang
 
 const SPEAKER_COLORS = [
-  'var(--accent-blue, #4f8fd8)',
-  'var(--accent-pink, #d45b86)',
-  'var(--accent-green, #3f9a73)',
-  'var(--accent-orange, #d58a3e)',
-  'var(--accent-purple, #8364c5)',
-  'var(--accent-yellow, #aa9a32)',
+  '#4f8fd8',
+  '#d45b86',
+  '#3f9a73',
+  '#d58a3e',
+  '#8364c5',
+  '#aa9a32',
 ]
 
 function speakerColor(speakerId: string): string {

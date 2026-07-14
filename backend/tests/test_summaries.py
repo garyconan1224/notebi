@@ -327,13 +327,24 @@ class TestGetSummary:
         }
         note_dir = tmp_path / "note"
         note_dir.mkdir()
-        (note_dir / "note.md").write_text("---\ntitle: 测试音频\n---\n正文\n", encoding="utf-8")
+        (note_dir / "note.md").write_text(
+            "---\ntitle: SPEAKER_00 会议\n---\nSPEAKER_00：正文\n",
+            encoding="utf-8",
+        )
+        summary_dir = note_dir / "summaries" / "speaker_consultant_detailed"
+        summary_dir.mkdir(parents=True)
+        (summary_dir / "v0.md").write_text(
+            "SPEAKER_00：总结\n", encoding="utf-8"
+        )
 
         with patch.object(ws_module, "note_dir", return_value=note_dir):
             resp = client.get("/workspaces/ws-1/items/item-1/note")
 
         assert resp.status_code == 200
         assert resp.json()["speaker_map"] == {"SPEAKER_00": "主持人"}
+        assert "SPEAKER_00" not in resp.json()["note_md"]
+        assert "主持人" in resp.json()["note_md"]
+        assert resp.json()["summaries"][0]["content"] == "主持人：总结\n"
 
 
 # ── DELETE ──────────────────────────────────────────────────────

@@ -2406,7 +2406,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 8px 20px 0;
+  padding: 4px 12px 0;
   font-family: var(--mono, var(--fm, monospace));
   font-size: 11px;
   color: var(--ink-4, #a09888);
@@ -2421,13 +2421,13 @@
 .note-audio-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 20px 14px;
+  gap: 4px;
+  padding: 6px 12px 8px;
 }
 
 .note-audio-ctrl {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border: none;
   border-radius: var(--r, 8px);
   background: transparent;
@@ -2456,8 +2456,8 @@
 }
 
 .note-audio-play {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border: none;
   border-radius: 999px;
   background: var(--ink, #1a1612);
@@ -2479,7 +2479,7 @@
   border: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
   border-radius: var(--r, 8px);
   background: var(--srf, #fff);
-  padding: 4px 10px;
+  padding: 3px 8px;
   color: var(--ink-2, #7c7464);
   font-family: var(--mono, var(--fm, monospace));
   font-size: 11px;
@@ -2529,7 +2529,7 @@
 
 .note-audio-chapters {
   flex: 0 0 auto;
-  padding: 10px 14px 12px;
+  padding: 8px 12px 9px;
   border-top: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
   background: linear-gradient(180deg, var(--bgalt, #f7f4ee), var(--srf, #fff));
 }
@@ -2538,7 +2538,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   color: var(--ink, #1a1612);
   font-size: 12px;
   font-weight: 800;
@@ -2566,9 +2566,9 @@
   grid-template-columns: auto minmax(0, 1fr);
   grid-template-rows: auto auto;
   column-gap: 8px;
-  row-gap: 3px;
+  row-gap: 2px;
   min-width: 0;
-  padding: 9px 10px;
+  padding: 7px 8px;
   border: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.72);
@@ -2618,6 +2618,7 @@
   line-height: 1.35;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  max-height: 30px;
 }
 
 /* ── 音频左栏转录区 ── */
