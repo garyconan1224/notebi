@@ -65,6 +65,7 @@ def test_speaker_aware_business_templates_have_evidence_contracts():
         for term in required_terms:
             assert term in template.system_prompt, f"{template_id} 缺少「{term}」"
         assert "不得编造" in template.system_prompt
+        assert "说话人标签必须原样" in template.system_prompt
         assert "时间" in template.system_prompt
 
 

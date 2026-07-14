@@ -7,7 +7,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from backend.app.models.workspace import ItemSummary, WorkspaceItem, WorkspaceRecord
-from backend.app.services.summary_generator import build_prompt, generate_summary
+from backend.app.services.summary_generator import (
+    _strip_unsupported_speaker_qualifiers,
+    build_prompt,
+    generate_summary,
+)
 from backend.app.services.workspace_store import WorkspaceStore
 
 
@@ -122,6 +126,29 @@ class TestBuildPrompt:
         assert "[00:00] 主持人：主持人开场" in usr_p
         assert "[00:12] 嘉宾 A：嘉宾补充" in usr_p
         assert "[01:01:01] 未识别说话人：后半程未标记内容" in usr_p
+
+    def test_speaker_aware_output_drops_unsupported_identity_qualifiers(self) -> None:
+        segments = [
+            {"speaker": "SPEAKER_00", "text": "发言"},
+            {"speaker": "SPEAKER_01", "text": "补充"},
+        ]
+        content = "SPEAKER_00（资深工程师）\nSPEAKER_01 (AI工程实践者)\nSPEAKER_00（主持人）"
+
+        cleaned = _strip_unsupported_speaker_qualifiers(content, segments)
+
+        assert cleaned == "SPEAKER_00\nSPEAKER_01\nSPEAKER_00"
+
+    def test_speaker_aware_output_keeps_user_mapped_label_qualifier(self) -> None:
+        segments = [{"speaker": "SPEAKER_00", "text": "发言"}]
+        content = "SPEAKER_00（主持人）"
+
+        cleaned = _strip_unsupported_speaker_qualifiers(
+            content,
+            segments,
+            {"SPEAKER_00": "主持人"},
+        )
+
+        assert cleaned == content
 
     def test_audio_prompt_does_not_inject_video_frame_rule(self) -> None:
         """音频总结没有画面，不能把视频配图占位规则注入给模型。"""

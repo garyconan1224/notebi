@@ -138,6 +138,52 @@ def _speaker_aware_transcript(item: WorkspaceItem) -> str:
     return "\n".join(lines)
 
 
+def _strip_unsupported_speaker_qualifiers(
+    content: str,
+    transcript_segments: List[Dict[str, object]],
+    speaker_map: Dict[str, object] | None = None,
+) -> str:
+    """移除模型给原始说话人标签追加的、材料未支持的身份括号。
+
+    这是一个窄范围的确定性安全网：只处理紧跟在原始 speaker id 后的括号，
+    不改正文事实，也不触碰用户明确设置的 speaker_map 标签。
+    """
+    if not content or not transcript_segments:
+        return content
+    raw_ids = {
+        str(segment.get("speaker") or "").strip()
+        for segment in transcript_segments
+        if isinstance(segment, dict) and str(segment.get("speaker") or "").strip()
+    }
+    explicit_labels = {
+        str(label).strip()
+        for label in (speaker_map or {}).values()
+        if str(label).strip()
+    }
+    if not raw_ids:
+        return content
+
+    cleaned = content
+    removed = 0
+    for speaker_id in sorted(raw_ids, key=len, reverse=True):
+        pattern = re.compile(
+            rf"({re.escape(speaker_id)})\s*[（(]([^\n（）()]{{1,80}})[）)]"
+        )
+
+        def replace(match: re.Match[str]) -> str:
+            nonlocal removed
+            qualifier = match.group(2).strip()
+            if qualifier in explicit_labels or qualifier == "未确认":
+                return match.group(0)
+            removed += 1
+            return match.group(1)
+
+        cleaned = pattern.sub(replace, cleaned)
+    if removed:
+        logger.warning("移除 %d 处未被转写支持的说话人身份括号", removed)
+    return cleaned
+
+
 def _summary_source_text(item: WorkspaceItem) -> str:
     results = item.results or {}
     if _is_image_text_item(item):
@@ -1033,6 +1079,12 @@ def generate_summary(
             log=logger.info,
             coverage=coverage,
         )
+        if summary_mode == "speaker_aware":
+            content_md = _strip_unsupported_speaker_qualifiers(
+                content_md,
+                transcript_segments,
+                (item.results or {}).get("speaker_map") or {},
+            )
         if item.type == "video" and embed_frames:
             from backend.app.services.frame_placeholder import resolve_frame_placeholders
 
@@ -1063,6 +1115,13 @@ def generate_summary(
         system_prompt, user_prompt,
         provider_id=provider_id, model=model,
     )
+
+    if summary_mode == "speaker_aware":
+        content_md = _strip_unsupported_speaker_qualifiers(
+            content_md,
+            transcript_segments,
+            (item.results or {}).get("speaker_map") or {},
+        )
 
     # R3.2: 后处理 — [[图N]] → ![desc](/static/path)
     # ⚠️ 这里的模板集合必须与上面「注入配图提示」的集合（约 line 450）保持一致，

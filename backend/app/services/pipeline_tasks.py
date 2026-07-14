@@ -4875,6 +4875,12 @@ def _generate_audio_summary(
         temperature=0.3,
         max_tokens=8000,
     ))
+    if summary_mode == "speaker_aware":
+        # 直接由音频/视频流水线调用时也要执行与 summaries API 相同的
+        # 说话人身份安全网，避免模型把 SPEAKER_00 擅自扩写成职业或角色。
+        from backend.app.services.summary_generator import _strip_unsupported_speaker_qualifiers
+
+        summary = _strip_unsupported_speaker_qualifiers(summary, transcript_segments)
     if progress:
         progress((len(chunks) + 1) / total_calls, "校验摘要覆盖范围")
 
