@@ -15,7 +15,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Bold, BookOpenCheck, Brain, Camera, Check, ChevronDown, Code2, Download, ExternalLink, FileDown, FileText, FileType, Image, Italic, List, MessageCircle, Minus, Pause, Pencil, Play, Plus, Presentation, Sparkles, Strikethrough, Subtitles, Trash2, Type, Underline, X } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { downloadItemNoteExport, exportItemNoteObsidian, getItemNote, putItemNote, updateSpeakerMap, type ItemNoteExportFormat } from '@/services/workspaces'
+import { downloadItemNoteExport, downloadTranscript, exportItemNoteObsidian, getItemNote, putItemNote, updateSpeakerMap, type ItemNoteExportFormat, type TranscriptExportMode } from '@/services/workspaces'
 import type { VideoResultTranscriptLine } from '@/services/workspaces'
 import type { ItemNote } from '@/types/workspace'
 import { createSummary, deleteSummary, listSummaries, renameSummary, type ItemSummary } from '@/services/summaries'
@@ -39,7 +39,7 @@ import { SourceMdModal } from './SourceMdModal'
 import { withStatusToast } from '@/lib/statusToast'
 import { categorizeError } from '@/lib/errorCategories'
 
-type NoteExportBusy = ItemNoteExportFormat | 'markdown' | 'obsidian' | 'transcript' | 'source_md'
+type NoteExportBusy = ItemNoteExportFormat | 'markdown' | 'obsidian' | 'transcript_article' | 'transcript_speakers' | 'source_md'
 type OperationNoticeTone = 'loading' | 'success' | 'error' | 'info'
 type OperationNotice = {
   id: number
@@ -309,18 +309,6 @@ function downloadMarkdownFile(markdown: string, title: string): void {
   const a = document.createElement('a')
   a.href = url
   a.download = `${safeFilename(title)}.md`
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
-}
-
-function downloadTextFile(text: string, title: string, extension = 'txt'): void {
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${safeFilename(title)}.${extension}`
   document.body.appendChild(a)
   a.click()
   a.remove()
@@ -1031,24 +1019,23 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     }
   }, [workspaceId, itemId, note, showOperationNotice])
 
-  const handleExportTranscript = useCallback(async () => {
-    const transcriptText = formatTranscriptForPrompt(note?.transcript)
-    if (!transcriptText) {
+  const handleExportTranscript = useCallback(async (mode: TranscriptExportMode) => {
+    if (!formatTranscriptForPrompt(note?.transcript)) {
       toast.error('暂无可导出的转写文本')
       return
     }
-    const title = String((note?.frontmatter as Record<string, unknown> | undefined)?.title ?? 'transcript')
-    setExportBusy('transcript')
+    const speakerGrouped = mode === 'speaker_grouped'
+    const busyKey = speakerGrouped ? 'transcript_speakers' : 'transcript_article'
+    const label = speakerGrouped ? '转写文本（无时间轴·区分说话人）' : '转写文本（无时间轴）'
+    setExportBusy(busyKey)
     try {
       await withStatusToast(
-        async () => {
-          downloadTextFile(transcriptText, `${title}-转写文本`)
-        },
+        () => downloadTranscript(workspaceId, itemId, mode),
         {
-          id: 'note-export-transcript',
-          loading: '正在导出转写文本…',
-          success: '转写文本已开始下载',
-          error: '转写文本导出失败，请重试',
+          id: `note-export-transcript-${mode}`,
+          loading: `正在导出${label}…`,
+          success: `${label}已开始下载`,
+          error: `${label}导出失败，请重试`,
         },
       )
       setExportOpen(false)
@@ -1057,7 +1044,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     } finally {
       setExportBusy(null)
     }
-  }, [note])
+  }, [itemId, note?.transcript, workspaceId])
 
   const handleDownloadNoteExport = useCallback(async (format: ItemNoteExportFormat) => {
     const title = String((note?.frontmatter as Record<string, unknown> | undefined)?.title ?? 'note')
@@ -1634,9 +1621,15 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                   <span>{exportBusy === 'obsidian' ? '导出中…' : 'Obsidian 包'}</span>
                 </button>
                 {(isVideoNote || isAudioNote) && (
-                  <button className="nibi-note-export-item" onClick={handleExportTranscript} disabled={!!exportBusy}>
+                  <button className="nibi-note-export-item" onClick={() => handleExportTranscript('article')} disabled={!!exportBusy}>
                     <Subtitles size={15} />
-                    <span>{exportBusy === 'transcript' ? '导出中…' : '转写文本.txt'}</span>
+                    <span>{exportBusy === 'transcript_article' ? '导出中…' : '转写文本（无时间轴）'}</span>
+                  </button>
+                )}
+                {(isVideoNote || isAudioNote) && (
+                  <button className="nibi-note-export-item" onClick={() => handleExportTranscript('speaker_grouped')} disabled={!!exportBusy}>
+                    <Subtitles size={15} />
+                    <span>{exportBusy === 'transcript_speakers' ? '导出中…' : '转写文本（无时间轴·区分说话人）'}</span>
                   </button>
                 )}
                 {[

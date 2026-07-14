@@ -14,6 +14,7 @@ MVP 只导 4 样东西：
 
 import io
 import json
+import re
 import zipfile
 from datetime import date, datetime
 from typing import Any, Dict, List
@@ -25,7 +26,13 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from shared.audio_analyzer import export_srt, export_vtt, export_ass
+from shared.audio_analyzer import (
+    export_ass,
+    export_srt,
+    export_transcript_article,
+    export_transcript_by_speaker,
+    export_vtt,
+)
 from backend.app.models.workspace import ItemType, WorkspaceItem, WorkspaceRecord
 from backend.app.services.video_result_demo import build_demo_video_result
 from backend.app.routes.workspaces import _store, _sync_item_with_tasks
@@ -115,19 +122,30 @@ def _get_text_data(item: WorkspaceItem) -> Dict[str, Any]:
 
 
 def _build_transcript_txt(transcript: Any) -> str:
-    """把 transcript 转为纯文本字幕。
-
-    transcript 可以是字符串（直接返回）或列表（每行带时间戳）。
-    """
+    """把 transcript 转为无时间轴文章；保留原顺序和全部文本。"""
     if isinstance(transcript, str):
-        return transcript
-    lines: list[str] = []
-    for entry in transcript:
-        t_sec = entry.get("t_sec", 0)
-        text = entry.get("edited_text") or entry.get("text") or ""
-        m, s = divmod(int(t_sec), 60)
-        lines.append(f"[{m:02d}:{s:02d}] {text}")
-    return "\n".join(lines)
+        raw_lines = transcript.splitlines()
+        units = []
+        for index, raw_line in enumerate(raw_lines):
+            line = raw_line.strip()
+            if not line:
+                continue
+            next_line = raw_lines[index + 1].strip() if index + 1 < len(raw_lines) else ""
+            if line.isdigit() and "-->" in next_line:
+                continue
+            if "-->" in line and re.search(r"\d{1,2}:\d{2}", line):
+                continue
+            line = re.sub(
+                r"^\*{0,2}\s*\[?\d{1,2}:\d{2}(?::\d{2})?(?:[,.]\d{3})?\]?\s*\*{0,2}\s*",
+                "",
+                line,
+            )
+            if line:
+                units.append({"text": line})
+        return export_transcript_article(units)
+    if not isinstance(transcript, list):
+        return ""
+    return export_transcript_article(transcript)
 
 
 def _build_srt(transcript: List[Dict[str, Any]]) -> str:
@@ -217,8 +235,11 @@ def _build_readme(title: str, item_type: str) -> str:
 
 ## 包内文件说明
 
-### transcript.txt
-纯文本字幕，按时间顺序排列。
+### 转写文本（无时间轴）.txt
+按原顺序整理成自然段的完整转写，不含时间轴。
+
+### 转写文本（无时间轴·区分说话人）.txt
+按重命名后的说话人归组整理；仅在素材含说话人标签时生成。
 
 ### summary.md
 音频内容摘要。
@@ -234,7 +255,7 @@ def _build_readme(title: str, item_type: str) -> str:
 ## 使用建议
 1. 先看 summary.md 了解整体内容
 2. 用 segments.json 定位感兴趣的片段
-3. 结合 transcript.txt 做进一步编辑
+3. 结合无时间轴转写文本做进一步编辑
 
 ---
 由 Nibi 自动生成
@@ -383,8 +404,16 @@ def export_workspace_item(workspace_id: str, item_id: str) -> StreamingResponse:
             zf.writestr("subtitles.srt", srt_content)
 
         elif item_type == ItemType.AUDIO.value:
-            # audio: transcript.txt + summary.md + segments.json
-            zf.writestr("transcript.txt", _build_transcript_txt(transcript))
+            # audio: 两种无时间轴转写 + summary.md + segments.json
+            segments = data.get("segments", [])
+            article = export_transcript_article(segments) or _build_transcript_txt(transcript)
+            grouped = export_transcript_by_speaker(
+                segments,
+                speaker_map=data.get("speaker_map") or {},
+            )
+            zf.writestr("转写文本（无时间轴）.txt", article)
+            if grouped:
+                zf.writestr("转写文本（无时间轴·区分说话人）.txt", grouped)
             zf.writestr("summary.md", data.get("summary", ""))
             zf.writestr("segments.json", json.dumps(data.get("segments", []), ensure_ascii=False, indent=2))
             zf.writestr("prompts.json", json.dumps(prompts_data, ensure_ascii=False, indent=2))
@@ -491,8 +520,16 @@ def batch_export_items(workspace_id: str, req: BatchExportRequest) -> StreamingR
             elif item_type == ItemType.AUDIO.value:
                 data = _get_audio_data(item)
                 transcript = data.get("transcript", [])
+                segments = data.get("segments", [])
                 prompts_data = _build_prompts_json_audio(data)
-                zf.writestr(f"{prefix}/transcript.txt", _build_transcript_txt(transcript))
+                article = export_transcript_article(segments) or _build_transcript_txt(transcript)
+                grouped = export_transcript_by_speaker(
+                    segments,
+                    speaker_map=data.get("speaker_map") or {},
+                )
+                zf.writestr(f"{prefix}/转写文本（无时间轴）.txt", article)
+                if grouped:
+                    zf.writestr(f"{prefix}/转写文本（无时间轴·区分说话人）.txt", grouped)
                 zf.writestr(f"{prefix}/summary.md", data.get("summary", ""))
                 zf.writestr(f"{prefix}/segments.json", json.dumps(data.get("segments", []), ensure_ascii=False, indent=2))
                 zf.writestr(f"{prefix}/prompts.json", json.dumps(prompts_data, ensure_ascii=False, indent=2))
@@ -522,6 +559,12 @@ _SUBTITLE_MIME: dict[str, str] = {
     "srt": "text/plain; charset=utf-8",
     "vtt": "text/vtt; charset=utf-8",
     "ass": "text/plain; charset=utf-8",
+}
+
+
+_TRANSCRIPT_MODE_SUFFIX = {
+    "article": "转写文本（无时间轴）",
+    "speaker_grouped": "转写文本（无时间轴·区分说话人）",
 }
 
 
@@ -563,6 +606,53 @@ def _normalize_segments(raw: Any) -> list[dict[str, Any]]:
                 entry["end"] = entry["start"] + 5.0  # 最后一段默认 5s
 
     return entries
+
+
+@router.get("/{workspace_id}/items/{item_id}/transcript")
+def export_transcript(
+    workspace_id: str,
+    item_id: str,
+    mode: str = "article",
+) -> StreamingResponse:
+    """导出无时间轴文章，或按重命名后说话人归组的无时间轴文章。"""
+    if mode not in _TRANSCRIPT_MODE_SUFFIX:
+        raise HTTPException(
+            status_code=400,
+            detail=f"unsupported mode: {mode!r}, use article/speaker_grouped",
+        )
+
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    item = _find_item(rec, item_id)
+    overlay = _sync_item_with_tasks(item)
+    results = (
+        dict(overlay.get("results", {}))
+        if overlay and overlay.get("results")
+        else dict(item.results or {})
+    )
+    raw = results.get("segments") or results.get("transcript_segments") or results.get("transcript") or []
+    segments = _normalize_segments(raw)
+    fallback = results.get("transcript") if isinstance(results.get("transcript"), str) else ""
+    if mode == "article":
+        content = export_transcript_article(segments) or _build_transcript_txt(fallback)
+    else:
+        content = export_transcript_by_speaker(
+            segments,
+            speaker_map=results.get("speaker_map") or {},
+        )
+    if not content:
+        raise HTTPException(status_code=404, detail="transcript is empty")
+
+    safe_title = (item.name or "untitled").replace("/", "_").replace("\\", "_")[:50]
+    filename = f"{safe_title}-{_TRANSCRIPT_MODE_SUFFIX[mode]}.txt"
+    return StreamingResponse(
+        io.BytesIO(content.encode("utf-8")),
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+        },
+    )
 
 
 @router.get("/{workspace_id}/items/{item_id}/subtitles")

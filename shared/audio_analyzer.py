@@ -453,6 +453,82 @@ def export_txt(
     return "\n".join(lines)
 
 
+def _join_transcript_units(units: List[str]) -> str:
+    text = ""
+    for unit in units:
+        cleaned = unit.strip()
+        if not cleaned:
+            continue
+        needs_space = bool(
+            text
+            and text[-1].isascii()
+            and text[-1].isalnum()
+            and cleaned[0].isascii()
+            and cleaned[0].isalnum()
+        )
+        text += (" " if needs_space else "") + cleaned
+    return text
+
+
+def _transcript_paragraphs(
+    units: List[str],
+    paragraph_chars: int,
+) -> str:
+    paragraphs: List[str] = []
+    current: List[str] = []
+    current_chars = 0
+    limit = max(1, paragraph_chars)
+    for unit in units:
+        cleaned = unit.strip()
+        if not cleaned:
+            continue
+        current.append(cleaned)
+        current_chars += len(cleaned)
+        if current_chars >= limit:
+            paragraphs.append(_join_transcript_units(current))
+            current = []
+            current_chars = 0
+    if current:
+        paragraphs.append(_join_transcript_units(current))
+    return "\n\n".join(paragraph for paragraph in paragraphs if paragraph)
+
+
+def export_transcript_article(
+    segments: List[Dict[str, Any]],
+    paragraph_chars: int = 480,
+) -> str:
+    """将转写按原顺序整理成无时间轴文章，edited_text 优先且不改写内容。"""
+    units = [
+        str(seg.get("edited_text") or seg.get("text") or "").strip()
+        for seg in segments
+        if str(seg.get("edited_text") or seg.get("text") or "").strip()
+    ]
+    return _transcript_paragraphs(units, paragraph_chars)
+
+
+def export_transcript_by_speaker(
+    segments: List[Dict[str, Any]],
+    speaker_map: Optional[Dict[str, str]] = None,
+    paragraph_chars: int = 480,
+) -> str:
+    """按说话人首次出现顺序归组，输出无时间轴、无技术 speaker ID 的文章。"""
+    groups: Dict[str, List[str]] = {}
+    names = speaker_map or {}
+    for seg in segments:
+        text = str(seg.get("edited_text") or seg.get("text") or "").strip()
+        if not text:
+            continue
+        speaker_id = str(seg.get("speaker") or "").strip()
+        display_name = str(names.get(speaker_id) or "").strip()
+        if not display_name:
+            display_name = speaker_id if speaker_id and not speaker_id.startswith("SPEAKER_") else "未识别说话人"
+        groups.setdefault(display_name, []).append(text)
+    return "\n\n".join(
+        f"【{speaker}】\n{_transcript_paragraphs(units, paragraph_chars)}"
+        for speaker, units in groups.items()
+    )
+
+
 def export_vtt(
     segments: List[Dict[str, Any]],
     speaker_map: Optional[Dict[Tuple[float, float], str]] = None,

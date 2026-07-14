@@ -28,6 +28,8 @@ from shared.audio_analyzer import (
     _parse_music_prompt_json,
     assign_speakers_to_segments,
     export_srt,
+    export_transcript_article,
+    export_transcript_by_speaker,
     export_txt,
     run_diarization,
     run_vad,
@@ -77,6 +79,45 @@ def test_export_txt_with_and_without_speaker():
     assert plain == "first\nsecond"
     tagged = export_txt(segments, with_speaker=True)
     assert tagged.startswith("[S0] first")
+
+
+def test_export_transcript_article_is_timeline_free_and_lossless():
+    segments = [
+        {"start": 0, "text": "大家好，", "speaker": "SPEAKER_00"},
+        {"start": 3, "text": "原始内容", "edited_text": "欢迎参加今天的访谈。", "speaker": "SPEAKER_00"},
+        {"start": 3661, "text": "后半程内容不能丢。", "speaker": "SPEAKER_01"},
+    ]
+
+    article = export_transcript_article(segments, paragraph_chars=12)
+
+    assert "00:00" not in article
+    assert "SPEAKER_" not in article
+    assert article.count("大家好，") == 1
+    assert article.count("欢迎参加今天的访谈。") == 1
+    assert article.count("后半程内容不能丢。") == 1
+    assert "原始内容" not in article
+    assert "\n\n" in article
+
+
+def test_export_transcript_by_speaker_groups_renamed_speakers():
+    segments = [
+        {"start": 0, "text": "主持人开场。", "speaker": "SPEAKER_00"},
+        {"start": 2, "text": "嘉宾回答一。", "speaker": "SPEAKER_01"},
+        {"start": 4, "text": "主持人追问。", "speaker": "SPEAKER_00"},
+        {"start": 6, "text": "未标记内容。"},
+    ]
+
+    grouped = export_transcript_by_speaker(
+        segments,
+        speaker_map={"SPEAKER_00": "主持人", "SPEAKER_01": "姚顺宇"},
+    )
+
+    assert grouped.index("【主持人】") < grouped.index("【姚顺宇】")
+    assert "主持人开场。主持人追问。" in grouped
+    assert "【姚顺宇】\n嘉宾回答一。" in grouped
+    assert "【未识别说话人】\n未标记内容。" in grouped
+    assert "SPEAKER_" not in grouped
+    assert "00:0" not in grouped
 
 
 # ── speaker 映射 ──────────────────────────────────────────────

@@ -156,6 +156,113 @@ def test_export_subtitles_rejects_unknown_format(client: TestClient) -> None:
     assert "unsupported format" in resp.json()["detail"]
 
 
+def test_export_timeline_free_article_transcript(client: TestClient) -> None:
+    ws_id, item_id = _create_workspace_with_item(client, "audio")
+    ws_module._store.update_item(
+        ws_id,
+        item_id,
+        results={
+            "transcript_segments": [
+                {"start": 0.0, "end": 1.5, "text": "第一句，", "speaker": "SPEAKER_00"},
+                {"start": 1.5, "end": 3.0, "text": "旧文本", "edited_text": "修订后的第二句。", "speaker": "SPEAKER_01"},
+            ],
+            "speaker_map": {"SPEAKER_00": "主持人", "SPEAKER_01": "嘉宾"},
+        },
+        status="done",
+    )
+
+    resp = client.get(f"/workspaces/{ws_id}/items/{item_id}/transcript?mode=article")
+
+    assert resp.status_code == 200
+    assert "转写文本（无时间轴）.txt" in resp.headers["content-disposition"] or "%E8%BD%AC%E5%86%99" in resp.headers["content-disposition"]
+    body = resp.content.decode()
+    assert body == "第一句，修订后的第二句。"
+    assert "00:00" not in body
+    assert "主持人" not in body
+
+
+def test_build_transcript_txt_removes_subtitle_markers_from_raw_markdown() -> None:
+    raw = (
+        "1\n"
+        "00:00:00,000 --> 00:00:02,000\n"
+        "第一句。\n\n"
+        "**[00:02]** 第二句。\n"
+        "[01:01:01] 第三句。"
+    )
+
+    body = export_module._build_transcript_txt(raw)
+
+    assert body == "第一句。第二句。第三句。"
+    assert "-->" not in body
+    assert "00:02" not in body
+
+
+def test_audio_zip_uses_named_timeline_free_transcripts(client: TestClient) -> None:
+    ws_id, item_id = _create_workspace_with_item(client, "audio")
+    ws_module._store.update_item(
+        ws_id,
+        item_id,
+        results={
+            "transcript": "第一句。第二句。",
+            "transcript_segments": [
+                {"start": 0.0, "end": 1.0, "text": "第一句。", "speaker": "SPEAKER_00"},
+                {"start": 1.0, "end": 2.0, "text": "第二句。", "speaker": "SPEAKER_01"},
+            ],
+            "speaker_map": {"SPEAKER_00": "主持人", "SPEAKER_01": "嘉宾"},
+            "summary": "# 摘要",
+        },
+        status="done",
+    )
+
+    resp = client.get(f"/workspaces/{ws_id}/items/{item_id}/export")
+
+    assert resp.status_code == 200
+    zf = zipfile.ZipFile(io.BytesIO(resp.content))
+    names = set(zf.namelist())
+    assert "转写文本（无时间轴）.txt" in names
+    assert "转写文本（无时间轴·区分说话人）.txt" in names
+    article = zf.read("转写文本（无时间轴）.txt").decode()
+    grouped = zf.read("转写文本（无时间轴·区分说话人）.txt").decode()
+    assert article == "第一句。第二句。"
+    assert "【主持人】\n第一句。" in grouped
+    assert "【嘉宾】\n第二句。" in grouped
+
+
+def test_export_timeline_free_transcript_grouped_by_renamed_speaker(client: TestClient) -> None:
+    ws_id, item_id = _create_workspace_with_item(client, "audio")
+    ws_module._store.update_item(
+        ws_id,
+        item_id,
+        results={
+            "transcript_segments": [
+                {"start": 0.0, "end": 1.0, "text": "开场。", "speaker": "SPEAKER_00"},
+                {"start": 1.0, "end": 2.0, "text": "回答。", "speaker": "SPEAKER_01"},
+                {"start": 2.0, "end": 3.0, "text": "追问。", "speaker": "SPEAKER_00"},
+            ],
+            "speaker_map": {"SPEAKER_00": "主持人", "SPEAKER_01": "客户"},
+        },
+        status="done",
+    )
+
+    resp = client.get(f"/workspaces/{ws_id}/items/{item_id}/transcript?mode=speaker_grouped")
+
+    assert resp.status_code == 200
+    body = resp.content.decode()
+    assert "【主持人】\n开场。追问。" in body
+    assert "【客户】\n回答。" in body
+    assert "SPEAKER_" not in body
+    assert "-->" not in body
+
+
+def test_export_transcript_rejects_unknown_mode(client: TestClient) -> None:
+    ws_id, item_id = _create_workspace_with_item(client, "audio")
+
+    resp = client.get(f"/workspaces/{ws_id}/items/{item_id}/transcript?mode=unknown")
+
+    assert resp.status_code == 400
+    assert "article/speaker_grouped" in resp.json()["detail"]
+
+
 def test_export_404_workspace_not_found(client: TestClient) -> None:
     resp = client.get("/workspaces/nonexistent/items/anything/export")
     assert resp.status_code == 404

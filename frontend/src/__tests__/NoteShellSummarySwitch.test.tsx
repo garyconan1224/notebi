@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   createSummary: vi.fn(),
   deleteSummary: vi.fn(),
   renameSummary: vi.fn(),
+  downloadTranscript: vi.fn(),
 }))
 
 vi.mock('@/services/workspaces', async (importOriginal) => {
@@ -21,6 +22,7 @@ vi.mock('@/services/workspaces', async (importOriginal) => {
     ...actual,
     getItemNote: mocks.getItemNote,
     putItemNote: mocks.putItemNote,
+    downloadTranscript: mocks.downloadTranscript,
   }
 })
 
@@ -129,6 +131,7 @@ describe('NoteShell summary switching', () => {
     mocks.getItemNote.mockResolvedValue(MAIN_NOTE)
     mocks.putItemNote.mockResolvedValue(MAIN_NOTE)
     mocks.listSummaries.mockResolvedValue([SUMMARY_V0])
+    mocks.downloadTranscript.mockResolvedValue(undefined)
   })
 
   it('点击总结版本只切换正文，不写回主笔记', async () => {
@@ -200,5 +203,34 @@ describe('NoteShell summary switching', () => {
     )
 
     expect(await screen.findByText('3:36:00')).not.toBeNull()
+  })
+
+  it('音频导出菜单提供无时间轴文章和按说话人分组版本', async () => {
+    mocks.getItemNote.mockResolvedValue({
+      ...AUDIO_NOTE,
+      speaker_map: { SPEAKER_00: '主持人' },
+      transcript: [{ t_sec: 0, t_str: '00:00', text: '开场。', speaker: 'SPEAKER_00' }],
+    })
+    mocks.listSummaries.mockResolvedValue([])
+
+    render(
+      <MemoryRouter>
+        <NoteShell workspaceId="ws-1" itemId="item-1" />
+      </MemoryRouter>,
+    )
+
+    await screen.findByText('尚未生成总结')
+    fireEvent.click(screen.getByRole('button', { name: '导出' }))
+
+    expect(screen.getByRole('button', { name: '转写文本（无时间轴）' })).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '转写文本（无时间轴·区分说话人）' }))
+
+    await waitFor(() => {
+      expect(mocks.downloadTranscript).toHaveBeenCalledWith(
+        'ws-1',
+        'item-1',
+        'speaker_grouped',
+      )
+    })
   })
 })

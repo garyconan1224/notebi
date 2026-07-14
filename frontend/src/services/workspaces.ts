@@ -941,6 +941,36 @@ export async function downloadSubtitles(
   URL.revokeObjectURL(url)
 }
 
+export type TranscriptExportMode = 'article' | 'speaker_grouped'
+
+/** GET /workspaces/{id}/items/{itemId}/transcript — 下载无时间轴文章或说话人归组文章 */
+export async function downloadTranscript(
+  workspaceId: string,
+  itemId: string,
+  mode: TranscriptExportMode,
+): Promise<void> {
+  const res = await http.get(`${BASE}/${workspaceId}/items/${itemId}/transcript`, {
+    params: { mode },
+    responseType: 'blob',
+  })
+  const disposition = res.headers['content-disposition'] as string | undefined
+  let filename = mode === 'speaker_grouped'
+    ? '转写文本（无时间轴·区分说话人）.txt'
+    : '转写文本（无时间轴）.txt'
+  if (disposition) {
+    const match = disposition.match(/filename\*=(?:UTF-8''|")?([^";]+)/i)
+    if (match) filename = decodeURIComponent(match[1])
+  }
+  const url = URL.createObjectURL(res.data as Blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 /** GET /workspaces/{id}/ln — 获取学习笔记 markdown 原文 */
 export async function getLnMarkdown(workspaceId: string): Promise<string> {
   const res = await http.get<string>(`${BASE}/${workspaceId}/ln`, {
