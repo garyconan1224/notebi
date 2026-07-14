@@ -4362,25 +4362,119 @@ def _chunk_audio_summary_source(text: str, max_chars: int = 12000) -> List[str]:
     return chunks
 
 
+def _format_audio_summary_timestamp(value: Any) -> str:
+    try:
+        seconds = max(0, int(float(value)))
+    except (TypeError, ValueError):
+        return "00:00"
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    if hours:
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes:02d}:{seconds:02d}"
+
+
 def _audio_summary_source(
     transcript_text: str,
     transcript_segments: List[Dict[str, Any]],
     summary_mode: str,
 ) -> str:
-    if summary_mode != "speaker_aware":
-        return transcript_text.strip()
     labeled_lines: List[str] = []
     for seg in transcript_segments:
-        speaker = str(seg.get("speaker") or "").strip()
         text = str(seg.get("edited_text") or seg.get("text") or "").strip()
-        if not speaker or not text:
+        if not text:
             continue
-        ts = str(seg.get("t_str") or "").strip()
-        if not ts:
-            sec = int(float(seg.get("t_sec") or seg.get("start") or 0))
-            ts = f"{sec // 60:02d}:{sec % 60:02d}"
-        labeled_lines.append(f"[{ts}] {speaker}：{text}")
-    return "\n".join(labeled_lines)
+        raw_sec = seg.get("t_sec")
+        if raw_sec is None:
+            raw_sec = seg.get("start", 0)
+        ts = _format_audio_summary_timestamp(raw_sec)
+        if summary_mode == "speaker_aware":
+            speaker = str(seg.get("speaker") or "").strip() or "未识别说话人"
+            labeled_lines.append(f"[{ts}] {speaker}：{text}")
+        else:
+            labeled_lines.append(f"[{ts}] {text}")
+    if labeled_lines:
+        return "\n".join(labeled_lines)
+    return transcript_text.strip()
+
+
+def _audio_chunk_manifest(chunks: List[str]) -> List[Dict[str, Any]]:
+    manifest: List[Dict[str, Any]] = []
+    for index, chunk in enumerate(chunks, start=1):
+        timestamps = re.findall(r"^\[([^\]]+)\]", chunk, flags=re.MULTILINE)
+        manifest.append({
+            "chunk_id": f"C{index:03d}",
+            "chars": len(chunk),
+            "start_time": timestamps[0] if timestamps else "",
+            "end_time": timestamps[-1] if timestamps else "",
+        })
+    return manifest
+
+
+def _parse_audio_coverage_audit(raw: str, expected_ids: List[str]) -> Dict[str, Any]:
+    match = re.search(r"\{.*\}", raw, flags=re.DOTALL)
+    if not match:
+        return {
+            "covered_chunk_ids": [],
+            "missing_chunk_ids": list(expected_ids),
+            "missing_facts": {},
+            "parse_error": True,
+        }
+    try:
+        parsed = json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return {
+            "covered_chunk_ids": [],
+            "missing_chunk_ids": list(expected_ids),
+            "missing_facts": {},
+            "parse_error": True,
+        }
+    covered = [
+        chunk_id for chunk_id in parsed.get("covered_chunk_ids", [])
+        if chunk_id in expected_ids
+    ]
+    reported_missing = [
+        chunk_id for chunk_id in parsed.get("missing_chunk_ids", [])
+        if chunk_id in expected_ids
+    ]
+    missing = list(dict.fromkeys(
+        reported_missing + [chunk_id for chunk_id in expected_ids if chunk_id not in covered]
+    ))
+    missing_facts = parsed.get("missing_facts")
+    if not isinstance(missing_facts, dict):
+        missing_facts = {}
+    return {
+        "covered_chunk_ids": covered,
+        "missing_chunk_ids": missing,
+        "missing_facts": missing_facts,
+        "parse_error": False,
+    }
+
+
+def _audit_audio_summary_coverage(
+    *,
+    provider: Any,
+    chat_model: str,
+    summary: str,
+    combined_partials: str,
+    expected_ids: List[str],
+) -> Dict[str, Any]:
+    audit_prompt = (
+        "你是严格的长音频总结覆盖审计员。请逐个对照分段摘要和最终总结，判断每个分段的关键事实、"
+        "观点、决定或行动项是否已被最终总结表达。只输出 JSON，不要 Markdown："
+        '{"covered_chunk_ids":["C001"],"missing_chunk_ids":["C002"],'
+        '"missing_facts":{"C002":["遗漏事实"]}}。覆盖审计必须列出全部分段 ID；不能仅凭主题相似就判定覆盖。'
+        f"\n\n预期分段 ID：{', '.join(expected_ids)}"
+        f"\n\n最终总结：\n{summary}"
+        f"\n\n按时间顺序的分段摘要：\n{combined_partials}"
+    )
+    raw = provider.chat(ChatRequest(
+        model=chat_model,
+        messages=[{"role": "user", "content": audit_prompt}],
+        temperature=0.0,
+        max_tokens=2500,
+    ))
+    return _parse_audio_coverage_audit(raw, expected_ids)
 
 
 def _generate_audio_summary(
@@ -4391,6 +4485,7 @@ def _generate_audio_summary(
     summary_mode: str,
     log: Callable[[str], None],
     progress: Optional[Callable[[float, str], None]] = None,
+    coverage: Optional[Dict[str, Any]] = None,
 ) -> str:
     """用完整转录生成 V0；长音频先分块，再汇总所有分块结果。"""
     source = _audio_summary_source(transcript_text, transcript_segments, summary_mode)
@@ -4426,6 +4521,19 @@ def _generate_audio_summary(
     chunks = _chunk_audio_summary_source(source)
     if not chunks:
         return ""
+    manifest = _audio_chunk_manifest(chunks)
+    chunk_ids = [entry["chunk_id"] for entry in manifest]
+    if coverage is not None:
+        coverage.clear()
+        coverage.update({
+            "source_chars": len(source),
+            "chunk_count": len(chunks),
+            "chunk_ids": chunk_ids,
+            "chunks": manifest,
+            "audit_passes": 0,
+            "missing_chunk_ids": [],
+            "status": "complete" if len(chunks) == 1 else "pending_audit",
+        })
     log(f"📝 LLM 总结 | template={template.label} ({template_id}) | chunks={len(chunks)}")
 
     speaker_instruction = ""
@@ -4450,11 +4558,19 @@ def _generate_audio_summary(
         return summary
 
     partials: List[str] = []
-    total_calls = len(chunks) + 1
-    for index, chunk in enumerate(chunks, start=1):
+    total_calls = len(chunks) + 3
+    for index, (chunk, manifest_entry) in enumerate(zip(chunks, manifest), start=1):
+        chunk_id = manifest_entry["chunk_id"]
+        time_range = ""
+        if manifest_entry["start_time"]:
+            time_range = (
+                f"，时间范围 {manifest_entry['start_time']}–"
+                f"{manifest_entry['end_time'] or manifest_entry['start_time']}"
+            )
         chunk_prompt = (
-            f"这是完整音频的第 {index}/{len(chunks)} 段。请忠于本段提取主题、关键事实、观点、"
-            "结论与行动项，保留重要说话人归属；不要假设其他分段内容。\n\n"
+            f"这是完整音频的第 {index}/{len(chunks)} 段，分段 ID：{chunk_id}{time_range}。"
+            "请忠于本段提取主题、关键事实、观点、结论与行动项，保留原文中的说话人和时间证据；"
+            "不要假设其他分段内容。\n\n"
             + chunk
         )
         partials.append(provider.chat(ChatRequest(
@@ -4470,12 +4586,18 @@ def _generate_audio_summary(
             progress(index / total_calls, f"摘要分块 {index}/{len(chunks)}")
 
     combined = "\n\n".join(
-        f"### 分段 {index}\n{content}" for index, content in enumerate(partials, start=1)
+        f"### {entry['chunk_id']}"
+        + (
+            f"（{entry['start_time']}–{entry['end_time'] or entry['start_time']}）"
+            if entry["start_time"] else ""
+        )
+        + f"\n{content}"
+        for entry, content in zip(manifest, partials)
     )
     final_prompt = (
         speaker_instruction
         + "下面是覆盖整段音频、按时间顺序生成的分段摘要。请综合全部分段，去重但不要遗漏后半程内容，"
-        "并严格按所选模板输出最终 Markdown。\n\n"
+        f"并严格按所选模板输出最终 Markdown。必须逐个覆盖这些分段 ID：{', '.join(chunk_ids)}。\n\n"
         + template.user_prompt.replace("{transcript}", combined)
     )
     summary = provider.chat(ChatRequest(
@@ -4488,7 +4610,74 @@ def _generate_audio_summary(
         max_tokens=4000,
     ))
     if progress:
-        progress(1.0, "摘要汇总完成")
+        progress((len(chunks) + 1) / total_calls, "校验摘要覆盖范围")
+
+    audit = _audit_audio_summary_coverage(
+        provider=provider,
+        chat_model=chat_model,
+        summary=summary,
+        combined_partials=combined,
+        expected_ids=chunk_ids,
+    )
+    audit_passes = 1
+    missing_ids = audit["missing_chunk_ids"]
+    if missing_ids:
+        log(f"⚠️  摘要覆盖审计发现遗漏分段：{', '.join(missing_ids)}，自动修复")
+        missing_sections = "\n\n".join(
+            f"### {entry['chunk_id']}\n{partial}"
+            for entry, partial in zip(manifest, partials)
+            if entry["chunk_id"] in missing_ids
+        )
+        facts = json.dumps(audit.get("missing_facts") or {}, ensure_ascii=False)
+        repair_prompt = (
+            "请修复当前总结：保持所选模板和已有正确内容，把覆盖校验指出的遗漏事实自然补入对应章节。"
+            "不得删除已有的时间证据、说话人归属、决定或行动项；只输出修复后的完整 Markdown。"
+            f"\n\n遗漏分段：{', '.join(missing_ids)}"
+            f"\n遗漏事实：{facts}"
+            f"\n\n当前总结：\n{summary}"
+            f"\n\n遗漏分段摘要：\n{missing_sections}"
+        )
+        summary = provider.chat(ChatRequest(
+            model=chat_model,
+            messages=[
+                {"role": "system", "content": template.system_prompt},
+                {"role": "user", "content": repair_prompt},
+            ],
+            temperature=0.2,
+            max_tokens=4500,
+        ))
+        if progress:
+            progress((len(chunks) + 2) / total_calls, "复审摘要覆盖范围")
+        audit = _audit_audio_summary_coverage(
+            provider=provider,
+            chat_model=chat_model,
+            summary=summary,
+            combined_partials=combined,
+            expected_ids=chunk_ids,
+        )
+        audit_passes = 2
+        missing_ids = audit["missing_chunk_ids"]
+
+    status = "complete"
+    if missing_ids:
+        log(f"⚠️  复审仍无法确认分段覆盖，附加原分段要点：{', '.join(missing_ids)}")
+        supplements = "\n\n".join(
+            f"### {entry['chunk_id']} 补充\n{partial}"
+            for entry, partial in zip(manifest, partials)
+            if entry["chunk_id"] in missing_ids
+        )
+        summary = summary.rstrip() + "\n\n## 覆盖校验补充\n\n" + supplements
+        status = "supplemented"
+        missing_ids = []
+
+    if coverage is not None:
+        coverage.update({
+            "audit_passes": audit_passes,
+            "missing_chunk_ids": missing_ids,
+            "status": status,
+        })
+    if progress:
+        progress(1.0, "摘要汇总与覆盖校验完成")
     return summary
 
 
@@ -4548,6 +4737,7 @@ def _handle_audio_diarization_retry(record: TaskRecord, runner: TaskRunner) -> D
     log(f"✅ 检测到 {diar.num_speakers} 个说话人，{len(diar.segments)} 段")
 
     runner.store.update(task_id, status=TaskStatus.SUM.value)
+    summary_coverage: Dict[str, Any] = {}
     summary = _generate_audio_summary(
         payload=record.payload,
         transcript_text=transcript_text,
@@ -4557,6 +4747,7 @@ def _handle_audio_diarization_retry(record: TaskRecord, runner: TaskRunner) -> D
         progress=lambda ratio, message: runner.set_progress(
             task_id, 0.72 + ratio * 0.14, message
         ),
+        coverage=summary_coverage,
     )
     log(f"📋 摘要生成完成，{len(summary)} 字符")
 
@@ -4579,6 +4770,7 @@ def _handle_audio_diarization_retry(record: TaskRecord, runner: TaskRunner) -> D
         "project_id": record.project_id,
         "transcript_segments": segments,
         "summary": summary,
+        "summary_coverage": summary_coverage,
         "summary_mode": "speaker_aware",
         "audio": audio,
         "diarization": diar.to_dict(),
@@ -4815,6 +5007,7 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
     runner.store.update(task_id, status=TaskStatus.SUM.value)
     runner.set_progress(task_id, 0.72, "生成摘要中...")
     summary = ""
+    summary_coverage: Dict[str, Any] = {}
 
     if transcript_text and partial_failure is None:
         log("📝 调用 chat model 生成摘要...")
@@ -4828,6 +5021,7 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
                 progress=lambda ratio, message: runner.set_progress(
                     task_id, 0.72 + ratio * 0.14, message
                 ),
+                coverage=summary_coverage,
             )
             log(f"📋 摘要生成完成，{len(summary)} 字符")
         except Exception as err:
@@ -4941,6 +5135,7 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         "transcript": transcript_text,
         "transcript_segments": transcript_segments,
         "summary": summary,
+        "summary_coverage": summary_coverage,
         "summary_mode": summary_mode,
         "audio": {
             "title": audio_title,

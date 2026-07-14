@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -306,6 +307,9 @@ def test_audio_diarization_retry_reuses_transcript_without_asr(tmp_path: Path) -
     asr_mock.assert_not_called()
     assert [s["speaker"] for s in result["transcript_segments"]] == ["SPEAKER_00", "SPEAKER_01"]
     assert result["summary"].startswith("# 按说话人总结")
+    assert result["summary_coverage"]["source_chars"] > 0
+    assert result["summary_coverage"]["chunk_ids"] == ["C001"]
+    assert result["summary_coverage"]["status"] == "complete"
     assert result["partial_failure"] is None
     assert result["retry_stage"] == "diarization"
 
@@ -345,6 +349,102 @@ def test_long_audio_summary_covers_tail_instead_of_truncating() -> None:
     ]
     assert any("TAIL-MUST-BE-SUMMARIZED" in prompt for prompt in user_prompts)
     assert summary.startswith("分段摘要-")
+
+
+def test_audio_summary_source_preserves_all_segments_with_time_evidence() -> None:
+    from backend.app.services.pipeline_tasks import _audio_summary_source
+
+    segments = [
+        {
+            "start": 0,
+            "end": 2,
+            "text": "原始开场",
+            "edited_text": "修订后的开场",
+            "speaker": "SPEAKER_00",
+        },
+        {
+            "start": 3661,
+            "end": 3664,
+            "text": "后半程不能丢",
+        },
+    ]
+
+    general = _audio_summary_source("备用全文", segments, "general")
+    speaker_aware = _audio_summary_source("备用全文", segments, "speaker_aware")
+
+    assert general.splitlines() == [
+        "[00:00] 修订后的开场",
+        "[01:01:01] 后半程不能丢",
+    ]
+    assert speaker_aware.splitlines() == [
+        "[00:00] SPEAKER_00：修订后的开场",
+        "[01:01:01] 未识别说话人：后半程不能丢",
+    ]
+
+
+def test_long_audio_summary_repairs_missing_chunk_after_coverage_audit() -> None:
+    from backend.app.services.pipeline_tasks import _generate_audio_summary
+
+    profile = SimpleNamespace(default_models=SimpleNamespace(chat="chat-model"))
+    provider = MagicMock()
+    audit_calls = 0
+
+    def fake_chat(request):
+        nonlocal audit_calls
+        prompt = request.messages[-1]["content"]
+        if "覆盖审计" in prompt:
+            audit_calls += 1
+            if audit_calls == 1:
+                return json.dumps({
+                    "covered_chunk_ids": ["C001"],
+                    "missing_chunk_ids": ["C002"],
+                    "missing_facts": {"C002": ["TAIL-FACT"]},
+                }, ensure_ascii=False)
+            return json.dumps({
+                "covered_chunk_ids": ["C001", "C002"],
+                "missing_chunk_ids": [],
+                "missing_facts": {},
+            }, ensure_ascii=False)
+        if "修复当前总结" in prompt:
+            assert "C002" in prompt
+            assert "TAIL-FACT" in prompt
+            return "# 修复后的完整总结\n\n开场与后半程均已纳入。"
+        if "覆盖整段音频" in prompt:
+            assert "C001" in prompt
+            assert "C002" in prompt
+            return "# 初稿\n\n只有开场。"
+        if "分段 ID：C001" in prompt:
+            return "开场事实"
+        if "分段 ID：C002" in prompt:
+            return "后半程事实 TAIL-FACT"
+        raise AssertionError(f"unexpected prompt: {prompt[:120]}")
+
+    provider.chat.side_effect = fake_chat
+    registry = MagicMock()
+    registry.resolve_default_profile.return_value = profile
+    registry.build.return_value = provider
+    coverage: dict = {}
+    transcript = ("开场内容" * 1400) + "\n" + ("后半程内容" * 1400) + " TAIL-FACT"
+
+    with (
+        patch("backend.app.services.pipeline_tasks.create_default_registry", return_value=registry),
+        patch("backend.app.services.pipeline_tasks.load_settings", return_value=SimpleNamespace(text_model="")),
+    ):
+        summary = _generate_audio_summary(
+            payload={"summary_template": "detailed"},
+            transcript_text=transcript,
+            transcript_segments=[],
+            summary_mode="general",
+            log=lambda _message: None,
+            coverage=coverage,
+        )
+
+    assert summary.startswith("# 修复后的完整总结")
+    assert coverage["source_chars"] == len(transcript)
+    assert coverage["chunk_ids"] == ["C001", "C002"]
+    assert coverage["audit_passes"] == 2
+    assert coverage["status"] == "complete"
+    assert coverage["missing_chunk_ids"] == []
 
 
 # ── 旧 music_mode_confirmed 参数兼容 ───────────────────────────
