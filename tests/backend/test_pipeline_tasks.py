@@ -126,6 +126,19 @@ def test_stall_notifier_warns_when_progress_stuck() -> None:
     assert runner.append_log.called
 
 
+def test_resolve_pipeline_api_key_falls_back_to_enabled_chat_provider() -> None:
+    """本地 start pipeline 也应使用设置页 provider 中保存的 chat key。"""
+    from backend.app.services.pipeline_tasks import _resolve_pipeline_api_key
+
+    settings = MagicMock(
+        openai_api_key="",
+        providers=[MagicMock(enabled=True, capabilities=("chat",), api_key="provider-key")],
+    )
+
+    assert _resolve_pipeline_api_key({}, settings) == "provider-key"
+    assert _resolve_pipeline_api_key({"api_key": "explicit-key"}, settings) == "explicit-key"
+
+
 def test_find_visual_json_paths_for_videos_filters_unrelated_workspace_json(tmp_path: Path) -> None:
     from backend.app.services.pipeline_tasks import _find_visual_json_paths_for_videos
     from shared.video_analyzer import get_safe_name

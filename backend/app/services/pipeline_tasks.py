@@ -62,6 +62,25 @@ def _tier_vlm_concurrency() -> int:
     return load_settings().performance.vlm_concurrency
 
 
+def _resolve_pipeline_api_key(payload: Dict[str, Any], settings: Any) -> str:
+    """兼容旧全局 key 与 provider profile key，供本地启动的媒体任务使用。"""
+    explicit = str(payload.get("api_key") or "").strip()
+    if explicit:
+        return explicit
+    legacy = str(getattr(settings, "openai_api_key", "") or "").strip()
+    if legacy:
+        return legacy
+    for profile in getattr(settings, "providers", ()) or ():
+        if not getattr(profile, "enabled", False):
+            continue
+        if "chat" not in (getattr(profile, "capabilities", ()) or ()):
+            continue
+        key = str(getattr(profile, "api_key", "") or "").strip()
+        if key:
+            return key
+    return ""
+
+
 # ── N7b 路径 1：视频字幕直接总结 ──────────────────────────────
 
 _OUTPUT_FORMAT_PROMPTS: Dict[str, str] = {
@@ -1163,7 +1182,7 @@ def handle_analyze_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any
     payload = record.payload
     task_id = record.task_id
     settings = load_settings()
-    api_key = str(payload.get("api_key") or "").strip() or settings.openai_api_key.strip()
+    api_key = _resolve_pipeline_api_key(payload, settings)
     summary_path = str(payload.get("summary_path") or "").strip()
     # subtitle 路径不需要 API key（仅规则清洗即可运行），video_model 用 GEMINI_API_KEY，其他路径用 OpenAI key
     if not api_key and summary_path not in ("subtitle", "video_model"):
@@ -2653,10 +2672,7 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         raise ValueError("note task 需要 payload.url 或 payload.video_url")
 
     settings = load_settings()
-    api_key = (
-        str(payload.get("api_key") or "").strip()
-        or settings.openai_api_key.strip()
-    )
+    api_key = _resolve_pipeline_api_key(payload, settings)
     vision_model = str(payload.get("vision_model") or "").strip() or settings.vision_model
     text_model = str(payload.get("text_model") or "").strip() or settings.text_model
     proxy = str(payload.get("proxy") or "").strip()
