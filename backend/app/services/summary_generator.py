@@ -121,13 +121,19 @@ def _speaker_aware_transcript(item: WorkspaceItem) -> str:
             continue
         text = str(seg.get("edited_text") or seg.get("text") or "").strip()
         speaker_id = str(seg.get("speaker") or "").strip()
-        if not text or not speaker_id:
+        if not text:
             continue
-        label = str(speaker_map.get(speaker_id) or speaker_id)
+        label = str(speaker_map.get(speaker_id) or speaker_id or "未识别说话人")
         ts = str(seg.get("t_str") or "").strip()
         if not ts:
             sec = int(float(seg.get("t_sec") or seg.get("start") or 0))
-            ts = f"{sec // 60:02d}:{sec % 60:02d}"
+            hours, remainder = divmod(max(0, sec), 3600)
+            minutes, seconds = divmod(remainder, 60)
+            ts = (
+                f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+                if hours
+                else f"{minutes:02d}:{seconds:02d}"
+            )
         lines.append(f"[{ts}] {label}：{text}")
     return "\n".join(lines)
 
@@ -411,6 +417,8 @@ def build_prompt(
         return _build_image_text_standard_prompt(item, background)
 
     tpl = get_template(template_id)
+    if tpl.speaker_aware_only and summary_mode != "speaker_aware":
+        raise ValueError(f"模板 {template_id!r} 仅支持区分说话人总结")
     system_prompt = tpl.system_prompt
     raw_transcript = (item.results or {}).get("transcript", "")
     seg_list = raw_transcript if isinstance(raw_transcript, list) else None

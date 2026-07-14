@@ -97,6 +97,9 @@ const TEMPLATE_LABELS: Record<string, string> = {
   oral: '口播稿', steps: '步骤教程', outline: '大纲',
   qa: '问答卡(Anki)', actions: '行动清单', tool_recommendation: '工具推荐',
   science_popularization: '知识科普', standard: '标准总结',
+  speaker_meeting: '会议纪要（区分说话人）',
+  speaker_interview: '线下采访（区分说话人）',
+  speaker_customer_reception: '客户接待（区分说话人）',
 }
 const tl = (id: string) => TEMPLATE_LABELS[id] ?? id
 
@@ -2439,6 +2442,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
           defaultTemplate={note.summary_hint?.default_template}
           allowSpeakerAware={isAudioNote}
           speakerAwareAvailable={speakerIds.length > 0}
+          templateCategory={isAudioNote ? 'style_audio' : 'style_video_with_frames'}
           onSubmit={handleCreateSummary}
           onClose={() => setShowNewSummaryModal(false)}
         />

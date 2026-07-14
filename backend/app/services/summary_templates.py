@@ -1,4 +1,4 @@
-"""9 种内容总结模板。每个模板由 (system_prompt, user_prompt_template, output_format) 三部分组成。"""
+"""内容总结模板。每个模板由提示词、输出格式和适用范围组成。"""
 
 from __future__ import annotations
 
@@ -15,6 +15,23 @@ FRAME_PLACEHOLDER_RULE = (
 )
 
 STYLE_TEMPLATE_PREFIX = "style"
+ALL_STYLE_CATEGORIES = (
+    "style_video_with_frames",
+    "style_video_text_only",
+    "style_audio",
+    "style_image_text",
+    "style_replica",
+    "style_text",
+)
+
+SPEAKER_EVIDENCE_RULES = (
+    "\n\n【说话人与证据规则】\n"
+    "- 每个关键事实、观点、决定、异议和行动项都要标明说话人，并附原转写中的 [时间] 作为时间证据。\n"
+    "- 只使用转写中出现的姓名或用户重命名后的说话人标签；身份或角色不明确时写「未确认」，不得猜测。\n"
+    "- 明确区分「原话事实」与「分析归纳」；不得编造共识、决议、负责人、截止时间、预算或客户意向。\n"
+    "- 同一议题存在不同立场时分别列出，不把不同说话人的话合并为无归属结论。\n"
+    "- 省略寒暄和重复口头禅，但不得因此漏掉实质信息。"
+)
 
 
 @dataclass
@@ -26,6 +43,8 @@ class SummaryTemplate:
     system_prompt: str
     user_prompt: str
     output_format: str
+    style_categories: tuple[str, ...] = ALL_STYLE_CATEGORIES
+    speaker_aware_only: bool = False
 
 
 TEMPLATES: dict[str, SummaryTemplate] = {
@@ -274,6 +293,71 @@ TEMPLATES: dict[str, SummaryTemplate] = {
         user_prompt="请为以下转写文本生成学习笔记：\n\n{transcript}",
         output_format="markdown",
     ),
+    "speaker_meeting": SummaryTemplate(
+        id="speaker_meeting",
+        label="会议纪要（区分说话人）",
+        desc="逐人立场、决议、责任到人、时间证据与待决风险",
+        use_case="多人会议 / 线下会议",
+        system_prompt=(
+            "你是专业会议纪要员。请把多人会议整理成可核对、可执行的 Markdown 纪要。\n\n"
+            "## 会议概览\n用 3-6 条概括目标、议题和明确出现的参会人。\n"
+            "## 议题与逐人立场\n按议题分组，用表格列出：议题 | 说话人 | 观点/依据 | 时间证据 | 讨论状态。\n"
+            "## 决议与共识\n只记录原文明确形成的决议或共识；列出决议、提出/确认人、依据和时间证据。\n"
+            "## 分歧与待决问题\n分别列出各方立场、尚缺信息及下一次需要确认的问题。\n"
+            "## 行动项\n表格列：行动 | 负责人 | 截止时间 | 依赖 | 完成标准 | 来源时间；"
+            "原文未明确的负责人或截止时间写「待确认」。\n"
+            "## 风险与后续跟进\n列出阻塞、风险、需要升级或复盘的事项。"
+            + SPEAKER_EVIDENCE_RULES
+        ),
+        user_prompt="请按区分说话人的会议纪要模板整理以下完整转写：\n\n{transcript}",
+        output_format="markdown",
+        style_categories=("style_audio",),
+        speaker_aware_only=True,
+    ),
+    "speaker_interview": SummaryTemplate(
+        id="speaker_interview",
+        label="线下采访（区分说话人）",
+        desc="Q&A、受访者主题观点、原话证据、共识分歧与未回答问题",
+        use_case="线下采访 / 用户访谈 / 播客",
+        system_prompt=(
+            "你是专业的采访与用户研究分析员。请把多人采访整理成既保留问答关系、又便于主题分析的 Markdown。\n\n"
+            "## 采访概览\n说明采访主题；仅依据原文明示信息列出采访者与受访者，角色不明确写「未确认」。\n"
+            "## Q&A 时间线\n按问题顺序列出：问题、提问者、回答者、回答摘要和时间证据。\n"
+            "## 主题与受访者观点\n按主题聚类，每个主题分别整理各位受访者的观点、动机、案例和情绪信号。\n"
+            "## 原话证据与高信号片段\n摘录最能支持结论的短句，标明说话人和时间；不要制造不存在的原话。\n"
+            "## 共识、分歧与矛盾\n区分共同模式、不同受访者之间的分歧，以及同一人前后表述的潜在矛盾。\n"
+            "## 洞察与机会\n把「原话事实」与「分析归纳」分开，说明用户需要、痛点和机会，不用单个受访者代表所有人。\n"
+            "## 未回答问题与后续追访\n列出采访中未回答、证据不足或值得继续追问的问题。"
+            + SPEAKER_EVIDENCE_RULES
+        ),
+        user_prompt="请按区分说话人的线下采访模板整理以下完整转写：\n\n{transcript}",
+        output_format="markdown",
+        style_categories=("style_audio",),
+        speaker_aware_only=True,
+    ),
+    "speaker_customer_reception": SummaryTemplate(
+        id="speaker_customer_reception",
+        label="客户接待（区分说话人）",
+        desc="客户痛点、需求优先级、异议回应、决策链、承诺与下一步",
+        use_case="客户接待 / 需求沟通 / 商务拜访",
+        system_prompt=(
+            "你是客户沟通与会后跟进分析员。请把客户接待或商务沟通整理成可用于内部协同和后续跟进的 Markdown。\n\n"
+            "## 会谈概览与参与方\n列出会谈目的、明确出现的人员及角色；无法确认客户方/接待方时不得猜测。\n"
+            "## 客户现状与当前流程\n记录客户自己的描述、已有方案、约束和背景，每点附说话人及时间证据。\n"
+            "## 目标与成功标准\n整理客户希望达成的业务目标、期望结果、优先级和衡量标准。\n"
+            "## 痛点、影响与紧迫度\n表格列：痛点 | 客户原话/说话人 | 业务影响 | 紧迫度依据 | 时间证据。\n"
+            "## 需求优先级\n区分明确需求、潜在需求和待确认需求；说明功能/服务、场景、优先级及证据。\n"
+            "## 异议、顾虑与回应\n逐条对应客户异议与接待方回应，不把回应误写为客户已接受。\n"
+            "## 决策链与采购条件\n仅记录原文明确的决策人、影响人、预算、时间线、评估标准和采购流程。\n"
+            "## 双方承诺与下一步\n表格列：事项 | 承诺方/负责人 | 截止时间 | 交付物 | 来源时间；未知写「待确认」。\n"
+            "## 风险、未知项与建议追问\n列出阻塞、竞争方案、信息缺口和下一次会谈需要确认的问题。"
+            + SPEAKER_EVIDENCE_RULES
+        ),
+        user_prompt="请按区分说话人的客户接待模板整理以下完整转写：\n\n{transcript}",
+        output_format="markdown",
+        style_categories=("style_audio",),
+        speaker_aware_only=True,
+    ),
 }
 
 
@@ -297,6 +381,13 @@ def _custom_style_template(template_id: str) -> SummaryTemplate | None:
         else:
             system_prompt = prompt
             user_prompt = f"请基于以下内容生成「{item.name}」Markdown 笔记：\n\n{{transcript}}"
+        builtin = TEMPLATES.get(item.template_id)
+        if (
+            builtin is not None
+            and builtin.speaker_aware_only
+            and "【说话人与证据规则】" not in system_prompt
+        ):
+            system_prompt += SPEAKER_EVIDENCE_RULES
         return SummaryTemplate(
             id=item.template_id,
             label=item.name,
@@ -305,6 +396,12 @@ def _custom_style_template(template_id: str) -> SummaryTemplate | None:
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             output_format="markdown",
+            style_categories=(
+                builtin.style_categories if builtin is not None else (item.category,)
+            ),
+            speaker_aware_only=(
+                builtin.speaker_aware_only if builtin is not None else False
+            ),
         )
     return None
 

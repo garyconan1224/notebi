@@ -11,7 +11,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { HelpCircle } from 'lucide-react'
 import { useProviderStore, type Model } from '@/store/providerStore'
 import { useConfigStore } from '@/store/configStore'
-import { fetchTemplates, type VideoTemplateItem } from '@/services/templates'
+import { fetchTemplates, type TemplateCategory, type VideoTemplateItem } from '@/services/templates'
 
 import './new-summary-modal.css'
 
@@ -42,10 +42,9 @@ const MORE_STYLES: { value: string; label: string; desc: string }[] = [
 
 /** 音频勾选“区分说话人”后，只展示与发言归属最相关的总结方式。 */
 const SPEAKER_AWARE_CARDS: { value: string; label: string; desc: string }[] = [
-  { value: 'detailed', label: '按说话人观点', desc: '按每位发言人整理观点、立场与依据' },
-  { value: 'meeting', label: '共识与行动', desc: '区分讨论、共识、分歧、决策与待办' },
-  { value: 'interview', label: '访谈观点整理', desc: '保留问答关系与各位嘉宾的核心观点' },
-  { value: 'actions', label: '决策与行动项', desc: '标注提出人、负责人、截止时间与完成标准' },
+  { value: 'speaker_meeting', label: '会议纪要', desc: '逐人立场、决议、负责人/截止与风险' },
+  { value: 'speaker_interview', label: '线下采访', desc: 'Q&A、受访者主题观点、证据与分歧' },
+  { value: 'speaker_customer_reception', label: '客户接待', desc: '痛点、需求、异议、决策链与双方承诺' },
 ]
 
 const SPEAKER_AWARE_VALUES = new Set(SPEAKER_AWARE_CARDS.map((card) => card.value))
@@ -61,6 +60,7 @@ interface NewSummaryModalProps {
   defaultTemplate?: string
   allowSpeakerAware?: boolean
   speakerAwareAvailable?: boolean
+  templateCategory?: TemplateCategory
   onSubmit: (opts: {
     template: string
     summaryMode: 'general' | 'speaker_aware'
@@ -77,6 +77,7 @@ export function NewSummaryModal({
   defaultTemplate,
   allowSpeakerAware = false,
   speakerAwareAvailable = true,
+  templateCategory,
   onSubmit,
   onClose,
 }: NewSummaryModalProps) {
@@ -108,17 +109,19 @@ export function NewSummaryModal({
 
   useEffect(() => {
     let cancelled = false
-    fetchTemplates('style_video_with_frames')
+    const category = templateCategory ?? (allowSpeakerAware ? 'style_audio' : 'style_video_with_frames')
+    fetchTemplates(category)
       .then((items) => {
         if (!cancelled) setStyleTemplates(items)
       })
       .catch(() => {})
     return () => { cancelled = true }
-  }, [])
+  }, [allowSpeakerAware, templateCategory])
 
   const templateOptions = useMemo(() => {
     if (styleTemplates.length === 0) return [...QUICK_CARDS, ...MORE_STYLES]
     return [...styleTemplates]
+      .filter((item) => !item.speaker_aware_only)
       .sort((a, b) => {
         const ai = TEMPLATE_ORDER.get(a.template_id) ?? 1000
         const bi = TEMPLATE_ORDER.get(b.template_id) ?? 1000

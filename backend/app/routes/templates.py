@@ -207,6 +207,8 @@ def _summary_builtin_response(template_id: str, category: str) -> Dict[str, Any]
         "default_prompt": tpl.system_prompt,
         "description": tpl.desc,
         "use_case": tpl.use_case,
+        "speaker_aware_only": tpl.speaker_aware_only,
+        "group": "speaker_aware" if tpl.speaker_aware_only else "general",
     }
 
 
@@ -217,7 +219,11 @@ def get_all_templates(
     """返回模板列表。可选 ?category=video|text|style_* 过滤。"""
     if _is_style_category(category):
         assert category is not None
-        builtins = [_summary_builtin_response(tid, category) for tid in TEMPLATES.keys()]
+        builtins = [
+            _summary_builtin_response(tid, category)
+            for tid, template in TEMPLATES.items()
+            if category in template.style_categories
+        ]
         customs = [
             _template_to_response(t)
             for t in load_templates_by_category(category)
@@ -250,7 +256,8 @@ def get_all_templates(
     customs = [_template_to_response(t) for t in load_templates()]
     style_builtins = [
         _summary_builtin_response(tid, "style_video_with_frames")
-        for tid in TEMPLATES.keys()
+        for tid, template in TEMPLATES.items()
+        if "style_video_with_frames" in template.style_categories
     ]
     return video_builtins + text_builtins + style_builtins + customs
 

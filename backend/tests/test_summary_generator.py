@@ -67,11 +67,13 @@ class TestBuildPrompt:
         assert "老总结内容" in usr_p
 
     def test_all_template_ids(self) -> None:
-        """9 个模板 id 都能构造 prompt 不报错。"""
-        from backend.app.services.summary_templates import list_template_ids
-        item = _make_item()
+        """所有模板 id 都能按自身适用模式构造 prompt。"""
+        from backend.app.services.summary_templates import get_template, list_template_ids
+
+        item = _make_item(type="audio")
         for tid in list_template_ids():
-            sys_p, usr_p = build_prompt(item, tid)
+            summary_mode = "speaker_aware" if get_template(tid).speaker_aware_only else "general"
+            sys_p, usr_p = build_prompt(item, tid, summary_mode=summary_mode)
             assert sys_p  # 非空
             assert usr_p  # 非空
 
@@ -110,6 +112,7 @@ class TestBuildPrompt:
                 "transcript_segments": [
                     {"t_sec": 0, "t_str": "00:00", "speaker": "SPEAKER_00", "text": "主持人开场"},
                     {"t_sec": 12, "t_str": "00:12", "speaker": "SPEAKER_01", "text": "嘉宾补充"},
+                    {"t_sec": 3661, "text": "后半程未标记内容"},
                 ],
                 "speaker_map": {"SPEAKER_00": "主持人", "SPEAKER_01": "嘉宾 A"},
             },
@@ -118,6 +121,13 @@ class TestBuildPrompt:
         assert "区分说话人总结" in sys_p
         assert "[00:00] 主持人：主持人开场" in usr_p
         assert "[00:12] 嘉宾 A：嘉宾补充" in usr_p
+        assert "[01:01:01] 未识别说话人：后半程未标记内容" in usr_p
+
+    def test_speaker_only_template_rejects_general_summary_mode(self) -> None:
+        item = _make_item(type="audio")
+
+        with pytest.raises(ValueError, match="仅支持区分说话人"):
+            build_prompt(item, "speaker_meeting", summary_mode="general")
 
     def test_image_text_standard_uses_image_note_prompt(self) -> None:
         """图文 standard 总结应使用 source.md 材料，不走视频时间轴模板。"""

@@ -230,6 +230,11 @@ export default function VideoTemplatesPage() {
                   >
                     {t.is_builtin ? (t.overridden ? '内置已改' : '内置') : '自定义'}
                   </span>
+                  {t.speaker_aware_only && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-violet-100 text-violet-700">
+                      区分说话人
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground truncate max-w-lg">
                   {t.prompt.slice(0, 80)}

@@ -38,7 +38,7 @@ import {
 } from '@/services/workspaces'
 import { fetchLinkPreview } from '@/services/linkPreview'
 import { batchAddItemsToWorkspace, fetchLibrary, type LibraryItem } from '@/services/library'
-import { fetchTemplates, type VideoTemplateItem } from '@/services/templates'
+import { fetchTemplates, type TemplateCategory, type VideoTemplateItem } from '@/services/templates'
 import {
   isWorkspaceKindAllowed,
   productConfig,
@@ -133,10 +133,9 @@ const MORE_STYLES = [
 
 /** 音频勾选区分说话人后使用的专属总结方式；底层仍复用现有模板 ID。 */
 const SPEAKER_AWARE_STYLES = [
-  { id: 'detailed', label: '按说话人观点', desc: '按每位发言人整理观点、立场与依据' },
-  { id: 'meeting', label: '共识与行动', desc: '区分讨论、共识、分歧、决策与待办' },
-  { id: 'interview', label: '访谈观点整理', desc: '保留问答关系与各位嘉宾的核心观点' },
-  { id: 'actions', label: '决策与行动项', desc: '标注提出人、负责人、截止时间与完成标准' },
+  { id: 'speaker_meeting', label: '会议纪要', desc: '逐人立场、决议、负责人/截止与风险' },
+  { id: 'speaker_interview', label: '线下采访', desc: 'Q&A、受访者主题观点、证据与分歧' },
+  { id: 'speaker_customer_reception', label: '客户接待', desc: '痛点、需求、异议、决策链与双方承诺' },
 ] as const
 
 const SPEAKER_AWARE_STYLE_IDS = new Set<string>(SPEAKER_AWARE_STYLES.map((style) => style.id))
@@ -402,13 +401,18 @@ export function AddMaterialModal({
 
   useEffect(() => {
     let cancelled = false
-    fetchTemplates('style_video_with_frames')
+    const category: TemplateCategory = selectedNoteType === 'audio'
+      ? 'style_audio'
+      : selectedNoteType === 'image_text'
+        ? 'style_image_text'
+        : 'style_video_with_frames'
+    fetchTemplates(category)
       .then((items) => {
         if (!cancelled) setStyleTemplates(items)
       })
       .catch(() => {})
     return () => { cancelled = true }
-  }, [])
+  }, [selectedNoteType])
 
   const styleOptions = useMemo(() => {
     if (styleTemplates.length === 0) {
@@ -419,6 +423,7 @@ export function AddMaterialModal({
       }))
     }
     return [...styleTemplates]
+      .filter((item) => !item.speaker_aware_only)
       .sort((a, b) => {
         const ai = STYLE_ORDER.get(a.template_id) ?? 1000
         const bi = STYLE_ORDER.get(b.template_id) ?? 1000

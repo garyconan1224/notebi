@@ -4518,6 +4518,8 @@ def _generate_audio_summary(
 
     template_id = str(payload.get("summary_template") or "concise").strip() or "concise"
     template = get_template(template_id)
+    if template.speaker_aware_only and summary_mode != "speaker_aware":
+        raise RuntimeError(f"模板 {template_id!r} 仅支持区分说话人总结")
     chunks = _chunk_audio_summary_source(source)
     if not chunks:
         return ""

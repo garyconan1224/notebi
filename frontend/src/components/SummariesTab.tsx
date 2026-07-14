@@ -53,6 +53,9 @@ const TEMPLATE_LABEL_MAP: Record<string, string> = {
   tool_recommendation: '工具推荐',
   science_popularization: '知识科普',
   standard: '标准总结',
+  speaker_meeting: '会议纪要（区分说话人）',
+  speaker_interview: '线下采访（区分说话人）',
+  speaker_customer_reception: '客户接待（区分说话人）',
 }
 
 function templateLabel(id: string): string {
@@ -314,6 +317,7 @@ export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummary
             creating={false}
             defaultTemplate={defaultTemplate}
             allowSpeakerAware={allowSpeakerAware}
+            templateCategory={allowSpeakerAware ? 'style_audio' : 'style_video_with_frames'}
             onSubmit={handleCreate}
             onClose={() => setShowModal(false)}
           />
@@ -553,6 +557,7 @@ export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummary
           creating={creatingTemplate !== null}
           defaultTemplate={defaultTemplate}
           allowSpeakerAware={allowSpeakerAware}
+          templateCategory={allowSpeakerAware ? 'style_audio' : 'style_video_with_frames'}
           onSubmit={handleCreate}
           onClose={() => setShowModal(false)}
         />

@@ -19,6 +19,15 @@ const storeMocks = vi.hoisted(() => ({
   },
 }))
 
+const templateMocks = vi.hoisted(() => ({
+  fetchTemplates: vi.fn(),
+}))
+
+vi.mock('@/services/templates', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/templates')>()
+  return { ...actual, fetchTemplates: templateMocks.fetchTemplates }
+})
+
 vi.mock('@/store/providerStore', () => ({
   useProviderStore: (selector: (state: unknown) => unknown) => selector({
     ...storeMocks.providerState,
@@ -40,6 +49,7 @@ describe('NewSummaryModal', () => {
     storeMocks.providerState.providerModels = {}
     storeMocks.providerState.modelsLoading = {}
     vi.clearAllMocks()
+    templateMocks.fetchTemplates.mockResolvedValue([])
   })
 
   it('defaultTemplate late arrival does not overwrite manual template choice', () => {
@@ -106,12 +116,30 @@ describe('NewSummaryModal', () => {
     expect(screen.getByText('常用模板')).toBeTruthy()
     fireEvent.click(screen.getByRole('checkbox', { name: '区分说话人' }))
     expect(screen.getByText('区分说话人的总结方式')).toBeTruthy()
-    expect(screen.getByRole('button', { name: /按说话人观点/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /会议纪要/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /线下采访/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /客户接待/ })).toBeTruthy()
     fireEvent.click(screen.getByText('生成'))
 
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       summaryMode: 'speaker_aware',
+      template: 'speaker_meeting',
     }))
+  })
+
+  it('音频新建总结从 style_audio 加载设置中的风格模板', async () => {
+    render(
+      <NewSummaryModal
+        creating={false}
+        allowSpeakerAware
+        onSubmit={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(templateMocks.fetchTemplates).toHaveBeenCalledWith('style_audio')
+    })
   })
 
   it('没有说话人识别结果时禁用区分说话人并提示重新分析', () => {

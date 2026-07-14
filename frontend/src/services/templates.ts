@@ -23,6 +23,8 @@ export interface VideoTemplateItem {
   default_prompt?: string
   description?: string
   use_case?: string
+  speaker_aware_only?: boolean
+  group?: 'general' | 'speaker_aware'
 }
 
 const BASE = '/templates'

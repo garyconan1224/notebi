@@ -40,6 +40,27 @@ def test_get_all_templates_includes_builtins(client: TestClient) -> None:
     assert len(builtins) == 9
 
 
+def test_audio_style_templates_include_speaker_business_templates_only_in_audio(
+    client: TestClient,
+) -> None:
+    audio = client.get("/templates", params={"category": "style_audio"})
+    video = client.get("/templates", params={"category": "style_video_with_frames"})
+
+    assert audio.status_code == 200
+    assert video.status_code == 200
+    audio_items = {item["template_id"]: item for item in audio.json()}
+    video_ids = {item["template_id"] for item in video.json()}
+    expected = {
+        "speaker_meeting",
+        "speaker_interview",
+        "speaker_customer_reception",
+    }
+    assert expected <= set(audio_items)
+    assert expected.isdisjoint(video_ids)
+    assert all(audio_items[template_id]["speaker_aware_only"] for template_id in expected)
+    assert all(audio_items[template_id]["group"] == "speaker_aware" for template_id in expected)
+
+
 def test_create_and_get_custom_template(client: TestClient) -> None:
     resp = client.post(
         "/video-templates",

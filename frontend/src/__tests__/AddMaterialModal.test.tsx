@@ -14,6 +14,7 @@ const {
   startItemPipelineMock,
   updateWorkspaceMock,
   fetchLinkPreviewMock,
+  fetchTemplatesMock,
 } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
   sniffUrlMock: vi.fn(),
@@ -26,6 +27,7 @@ const {
   startItemPipelineMock: vi.fn(),
   updateWorkspaceMock: vi.fn(),
   fetchLinkPreviewMock: vi.fn(),
+  fetchTemplatesMock: vi.fn(),
 }))
 
 vi.mock('react-router-dom', () => ({
@@ -48,6 +50,11 @@ vi.mock('@/services/linkPreview', () => ({
   fetchLinkPreview: fetchLinkPreviewMock,
 }))
 
+vi.mock('@/services/templates', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/templates')>()
+  return { ...actual, fetchTemplates: fetchTemplatesMock }
+})
+
 vi.mock('@/store/providerStore', () => ({
   useProviderStore: vi.fn(() => ({
     providers: [{ id: 'p1', name: 'TestProvider', enabled: true, capabilities: ['vision'] }],
@@ -69,6 +76,8 @@ describe('AddMaterialModal', () => {
     startItemPipelineMock.mockReset()
     updateWorkspaceMock.mockReset()
     fetchLinkPreviewMock.mockReset()
+    fetchTemplatesMock.mockReset()
+    fetchTemplatesMock.mockResolvedValue([])
     probeDurationMock.mockResolvedValue({ duration_sec: 0 })
     fetchLinkPreviewMock.mockImplementation(() => new Promise(() => {}))
     generateNoteMock.mockResolvedValue({
@@ -77,6 +86,22 @@ describe('AddMaterialModal', () => {
       item_type: 'video',
       item_id: 'item-1',
       workspace: {},
+    })
+  })
+
+  it('切换到音频笔记后从 style_audio 加载风格模板', async () => {
+    render(
+      <AddMaterialModal
+        open
+        onOpenChange={vi.fn()}
+        workspaceIds={[]}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /音频笔记/ }))
+
+    await waitFor(() => {
+      expect(fetchTemplatesMock).toHaveBeenCalledWith('style_audio')
     })
   })
 
@@ -501,7 +526,7 @@ describe('AddMaterialModal', () => {
     expect(speakerSwitch).toHaveProperty('ariaChecked', 'false')
     fireEvent.click(speakerSwitch)
     expect(screen.getByText('区分说话人的总结方式')).toBeTruthy()
-    expect(screen.getByText('按说话人观点')).toBeTruthy()
+    expect(screen.getByText('会议纪要')).toBeTruthy()
     expect(screen.getByRole('combobox', { name: '预计说话人数' })).toBeTruthy()
     expect(screen.getByText('自动判断')).toBeTruthy()
   })
