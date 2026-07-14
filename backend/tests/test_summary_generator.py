@@ -127,6 +127,65 @@ class TestBuildPrompt:
         assert "[00:12] 嘉宾 A：嘉宾补充" in usr_p
         assert "[01:01:01] 未识别说话人：后半程未标记内容" in usr_p
 
+    def test_speaker_aware_prompt_includes_explicit_speaker_roles(self) -> None:
+        item = _make_item(
+            type="audio",
+            results={
+                "transcript_segments": [
+                    {"t_sec": 0, "speaker": "SPEAKER_00", "text": "介绍客户目标"},
+                ],
+                "speaker_map": {"SPEAKER_00": "李总"},
+                "speaker_roles": {"SPEAKER_00": "客户"},
+            },
+        )
+
+        sys_p, usr_p = build_prompt(
+            item,
+            "speaker_consultant_detailed",
+            summary_mode="speaker_aware",
+        )
+
+        assert "姓名：李总" in sys_p or "姓名：李总" in usr_p
+        assert "角色：客户" in sys_p or "角色：客户" in usr_p
+        assert "角色未知时不得推断" in sys_p or "角色未知时不得推断" in usr_p
+
+
+def test_speaker_rename_rewrites_note_and_all_summary_files(
+    monkeypatch: pytest.MonkeyPatch, tmp_path,
+) -> None:
+    """改名必须同步主笔记、v0/v1 历史文件和 JSON 总结。"""
+    import backend.app.services.workspace_store as store_module
+
+    item = _make_item(
+        type="audio",
+        results={"speaker_map": {"SPEAKER_00": "旧姓名"}},
+    )
+    item.summaries.extend([
+        ItemSummary(summary_id="v0", template="concise", version=0, content_md="旧姓名：旧观点"),
+        ItemSummary(summary_id="v1", template="concise", version=1, content_md="SPEAKER_00：后续观点"),
+    ])
+    store = _make_store_with_item(item)
+    note_root = tmp_path / "note"
+    summary_root = note_root / "summaries"
+    summary_root.mkdir(parents=True)
+    (note_root / "note.md").write_text("# 旧姓名\nSPEAKER_00 发言", encoding="utf-8")
+    (summary_root / "v0.md").write_text("旧姓名 的总结", encoding="utf-8")
+    (summary_root / "v1.md").write_text("SPEAKER_00 的总结", encoding="utf-8")
+    monkeypatch.setattr(store_module, "note_dir", lambda *_args: note_root)
+
+    updated = store.update_speaker_summary_labels(
+        "ws-1",
+        "item-1",
+        {"SPEAKER_00": "李总"},
+        previous_speaker_map={"SPEAKER_00": "旧姓名"},
+    )
+
+    assert updated == 2
+    assert store.get_item("ws-1", "item-1").summaries[0].content_md == "李总：旧观点"
+    assert (note_root / "note.md").read_text(encoding="utf-8") == "# 李总\n李总 发言"
+    assert (summary_root / "v0.md").read_text(encoding="utf-8") == "李总 的总结"
+    assert (summary_root / "v1.md").read_text(encoding="utf-8") == "李总 的总结"
+
     @pytest.mark.parametrize(
         ("template_id", "required_instruction"),
         [

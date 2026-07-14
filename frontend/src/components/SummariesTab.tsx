@@ -22,6 +22,8 @@ import {
   type ItemSummary,
 } from '@/services/summaries'
 import { getItemNote } from '@/services/workspaces'
+import { useTaskStore } from '@/store/taskStore'
+import type { TaskRecord } from '@/types/task'
 import type { TemplateCategory } from '@/services/templates'
 import { withStatusToast } from '@/lib/statusToast'
 
@@ -95,6 +97,7 @@ export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummary
   const [showModal, setShowModal] = useState(false)
   /** null = 没在生成；string = 正在生成的模板 id（列表里显示进度条） */
   const [creatingTemplate, setCreatingTemplate] = useState<string | null>(null)
+  const [creatingTaskId, setCreatingTaskId] = useState<string | null>(null)
   const [defaultTemplate, setDefaultTemplate] = useState<string | undefined>(undefined)
 
   // 对比模式
@@ -109,6 +112,10 @@ export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummary
   const [editingName, setEditingName] = useState('')
 
   const scrollRef = useRef<HTMLDivElement>(null)
+  const creatingToastIdRef = useRef('')
+  const tasks = useTaskStore((state) => state.tasks)
+  const addTask = useTaskStore((state) => state.addTask)
+  const creatingTask = tasks.find((task) => task.task_id === creatingTaskId)
 
   /* ── 加载列表 ────────────────────────────────────────── */
 
@@ -130,6 +137,25 @@ export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummary
   useEffect(() => {
     refresh()
   }, [refresh])
+
+  useEffect(() => {
+    if (!creatingTaskId || !creatingTask) return
+    if (!['SUCCESS', 'FAILED', 'PARTIAL', 'CANCELLED'].includes(creatingTask.status)) return
+    const toastId = creatingToastIdRef.current
+    if (creatingTask.status === 'SUCCESS') {
+      const rawSummary = (creatingTask.result as Record<string, unknown>)?.summary
+      const summary = rawSummary && typeof rawSummary === 'object' ? rawSummary as ItemSummary : null
+      toast.success(summary ? `${templateLabel(summary.template)} v${summary.version} 生成完成` : '总结生成完成', { id: toastId })
+      void refresh().then(() => {
+        if (summary) setSelected(summary)
+        onRefresh?.()
+      })
+    } else {
+      toast.error(creatingTask.error || (creatingTask.status === 'CANCELLED' ? '总结任务已取消' : '总结生成失败'), { id: toastId })
+    }
+    setCreatingTemplate(null)
+    setCreatingTaskId(null)
+  }, [creatingTask, creatingTaskId, onRefresh, refresh])
 
   // 获取 summary_hint（图文内容分类推荐模板）
   useEffect(() => {
@@ -162,16 +188,33 @@ export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummary
     toast.loading(`正在生成${creatingLabel}…`, { id: toastId })
 
     try {
-      const s = await createSummary(workspaceId, itemId, opts.template, opts.background, {
+      const accepted = await createSummary(workspaceId, itemId, opts.template, opts.background, {
         provider_id: opts.providerId,
         model: opts.model,
         search_web: opts.searchWeb,
         summary_mode: opts.summaryMode,
       })
-      toast.success(`${templateLabel(s.template)} v${s.version} 生成完成`, { id: toastId })
-      await refresh()
-      onRefresh?.()
-      setSelected(s)
+      creatingToastIdRef.current = toastId
+      setCreatingTaskId(accepted.task_id)
+      const now = new Date().toISOString()
+      // 极短内容可能在 HTTP 返回前已经完成；不要用本地 PENDING 快照覆盖真实终态。
+      if (!useTaskStore.getState().getTask(accepted.task_id)) {
+        addTask({
+          task_id: accepted.task_id,
+          project_id: workspaceId,
+          task_type: 'summary',
+          payload: { item_id: itemId, template: opts.template, title: creatingLabel },
+          status: 'PENDING',
+          progress: 0,
+          log: [],
+          result: {},
+          error: '',
+          retry_of: '',
+          cancel_requested: false,
+          created_at: now,
+          updated_at: now,
+        } satisfies TaskRecord)
+      }
     } catch (err: unknown) {
       const axiosData = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       if (axiosData && axiosData.includes('chat model')) {
@@ -183,10 +226,8 @@ export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummary
         const msg = err instanceof Error ? err.message : '生成失败'
         toast.error(msg, { id: toastId })
       }
-    } finally {
-      setCreatingTemplate(null)
     }
-  }, [workspaceId, itemId, refresh, onRefresh, navigate])
+  }, [workspaceId, itemId, addTask, navigate])
 
   /* ── 删除 ────────────────────────────────────────────── */
 
@@ -371,8 +412,11 @@ export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummary
             <div className="sm-version-info">
               <span className="sm-version-label">{templateLabel(creatingTemplate)}</span>
               <span className="sm-version-preview" style={{ color: 'var(--accent-pink)' }}>
-                正在生成…
+                {creatingTask ? `${creatingTask.log?.at(-1)?.message || '正在准备材料'} · ${Math.round((creatingTask.progress || 0) * 100)}%` : '正在提交任务…'}
               </span>
+            </div>
+            <div className="sm-creating-progress" aria-label="总结生成进度">
+              <span style={{ width: `${Math.max(4, Math.round((creatingTask?.progress || 0) * 100))}%` }} />
             </div>
             <div className="sm-creating-spinner" />
           </div>

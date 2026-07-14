@@ -156,7 +156,7 @@ export function ProviderDetailPanel({
                   id={`p-${id}-base-url`}
                   value={draft.base_url}
                   onChange={(e) => onChange({ base_url: e.target.value })}
-                  placeholder={t('form.baseUrlPlaceholder')}
+                  placeholder="https://api.example.com/v1 或 http://127.0.0.1:8000/v1（vLLM-Ascend / MindIE）"
                   className="font-mono"
                 />
               </FieldRow>
@@ -243,4 +243,3 @@ export function ProviderDetailPanel({
 }
 
 export default ProviderDetailPanel
-

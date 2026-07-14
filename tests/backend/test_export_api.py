@@ -176,7 +176,7 @@ def test_export_timeline_free_article_transcript(client: TestClient) -> None:
     assert resp.status_code == 200
     assert "转写文本（无时间轴）.txt" in resp.headers["content-disposition"] or "%E8%BD%AC%E5%86%99" in resp.headers["content-disposition"]
     body = resp.content.decode()
-    assert body == "第一句，修订后的第二句。"
+    assert body == "# test-video\n\n类型：转写文本（无时间轴）\n\n第一句，修订后的第二句。\n"
     assert "00:00" not in body
     assert "主持人" not in body
 

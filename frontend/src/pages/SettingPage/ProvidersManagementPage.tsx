@@ -524,7 +524,7 @@ const ProvidersManagementPage = () => {
                 <Input
                   value={editDraft.base_url}
                   onChange={(e) => setEditDraft((d) => ({ ...d, base_url: e.target.value }))}
-                  placeholder="https://api.example.com/v1"
+                  placeholder="https://api.example.com/v1 或 http://127.0.0.1:8000/v1（vLLM-Ascend / MindIE）"
                 />
               </div>
               {/* API Key */}
@@ -613,7 +613,7 @@ const ProvidersManagementPage = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="anthropic">Anthropic</SelectItem>
-                  <SelectItem value="openai_compatible">OpenAI 兼容</SelectItem>
+                  <SelectItem value="openai_compatible">OpenAI 兼容（vLLM-Ascend / MindIE）</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -639,7 +639,7 @@ const ProvidersManagementPage = () => {
                 onChange={(e) =>
                   setCreateForm((f) => ({ ...f, base_url: e.target.value }))
                 }
-                placeholder={t('create.baseUrlPlaceholder')}
+                placeholder="https://api.example.com/v1 或 http://127.0.0.1:8000/v1（vLLM-Ascend / MindIE）"
               />
             </div>
           </div>

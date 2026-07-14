@@ -2069,6 +2069,36 @@
   font-size: 11px;
 }
 
+.nibi-audio-speaker-editor {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.nibi-audio-speaker-role {
+  min-height: 25px;
+  padding: 0 7px;
+  border: 1px solid var(--acc, #ff8a36);
+  border-radius: 999px;
+  outline: none;
+  background: var(--srf, #fff);
+  color: var(--fg2, #3d3929);
+  font-size: 11px;
+}
+
+.nibi-audio-speaker-save {
+  min-height: 25px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--acc, #ff8a36);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 .nibi-audio-speaker-empty {
   display: flex;
   flex-direction: column;
@@ -2329,13 +2359,14 @@
 .note-audio-waveform {
   width: 100%;
   min-width: 0;
-  padding: 0 20px;
+  padding: 0 clamp(8px, 3vw, 20px);
   box-sizing: border-box;
 }
 
 .note-audio-progress {
   position: relative;
-  height: 52px;
+  min-height: 52px;
+  height: clamp(46px, 8vw, 64px);
   cursor: pointer;
   touch-action: none;
   user-select: none;
@@ -2344,7 +2375,7 @@
 .note-audio-bars {
   display: flex;
   align-items: flex-end;
-  gap: 2px;
+  gap: clamp(1px, 0.35vw, 2px);
   height: 100%;
   position: absolute;
   inset: 0;
@@ -2354,7 +2385,7 @@
   flex: 1 1 0;
   height: var(--bar-h, 50%);
   border-radius: 1px;
-  min-width: 0;
+  min-width: 1px;
 }
 
 .note-audio-bars--bg span {

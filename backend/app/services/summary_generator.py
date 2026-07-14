@@ -8,12 +8,15 @@ import re
 import uuid
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Callable, Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
 
 from backend.app.models.workspace import ItemSummary, WorkspaceItem
-from backend.app.services.speaker_labels import apply_speaker_map
+from backend.app.services.speaker_labels import (
+    apply_speaker_map,
+    build_speaker_profile_context,
+)
 from backend.app.services.summary_templates import get_template, TEMPLATES
 from shared.config import DATA_DIR
 from shared.settings_store import load_settings
@@ -512,6 +515,13 @@ def build_prompt(
                 "不要把不同说话人的内容合并成无归属的叙述。引用具体发言时保留 [mm:ss] 时间码。"
             )
     user_prompt = tpl.user_prompt.format(transcript=transcript)
+    if summary_mode == "speaker_aware" and item.type in {"audio", "video"}:
+        profile_context = build_speaker_profile_context(
+            (item.results or {}).get("speaker_map") or {},
+            (item.results or {}).get("speaker_roles") or {},
+        )
+        if profile_context:
+            user_prompt = profile_context + "\n" + user_prompt
 
     # R3.6: 计算视频时长（供后续 metadata 和配图 cap 使用）
     duration_sec = 0
@@ -992,6 +1002,7 @@ def generate_summary(
     search_web: bool = False,
     embed_frames: bool = True,
     max_embed_frames: int = 0,
+    progress: Callable[[float, str], None] | None = None,
 ) -> ItemSummary:
     """生成一份总结并返回 ItemSummary（不负责持久化）。
 
@@ -1020,6 +1031,8 @@ def generate_summary(
         if query.strip():
             search_results = search_web_context(query.strip(), max_results=5)
             search_context = format_search_context(search_results)
+    if progress:
+        progress(0.12, "总结材料已准备")
 
     raw_transcript = (item.results or {}).get("transcript", "")
     if isinstance(raw_transcript, list):
@@ -1073,11 +1086,18 @@ def generate_summary(
                 "summary_context": summary_context,
                 "frame_context": frame_context,
                 "embed_frames": embed_frames,
+                "speaker_map": (item.results or {}).get("speaker_map") or {},
+                "speaker_roles": (item.results or {}).get("speaker_roles") or {},
             },
             transcript_text=long_source,
             transcript_segments=transcript_segments,
             summary_mode=summary_mode,
             log=logger.info,
+            progress=(
+                (lambda ratio, message: progress(0.15 + ratio * 0.82, message))
+                if progress
+                else None
+            ),
             coverage=coverage,
         )
         if summary_mode == "speaker_aware":
@@ -1120,6 +1140,8 @@ def generate_summary(
         system_prompt, user_prompt,
         provider_id=provider_id, model=model,
     )
+    if progress:
+        progress(0.95, "总结正文已生成")
 
     if summary_mode == "speaker_aware":
         content_md = _strip_unsupported_speaker_qualifiers(

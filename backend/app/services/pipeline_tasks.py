@@ -4785,8 +4785,15 @@ def _generate_audio_summary(
     )
     speaker_instruction = context_instruction
     if summary_mode == "speaker_aware":
+        from backend.app.services.speaker_labels import build_speaker_profile_context
+
+        speaker_instruction += build_speaker_profile_context(
+            payload.get("speaker_map") or {},
+            payload.get("speaker_roles") or {},
+        )
         speaker_instruction += (
-            "请保留每段内容对应的说话人，分别整理观点、共识、分歧、决策和行动项。\n\n"
+            "请保留每段内容对应的说话人，分别整理观点、共识、分歧、决策和行动项；"
+            "互动内容必须尽量还原为提问→回应→反馈/异议→决定或行动的闭环。\n\n"
         )
 
     if len(chunks) == 1:

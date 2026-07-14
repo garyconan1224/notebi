@@ -69,6 +69,7 @@ def test_patch_speaker_map_saves_to_results(client: TestClient) -> None:
     assert resp.json()["speaker_map"] == mapping
     assert resp.json()["summary_refresh"] == {
         "status": "not_needed",
+        "updated_count": 0,
         "reason": "当前没有区分说话人总结需要更新。",
     }
 

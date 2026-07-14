@@ -29,7 +29,8 @@ from backend.app.models.workspace import (
     WorkspaceRecord,
     WorkspaceStatus,
 )
-from backend.app.services.speaker_labels import apply_speaker_map
+from backend.app.services.note_assembler import note_dir
+from backend.app.services.speaker_labels import apply_speaker_renames
 from shared.config import DATA_DIR
 
 WORKSPACE_DIR: Path = DATA_DIR / "workspaces"
@@ -318,9 +319,13 @@ class WorkspaceStore:
             return summary
 
     def update_speaker_summary_labels(
-        self, workspace_id: str, item_id: str, speaker_map: Dict[str, str]
+        self,
+        workspace_id: str,
+        item_id: str,
+        speaker_map: Dict[str, str],
+        previous_speaker_map: Optional[Dict[str, str]] = None,
     ) -> int:
-        """将已有区分说话人总结中的原始标签原地替换为用户名称。"""
+        """把姓名改动同步到 JSON、主笔记和所有历史总结文件。"""
         with self._lock:
             rec = self._records.get(workspace_id)
             if rec is None:
@@ -328,16 +333,30 @@ class WorkspaceStore:
             item = next((it for it in rec.items if it.item_id == item_id), None)
             if item is None:
                 raise KeyError(f"item not found: {item_id}")
+            old_map = previous_speaker_map or {
+                str(key): str(value)
+                for key, value in (item.results or {}).get("speaker_map", {}).items()
+            }
             updated_count = 0
             for summary in item.summaries:
-                if summary.summary_mode != "speaker_aware":
-                    continue
-                content_md = apply_speaker_map(summary.content_md or "", speaker_map)
+                content_md = apply_speaker_renames(
+                    summary.content_md or "", old_map, speaker_map
+                )
                 if content_md == summary.content_md:
                     continue
                 summary.content_md = content_md
                 updated_count += 1
-            if updated_count:
+            rewritten_files = 0
+            nd = note_dir(workspace_id, item_id)
+            for path in [nd / "note.md", *sorted(nd.glob("summaries/**/*.md"))]:
+                if not path.exists():
+                    continue
+                current = path.read_text(encoding="utf-8")
+                rewritten = apply_speaker_renames(current, old_map, speaker_map)
+                if rewritten != current:
+                    path.write_text(rewritten, encoding="utf-8")
+                    rewritten_files += 1
+            if updated_count or rewritten_files:
                 item.updated_at = _now_iso()
                 self._save(rec)
             return updated_count

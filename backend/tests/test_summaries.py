@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.models.workspace import ItemSummary, WorkspaceItem, WorkspaceRecord
+from backend.app.models.tasks import TaskRecord
 from backend.app.services.workspace_store import WorkspaceStore
 
 
@@ -45,6 +46,15 @@ def _patch_store(monkeypatch: pytest.MonkeyPatch) -> WorkspaceStore:
 from backend.app.main import app  # noqa: E402
 
 client = TestClient(app)
+
+
+def _fake_summary_task(task_id: str = "summary-task-1") -> TaskRecord:
+    return TaskRecord(
+        task_id=task_id,
+        project_id="ws-1",
+        task_type="summary",
+        payload={"workspace_id": "ws-1", "item_id": "item-1", "template": "concise"},
+    )
 
 
 # ── GET list ────────────────────────────────────────────────────
@@ -99,44 +109,52 @@ class TestListSummaries:
 
 
 class TestCreateSummary:
-    @patch("backend.app.routes.workspaces.generate_summary")
-    def test_create_success(self, mock_gen: MagicMock) -> None:
-        mock_gen.return_value = ItemSummary(
-            summary_id="s-1",
-            template="concise",
-            version=1,
-            content_md="# 摘要\n\n生成内容",
-            model_used="openai/gpt-4o",
-        )
+    def test_create_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import backend.app.routes.workspaces as ws_module
+
+        captured: dict[str, object] = {}
+
+        def fake_create_task(project_id: str, task_type: str, payload: dict[str, object]) -> TaskRecord:
+            captured.update(payload)
+            return _fake_summary_task()
+
+        monkeypatch.setattr(ws_module._pipeline_runner, "create_task", fake_create_task)
         resp = client.post("/workspaces/ws-1/items/item-1/summaries", json={
             "template": "concise",
             "background_for_summary": "背景信息",
         })
         assert resp.status_code == 201
         data = resp.json()
-        assert data["template"] == "concise"
-        assert data["content_md"] == "# 摘要\n\n生成内容"
-        assert data["model_used"] == "openai/gpt-4o"
-        assert data["version"] == 0  # 首版 = v0
+        assert data == {
+            "status": "accepted",
+            "task_id": "summary-task-1",
+            "workspace_id": "ws-1",
+            "item_id": "item-1",
+        }
+        assert captured["template"] == "concise"
+        assert captured["background_for_summary"] == "背景信息"
 
-    @patch("backend.app.routes.workspaces.generate_summary")
-    def test_create_version_increment(self, mock_gen: MagicMock) -> None:
-        """同模板第二次生成 → version=1。"""
-        mock_gen.return_value = ItemSummary(
-            summary_id="s-1", template="concise", version=0, content_md="v0",
-        )
-        client.post("/workspaces/ws-1/items/item-1/summaries", json={
-            "template": "concise",
-        })
+    def test_create_version_increment_is_deferred_to_task_handler(
+        self, monkeypatch: pytest.MonkeyPatch, _patch_store: WorkspaceStore,
+    ) -> None:
+        """版本号在后台 handler 中分配，HTTP 请求只负责入队。"""
+        import backend.app.routes.workspaces as ws_module
 
-        mock_gen.return_value = ItemSummary(
-            summary_id="s-2", template="concise", version=1, content_md="v1",
-        )
+        task = _fake_summary_task()
+        monkeypatch.setattr(ws_module._pipeline_runner, "create_task", lambda *args, **kwargs: task)
         resp = client.post("/workspaces/ws-1/items/item-1/summaries", json={
             "template": "concise",
         })
         assert resp.status_code == 201
-        assert resp.json()["version"] == 1
+        assert resp.json()["task_id"] == task.task_id
+
+        generated = ItemSummary(
+            summary_id="s-1", template="concise", version=0, content_md="v0",
+        )
+        monkeypatch.setattr(ws_module, "generate_summary", lambda *args, **kwargs: generated)
+        fake_runner = MagicMock()
+        ws_module._handle_summary_task(task, fake_runner)
+        assert _patch_store.get_item("ws-1", "item-1").summaries[0].version == 0
 
     def test_invalid_template(self) -> None:
         resp = client.post("/workspaces/ws-1/items/item-1/summaries", json={
@@ -153,20 +171,24 @@ class TestCreateSummary:
         assert resp.status_code == 409
         assert "说话人识别" in resp.json()["detail"]
 
-    @patch("backend.app.routes.workspaces.generate_summary")
     def test_speaker_aware_mode_accepts_video_with_speaker_segments(
-        self, mock_gen: MagicMock, _patch_store: WorkspaceStore,
+        self, monkeypatch: pytest.MonkeyPatch, _patch_store: WorkspaceStore,
     ) -> None:
+        import backend.app.routes.workspaces as ws_module
+
         item = _patch_store.get_item("ws-1", "item-1")
         item.results = {
             "transcript_segments": [
                 {"start": 0, "speaker": "SPEAKER_00", "text": "视频主持人发言"},
             ],
         }
-        mock_gen.return_value = ItemSummary(
-            summary_id="video-speaker-summary", template="speaker_meeting", version=0,
-            summary_mode="speaker_aware", content_md="视频逐人总结",
-        )
+        captured: dict[str, object] = {}
+
+        def fake_create_task(project_id: str, task_type: str, payload: dict[str, object]) -> TaskRecord:
+            captured.update(payload)
+            return _fake_summary_task("video-speaker-task")
+
+        monkeypatch.setattr(ws_module._pipeline_runner, "create_task", fake_create_task)
 
         resp = client.post("/workspaces/ws-1/items/item-1/summaries", json={
             "template": "speaker_meeting",
@@ -174,13 +196,14 @@ class TestCreateSummary:
         })
 
         assert resp.status_code == 201
-        assert resp.json()["summary_mode"] == "speaker_aware"
-        assert mock_gen.call_args.kwargs["summary_mode"] == "speaker_aware"
+        assert resp.json()["task_id"] == "video-speaker-task"
+        assert captured["summary_mode"] == "speaker_aware"
 
-    @patch("backend.app.routes.workspaces.generate_summary")
     def test_speaker_aware_mode_passed_to_generator(
-        self, mock_gen: MagicMock, _patch_store: WorkspaceStore,
+        self, monkeypatch: pytest.MonkeyPatch, _patch_store: WorkspaceStore,
     ) -> None:
+        import backend.app.routes.workspaces as ws_module
+
         item = _patch_store.get_item("ws-1", "item-1")
         item.type = "audio"
         item.results = {
@@ -188,21 +211,23 @@ class TestCreateSummary:
                 {"t_sec": 0, "speaker": "SPEAKER_00", "text": "发言"},
             ],
         }
-        mock_gen.return_value = ItemSummary(
-            summary_id="speaker-summary", template="concise", version=0,
-            summary_mode="speaker_aware", content_md="按说话人总结",
-        )
+        captured: dict[str, object] = {}
+
+        def fake_create_task(project_id: str, task_type: str, payload: dict[str, object]) -> TaskRecord:
+            captured.update(payload)
+            return _fake_summary_task("speaker-task")
+
+        monkeypatch.setattr(ws_module._pipeline_runner, "create_task", fake_create_task)
         resp = client.post("/workspaces/ws-1/items/item-1/summaries", json={
             "template": "concise",
             "summary_mode": "speaker_aware",
         })
         assert resp.status_code == 201
-        assert resp.json()["summary_mode"] == "speaker_aware"
-        assert mock_gen.call_args.kwargs["summary_mode"] == "speaker_aware"
+        assert resp.json()["task_id"] == "speaker-task"
+        assert captured["summary_mode"] == "speaker_aware"
 
-    @patch("backend.app.routes.workspaces.generate_summary")
     def test_speaker_map_updates_existing_speaker_summary_in_place(
-        self, mock_gen: MagicMock, _patch_store: WorkspaceStore,
+        self, _patch_store: WorkspaceStore,
     ) -> None:
         item = _patch_store.get_item("ws-1", "item-1")
         item.type = "audio"
@@ -225,20 +250,47 @@ class TestCreateSummary:
         })
         assert resp.status_code == 200
         assert resp.json()["summary_refresh"]["status"] == "updated"
-        assert resp.json()["summary_refresh"]["updated_count"] == 1
-        mock_gen.assert_not_called()
+        assert resp.json()["summary_refresh"]["updated_count"] == 2
         summaries = _patch_store.get_item("ws-1", "item-1").summaries
         assert [s.version for s in summaries] == [0, 1]
         assert summaries[0].content_md == "主持人 提出旧总结"
-        assert summaries[1].content_md == "SPEAKER_00 出现在普通总结中"
+        assert summaries[1].content_md == "主持人 出现在普通总结中"
 
-    @patch("backend.app.routes.workspaces.generate_summary")
-    def test_llm_failure(self, mock_gen: MagicMock) -> None:
-        mock_gen.side_effect = RuntimeError("未配置 chat model")
-        resp = client.post("/workspaces/ws-1/items/item-1/summaries", json={
-            "template": "concise",
+    def test_speaker_profile_keeps_name_and_role_for_future_summary(
+        self, _patch_store: WorkspaceStore,
+    ) -> None:
+        item = _patch_store.get_item("ws-1", "item-1")
+        item.type = "audio"
+        item.results = {
+            "transcript_segments": [
+                {"t_sec": 0, "speaker": "SPEAKER_00", "text": "我们先讨论客户目标"},
+            ],
+        }
+        resp = client.patch("/workspaces/ws-1/items/item-1/speaker_map", json={
+            "speaker_map": {"SPEAKER_00": "李总"},
+            "speaker_roles": {"SPEAKER_00": "客户"},
         })
-        assert resp.status_code == 500
+
+        assert resp.status_code == 200
+        assert resp.json()["speaker_map"] == {"SPEAKER_00": "李总"}
+        assert resp.json()["speaker_roles"] == {"SPEAKER_00": "客户"}
+        saved = _patch_store.get_item("ws-1", "item-1")
+        assert saved.results["speaker_map"] == {"SPEAKER_00": "李总"}
+        assert saved.results["speaker_roles"] == {"SPEAKER_00": "客户"}
+
+    def test_llm_failure_is_reported_by_background_handler(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import backend.app.routes.workspaces as ws_module
+
+        task = _fake_summary_task("failing-summary-task")
+        monkeypatch.setattr(
+            ws_module,
+            "generate_summary",
+            MagicMock(side_effect=RuntimeError("未配置 chat model")),
+        )
+        with pytest.raises(RuntimeError, match="未配置 chat model"):
+            ws_module._handle_summary_task(task, ws_module._pipeline_runner)
 
 
 # ── GET detail ──────────────────────────────────────────────────
@@ -249,17 +301,12 @@ class TestGetSummary:
         resp = client.get("/workspaces/ws-1/items/item-1/summaries/nonexistent")
         assert resp.status_code == 404
 
-    @patch("backend.app.routes.workspaces.generate_summary")
-    def test_get_after_create(self, mock_gen: MagicMock) -> None:
-        mock_gen.return_value = ItemSummary(
+    def test_get_after_background_task_persist(self, _patch_store: WorkspaceStore) -> None:
+        _patch_store.get_item("ws-1", "item-1").summaries.append(ItemSummary(
             summary_id="s-detail", template="detailed", version=1, content_md="详细内容",
-        )
-        create_resp = client.post("/workspaces/ws-1/items/item-1/summaries", json={
-            "template": "detailed",
-        })
-        sid = create_resp.json()["summary_id"]
+        ))
 
-        resp = client.get(f"/workspaces/ws-1/items/item-1/summaries/{sid}")
+        resp = client.get("/workspaces/ws-1/items/item-1/summaries/s-detail")
         assert resp.status_code == 200
         assert resp.json()["content_md"] == "详细内容"
 
@@ -297,18 +344,13 @@ class TestDeleteSummary:
         resp = client.delete("/workspaces/ws-1/items/item-1/summaries/nonexistent")
         assert resp.status_code == 404
 
-    @patch("backend.app.routes.workspaces.generate_summary")
-    def test_delete_after_create(self, mock_gen: MagicMock) -> None:
-        mock_gen.return_value = ItemSummary(
+    def test_delete_after_background_task_persist(self, _patch_store: WorkspaceStore) -> None:
+        _patch_store.get_item("ws-1", "item-1").summaries.append(ItemSummary(
             summary_id="s-del", template="concise", version=1, content_md="要删的",
-        )
-        create_resp = client.post("/workspaces/ws-1/items/item-1/summaries", json={
-            "template": "concise",
-        })
-        sid = create_resp.json()["summary_id"]
+        ))
 
         # 删除
-        del_resp = client.delete(f"/workspaces/ws-1/items/item-1/summaries/{sid}")
+        del_resp = client.delete("/workspaces/ws-1/items/item-1/summaries/s-del")
         assert del_resp.status_code == 200
         assert del_resp.json()["status"] == "deleted"
 

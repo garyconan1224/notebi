@@ -36,6 +36,11 @@ def _headers(api_key: str) -> dict[str, str]:
     }
 
 
+def _base_url(base_url: str | None = None) -> str:
+    """Resolve one provider's base URL without relying on process-global env state."""
+    return (base_url or get_openai_compat_base_url()).strip().rstrip("/")
+
+
 @retry(
     reraise=True,
     stop=stop_after_attempt(5),
@@ -53,9 +58,10 @@ def _post_json(
     path: str,
     payload: dict[str, Any],
     timeout: int = 120,
+    base_url: str | None = None,
 ) -> dict[str, Any]:
     """统一 POST。网络类错误与 429/503/504 触发重试；401/400 等立即失败。"""
-    url = f"{get_openai_compat_base_url().rstrip('/')}{path}"
+    url = f"{_base_url(base_url)}{path}"
     resp = requests.post(url, headers=_headers(api_key), json=payload, timeout=timeout)
     if resp.status_code in (429, 503, 504):
         raise SiliconFlowTransientError(f"HTTP {resp.status_code}: {resp.text[:500]}")
@@ -83,6 +89,7 @@ def create_embeddings(
     model: str,
     inputs: Sequence[str],
     on_batch: Optional[Callable[[int, int], None]] = None,
+    base_url: str | None = None,
 ) -> list[list[float]]:
     """
     调用 /v1/embeddings。单次最多 32 条，自动分批。
@@ -99,25 +106,32 @@ def create_embeddings(
     for text in sanitized:
         batch.append(text)
         if len(batch) >= 32:
-            out.extend(_embed_batch(api_key, model, batch))
+            out.extend(_embed_batch(api_key, model, batch, base_url=base_url))
             batch = []
             done_batches += 1
             if on_batch is not None:
                 on_batch(done_batches, total_batches)
     if batch:
-        out.extend(_embed_batch(api_key, model, batch))
+        out.extend(_embed_batch(api_key, model, batch, base_url=base_url))
         done_batches += 1
         if on_batch is not None:
             on_batch(done_batches, total_batches)
     return out
 
 
-def _embed_batch(api_key: str, model: str, batch: list[str]) -> list[list[float]]:
+def _embed_batch(
+    api_key: str,
+    model: str,
+    batch: list[str],
+    *,
+    base_url: str | None = None,
+) -> list[list[float]]:
     data = _post_json(
         api_key,
         "/embeddings",
         {"model": model, "input": batch},
         timeout=180,
+        base_url=base_url,
     )
     items = data.get("data") or []
     items_sorted = sorted(items, key=lambda x: x.get("index", 0))
@@ -130,6 +144,7 @@ def rerank_documents(
     query: str,
     documents: Sequence[str],
     top_n: int,
+    base_url: str | None = None,
 ) -> list[dict[str, Any]]:
     """调用 /v1/rerank，返回官方 results 列表（含 index 与 relevance_score）。"""
     if not documents:
@@ -141,7 +156,7 @@ def rerank_documents(
         "top_n": min(top_n, len(documents)),
         "return_documents": False,
     }
-    data = _post_json(api_key, "/rerank", payload, timeout=120)
+    data = _post_json(api_key, "/rerank", payload, timeout=120, base_url=base_url)
     return list(data.get("results") or [])
 
 
@@ -152,6 +167,7 @@ def chat_completion(
     temperature: float = 0.7,
     max_tokens: int = 8192,
     timeout: int = 300,
+    base_url: str | None = None,
 ) -> str:
     """OpenAI 兼容 /v1/chat/completions，返回 assistant 文本。"""
     payload = {
@@ -160,7 +176,7 @@ def chat_completion(
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
-    data = _post_json(api_key, "/chat/completions", payload, timeout=timeout)
+    data = _post_json(api_key, "/chat/completions", payload, timeout=timeout, base_url=base_url)
     choices = data.get("choices") or []
     if not choices:
         raise SiliconFlowError(f"无 choices 字段: {data}")
@@ -177,13 +193,14 @@ def chat_completion_stream(
     messages: list[dict[str, Any]],
     temperature: float = 0.7,
     max_tokens: int = 8192,
+    base_url: str | None = None,
 ) -> Iterator[str]:
     """OpenAI 兼容流式 /v1/chat/completions（stream=True），逐块 yield 文本片段。
 
     每次 yield 的是单条 delta.content 字符串；调用方无需关心 SSE 格式。
     API 返回 [DONE] 或流结束时自动停止迭代。
     """
-    url = f"{get_openai_compat_base_url().rstrip('/')}/chat/completions"
+    url = f"{_base_url(base_url)}/chat/completions"
     payload = {
         "model": model,
         "messages": messages,
@@ -444,19 +461,23 @@ def generate_video_summary(
     return choices[0].get("message", {}).get("content", "").strip()
 
 
-def get_model_ids(api_key: str, sub_type: str) -> list[str]:
+def get_model_ids(
+    api_key: str,
+    sub_type: str = "chat",
+    *,
+    base_url: str | None = None,
+) -> list[str]:
     """
-    GET /v1/models?sub_type=chat|embedding|reranker
-    返回当前 Key 在硅基流动可见的模型 id 列表。
+    GET /v1/models，返回 OpenAI 兼容服务公开的模型 id 列表。
+    ``sub_type`` 保留用于兼容旧调用方，但不再发送服务商专属查询参数。
     """
     k = (api_key or "").strip()
     if not k:
         return []
-    url = f"{get_openai_compat_base_url().rstrip('/')}/models"
+    url = f"{_base_url(base_url)}/models"
     resp = requests.get(
         url,
         headers=_headers(k),
-        params={"sub_type": sub_type},
         timeout=45,
     )
     if resp.status_code >= 400:

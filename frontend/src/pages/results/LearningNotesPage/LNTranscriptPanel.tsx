@@ -391,6 +391,7 @@ export default function LNTranscriptPanel({
               : ''
             const speakerPrefix = speakerName ? `[${speakerName}] ` : ''
             const detailedSpeaker = speakerPresentation === 'detailed' && Boolean(speakerName)
+            const speakerBoundary = detailedSpeaker && (i === 0 || transcript[i - 1]?.speaker !== line.speaker)
             const translatedText = localTranslations?.[i]
             const quoteText = mode === 'translated' || mode === 'bilingual'
               ? translatedText || displayText
@@ -413,7 +414,11 @@ export default function LNTranscriptPanel({
                 }}
               >
                 {detailedSpeaker && (
-                  <span className="ln-tr-speaker-avatar" aria-hidden="true">{speakerName.slice(0, 1)}</span>
+                  <span
+                    className="ln-tr-speaker-avatar"
+                    title={speakerName}
+                    aria-label={speakerName}
+                  >{speakerName.slice(0, 1)}</span>
                 )}
                 <span className="ln-tr-time">{line.t_str}</span>
                 {isEditing ? (
@@ -431,7 +436,7 @@ export default function LNTranscriptPanel({
                   />
                 ) : (
                   <span className="ln-tr-text">
-                    {detailedSpeaker && <span className="ln-tr-speaker-name">{speakerName}</span>}
+                    {speakerBoundary && <span className="ln-tr-speaker-name">{speakerName}</span>}
                     {mode !== 'translated' && (
                       <span className={mode === 'bilingual' && translatedText ? 'ln-tr-original' : undefined}>
                         {!detailedSpeaker && speakerPrefix}{displayText}

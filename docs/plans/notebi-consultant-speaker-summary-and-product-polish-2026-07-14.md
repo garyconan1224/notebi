@@ -6,6 +6,28 @@ owner: Codex
 priority: P0
 ---
 
+## 本轮用户确认的追加范围（2026-07-14）
+
+本轮用户确认按前一轮建议直接实现以下行为：
+
+- 说话人改名后，主笔记与所有历史总结版本的落盘内容同步更新；不再只更新 JSON 或接口回显。
+- 说话人保存为“姓名 + 角色”档案。角色使用固定下拉选项：主持人、我司领导、客户、讲师、其他；姓名可自由输入。
+- 后续区分说话人总结将把姓名和角色作为证据上下文，角色未知时不得推断。
+- 新建总结改为后台任务，展示阶段和百分比进度。
+- OpenAI-compatible Provider 继续作为统一开放协议，并覆盖华为昇腾常见的 vLLM-Ascend / MindIE OpenAI-compatible 服务；不能依赖硅基流动专有参数。
+- 音频波形自适应播放器宽度；字幕行减少头像与完整姓名重复；转写导出显示内容标题与类型。
+
+实现约束：保持旧 `speaker_map`、旧总结模板和旧接口兼容；不做数据库 schema 迁移，新增角色信息使用现有 JSON results 的兼容字段。
+
+## 本轮实现与验证结果（2026-07-14）
+
+- 改名链路现在同时更新 `results.speaker_map`、内存中的所有历史总结、`note.md` 与 `summaries/**/*.md`；角色以 `results.speaker_roles` 保存，姓名与角色在前端独立编辑。
+- 区分说话人提示词新增姓名/角色档案、证据账本、逐人观点、互动闭环、共识/分歧/决策/行动项/风险检查规则；短文本和长音频分块链路都透传角色档案。
+- 新建总结通过既有 TaskRunner 异步执行，阶段为 `SUM`，前端显示日志、百分比和终态；版本号在任务完成后分配。
+- OpenAI 兼容客户端按 provider 独立携带 `base_url`，使用标准 `/models`、`/chat/completions`、`/embeddings`、`/rerank`，可配置 vLLM-Ascend 和 MindIE；增加 `docs/openai-compatible-providers.md`。
+- 音频波形按容器宽度重采样，字幕详细模式只在说话人切换时显示完整姓名，独立转写导出带内容标题与转写类型。
+- 验证：后端 `1032 passed, 2 skipped`；前端 `29 files / 204 tests passed`；前端 TypeScript/Vite build 通过；Python compileall 与 `git diff --check` 通过。
+
 # NoteBi 咨询师录音总结、模型设置与产品文案修复计划
 
 ## 1. 用户已确认的产品决策

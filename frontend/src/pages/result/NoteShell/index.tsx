@@ -36,6 +36,8 @@ import { NewSummaryModal } from '@/components/NewSummaryModal'
 import NoteChatDrawer from '@/components/NoteChatDrawer'
 import { FloatingAskAi } from './FloatingAskAi'
 import { useLnEditorStore } from '@/store/lnEditorStore'
+import { useTaskStore } from '@/store/taskStore'
+import type { TaskRecord } from '@/types/task'
 import { SourceMdModal } from './SourceMdModal'
 import { withStatusToast } from '@/lib/statusToast'
 import { categorizeError } from '@/lib/errorCategories'
@@ -49,6 +51,8 @@ type OperationNotice = {
   actionLabel?: string
   onAction?: () => void
 }
+
+const SPEAKER_ROLE_OPTIONS = ['主持人', '我司领导', '客户', '讲师', '其他'] as const
 
 /* ────────────────── helpers ────────────────── */
 
@@ -430,8 +434,10 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
 
   const [note, setNote] = useState<ItemNote | null>(null)
   const [speakerMap, setSpeakerMap] = useState<Record<string, string>>({})
+  const [speakerRoles, setSpeakerRoles] = useState<Record<string, string>>({})
   const [editingSpeakerId, setEditingSpeakerId] = useState<string | null>(null)
   const [editingSpeakerName, setEditingSpeakerName] = useState('')
+  const [editingSpeakerRole, setEditingSpeakerRole] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [chatOpen] = useState(false)
@@ -451,10 +457,13 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   // 新建总结（复用 NewSummaryModal）
   const [showNewSummaryModal, setShowNewSummaryModal] = useState(false)
   const [creatingSummary, setCreatingSummary] = useState(false)
+  const [creatingSummaryTaskId, setCreatingSummaryTaskId] = useState<string | null>(null)
   const [retryingAutoSummary, setRetryingAutoSummary] = useState(false)
   const [editorPrefsOpen, setEditorPrefsOpen] = useState(false)
   const editorPrefsRef = useRef<HTMLDivElement>(null)
   const [editorPrefs, setEditorPrefs] = useState<NoteEditorPrefs>(readEditorPrefs)
+  const pipelineTasks = useTaskStore((state) => state.tasks)
+  const addPipelineTask = useTaskStore((state) => state.addTask)
 
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [savedAt, setSavedAt] = useState<string>('')
@@ -590,6 +599,10 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   }, [note?.speaker_map])
 
   useEffect(() => {
+    setSpeakerRoles(note?.speaker_roles ?? {})
+  }, [note?.speaker_roles])
+
+  useEffect(() => {
     return () => {
       exportAbortRef.current?.abort()
       exportAbortRef.current = null
@@ -619,6 +632,34 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
       }, 2200)
     }
   }, [])
+
+  const creatingSummaryTask = pipelineTasks.find((task) => task.task_id === creatingSummaryTaskId)
+  useEffect(() => {
+    if (!creatingSummaryTaskId || !creatingSummaryTask) return
+    const terminal = ['SUCCESS', 'FAILED', 'PARTIAL', 'CANCELLED'].includes(creatingSummaryTask.status)
+    if (!terminal) {
+      const stage = creatingSummaryTask.log?.at(-1)?.message || '正在准备材料'
+      showOperationNotice(
+        `正在生成总结 · ${Math.round((creatingSummaryTask.progress || 0) * 100)}% · ${stage}`,
+        'loading',
+      )
+      return
+    }
+    if (creatingSummaryTask.status === 'SUCCESS') {
+      const raw = (creatingSummaryTask.result as Record<string, unknown>)?.summary
+      const summary = raw && typeof raw === 'object' ? raw as ItemSummary : null
+      showOperationNotice(summary ? `V${summary.version} 总结生成完成` : '总结生成完成', 'success')
+      if (summary && typeof summary.summary_id === 'string') setActiveSummaryId(summary.summary_id)
+      refreshSummaries()
+    } else {
+      showOperationNotice(
+        creatingSummaryTask.error || (creatingSummaryTask.status === 'CANCELLED' ? '总结任务已取消' : '总结生成失败'),
+        'error',
+      )
+    }
+    setCreatingSummary(false)
+    setCreatingSummaryTaskId(null)
+  }, [creatingSummaryTask, creatingSummaryTaskId, refreshSummaries, showOperationNotice])
 
   const notePageStyle = useMemo<CSSProperties>(
     () => ({
@@ -1056,7 +1097,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     }
     const speakerGrouped = mode === 'speaker_grouped'
     const busyKey = speakerGrouped ? 'transcript_speakers' : 'transcript_article'
-    const label = speakerGrouped ? '转写文本（无时间轴·区分说话人）' : '转写文本（无时间轴）'
+    const exportTitle = String((note?.frontmatter as Record<string, unknown> | undefined)?.title ?? '当前内容')
+    const label = speakerGrouped ? `${exportTitle} · 转写文本（区分说话人）` : `${exportTitle} · 转写文本`
     setExportBusy(busyKey)
     try {
       await withStatusToast(
@@ -1074,7 +1116,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     } finally {
       setExportBusy(null)
     }
-  }, [itemId, note?.transcript, workspaceId])
+  }, [itemId, note, workspaceId])
 
   const handleDownloadNoteExport = useCallback(async (format: ItemNoteExportFormat) => {
     const title = String((note?.frontmatter as Record<string, unknown> | undefined)?.title ?? 'note')
@@ -1150,14 +1192,32 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     setShowNewSummaryModal(false)
     showOperationNotice(`正在生成${templateName}…`, 'loading')
     try {
-      const s = await createSummary(workspaceId, itemId, opts.template, opts.background, {
+      const accepted = await createSummary(workspaceId, itemId, opts.template, opts.background, {
         provider_id: opts.providerId,
         model: opts.model,
         search_web: opts.searchWeb,
         summary_mode: opts.summaryMode,
       })
-      showOperationNotice(`${templateName} V${s.version} 生成完成`, 'success')
-      refreshSummaries()
+      setCreatingSummaryTaskId(accepted.task_id)
+      const now = new Date().toISOString()
+      // 极短内容可能在 HTTP 返回前已经完成；不要用本地 PENDING 快照覆盖真实终态。
+      if (!useTaskStore.getState().getTask(accepted.task_id)) {
+        addPipelineTask({
+          task_id: accepted.task_id,
+          project_id: workspaceId,
+          task_type: 'summary',
+          payload: { item_id: itemId, template: opts.template, title: templateName },
+          status: 'PENDING',
+          progress: 0,
+          log: [],
+          result: {},
+          error: '',
+          retry_of: '',
+          cancel_requested: false,
+          created_at: now,
+          updated_at: now,
+        } satisfies TaskRecord)
+      }
     } catch (err: unknown) {
       const axiosData = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       if (axiosData && axiosData.includes('chat model')) {
@@ -1169,10 +1229,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         const msg = err instanceof Error ? err.message : '生成失败'
         showOperationNotice(msg, 'error')
       }
-    } finally {
-      setCreatingSummary(false)
     }
-  }, [workspaceId, itemId, refreshSummaries, navigate, showOperationNotice])
+  }, [workspaceId, itemId, addPipelineTask, navigate, showOperationNotice])
 
   // 删除总结（从顶栏版本下拉触发）
   const handleDeleteSummary = useCallback(async (summaryId: string) => {
@@ -1306,24 +1364,36 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     transcriptLines.map((line) => String(line.speaker || '').trim()).filter(Boolean),
   ))
   const speakerNames = speakerIds.map((id) => speakerMap[id] || id.replace(/^SPEAKER_/, 'S'))
-  const handleSpeakerRename = async (speakerId: string, nextName: string) => {
+  const handleSpeakerProfileSave = async (speakerId: string, nextName: string, nextRole: string) => {
     const trimmed = nextName.trim()
+    const normalizedRole = nextRole.trim()
     setEditingSpeakerId(null)
-    if (!trimmed || trimmed === speakerId || trimmed === (speakerMap[speakerId] || '')) return
+    if (!trimmed || trimmed === speakerId) return
+    if (!SPEAKER_ROLE_OPTIONS.includes(normalizedRole as (typeof SPEAKER_ROLE_OPTIONS)[number]) && normalizedRole) return
+    const currentName = speakerMap[speakerId] || ''
+    const currentRole = speakerRoles[speakerId] || ''
+    if (trimmed === currentName && normalizedRole === currentRole) return
     const previous = speakerMap
+    const previousRoles = speakerRoles
     const updated = { ...speakerMap, [speakerId]: trimmed }
+    const updatedRoles = { ...speakerRoles }
+    if (normalizedRole) updatedRoles[speakerId] = normalizedRole
+    else delete updatedRoles[speakerId]
     setSpeakerMap(updated)
+    setSpeakerRoles(updatedRoles)
     try {
-      const result = await updateSpeakerMap(workspaceId, itemId, updated)
-      refreshSummaries()
+      const result = await updateSpeakerMap(workspaceId, itemId, updated, updatedRoles)
+      await fetchNote()
+      await refreshSummaries()
       const updatedCount = result.summary_refresh?.updated_count ?? 0
       toast.success(
         result.summary_refresh?.status === 'updated'
-          ? `说话人已更新，已同步刷新 ${updatedCount} 份区分说话人总结`
+          ? `说话人已更新，已同步刷新 ${updatedCount} 份历史总结`
           : '说话人已更新',
       )
     } catch {
       setSpeakerMap(previous)
+      setSpeakerRoles(previousRoles)
       toast.error('说话人保存失败，请重试')
     }
   }
@@ -1649,13 +1719,13 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 {(isVideoNote || isAudioNote) && (
                   <button className="nibi-note-export-item" onClick={() => handleExportTranscript('article')} disabled={!!exportBusy}>
                     <Subtitles size={15} />
-                    <span>{exportBusy === 'transcript_article' ? '导出中…' : '转写文本（无时间轴）'}</span>
+                    <span>{exportBusy === 'transcript_article' ? '导出中…' : `${title} · 转写文本`}</span>
                   </button>
                 )}
                 {(isVideoNote || isAudioNote) && (
                   <button className="nibi-note-export-item" onClick={() => handleExportTranscript('speaker_grouped')} disabled={!!exportBusy}>
                     <Subtitles size={15} />
-                    <span>{exportBusy === 'transcript_speakers' ? '导出中…' : '转写文本（无时间轴·区分说话人）'}</span>
+                    <span>{exportBusy === 'transcript_speakers' ? '导出中…' : `${title} · 转写文本（区分说话人）`}</span>
                   </button>
                 )}
                 {[
@@ -2028,37 +2098,54 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                         <span className="nibi-audio-speaker-title">说话人</span>
                         {speakerIds.map((speakerId) => {
                           const displayName = speakerMap[speakerId] || speakerId.replace(/^SPEAKER_/, 'S')
+                          const displayRole = speakerRoles[speakerId] || ''
                           const speakerStat = speakerStatsMap.get(speakerId)
                           const speakerPercent = totalSpeakerDuration > 0 && speakerStat
                             ? Math.round((speakerStat.duration / totalSpeakerDuration) * 100)
                             : 0
                           const isEditing = editingSpeakerId === speakerId
                           return isEditing ? (
-                            <input
-                              key={speakerId}
-                              className="nibi-audio-speaker-input"
-                              autoFocus
-                              value={editingSpeakerName}
-                              onChange={(event) => setEditingSpeakerName(event.target.value)}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') void handleSpeakerRename(speakerId, editingSpeakerName)
-                                if (event.key === 'Escape') setEditingSpeakerId(null)
-                              }}
-                              onBlur={() => void handleSpeakerRename(speakerId, editingSpeakerName)}
-                            />
+                            <div key={speakerId} className="nibi-audio-speaker-editor">
+                              <input
+                                className="nibi-audio-speaker-input"
+                                autoFocus
+                                value={editingSpeakerName}
+                                aria-label={`${speakerId} 姓名`}
+                                onChange={(event) => setEditingSpeakerName(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter') void handleSpeakerProfileSave(speakerId, editingSpeakerName, editingSpeakerRole)
+                                  if (event.key === 'Escape') setEditingSpeakerId(null)
+                                }}
+                              />
+                              <select
+                                className="nibi-audio-speaker-role"
+                                aria-label={`${speakerId} 角色`}
+                                value={editingSpeakerRole}
+                                onChange={(event) => setEditingSpeakerRole(event.target.value)}
+                              >
+                                <option value="">未设置角色</option>
+                                {SPEAKER_ROLE_OPTIONS.map((role) => <option key={role} value={role}>{role}</option>)}
+                              </select>
+                              <button
+                                type="button"
+                                className="nibi-audio-speaker-save"
+                                onClick={() => void handleSpeakerProfileSave(speakerId, editingSpeakerName, editingSpeakerRole)}
+                              >保存</button>
+                            </div>
                           ) : (
                             <button
                               key={speakerId}
                               className="nibi-audio-speaker-chip"
                               style={{ '--speaker-color': audioSpeakerColor(speakerId) } as CSSProperties}
-                              title="点击重命名说话人"
+                              title="点击编辑姓名和角色"
                               onClick={() => {
                                 setEditingSpeakerId(speakerId)
                                 setEditingSpeakerName(speakerMap[speakerId] || '')
+                                setEditingSpeakerRole(speakerRoles[speakerId] || '')
                               }}
                             >
                               <span className="nibi-audio-speaker-dot" />
-                              <span>{displayName}</span>
+                              <span>{displayName}{displayRole ? ` · ${displayRole}` : ''}</span>
                               {speakerStat && (
                                 <small>{speakerStat.count} 段 · {formatTimecode(speakerStat.duration)} · {speakerPercent}%</small>
                               )}

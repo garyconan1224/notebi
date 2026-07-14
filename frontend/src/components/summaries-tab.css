@@ -628,7 +628,27 @@
 /* ── 生成中进度项 ──────────────────────────────────── */
 
 .sm-creating {
+  position: relative;
   opacity: 0.85;
+}
+
+.sm-creating-progress {
+  position: absolute;
+  right: 34px;
+  bottom: 8px;
+  left: 12px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.sm-creating-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-pink);
+  transition: width 240ms ease;
 }
 
 .sm-creating-spinner {

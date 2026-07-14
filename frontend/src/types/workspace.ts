@@ -186,6 +186,8 @@ export interface ItemNote {
   translations?: TranscriptTranslations | null
   /** 音频说话人编号到用户名称的映射，刷新后用于字幕和总结入口回显。 */
   speaker_map?: Record<string, string>
+  /** 音频说话人角色，和 speaker_map 按原始 speaker id 对齐。 */
+  speaker_roles?: Record<string, string>
   summary_hint?: {
     content_category?: string
     default_template?: string

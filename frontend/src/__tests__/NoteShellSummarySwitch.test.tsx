@@ -282,8 +282,8 @@ describe('NoteShell summary switching', () => {
     await screen.findByText('尚未生成总结')
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
 
-    expect(screen.getByRole('button', { name: '转写文本（无时间轴）' })).not.toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '转写文本（无时间轴·区分说话人）' }))
+    expect(screen.getByRole('button', { name: '测试音频 · 转写文本' })).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '测试音频 · 转写文本（区分说话人）' }))
 
     await waitFor(() => {
       expect(mocks.downloadTranscript).toHaveBeenCalledWith(
@@ -332,7 +332,7 @@ describe('NoteShell summary switching', () => {
     fireEvent.keyDown(input!, { key: 'Enter' })
 
     await waitFor(() => {
-      expect(mocks.updateSpeakerMap).toHaveBeenCalledWith('ws-1', 'item-1', { SPEAKER_00: '主持人' })
+      expect(mocks.updateSpeakerMap).toHaveBeenCalledWith('ws-1', 'item-1', { SPEAKER_00: '主持人' }, {})
       expectAnyEditorToContain('主持人 提出关键结论')
     })
   })

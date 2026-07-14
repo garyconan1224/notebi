@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any, Sequence
 
 from shared.sf_client import (
@@ -30,32 +29,14 @@ class OpenAICompatProvider(BaseProvider):
         self.api_key = (api_key or "").strip()
         self.base_url = (base_url or "").strip()
 
-    def _with_base_url_env(self) -> tuple[bool, str | None]:
-        if not self.base_url:
-            return False, None
-        old = os.environ.get("LLM_BASE_URL")
-        os.environ["LLM_BASE_URL"] = self.base_url
-        return True, old
-
-    def _restore_base_url_env(self, enabled: bool, old: str | None) -> None:
-        if not enabled:
-            return
-        if old is None:
-            os.environ.pop("LLM_BASE_URL", None)
-        else:
-            os.environ["LLM_BASE_URL"] = old
-
     def test_connection(self) -> str:
         if not self.api_key:
             raise ProviderRequestError("missing api_key")
-        patched, old = self._with_base_url_env()
         try:
-            models = get_model_ids(self.api_key, "chat")
+            models = get_model_ids(self.api_key, "chat", base_url=self.base_url or None)
             return f"ok: chat_models={len(models)}"
         except SiliconFlowError as err:
             raise ProviderRequestError(str(err)) from err
-        finally:
-            self._restore_base_url_env(patched, old)
 
     def list_models(self, capability: str) -> list[str]:
         if not self.api_key:
@@ -66,16 +47,11 @@ class OpenAICompatProvider(BaseProvider):
             "embedding": "embedding",
             "rerank": "reranker",
         }.get(capability, "chat")
-        patched, old = self._with_base_url_env()
-        try:
-            return get_model_ids(self.api_key, sub_type)
-        finally:
-            self._restore_base_url_env(patched, old)
+        return get_model_ids(self.api_key, sub_type, base_url=self.base_url or None)
 
     def chat(self, req: ChatRequest) -> str:
         if not self.api_key:
             raise ProviderRequestError("missing api_key")
-        patched, old = self._with_base_url_env()
         try:
             return chat_completion(
                 self.api_key,
@@ -84,30 +60,30 @@ class OpenAICompatProvider(BaseProvider):
                 temperature=req.temperature,
                 max_tokens=req.max_tokens,
                 timeout=req.timeout or 300,
+                base_url=self.base_url or None,
             )
         except SiliconFlowError as err:
             raise ProviderRequestError(str(err)) from err
-        finally:
-            self._restore_base_url_env(patched, old)
 
     def create_embeddings(self, model: str, inputs: Sequence[str]) -> list[list[float]]:
         if not self.api_key:
             raise ProviderRequestError("missing api_key")
-        patched, old = self._with_base_url_env()
         try:
-            return create_embeddings(self.api_key, model, inputs)
+            return create_embeddings(self.api_key, model, inputs, base_url=self.base_url or None)
         except SiliconFlowError as err:
             raise ProviderRequestError(str(err)) from err
-        finally:
-            self._restore_base_url_env(patched, old)
 
     def rerank(self, model: str, query: str, documents: Sequence[str], top_n: int) -> list[dict[str, Any]]:
         if not self.api_key:
             raise ProviderRequestError("missing api_key")
-        patched, old = self._with_base_url_env()
         try:
-            return rerank_documents(self.api_key, model, query, documents, top_n)
+            return rerank_documents(
+                self.api_key,
+                model,
+                query,
+                documents,
+                top_n,
+                base_url=self.base_url or None,
+            )
         except SiliconFlowError as err:
             raise ProviderRequestError(str(err)) from err
-        finally:
-            self._restore_base_url_env(patched, old)

@@ -568,6 +568,12 @@ _TRANSCRIPT_MODE_SUFFIX = {
 }
 
 
+def _with_transcript_metadata(title: str, mode: str, content: str) -> str:
+    """让独立导出的 txt 自带标题与类型，避免只看到重复的“转写文本”。"""
+    label = _TRANSCRIPT_MODE_SUFFIX[mode]
+    return f"# {title}\n\n类型：{label}\n\n{content.strip()}\n"
+
+
 def _normalize_segments(raw: Any) -> list[dict[str, Any]]:
     """归一化 transcript segments：兼容 display (t_sec) / whisper (start/end) 两种格式。
 
@@ -644,6 +650,7 @@ def export_transcript(
     if not content:
         raise HTTPException(status_code=404, detail="transcript is empty")
 
+    content = _with_transcript_metadata(item.name or "未命名内容", mode, content)
     safe_title = (item.name or "untitled").replace("/", "_").replace("\\", "_")[:50]
     filename = f"{safe_title}-{_TRANSCRIPT_MODE_SUFFIX[mode]}.txt"
     return StreamingResponse(

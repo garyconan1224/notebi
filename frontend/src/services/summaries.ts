@@ -23,6 +23,13 @@ export interface ItemSummary {
   created_at: string
 }
 
+export interface SummaryTaskAccepted {
+  status: 'accepted'
+  task_id: string
+  workspace_id: string
+  item_id: string
+}
+
 /** GET 列表（按素材级连续 version 排序）。 */
 export async function listSummaries(
   workspaceId: string,
@@ -34,15 +41,15 @@ export async function listSummaries(
   return data
 }
 
-/** POST 同步生成一份总结；4 小时素材的分层覆盖审计实测可能超过 10 分钟。 */
+/** POST 创建后台总结任务；实际总结通过 /pipeline/tasks/{task_id} 读取。 */
 export async function createSummary(
   workspaceId: string,
   itemId: string,
   template: string,
   background_for_summary = '',
   options: { provider_id?: string; model?: string; search_web?: boolean; summary_mode?: 'general' | 'speaker_aware' } = {},
-): Promise<ItemSummary> {
-  const { data } = await http.post<ItemSummary>(
+): Promise<SummaryTaskAccepted> {
+  const { data } = await http.post<SummaryTaskAccepted>(
     `/workspaces/${workspaceId}/items/${itemId}/summaries`,
     {
       template,
@@ -52,7 +59,7 @@ export async function createSummary(
       search_web: options.search_web ?? false,
       summary_mode: options.summary_mode ?? 'general',
     },
-    { timeout: 1_800_000 },
+    { timeout: 30_000 },
   )
   return data
 }

@@ -6,7 +6,7 @@
  *
  * 设计稿 pg-audio 对齐。
  */
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { Pause, PictureInPicture2, Play, Repeat, Volume2, VolumeX } from 'lucide-react'
 import { formatAudioTime } from './audioTime'
@@ -30,6 +30,16 @@ function normalizeWaveform(values: number[] | null | undefined): number[] {
   const maximum = Math.max(...clean, 0)
   if (maximum <= 0) return []
   return clean.map((value) => Math.min(1, Math.max(0.03, value / maximum)))
+}
+
+function resampleWaveform(values: number[], targetCount: number): number[] {
+  if (values.length <= targetCount) return values
+  return Array.from({ length: targetCount }, (_, index) => {
+    const start = Math.floor((index * values.length) / targetCount)
+    const end = Math.max(start + 1, Math.floor(((index + 1) * values.length) / targetCount))
+    const slice = values.slice(start, end)
+    return slice.reduce((sum, value) => sum + value, 0) / slice.length
+  })
 }
 
 /* ── types ── */
@@ -58,6 +68,7 @@ const NoteAudioPanel = forwardRef<NoteAudioPanelHandle, NoteAudioPanelProps>(
     const audioRef = useRef<HTMLAudioElement>(null)
     const progressRef = useRef<HTMLDivElement>(null)
     const volumeSliderRef = useRef<HTMLDivElement>(null)
+    const waveformRef = useRef<HTMLDivElement>(null)
 
     const [playing, setPlaying] = useState(false)
     const [duration, setDuration] = useState(0)
@@ -66,6 +77,7 @@ const NoteAudioPanel = forwardRef<NoteAudioPanelHandle, NoteAudioPanelProps>(
     const [volume, setVolume] = useState(1)
     const [speed, setSpeed] = useState(1)
     const [loop, setLoop] = useState(false)
+    const [waveformBarCount, setWaveformBarCount] = useState(WAVEFORM_BARS)
     const [waveformHeights, setWaveformHeights] = useState(() => {
       const realWaveform = normalizeWaveform(waveform)
       return realWaveform.length > 0 ? realWaveform : FALLBACK_WAVEFORM_HEIGHTS
@@ -111,7 +123,28 @@ const NoteAudioPanel = forwardRef<NoteAudioPanelHandle, NoteAudioPanelProps>(
       setWaveformHeights(realWaveform.length > 0 ? realWaveform : FALLBACK_WAVEFORM_HEIGHTS)
     }, [src, waveform])
 
-    useEffect(() => { onTransportChange?.() }, [playing, progress, duration, muted, volume, speed, loop, waveformHeights, isPipActive, onTransportChange])
+    useEffect(() => {
+      const node = waveformRef.current
+      if (!node || typeof ResizeObserver === 'undefined') return
+      const updateBarCount = (width: number) => {
+        // 每根柱保留约 4px 的可见宽度，窄播放器减少柱子而不是压扁全部柱子。
+        setWaveformBarCount(Math.max(28, Math.min(120, Math.round(width / 4))))
+      }
+      updateBarCount(node.getBoundingClientRect().width)
+      const observer = new ResizeObserver((entries) => {
+        const width = entries[0]?.contentRect.width ?? 0
+        if (width > 0) updateBarCount(width)
+      })
+      observer.observe(node)
+      return () => observer.disconnect()
+    }, [])
+
+    const visibleWaveform = useMemo(
+      () => resampleWaveform(waveformHeights, waveformBarCount),
+      [waveformBarCount, waveformHeights],
+    )
+
+    useEffect(() => { onTransportChange?.() }, [playing, progress, duration, muted, volume, speed, loop, visibleWaveform, isPipActive, onTransportChange])
 
     /* ── 交互控制 ── */
     const togglePlay = useCallback(() => {
@@ -231,7 +264,7 @@ const NoteAudioPanel = forwardRef<NoteAudioPanelHandle, NoteAudioPanelProps>(
     const transportJsx = (
       <>
         {/* 波形 + 进度 */}
-        <div className="note-audio-waveform" style={{ '--audio-progress': `${progress * 100}%` } as React.CSSProperties}>
+        <div ref={waveformRef} className="note-audio-waveform" style={{ '--audio-progress': `${progress * 100}%` } as React.CSSProperties}>
           <div
             className="note-audio-progress"
             ref={progressRef}
@@ -239,12 +272,12 @@ const NoteAudioPanel = forwardRef<NoteAudioPanelHandle, NoteAudioPanelProps>(
             onPointerDown={onProgressPointerDown}
           >
             <div className="note-audio-bars note-audio-bars--bg">
-              {waveformHeights.map((h, i) => (
+              {visibleWaveform.map((h, i) => (
                 <span key={i} style={{ '--bar-h': `${h * 100}%` } as React.CSSProperties} />
               ))}
             </div>
             <div className="note-audio-bars note-audio-bars--fill">
-              {waveformHeights.map((h, i) => (
+              {visibleWaveform.map((h, i) => (
                 <span key={i} style={{ '--bar-h': `${h * 100}%` } as React.CSSProperties} />
               ))}
             </div>

@@ -77,7 +77,10 @@ from backend.app.services.note_assembler import (
     note_dir,
 )
 from backend.app.services.note_exporter import build_note_export_response
-from backend.app.services.speaker_labels import apply_speaker_map
+from backend.app.services.speaker_labels import (
+    SPEAKER_ROLE_OPTIONS,
+    apply_speaker_map,
+)
 from backend.app.services.summary_generator import generate_summary
 from backend.app.services.summary_templates import list_template_ids
 from backend.app.services.video_result_demo import build_demo_video_result
@@ -96,6 +99,43 @@ router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
 # 进程级单例 store（与 pipeline 路由的 _store 同模式）
 _store = WorkspaceStore()
+
+
+def _handle_summary_task(record: TaskRecord, runner: Any) -> Dict[str, Any]:
+    """后台生成总结；结果放进 task.result，前端按任务进度读取。"""
+    payload = record.payload or {}
+    workspace_id = str(payload.get("workspace_id") or record.project_id)
+    item_id = str(payload.get("item_id") or "")
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise RuntimeError(f"workspace not found: {workspace_id}")
+    item = _find_item(rec, item_id)
+    if not _summary_source_present(item.results or {}):
+        raise RuntimeError("当前素材没有可用于总结的内容")
+
+    summary = generate_summary(
+        item,
+        str(payload.get("template") or "concise"),
+        str(payload.get("background_for_summary") or ""),
+        summary_mode=str(payload.get("summary_mode") or "general"),
+        provider_id=str(payload.get("provider_id") or ""),
+        model=str(payload.get("model") or ""),
+        search_web=bool(payload.get("search_web")),
+        progress=lambda ratio, message: runner.set_progress(record.task_id, ratio, message),
+    )
+    # 在模型调用完成后再取版本号，避免两个并行总结任务同时拿到同一个 vN。
+    next_ver = _store.next_summary_version(workspace_id, item_id)
+    summary.version = next_ver
+    _store.add_item_summary(workspace_id, item_id, summary)
+    runner.set_progress(record.task_id, 0.98, "正在保存总结版本")
+    return {
+        "summary": summary.to_dict(),
+        "workspace_id": workspace_id,
+        "item_id": item_id,
+    }
+
+
+_pipeline_runner.register("summary", _handle_summary_task)
 
 
 # R3.1: 本地路径 → /static/... URL（供前端 <img> / <video> / <audio> src 使用）
@@ -4287,31 +4327,51 @@ def regenerate_item_tags(workspace_id: str, item_id: str) -> Dict[str, Any]:
 
 
 class SpeakerMapRequest(BaseModel):
-    """说话人名称映射请求体。"""
+    """说话人姓名与角色配置请求体。"""
 
     speaker_map: Dict[str, str]
+    speaker_roles: Optional[Dict[str, str]] = None
 
 
 @router.patch("/{workspace_id}/items/{item_id}/speaker_map")
 def update_speaker_map(
     workspace_id: str, item_id: str, req: SpeakerMapRequest
 ) -> Dict[str, Any]:
-    """保存说话人名称映射，并同步更新已有的区分说话人总结。"""
+    """保存说话人姓名/角色，并同步更新已有总结及其落盘文件。"""
     rec = _store.get(workspace_id)
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
     item = _find_item(rec, item_id)
     results = dict(item.results or {})
+    previous_map = {
+        str(key): str(value)
+        for key, value in (results.get("speaker_map") or {}).items()
+    }
+    roles = req.speaker_roles
+    if roles is None:
+        roles = dict(results.get("speaker_roles") or {})
+    normalized_roles: Dict[str, str] = {}
+    for raw_id, raw_role in roles.items():
+        role = str(raw_role or "").strip()
+        if role and role not in SPEAKER_ROLE_OPTIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"不支持的说话人角色: {role}；可选角色：{'、'.join(SPEAKER_ROLE_OPTIONS)}",
+            )
+        if role:
+            normalized_roles[str(raw_id).strip()] = role
     results["speaker_map"] = req.speaker_map
+    results["speaker_roles"] = normalized_roles
     _store.update_item(workspace_id, item_id, results=results)
     has_speaker_summaries = any(
         summary.summary_mode == "speaker_aware" for summary in item.summaries
     )
     updated_count = _store.update_speaker_summary_labels(
-        workspace_id, item_id, req.speaker_map
+        workspace_id, item_id, req.speaker_map, previous_speaker_map=previous_map
     )
     return {
         "speaker_map": req.speaker_map,
+        "speaker_roles": normalized_roles,
         "summary_refresh": {
             "status": "updated" if has_speaker_summaries else "not_needed",
             "updated_count": updated_count,
@@ -4747,6 +4807,7 @@ def _summary_source_present(results: Dict[str, Any]) -> bool:
         for key in (
             "content",
             "transcript",
+            "transcript_segments",
             "summary",
             "note_body",
             "markdown",
@@ -4778,8 +4839,7 @@ def list_summaries(workspace_id: str, item_id: str) -> List[Dict[str, Any]]:
 async def create_summary(
     workspace_id: str, item_id: str, req: SummaryCreateRequest
 ) -> Dict[str, Any]:
-    """同步生成一份总结并落盘。LLM 调用可能耗时 5-15s。"""
-    from fastapi.concurrency import run_in_threadpool
+    """创建后台总结任务；长音频不再占住前端 HTTP 请求。"""
 
     _ensure_valid_template(req.template)
     _ensure_valid_summary_mode(req.summary_mode)
@@ -4817,28 +4877,30 @@ async def create_summary(
         _pb = list(item.results.get("json_output_basenames") or [])
         item.results = dict(_materialize_video_results_from_analyze(item.results, preferred_basenames=_pb))
 
-    next_ver = _store.next_summary_version(workspace_id, item_id)
-
-    def _do_generate() -> ItemSummary:
-        summary = generate_summary(
-            item, req.template, req.background_for_summary,
-            summary_mode=req.summary_mode,
-            provider_id=req.provider_id,
-            model=req.model,
-            search_web=req.search_web,
-        )
-        summary.version = next_ver
-        return summary
-
     try:
-        summary = await run_in_threadpool(_do_generate)
-    except RuntimeError as err:
-        raise HTTPException(status_code=500, detail=str(err)) from err
+        task = _pipeline_runner.create_task(
+            workspace_id,
+            "summary",
+            {
+                "workspace_id": workspace_id,
+                "item_id": item_id,
+                "template": req.template,
+                "background_for_summary": req.background_for_summary,
+                "provider_id": req.provider_id,
+                "model": req.model,
+                "search_web": req.search_web,
+                "summary_mode": req.summary_mode,
+                "title": item.name,
+            },
+        )
     except Exception as err:
-        raise HTTPException(status_code=502, detail=f"LLM 调用失败: {err}") from err
-
-    _store.add_item_summary(workspace_id, item_id, summary)
-    return summary.to_dict()
+        raise HTTPException(status_code=500, detail=f"创建总结任务失败: {err}") from err
+    return {
+        "status": "accepted",
+        "task_id": task.task_id,
+        "workspace_id": workspace_id,
+        "item_id": item_id,
+    }
 
 
 @router.get("/{workspace_id}/items/{item_id}/summaries/{summary_id}")
@@ -5126,7 +5188,8 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
         "transcript": transcript,
         "translations": results.get("translations", {}),
         # 音频说话人改名需要随 /note 回显，保证刷新后字幕和总结入口仍使用用户名称。
-        "speaker_map": results.get("speaker_map", {}) if item_type == "audio" else {},
+        "speaker_map": results.get("speaker_map", {}) if item_type in {"audio", "video"} else {},
+        "speaker_roles": results.get("speaker_roles", {}) if item_type in {"audio", "video"} else {},
         "summary_hint": summary_hint,
         # 自动总结失败时，结果页必须拿到原因和可重试的任务 ID，不能只显示空态。
         "summary_failure": summary_failure,

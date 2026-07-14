@@ -593,6 +593,8 @@ export interface AudioResult {
   }
   /** A2: 用户自定义说话人映射 */
   speaker_map?: Record<string, string>
+  /** A2: 说话人角色映射 */
+  speaker_roles?: Record<string, string>
 }
 
 /** A3.3: 单个音乐片段的 6 维度分析 */
@@ -628,9 +630,15 @@ export async function updateSpeakerMap(
   workspaceId: string,
   itemId: string,
   speakerMap: Record<string, string>,
-): Promise<{ speaker_map: Record<string, string>; summary_refresh?: { status: string; reason: string; updated_count?: number } }> {
+  speakerRoles: Record<string, string> = {},
+): Promise<{
+  speaker_map: Record<string, string>
+  speaker_roles: Record<string, string>
+  summary_refresh?: { status: string; reason: string; updated_count?: number }
+}> {
   const { data } = await http.patch(`${BASE}/${workspaceId}/items/${itemId}/speaker_map`, {
     speaker_map: speakerMap,
+    speaker_roles: speakerRoles,
   })
   return data
 }
