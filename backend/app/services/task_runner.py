@@ -12,6 +12,7 @@ from backend.app.services.task_store import TaskStore
 
 TaskHandler = Callable[[TaskRecord, "TaskRunner"], Dict[str, Any]]
 SuccessCallback = Callable[[TaskRecord, "TaskRunner"], None]
+PartialCallback = Callable[[TaskRecord, "TaskRunner"], None]
 
 
 class TaskRunner:
@@ -20,6 +21,7 @@ class TaskRunner:
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="vps-task")
         self._handlers: Dict[str, TaskHandler] = {}
         self._success_callbacks: Dict[str, List[SuccessCallback]] = {}
+        self._partial_callbacks: Dict[str, List[PartialCallback]] = {}
         self._lock = threading.Lock()
 
     def register(self, task_type: str, handler: TaskHandler) -> None:
@@ -38,6 +40,11 @@ class TaskRunner:
         """注册 task_type 成功后的回调（可注册多个，按顺序调用）。"""
         with self._lock:
             self._success_callbacks.setdefault(task_type, []).append(callback)
+
+    def register_partial_callback(self, task_type: str, callback: PartialCallback) -> None:
+        """注册核心产物可用、但后续阶段未完成时的回调。"""
+        with self._lock:
+            self._partial_callbacks.setdefault(task_type, []).append(callback)
 
     @staticmethod
     def _normalize_url_for_dedup(raw: str) -> str:
@@ -146,6 +153,17 @@ class TaskRunner:
             # A3: handler 设了 AWAITING_CONFIRM 后提前返回——不覆盖为 SUCCESS，等用户确认
             if current and current.status == TaskStatus.AWAITING_CONFIRM.value:
                 return
+            if current and current.status == TaskStatus.PARTIAL.value:
+                partial_record = self.store.update(task_id, progress=1.0, result=result)
+                self.store.append_log(task_id, "Task partially completed", level="warning")
+                with self._lock:
+                    callbacks = list(self._partial_callbacks.get(record.task_type, []))
+                for cb in callbacks:
+                    try:
+                        cb(partial_record, self)
+                    except Exception as cb_err:  # noqa: BLE001
+                        self.store.append_log(task_id, f"Partial callback error: {cb_err}", level="error")
+                return
             self.store.update(task_id, status=TaskStatus.SUCCESS.value, progress=1.0, result=result, error="")
             self.store.append_log(task_id, "Task succeeded")
             # 触发成功回调（例如：download→analyze 任务链）
@@ -193,11 +211,36 @@ class TaskRunner:
             rec = self.store.update(task_id, status=TaskStatus.CANCELLED.value)
         return rec
 
-    def retry_task(self, task_id: str) -> TaskRecord:
+    def retry_task(self, task_id: str, *, stage: Optional[str] = None) -> TaskRecord:
         rec = self.store.get(task_id)
         if rec is None:
             raise KeyError(f"task not found: {task_id}")
-        return self.create_task(rec.project_id, rec.task_type, rec.payload, retry_of=rec.task_id)
+        if stage is None:
+            return self.create_task(
+                rec.project_id,
+                rec.task_type,
+                dict(rec.payload),
+                retry_of=rec.task_id,
+            )
+        if stage != "diarization":
+            raise ValueError(f"unsupported retry stage: {stage}")
+        if rec.task_type != "audio" or rec.status not in {
+            TaskStatus.PARTIAL.value,
+            TaskStatus.SUCCESS.value,
+        }:
+            raise ValueError("diarization retry requires a terminal audio task")
+        failure = rec.result.get("partial_failure") if isinstance(rec.result, dict) else None
+        if rec.status == TaskStatus.PARTIAL.value and (
+            not isinstance(failure, dict) or failure.get("stage") != "diarization"
+        ):
+            raise ValueError("task has no retryable diarization failure")
+        if not rec.result.get("transcript_segments"):
+            raise ValueError("task has no reusable transcript segments")
+
+        payload = dict(rec.payload)
+        payload["_retry_stage"] = "diarization"
+        payload["_retry_source_task_id"] = rec.task_id
+        return self.create_task(rec.project_id, rec.task_type, payload, retry_of=rec.task_id)
 
     def resubmit_task(self, task_id: str) -> None:
         """A3: 将已有任务重新提交到 executor（保持同一 task_id，SSE 连接不断）。"""

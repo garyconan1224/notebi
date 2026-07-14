@@ -113,4 +113,20 @@ describe('NewSummaryModal', () => {
       summaryMode: 'speaker_aware',
     }))
   })
+
+  it('没有说话人识别结果时禁用区分说话人并提示重新分析', () => {
+    render(
+      <NewSummaryModal
+        creating={false}
+        allowSpeakerAware
+        speakerAwareAvailable={false}
+        onSubmit={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('checkbox', { name: '区分说话人' })).toHaveProperty('disabled', true)
+    expect(screen.getByText('请重新分析并开启“区分说话人”')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '生成' })).toHaveProperty('disabled', false)
+  })
 })

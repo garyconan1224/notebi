@@ -2034,6 +2034,17 @@
   cursor: pointer;
 }
 
+.nibi-audio-speaker-chip > span:not(.nibi-audio-speaker-dot) {
+  white-space: nowrap;
+}
+
+.nibi-audio-speaker-chip small {
+  color: var(--mut, #7c7464);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .nibi-audio-speaker-chip:hover {
   border-color: var(--speaker-color);
   color: var(--speaker-color);
@@ -2056,6 +2067,52 @@
   background: var(--srf, #fff);
   color: var(--fg2, #3d3929);
   font-size: 11px;
+}
+
+.nibi-audio-speaker-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--bdr, rgba(25, 20, 16, 0.07));
+  background: var(--bgalt, #f7f4ee);
+  color: var(--mut, #7c7464);
+  font-size: 11px;
+}
+
+.nibi-audio-speaker-empty strong {
+  color: var(--fg2, #3d3929);
+  font-size: 12px;
+}
+
+.nibi-summary-empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 16px;
+  border: 1px dashed var(--bdr, #e8e3db);
+  border-radius: 8px;
+  background: var(--bgalt, #f7f4ee);
+  color: var(--mut, #7c7464);
+  font-size: 12px;
+}
+
+.nibi-summary-empty-card strong {
+  color: var(--fg2, #3d3929);
+  font-size: 13px;
+}
+
+.nibi-summary-empty-card button {
+  min-height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--acc, #ff8a36);
+  border-radius: 6px;
+  background: var(--acc, #ff8a36);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .nibi-audio-result-player-head {
@@ -2104,6 +2161,9 @@
 
 .nibi-audio-player-wrap {
   flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 16px 20px 0;
   display: flex;
   flex-direction: column;
@@ -2112,6 +2172,7 @@
 
 .nibi-audio-player-shell {
   flex: 0 0 auto;
+  width: 100%;
   min-width: 0;
   background: var(--srf, #fff);
 }
@@ -2267,6 +2328,7 @@
 
 .note-audio-waveform {
   width: 100%;
+  min-width: 0;
   padding: 0 20px;
   box-sizing: border-box;
 }

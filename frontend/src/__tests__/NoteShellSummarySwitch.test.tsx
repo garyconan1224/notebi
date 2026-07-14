@@ -143,9 +143,10 @@ describe('NoteShell summary switching', () => {
     })
 
     fireEvent.click(screen.getByRole('button', { name: /主笔记 v1/ }))
-    fireEvent.click(screen.getByRole('button', { name: /v0/ }))
+    fireEvent.click(screen.getByRole('button', { name: /V0/ }))
 
     expectAnyEditorToContain('总结正文')
+    expect(screen.getByRole('button', { name: /标准总结 · V0/ })).not.toBeNull()
     expect(mocks.putItemNote).not.toHaveBeenCalled()
   })
 
@@ -167,5 +168,37 @@ describe('NoteShell summary switching', () => {
     })
 
     expect(screen.getByTestId('note-editor').textContent).not.toContain('原始转写不应进入编辑器')
+  })
+
+  it('音频没有总结时显示明确空态和生成入口', async () => {
+    mocks.getItemNote.mockResolvedValue(AUDIO_NOTE)
+    mocks.listSummaries.mockResolvedValue([])
+
+    render(
+      <MemoryRouter>
+        <NoteShell workspaceId="ws-1" itemId="item-1" />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('尚未生成总结')).not.toBeNull()
+    expect(screen.getByRole('button', { name: '生成默认总结' })).not.toBeNull()
+  })
+
+  it('长音频关键时间点覆盖到音频末段', async () => {
+    const transcript = Array.from({ length: 14 }, (_, index) => ({
+      t_sec: index * 1080,
+      t_str: `${Math.floor(index * 18 / 60)}:${String(index * 18 % 60).padStart(2, '0')}:00`,
+      text: `第 ${index + 1} 段内容`,
+    }))
+    mocks.getItemNote.mockResolvedValue({ ...AUDIO_NOTE, transcript })
+    mocks.listSummaries.mockResolvedValue([])
+
+    render(
+      <MemoryRouter>
+        <NoteShell workspaceId="ws-1" itemId="item-1" />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('3:36:00')).not.toBeNull()
   })
 })

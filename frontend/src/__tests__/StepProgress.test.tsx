@@ -4,8 +4,8 @@ import { deriveSteps } from '@/pages/result/ProcessingPage/StepProgress'
 // ── 各类型的预期步骤序列 ──
 const STEPS_LINK_VIDEO  = ['PENDING', 'DOWNLOAD', 'TRANSCRIBE', 'ANALYZE', 'ANALYZE_NOTE', 'SUCCESS']
 const STEPS_LOCAL_VIDEO  = ['PENDING', 'TRANSCRIBE', 'ANALYZE', 'ANALYZE_NOTE', 'SUCCESS']
-const STEPS_LINK_AUDIO   = ['PENDING', 'DOWNLOAD', 'TRANSCRIBE', 'ANALYZE_NOTE', 'SUCCESS']
-const STEPS_LOCAL_AUDIO  = ['PENDING', 'TRANSCRIBE', 'ANALYZE_NOTE', 'SUCCESS']
+const STEPS_LINK_AUDIO   = ['PENDING', 'DOWNLOAD', 'TRANSCRIBE', 'DIARIZE', 'ANALYZE_NOTE', 'SUCCESS']
+const STEPS_LOCAL_AUDIO  = ['PENDING', 'TRANSCRIBE', 'DIARIZE', 'ANALYZE_NOTE', 'SUCCESS']
 const STEPS_LINK_IMAGE   = ['PENDING', 'DOWNLOAD', 'ANALYZE', 'ANALYZE_NOTE', 'SUCCESS']
 const STEPS_LOCAL_IMAGE  = ['PENDING', 'ANALYZE', 'ANALYZE_NOTE', 'SUCCESS']
 const STEPS_TEXT         = ['PENDING', 'ANALYZE_NOTE', 'SUCCESS']
@@ -13,6 +13,19 @@ const STEPS_TEXT         = ['PENDING', 'ANALYZE_NOTE', 'SUCCESS']
 const STEPS_DEFAULT      = STEPS_TEXT
 
 describe('deriveSteps', () => {
+  it('音频 ASR 节点显示当前转录阶段的真实 0-100%，而不是整体任务百分比', () => {
+    const steps = deriveSteps('ASR', 0.475, 'local', 'audio', true)
+    const transcribe = steps.find((step) => step.id === 'TRANSCRIBE')
+
+    expect(transcribe?.pct).toBeCloseTo(0.5)
+  })
+
+  it('音频进入说话人分析区间时不再把进度显示为转录 100%', () => {
+    const steps = deriveSteps('ASR', 0.69, 'local', 'audio', true)
+    expect(steps.find((step) => step.id === 'TRANSCRIBE')).toMatchObject({ state: 'done', pct: 1 })
+    expect(steps.find((step) => step.id === 'DIARIZE')?.state).toBe('running')
+    expect(steps.find((step) => step.id === 'DIARIZE')?.pct).toBeCloseTo(0.5)
+  })
   // ── 步骤序列矩阵 ──
 
   it('链接视频 → 6 步：排队→下载→转录→分析→生成笔记→完成', () => {
@@ -26,12 +39,12 @@ describe('deriveSteps', () => {
   })
 
   it('链接音频 → 5 步：排队→下载→转录→生成笔记→完成（无分析）', () => {
-    const steps = deriveSteps('PENDING', 0, 'link', 'audio')
+    const steps = deriveSteps('PENDING', 0, 'link', 'audio', true)
     expect(steps.map(s => s.id)).toEqual(STEPS_LINK_AUDIO)
   })
 
   it('本地音频 → 4 步：排队→转录→生成笔记→完成', () => {
-    const steps = deriveSteps('PENDING', 0, 'local', 'audio')
+    const steps = deriveSteps('PENDING', 0, 'local', 'audio', true)
     expect(steps.map(s => s.id)).toEqual(STEPS_LOCAL_AUDIO)
   })
 
@@ -167,9 +180,9 @@ describe('deriveSteps', () => {
   })
 
   it('ASR(音频) → 转录 running（无分析步骤）', () => {
-    const steps = deriveSteps('ASR', 0.3, 'link', 'audio')
+    const steps = deriveSteps('ASR', 0.3, 'link', 'audio', true)
     expect(steps.map(s => s.id)).toEqual(STEPS_LINK_AUDIO)
-    expect(steps[2]).toMatchObject({ id: 'TRANSCRIBE', state: 'running', pct: 0.3 })
+    expect(steps[2]).toMatchObject({ id: 'TRANSCRIBE', state: 'running', pct: 0 })
   })
 
   // ── AWAITING_CONFIRM ──

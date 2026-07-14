@@ -502,6 +502,53 @@ describe('AddMaterialModal', () => {
     fireEvent.click(speakerSwitch)
     expect(screen.getByText('区分说话人的总结方式')).toBeTruthy()
     expect(screen.getByText('按说话人观点')).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: '预计说话人数' })).toBeTruthy()
+    expect(screen.getByText('自动判断')).toBeTruthy()
+  })
+
+  it('音频可把预计说话人数提交给任务', async () => {
+    render(
+      <AddMaterialModal
+        open={true}
+        onOpenChange={vi.fn()}
+        workspaceIds={['ws-1']}
+        urlValue="https://example.com/interview.m4a"
+        sniffResult={{
+          primary_type: 'audio',
+          possible_types: ['audio'],
+          platform: 'direct',
+          title: '双人访谈',
+          thumbnail: null,
+          content_type_header: 'audio/mp4',
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /音频笔记/ }))
+    fireEvent.click(screen.getByRole('button', { name: /高级设置/ }))
+    fireEvent.click(screen.getByRole('switch'))
+    fireEvent.click(screen.getByRole('combobox', { name: '预计说话人数' }))
+    fireEvent.click(screen.getByRole('option', { name: '2 人' }))
+    fireEvent.click(screen.getByRole('button', { name: /开始生成/ }))
+
+    await waitFor(() => {
+      expect(generateNoteMock).toHaveBeenCalledWith(
+        'ws-1',
+        'https://example.com/interview.m4a',
+        '双人访谈',
+        true,
+        'vision',
+        10,
+        '',
+        'note',
+        'audio',
+        expect.objectContaining({
+          diarize: true,
+          speaker_count: 2,
+          summary_mode: 'speaker_aware',
+        }),
+      )
+    })
   })
 
   it('复刻设置展示取画面，不展示笔记专属项', () => {

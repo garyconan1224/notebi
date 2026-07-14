@@ -66,7 +66,11 @@ def test_patch_speaker_map_saves_to_results(client: TestClient) -> None:
     )
 
     assert resp.status_code == 200
-    assert resp.json() == {"speaker_map": mapping}
+    assert resp.json()["speaker_map"] == mapping
+    assert resp.json()["summary_refresh"] == {
+        "status": "not_needed",
+        "reason": "当前没有区分说话人总结需要更新。",
+    }
 
     # 验证已持久化到 item.results
     rec = ws_module._store.get(ws_id)

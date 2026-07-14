@@ -11,7 +11,7 @@ import './FloatingTaskQueue.css'
 
 /* ── helpers ── */
 
-type DisplayState = 'running' | 'queued' | 'error'
+type DisplayState = 'running' | 'queued' | 'partial' | 'error'
 
 interface QueueRow {
   id: string
@@ -29,11 +29,13 @@ interface QueueRow {
 
 function displayState(status: string): DisplayState {
   if (status === 'FAILED') return 'error'
+  if (status === 'PARTIAL') return 'partial'
   if (status === 'PENDING') return 'queued'
   return 'running'
 }
 
 function getStageLabel(status: string, errorMsg?: string): string {
+  if (status === 'PARTIAL') return '部分完成'
   if (status === 'FAILED') {
     if (errorMsg) {
       // F3.2: 复用 errorCategories 框架，展示友好分类文案（如「API 配额耗尽或请求限流」），
@@ -89,6 +91,7 @@ const timeOf = (value: string | undefined): number => {
 const dotColor = (s: DisplayState): string =>
   s === 'running' ? 'var(--accent-green)'
     : s === 'queued' ? 'var(--ink-4)'
+    : s === 'partial' ? 'var(--accent-2)'
     : 'var(--accent-pink)'
 
 /* ── component ── */
@@ -127,15 +130,15 @@ export function FloatingTaskQueue() {
       groups.set(key, group)
     }
 
-    // 仅保留「整组未完成」的素材：组内任一 task 非终态，或有 FAILED。
+    // 仅保留「整组未完成」或需要用户处理的素材。
     // 全部 SUCCESS 的素材视为已完成，从活跃队列隐去。
     const activeGroups = Array.from(groups.entries()).filter(([, group]) =>
-      group.some((t) => !isTaskTerminal(t.status) || t.status === 'FAILED'),
+      group.some((t) => !isTaskTerminal(t.status) || t.status === 'FAILED' || t.status === 'PARTIAL'),
     )
 
     // 每组取代表 task：运行态 > PENDING > FAILED > 终态(SUCCESS/CANCELLED)
     const rankOf = (s: string): number =>
-      s === 'FAILED' ? 2 : s === 'PENDING' ? 3 : isTaskTerminal(s) ? 1 : 4
+      s === 'FAILED' || s === 'PARTIAL' ? 2 : s === 'PENDING' ? 3 : isTaskTerminal(s) ? 1 : 4
 
     const representativeTasks = activeGroups.map(([groupKey, group]) => {
       // 按 status 优先级排序，取优先级最高的（运行中的 analyze 会盖过已完成的 download）
@@ -193,6 +196,7 @@ export function FloatingTaskQueue() {
 
   const running = rows.filter((r) => r.state === 'running').length
   const queued = rows.filter((r) => r.state === 'queued').length
+  const partial = rows.filter((r) => r.state === 'partial').length
   const errored = rows.filter((r) => r.state === 'error').length
   const total = rows.length
 
@@ -251,7 +255,7 @@ export function FloatingTaskQueue() {
 
   if (total === 0) return null
 
-  const activeRows = rows.filter((r) => r.status !== 'FAILED')
+  const activeRows = rows.filter((r) => !isTaskTerminal(r.status))
   const erroredRows = rows.filter((r) => r.status === 'FAILED')
 
   return (
@@ -292,13 +296,16 @@ export function FloatingTaskQueue() {
           </svg>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'flex-start', lineHeight: 1.1 }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--bg)' }}>
-              任务 · {running + queued + errored} 项进行中
+              任务 · {total} 项需关注
             </span>
             <span style={{ fontSize: 10, opacity: 0.65 }}>
               {running > 0 && <>● {running} 处理</>}
               {queued > 0 && <>{running > 0 ? ' · ' : ''}○ {queued} 等待</>}
+              {partial > 0 && (
+                <>{(running || queued) ? ' · ' : ''}<span style={{ color: 'var(--accent-2)' }}>△ {partial} 部分完成</span></>
+              )}
               {errored > 0 && (
-                <>{(running || queued) ? ' · ' : ''}<span style={{ color: 'var(--accent-pink)' }}>✗ {errored} 失败</span></>
+                <>{(running || queued || partial) ? ' · ' : ''}<span style={{ color: 'var(--accent-pink)' }}>✗ {errored} 失败</span></>
               )}
             </span>
           </div>
@@ -398,7 +405,9 @@ export function FloatingTaskQueue() {
                       style={{
                         flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600,
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                        color: r.state === 'error' ? 'var(--accent-pink)' : 'var(--ink)',
+                        color: r.state === 'error'
+                          ? 'var(--accent-pink)'
+                          : r.state === 'partial' ? 'var(--accent-2)' : 'var(--ink)',
                       }}
                     >
                       {r.title}
@@ -415,7 +424,7 @@ export function FloatingTaskQueue() {
                       </span>
                     )}
                     <span className="mono" style={{ fontSize: 10, color: dotColor(r.state), flexShrink: 0 }}>
-                      {r.state === 'error' ? 'FAIL' : `${r.progress}%`}
+                      {r.state === 'error' ? 'FAIL' : r.state === 'partial' ? 'PART' : `${r.progress}%`}
                     </span>
                   </div>
 
@@ -447,17 +456,32 @@ export function FloatingTaskQueue() {
                         <RotateCcw size={10} />重试
                       </button>
                     )}
-                    <button
-                      className="btn btn-ghost"
-                      aria-label={r.status === 'FAILED' ? `清除失败任务 ${r.title}` : `取消任务 ${r.title}`}
-                      style={{ height: 20, padding: '0 7px', fontSize: 10, color: 'var(--ink-3)' }}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        void handleCancelOrHide(r)
-                      }}
-                    >
-                      <X size={10} />
-                    </button>
+                    {r.state === 'partial' && (
+                      <button
+                        className="btn btn-ghost"
+                        aria-label={`仅重试说话人分析 ${r.title}`}
+                        style={{ height: 20, padding: '0 7px', fontSize: 10, gap: 4 }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void retryTask(r.id, { stage: 'diarization' })
+                        }}
+                      >
+                        <RotateCcw size={10} />重试说话人
+                      </button>
+                    )}
+                    {r.state !== 'partial' && (
+                      <button
+                        className="btn btn-ghost"
+                        aria-label={r.status === 'FAILED' ? `清除失败任务 ${r.title}` : `取消任务 ${r.title}`}
+                        style={{ height: 20, padding: '0 7px', fontSize: 10, color: 'var(--ink-3)' }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void handleCancelOrHide(r)
+                        }}
+                      >
+                        <X size={10} />
+                      </button>
+                    )}
                   </div>
                 </div>
               )

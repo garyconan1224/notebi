@@ -95,6 +95,7 @@ interface AddMaterialModalProps {
 type NoteMediaKind = 'auto' | 'video' | 'image_text' | 'audio' | 'mixed'
 type ActionType = 'note' | 'replica' | 'ai_video' | 'storyboard' | 'rewrite'
 type SourceMode = 'auto' | 'single' | 'batch'
+type SpeakerCountChoice = 'auto' | '2' | '3' | '4' | '5'
 const DEFAULT_ACTION: ActionType = productConfig.defaultKind === 'replica' ? 'replica' : 'note'
 
 const NOTE_TYPE_CARDS: { value: NoteMediaKind; label: string; desc: string }[] = [
@@ -317,6 +318,7 @@ export function AddMaterialModal({
   const [error, setError] = useState<string | null>(null)
   const [sniffFailed, setSniffFailed] = useState(false)
   const [diarizeOn, setDiarizeOn] = useState(false)
+  const [speakerCount, setSpeakerCount] = useState<SpeakerCountChoice>('auto')
   const [userNotes, setUserNotes] = useState('')
   const [noteStyle, setNoteStyle] = useState('standard')
   const [sourceMode, setSourceMode] = useState<SourceMode>('auto')
@@ -535,6 +537,7 @@ export function AddMaterialModal({
   const advancedSummary = advancedSummaryParts.join(' · ')
 
   const speakerAwareAudio = showAudioNoteSettings && diarizeOn
+  const selectedSpeakerCount = speakerCount === 'auto' ? undefined : Number(speakerCount)
   const visiblePrimaryStyleOptions = speakerAwareAudio ? SPEAKER_AWARE_STYLES : primaryStyleOptions
   const visibleMoreStyleOptions = speakerAwareAudio
     ? styleOptions.filter((style) => !SPEAKER_AWARE_STYLE_IDS.has(style.id))
@@ -882,6 +885,7 @@ export function AddMaterialModal({
         note_media_kind: resolvedNoteKind,
         summary_template: noteStyle,
         diarize: diarizeOn,
+        ...(selectedSpeakerCount ? { speaker_count: selectedSpeakerCount } : {}),
         ...(speakerAwareAudio ? { summary_mode: 'speaker_aware' as const } : {}),
         user_notes: userNotes,
       })
@@ -934,6 +938,9 @@ export function AddMaterialModal({
               embed_frames: videoTask ? embedFrames : false,
               summary_template: noteStyle,
               diarize: resolvedNoteType === 'mixed' ? true : diarizeOn,
+              ...(resolvedNoteType === 'audio' && diarizeOn && selectedSpeakerCount
+                ? { speaker_count: selectedSpeakerCount }
+                : {}),
               ...(resolvedNoteType === 'audio' && diarizeOn ? { summary_mode: 'speaker_aware' as const } : {}),
             },
             // 混合笔记：标记 note_media_kind
@@ -994,7 +1001,7 @@ export function AddMaterialModal({
         wsId, effectiveUrl, effectiveSniff?.title ?? undefined,
         embedFrames, targetWorkspaceKind === 'replica' ? 'replica_prompt' : 'vision', effInterval, effVisionModel,
         targetWorkspaceKind, selectedNoteType,
-        { diarize: selectedNoteType === 'mixed' ? true : diarizeOn, summary_template: noteStyle, ...(speakerAwareAudio ? { summary_mode: 'speaker_aware' as const } : {}), user_notes: userNotes, ...(targetWorkspaceKind === 'replica' ? { replica_kind: replicaKind } : {}), ...(selectedNoteType === 'mixed' ? { note_media_kind: 'mixed' } : {}) },
+        { diarize: selectedNoteType === 'mixed' ? true : diarizeOn, ...(speakerAwareAudio && selectedSpeakerCount ? { speaker_count: selectedSpeakerCount } : {}), summary_template: noteStyle, ...(speakerAwareAudio ? { summary_mode: 'speaker_aware' as const } : {}), user_notes: userNotes, ...(targetWorkspaceKind === 'replica' ? { replica_kind: replicaKind } : {}), ...(selectedNoteType === 'mixed' ? { note_media_kind: 'mixed' } : {}) },
       )
       toast.success(targetWorkspaceKind === 'replica' ? '复刻任务已创建' : '笔记生成中', { description: `${result.item_type} · ${effectiveUrl}` })
 
@@ -1761,17 +1768,42 @@ export function AddMaterialModal({
                   {advancedOpen && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14 }}>
                       {showSpeakerSettings && (
-                        <label className="gen-toggle">
-                          <Switch checked={diarizeOn} onCheckedChange={handleDiarizeChange} />
-                          <span className="gen-toggle-text">
-                            <span className="gen-field-label">{showAudioNoteSettings ? '区分说话人' : '区分发言人'}</span>
-                            <span className="kw" style={{ fontSize: 11 }}>
-                              {showAudioNoteSettings
-                                ? '开启后使用区分说话人的总结方式，并在转写中标注不同说话人'
-                                : '开启后在转写中标注不同说话人（实验功能）'}
+                        <>
+                          <label className="gen-toggle">
+                            <Switch checked={diarizeOn} onCheckedChange={handleDiarizeChange} />
+                            <span className="gen-toggle-text">
+                              <span className="gen-field-label">{showAudioNoteSettings ? '区分说话人' : '区分发言人'}</span>
+                              <span className="kw" style={{ fontSize: 11 }}>
+                                {showAudioNoteSettings
+                                  ? '开启后使用区分说话人的总结方式，并在转写中标注不同说话人'
+                                  : '开启后在转写中标注不同说话人（实验功能）'}
+                              </span>
                             </span>
-                          </span>
-                        </label>
+                          </label>
+                          {speakerAwareAudio && (
+                            <div className="gen-field">
+                              <span className="gen-field-label">预计说话人数</span>
+                              <Select
+                                value={speakerCount}
+                                onValueChange={(value) => setSpeakerCount(value as SpeakerCountChoice)}
+                              >
+                                <SelectTrigger aria-label="预计说话人数" style={{ fontSize: 13 }}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="auto">自动判断</SelectItem>
+                                  <SelectItem value="2">2 人</SelectItem>
+                                  <SelectItem value="3">3 人</SelectItem>
+                                  <SelectItem value="4">4 人</SelectItem>
+                                  <SelectItem value="5">5 人</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <span className="kw" style={{ fontSize: 11 }}>
+                                已知人数时建议明确选择；超过 5 人请使用自动判断。
+                              </span>
+                            </div>
+                          )}
+                        </>
                       )}
                       <div className="gen-field">
                         <span className="gen-field-label">补充说明</span>

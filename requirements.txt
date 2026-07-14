@@ -45,9 +45,17 @@ opencc-python-reimplemented>=0.1.7
 # ── 音频分析（N8）──────────────────────────────────────────────
 silero-vad>=5.0    # VAD 人声活动检测（轻量，torch 后端）
 librosa>=0.10      # 音乐特征：BPM / 调性 / 能量曲线
-# pyannote.audio：说话人分离。**首次运行需 HF_TOKEN + 同意
-# pyannote/speaker-diarization-3.1 模型协议**。代码 graceful skip 缺包/缺 token
-pyannote.audio>=3.1
+# sherpa-onnx：默认说话人分离后端，支持 macOS / Windows / Linux 离线运行。
+# 固定 1.13.x，包含说话人分离边界检查修复且避免未来主/次版本破坏性升级。
+sherpa-onnx>=1.13.2,<1.14
+# WeSpeaker：优先音色嵌入引擎，支持 macOS / Windows / Linux；无需 HF Token。
+# 说话人分析失败时自动回退 sherpa-onnx。
+wespeakerruntime>=1.0.1
+soundfile>=0.12
+scikit-learn>=1.2
+# pyannote.audio：说话人分离。首次运行需 HF_TOKEN + 同意 Community-1 模型协议。
+# 固定已适配的 4.x 主版本，避免再被破坏性升级静默打断。
+pyannote.audio>=4.0,<5
 ctranslate2>=4.0.0
 
 # ── 系统监控（部署监控页 M4）────────────────────────────────────

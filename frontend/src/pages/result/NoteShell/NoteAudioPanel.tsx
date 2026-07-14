@@ -9,16 +9,10 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { Pause, PictureInPicture2, Play, Repeat, Volume2, VolumeX } from 'lucide-react'
+import { formatAudioTime } from './audioTime'
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3] as const
 const WAVEFORM_BARS = 72
-
-function formatTs(sec: number): string {
-  if (!sec || !Number.isFinite(sec)) return '00:00'
-  const m = Math.floor(sec / 60)
-  const s = Math.floor(sec % 60)
-  return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`
-}
 
 function formatSpeed(s: number): string {
   return s === Math.floor(s) ? `${s}.0` : String(s)
@@ -97,6 +91,10 @@ const NoteAudioPanel = forwardRef<NoteAudioPanelHandle, NoteAudioPanelProps>(
       setProgress(a.currentTime / a.duration)
       onTimeUpdate?.(a.currentTime)
     }, [onTimeUpdate])
+    const handleSeeked = useCallback(() => {
+      // 某些浏览器在脚本 seek 后不会立即触发 timeupdate；用 seeked 把转录轴校准到媒体真实时间。
+      handleTimeUpdate()
+    }, [handleTimeUpdate])
     const handleVolumeChange = useCallback(() => {
       const a = audioRef.current
       if (!a) return
@@ -254,9 +252,9 @@ const NoteAudioPanel = forwardRef<NoteAudioPanelHandle, NoteAudioPanelProps>(
         </div>
         {/* 时间 */}
         <div className="note-audio-time">
-          <span>{formatTs(progress * duration)}</span>
+          <span>{formatAudioTime(progress * duration)}</span>
           <span className="note-audio-time-sep">/</span>
-          <span>{formatTs(duration)}</span>
+          <span>{formatAudioTime(duration)}</span>
         </div>
         {/* 控制条 */}
         <div className="note-audio-controls">
@@ -347,6 +345,7 @@ const NoteAudioPanel = forwardRef<NoteAudioPanelHandle, NoteAudioPanelProps>(
           onEnded={handleEnded}
           onLoadedMetadata={handleLoadedMetadata}
           onTimeUpdate={handleTimeUpdate}
+          onSeeked={handleSeeked}
           onVolumeChange={handleVolumeChange}
           onRateChange={handleRateChange}
         />

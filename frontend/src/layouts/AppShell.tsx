@@ -19,6 +19,7 @@ import {
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useSystemStats } from '@/hooks/useSystemStats'
+import { useHealthPulse } from '@/hooks/useHealthPulse'
 import { FloatingTaskQueue } from '@/components/FloatingTaskQueue'
 import { GlobalAddMaterialModal } from '@/components/workspace/GlobalAddMaterialModal'
 import ThemeSwitcher from '@/components/ThemeSwitcher'
@@ -189,7 +190,13 @@ const BACKEND_ADDR = `127.0.0.1:${import.meta.env.VITE_BACKEND_PORT ?? '8001'}`
 export function AppShell({ children }: AppShellProps) {
   const location = useLocation()
   const navigate = useNavigate()
-  const { stats, online } = useSystemStats()
+  const { stats } = useSystemStats()
+  // /admin/system/stats 是诊断接口，模型推理高负载时可能超时；在线灯只由轻量 /health 决定。
+  const health = useHealthPulse(5000)
+  // 允许一次健康探针抖动，不让侧栏状态在重负载时瞬间闪成 offline；连续约 15s 无成功握手才算离线。
+  const online = health.online || Boolean(
+    health.data && health.lastCheckedAt && Date.now() - health.lastCheckedAt < 15_000,
+  )
   const openAddMaterial = useAddMaterialStore((state) => state.openAddMaterial)
   const [collapsed, setCollapsed] = useState<boolean>(
     () => getProductStorageItem('sidebar-collapsed', 'nibi-sidebar-collapsed') === '1',

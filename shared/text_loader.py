@@ -131,19 +131,33 @@ def _extract_pdf_title_pypdf(path: Path) -> str:
         return ""
 
 
+def _pdf_has_embedded_images(path: Path) -> bool:
+    """Return whether a PDF has image objects worth sending to marker/OCR."""
+    try:
+        from pypdf import PdfReader
+
+        reader = PdfReader(str(path))
+        return any(bool(getattr(page, "images", [])) for page in reader.pages)
+    except Exception:
+        # If the lightweight probe cannot decide, retain the marker attempt.
+        return True
+
+
 def load_pdf(path: Union[str, Path]) -> TextDocument:
     """解析 PDF 文件。marker 优先（支持扫描件 OCR + 图片表格保留），pypdf 兜底。"""
     p = Path(path)
     if not p.is_file():
         raise TextLoaderError(f"PDF 文件不存在: {p}")
 
-    # 优先 marker
-    try:
-        return _load_pdf_marker(p)
-    except TextLoaderError:
-        pass  # marker 失败，fallback pypdf
-    except Exception:  # noqa: BLE001
-        pass  # marker 导入失败等
+    # 空白/纯文字 PDF 不需要加载约 1.5GB 的 marker 模型；扫描件或含图片
+    # 的 PDF 才尝试 marker，避免一个空白页触发 Torch 原生初始化崩溃。
+    if _pdf_has_embedded_images(p):
+        try:
+            return _load_pdf_marker(p)
+        except TextLoaderError:
+            pass  # marker 失败，fallback pypdf
+        except Exception:  # noqa: BLE001
+            pass  # marker 导入失败等
 
     # fallback: pypdf（纯文本，无 OCR）
     try:

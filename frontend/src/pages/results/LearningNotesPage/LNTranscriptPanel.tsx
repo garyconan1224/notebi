@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { FileCode, Globe, Loader2, Quote } from 'lucide-react'
 import { toast } from 'sonner'
 import type { VideoResultTranscriptLine } from '@/services/workspaces'
@@ -15,6 +16,21 @@ const TRANSLATE_LANGS: { value: string; label: string }[] = [
 ]
 
 const langLabel = (lang: string) => TRANSLATE_LANGS.find((l) => l.value === lang)?.label ?? lang
+
+const SPEAKER_COLORS = [
+  'var(--accent-blue, #4f8fd8)',
+  'var(--accent-pink, #d45b86)',
+  'var(--accent-green, #3f9a73)',
+  'var(--accent-orange, #d58a3e)',
+  'var(--accent-purple, #8364c5)',
+  'var(--accent-yellow, #aa9a32)',
+]
+
+function speakerColor(speakerId: string): string {
+  let hash = 0
+  for (const ch of speakerId) hash = (hash * 31 + ch.charCodeAt(0)) | 0
+  return SPEAKER_COLORS[Math.abs(hash) % SPEAKER_COLORS.length]
+}
 
 function extractTranslateErrorMessage(error: unknown): string {
   const err = error as {
@@ -43,6 +59,10 @@ interface LNTranscriptPanelProps {
   translations?: TranscriptTranslations | null
   /** 说话人编号到用户自定义名称的映射。 */
   speakerMap?: Record<string, string>
+  /** 音频笔记使用详细说话人样式；其它页面保持原有文字前缀。 */
+  speakerPresentation?: 'prefix' | 'detailed'
+  /** 长音频字幕跳过屏幕外行的布局和绘制；其它素材保持原渲染路径。 */
+  optimizeLongTranscript?: boolean
   title?: string
   countLabel?: string
 }
@@ -101,6 +121,8 @@ export default function LNTranscriptPanel({
   sourceMd,
   translations,
   speakerMap,
+  speakerPresentation = 'prefix',
+  optimizeLongTranscript = false,
   title = '转录',
   countLabel,
 }: LNTranscriptPanelProps) {
@@ -255,8 +277,10 @@ export default function LNTranscriptPanel({
     )
   }
 
+  const optimizeOffscreenRows = optimizeLongTranscript && transcript.length >= 300
+
   return (
-    <div className="ln-transcript-panel">
+    <div className={`ln-transcript-panel${optimizeOffscreenRows ? ' ln-transcript-panel--long' : ''}`}>
       <div className="ln-tr-head">
         <div className="ln-tr-head-main">
           <span className="ln-tr-title">{title}</span>
@@ -366,6 +390,7 @@ export default function LNTranscriptPanel({
               ? (speakerMap?.[line.speaker] || line.speaker.replace(/^SPEAKER_/, 'S'))
               : ''
             const speakerPrefix = speakerName ? `[${speakerName}] ` : ''
+            const detailedSpeaker = speakerPresentation === 'detailed' && Boolean(speakerName)
             const translatedText = localTranslations?.[i]
             const quoteText = mode === 'translated' || mode === 'bilingual'
               ? translatedText || displayText
@@ -376,6 +401,10 @@ export default function LNTranscriptPanel({
                 ref={i === activeIdx ? activeRef : undefined}
                 className="ln-tr-row"
                 data-active={i === activeIdx}
+                data-speaker={detailedSpeaker ? line.speaker : undefined}
+                style={detailedSpeaker
+                  ? { '--speaker-color': speakerColor(String(line.speaker)) } as CSSProperties
+                  : undefined}
                 onClick={() => !isEditing && onSeek(line.t_sec)}
                 onDoubleClick={(e) => {
                   e.stopPropagation()
@@ -383,6 +412,9 @@ export default function LNTranscriptPanel({
                   setEditText(displayText)
                 }}
               >
+                {detailedSpeaker && (
+                  <span className="ln-tr-speaker-avatar" aria-hidden="true">{speakerName.slice(0, 1)}</span>
+                )}
                 <span className="ln-tr-time">{line.t_str}</span>
                 {isEditing ? (
                   <input
@@ -399,9 +431,10 @@ export default function LNTranscriptPanel({
                   />
                 ) : (
                   <span className="ln-tr-text">
+                    {detailedSpeaker && <span className="ln-tr-speaker-name">{speakerName}</span>}
                     {mode !== 'translated' && (
                       <span className={mode === 'bilingual' && translatedText ? 'ln-tr-original' : undefined}>
-                        {speakerPrefix}{displayText}
+                        {!detailedSpeaker && speakerPrefix}{displayText}
                       </span>
                     )}
                     {mode === 'bilingual' && translatedText && (

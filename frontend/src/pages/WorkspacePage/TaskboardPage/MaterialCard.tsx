@@ -56,6 +56,7 @@ function getMaterialThumbnail(item: WorkspaceItem): string | null {
 const STATUS_DOT: Record<string, string> = {
   done: 'var(--accent-green)',
   processing: 'var(--ink)',
+  partial: 'var(--accent-2)',
   pending: 'var(--ink-4)',
   failed: 'var(--accent-pink)',
 }
@@ -64,6 +65,7 @@ const STATUS_DOT: Record<string, string> = {
 const STATUS_LABEL: Record<string, string> = {
   done: '完成',
   processing: '处理中',
+  partial: '部分完成',
   pending: '等待中',
   failed: '失败',
 }

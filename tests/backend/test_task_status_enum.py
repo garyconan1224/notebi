@@ -65,7 +65,8 @@ def test_legacy_failed_maps_to_failed() -> None:
 
 
 def test_terminal_status_values_are_uppercase_strings() -> None:
-    assert TERMINAL_STATUS_VALUES == frozenset({"SUCCESS", "FAILED", "CANCELLED"})
+    assert TERMINAL_STATUS_VALUES == frozenset({"SUCCESS", "PARTIAL", "FAILED", "CANCELLED"})
+    assert TaskStatus("PARTIAL") is TaskStatus.PARTIAL
 
 
 def test_task_record_from_dict_coerces_legacy_lowercase_status() -> None:
@@ -99,4 +100,3 @@ def test_task_record_to_dict_status_is_plain_string() -> None:
     # 模拟误把 Enum 成员直接赋给 status 的场景
     rec.status = TaskStatus.SUCCESS  # type: ignore[assignment]
     assert rec.to_dict()["status"] == "SUCCESS"
-

@@ -1075,6 +1075,12 @@
   transition: background 0.15s;
 }
 
+/* 长音频仍保留完整字幕语义，但跳过屏幕外行的布局与绘制。 */
+.vm-ln-scope .ln-transcript-panel--long .ln-tr-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 44px;
+}
+
 .vm-ln-scope .ln-tr-row:hover {
   background: var(--line);
 }
@@ -1082,6 +1088,30 @@
 .vm-ln-scope .ln-tr-row[data-active="true"] {
   background: var(--bg-sunken);
   border-left: 2px solid var(--accent-pink);
+}
+
+.vm-ln-scope .ln-tr-row[data-speaker] {
+  border-left: 2px solid var(--speaker-color);
+}
+
+.vm-ln-scope .ln-tr-speaker-avatar {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--speaker-color) 16%, var(--bg));
+  color: var(--speaker-color);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.vm-ln-scope .ln-tr-speaker-name {
+  color: var(--speaker-color);
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .vm-ln-scope .ln-tr-time {

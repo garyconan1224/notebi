@@ -17,7 +17,7 @@ TEST_URLS = {
 }
 
 
-def test_platform(name: str, url: str) -> dict:
+def run_platform_test(name: str, url: str) -> dict:
     """测试单个平台的下载能力。"""
     print(f"\n{'='*60}")
     print(f"🔍 测试平台: {name}")
@@ -63,7 +63,7 @@ def main():
 
     results = []
     for name, url in TEST_URLS.items():
-        result = test_platform(name, url)
+        result = run_platform_test(name, url)
         results.append(result)
 
     print("\n" + "=" * 60)

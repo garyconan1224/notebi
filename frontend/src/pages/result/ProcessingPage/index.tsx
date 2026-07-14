@@ -152,6 +152,8 @@ export default function ProcessingPage() {
   const isFailed = status === 'FAILED'
   const isCancelled = status === 'CANCELLED'
   const isSuccess = status === 'SUCCESS'
+  const isPartial = status === 'PARTIAL'
+  const hasUsableResult = isSuccess || isPartial
 
   // R18.1.3: 任务失败弹窗
   const [showFailModal, setShowFailModal] = useState(false)
@@ -203,6 +205,10 @@ export default function ProcessingPage() {
     retryTask(taskId)
   }
 
+  const handleRetryDiarization = () => {
+    retryTask(taskId, { stage: 'diarization' })
+  }
+
   const categorized = categorizeError(task?.error)
 
   const result = taskResult
@@ -218,6 +224,9 @@ export default function ProcessingPage() {
     (_kindHint && _kindHint !== 'auto' ? _kindHint : '') ||
     (_mediaKind && _mediaKind !== 'auto' ? _mediaKind : '') ||
     (isAudioTask ? 'audio' : '')
+  const speakerAnalysis = Boolean(
+    (payload.voiceprint as { enabled?: unknown } | undefined)?.enabled,
+  ) || Boolean((result.diarization as unknown) && typeof result.diarization === 'object')
   const isImageNote = noteKind === 'image' || noteKind === 'image_text'
   // R13.2/R18.1 标题/封面/时长来源优先级：result（直接来源）→ payload（从 download 继承）→ fallback
   const resultAudio = result.audio as Record<string, unknown> | undefined
@@ -284,7 +293,7 @@ export default function ProcessingPage() {
   const resultPath = buildResultPath(workspaceId, itemId, resultIntent, resultItemType)
 
   const handleViewResult = () => {
-    if (!isSuccess) return
+    if (!hasUsableResult) return
     if (resultPath) {
       navigate(resultPath)
     } else {
@@ -339,7 +348,7 @@ export default function ProcessingPage() {
                 <Copy size={12} />
                 复制链接
               </button>
-              <button className="proc-top-btn primary" onClick={handleViewResult} disabled={!isSuccess}>
+              <button className="proc-top-btn primary" onClick={handleViewResult} disabled={!hasUsableResult}>
                 查看结果
                 <ArrowRight size={12} />
               </button>
@@ -366,7 +375,7 @@ export default function ProcessingPage() {
                   </div>
                 )
               )}
-              {!isFailed && !isCancelled && (
+              {!isFailed && !isCancelled && !isPartial && (
                 <div className="live">● LIVE</div>
               )}
               {isAudioTask && coverUrl && (
@@ -429,7 +438,7 @@ export default function ProcessingPage() {
                 </div>
               )}
               <div className="actions">
-                {!isSuccess && (
+                {isActive && (
                   <button className="btn" onClick={handleCancel}>
                     <X size={14} />
                     取消
@@ -438,7 +447,7 @@ export default function ProcessingPage() {
                 <button
                   className="btn btn-primary"
                   onClick={handleViewResult}
-                  disabled={!isSuccess}
+                  disabled={!hasUsableResult}
                 >
                   查看结果 <ArrowRight size={14} />
                 </button>
@@ -451,6 +460,25 @@ export default function ProcessingPage() {
               </div>
             </div>
           </div>
+
+          {/* Partial state: transcript is usable; only the failed stage needs retrying. */}
+          {isPartial && (
+            <div className="proc-error proc-partial">
+              <AlertTriangle size={28} className="proc-error-icon" />
+              <h3>说话人分析未完成</h3>
+              <p className="proc-error-message">
+                <strong>转录和字幕已经保留</strong>
+                <br />
+                你可以先查看结果，稍后仅重试失败阶段。
+              </p>
+              <div className="proc-error-actions">
+                <button className="btn btn-primary" onClick={handleRetryDiarization}>
+                  <RotateCcw size={14} />
+                  仅重试说话人分析
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Failed state — inline indicator */}
           {isFailed && (
@@ -497,7 +525,7 @@ export default function ProcessingPage() {
           )}
 
           {/* Step progress (running / success) */}
-          {!isFailed && !isCancelled && status !== 'AWAITING_CONFIRM' && (
+          {!isFailed && !isCancelled && !isPartial && status !== 'AWAITING_CONFIRM' && (
             <>
               {/* VN3: 简洁处理中 — 5 步进度 + 预计剩余 + 友好提示 */}
               <div className="proc-body">
@@ -514,6 +542,7 @@ export default function ProcessingPage() {
                   progress={progress}
                   sourceType={sourceType as 'local' | 'link'}
                   noteKind={noteKind as 'video' | 'audio' | 'image' | 'image_text' | 'text'}
+                  speakerAnalysis={speakerAnalysis}
                 />
                 <div className="proc-body-hint">
                   {isSuccess

@@ -69,6 +69,7 @@ def test_audio_platform_url_uses_ytdlp(tmp_path: Path) -> None:
         patch("backend.app.services.pipeline_tasks.run_vad",
               return_value=VadResult(has_speech=False, total_speech_duration=0.0, total_duration=180.0)),
         patch("shared.config.get_workspace_root", return_value=tmp_path / "workspace"),
+        patch("backend.app.services.pipeline_tasks.fetch_ytdlp_metadata", return_value={}),
         patch("backend.app.services.pipeline_tasks.run_ytdlp_download",
               return_value={"ok": True, "save_path": str(audio_file)}) as mock_ytdlp,
         patch("urllib.request.urlopen") as mock_urlopen,
@@ -77,7 +78,8 @@ def test_audio_platform_url_uses_ytdlp(tmp_path: Path) -> None:
 
     mock_ytdlp.assert_called_once()
     mock_urlopen.assert_not_called()
-    assert result.get("awaiting_confirm") is True
+    assert result.get("awaiting_confirm") is None
+    assert result["vad"]["has_speech"] is False
 
 
 def test_audio_platform_url_preserves_metadata_and_asr_status(tmp_path: Path) -> None:
@@ -164,7 +166,8 @@ def test_audio_direct_url_uses_urllib(tmp_path: Path) -> None:
 
     mock_urlopen.assert_called_once()
     mock_ytdlp.assert_not_called()
-    assert result.get("awaiting_confirm") is True
+    assert result.get("awaiting_confirm") is None
+    assert result["vad"]["has_speech"] is False
 
 
 # ── integration: yt-dlp 失败 ────────────────────────────────────
@@ -179,6 +182,7 @@ def test_audio_platform_url_ytdlp_fails(tmp_path: Path) -> None:
     with (
         patch("backend.app.services.pipeline_tasks.run_vad") as mock_vad,
         patch("shared.config.get_workspace_root", return_value=tmp_path / "workspace"),
+        patch("backend.app.services.pipeline_tasks.fetch_ytdlp_metadata", return_value={}),
         patch("backend.app.services.pipeline_tasks.run_ytdlp_download",
               return_value={"ok": False, "error": "412 Precondition Failed"}),
     ):

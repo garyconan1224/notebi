@@ -193,3 +193,30 @@ class TestRefineSegments:
             assert "start" in seg
             assert "end" in seg
             assert "text" in seg
+
+    def test_preserves_speaker_metadata_for_short_and_split_segments(self):
+        segs = [
+            {
+                "start": 0.0,
+                "end": 2.0,
+                "text": "短句",
+                "speaker": "SPEAKER_00",
+                "speaker_confidence": 0.91,
+            },
+            {
+                "start": 2.0,
+                "end": 18.0,
+                "text": "这是一段足够长的多人访谈字幕，需要被拆成多段以后继续保留说话人标签。",
+                "speaker": "SPEAKER_01",
+                "speaker_confidence": 0.87,
+            },
+        ]
+
+        out = refine_segments(segs)
+
+        assert out[0]["speaker"] == "SPEAKER_00"
+        assert out[0]["speaker_confidence"] == 0.91
+        assert len(out) > 2
+        for segment in out[1:]:
+            assert segment["speaker"] == "SPEAKER_01"
+            assert segment["speaker_confidence"] == 0.87

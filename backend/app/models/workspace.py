@@ -45,12 +45,13 @@ class ItemStatus(str, Enum):
     PENDING = "pending"
     PROCESSING = "processing"
     DONE = "done"
+    PARTIAL = "partial"
     FAILED = "failed"
 
 
 # 终结态集合（用于删除/查询过滤）。
 TERMINAL_ITEM_STATUS: FrozenSet[str] = frozenset(
-    {ItemStatus.DONE.value, ItemStatus.FAILED.value}
+    {ItemStatus.DONE.value, ItemStatus.PARTIAL.value, ItemStatus.FAILED.value}
 )
 
 

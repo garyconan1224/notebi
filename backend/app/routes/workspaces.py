@@ -420,6 +420,35 @@ def _assemble_note_for_task(task: TaskRecord, runner) -> None:  # type: ignore[t
         if task.result:
             merged.update(task.result)
         item.results = merged
+        item_status = (
+            ItemStatus.PARTIAL.value
+            if task.status == TaskStatus.PARTIAL.value
+            else ItemStatus.DONE.value
+        )
+        _store.update_item(
+            ws.workspace_id,
+            item.item_id,
+            results=merged,
+            status=item_status,
+        )
+        initial_summary = str(merged.get("summary") or "").strip()
+        if item.type == ItemType.AUDIO.value and initial_summary and not item.summaries:
+            _store.add_item_summary(
+                ws.workspace_id,
+                item.item_id,
+                ItemSummary(
+                    summary_id=str(uuid.uuid4()),
+                    template=str(task.payload.get("summary_template") or "standard"),
+                    version=0,
+                    summary_mode=str(
+                        merged.get("summary_mode")
+                        or task.payload.get("summary_mode")
+                        or "general"
+                    ),
+                    content_md=initial_summary,
+                    model_used=str(task.payload.get("text_model") or ""),
+                ),
+            )
         note_path = nd / "note.md"
         if note_path.exists() and not _refresh_auto_note_if_stale(ws.workspace_id, item, note_path):
             continue
@@ -441,6 +470,8 @@ def _on_analysis_success_assemble(completed_task: TaskRecord, runner) -> None:  
 
 for _tt in ("analyze", "text", "audio", "image", "note"):
     _pipeline_runner.register_success_callback(_tt, _on_analysis_success_assemble)
+
+_pipeline_runner.register_partial_callback("audio", _on_analysis_success_assemble)
 
 
 # ── 7.2 标题全链路：note task 成功后回写 item.name ─────────────
@@ -709,6 +740,12 @@ class GenerateNoteRequest(BaseModel):
         default="general",
         description="音频总结方式：general（普通）或 speaker_aware（区分说话人）",
     )
+    speaker_count: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=20,
+        description="预计说话人数；空值表示自动判断",
+    )
     user_notes: str = Field(
         default="",
         description="用户补充说明，生成时附加给模型的上下文",
@@ -749,6 +786,7 @@ class BatchSourceImportRequest(BaseModel):
     summary_template: str = Field(default="standard")
     diarize: bool = Field(default=False)
     summary_mode: str = Field(default="general")
+    speaker_count: Optional[int] = Field(default=None, ge=1, le=20)
     user_notes: str = Field(default="", max_length=8000)
 
 
@@ -1032,25 +1070,25 @@ def _items_count_by_type(rec: WorkspaceRecord) -> Dict[str, int]:
 def _sync_item_with_tasks(item: WorkspaceItem) -> Optional[Dict[str, Any]]:
     """Phase X.1 状态桥（拉模式）：根据 related_task_ids 推导 item 当前应有的状态/产物。
 
-    - status：最新一条 task 决定。SUCCESS→done / FAILED|CANCELLED→failed / 其它非终结→processing
-    - results：最新一条 SUCCESS 任务的 result，作为 overlay 返回（item.results 已有则不覆盖）
+    - status：SUCCESS→done / PARTIAL→partial / FAILED|CANCELLED→failed / 其它→processing
+    - results：最新一条 SUCCESS/PARTIAL 任务的可用 result，作为 overlay 返回
     只读 task_store；返回 None 表示无需 overlay。**不修改** item 本身，避免污染 store 缓存。
     """
     if not item.related_task_ids:
         return None
 
     latest: Optional[Any] = None
-    latest_success: Optional[Any] = None
+    latest_result: Optional[Any] = None
     for tid in item.related_task_ids:
         task = _pipeline_runner.store.get(tid)
         if task is None:
             continue
         if latest is None or task.updated_at > latest.updated_at:
             latest = task
-        if task.status == TaskStatus.SUCCESS.value and (
-            latest_success is None or task.updated_at > latest_success.updated_at
+        if task.status in (TaskStatus.SUCCESS.value, TaskStatus.PARTIAL.value) and (
+            latest_result is None or task.updated_at > latest_result.updated_at
         ):
-            latest_success = task
+            latest_result = task
 
     if latest is None:
         return None
@@ -1058,14 +1096,16 @@ def _sync_item_with_tasks(item: WorkspaceItem) -> Optional[Dict[str, Any]]:
     overlay: Dict[str, Any] = {}
     if latest.status == TaskStatus.SUCCESS.value:
         overlay["status"] = ItemStatus.DONE.value
+    elif latest.status == TaskStatus.PARTIAL.value:
+        overlay["status"] = ItemStatus.PARTIAL.value
     elif latest.status in (TaskStatus.FAILED.value, TaskStatus.CANCELLED.value):
         overlay["status"] = ItemStatus.FAILED.value
     else:
         overlay["status"] = ItemStatus.PROCESSING.value
 
-    if latest_success is not None and latest_success.result:
+    if latest_result is not None and latest_result.result:
         merged = dict(item.results or {})
-        merged.update(latest_success.result)
+        merged.update(latest_result.result)
         # 保留 item.results 中 transcript_segments 的 edited_text（用户在字幕轴的编辑）
         # task result 不含 edited_text，直接 update 会覆盖掉用户的编辑
         _item_segs = (item.results or {}).get("transcript_segments") or []
@@ -1080,9 +1120,9 @@ def _sync_item_with_tasks(item: WorkspaceItem) -> Optional[Dict[str, Any]]:
         if not merged.get("cover_thumbnail"):
             for tid in item.related_task_ids:
                 task = _pipeline_runner.store.get(tid)
-                if task is None or task is latest_success:
+                if task is None or task is latest_result:
                     continue
-                if task.status == TaskStatus.SUCCESS.value and task.result:
+                if task.status in (TaskStatus.SUCCESS.value, TaskStatus.PARTIAL.value) and task.result:
                     ct = task.result.get("cover_thumbnail")
                     if ct:
                         merged["cover_thumbnail"] = ct
@@ -1677,6 +1717,7 @@ def _create_batch_note_task(
         "summary_template": req.summary_template or "standard",
         "diarize": req.diarize,
         "summary_mode": req.summary_mode,
+        "speaker_count": req.speaker_count,
         "batch_source": {
             "source_type": req.source_type,
             "source_url": req.source_url,
@@ -2784,7 +2825,13 @@ def _bridge_to_pipeline_payload(
             _copy_task_config(payload, "voiceprint", ts, "speaker_diarize")
             _copy_task_config(payload, "srt", ts, "subtitle_export")
             # 顶层参数直接透传
-            for k in ("proper_nouns", "include_timestamps", "summary_template", "summary_mode"):
+            for k in (
+                "proper_nouns",
+                "include_timestamps",
+                "summary_template",
+                "summary_mode",
+                "speaker_count",
+            ):
                 v = ts.get(k)
                 if v is not None and v != "":
                     payload[k] = v
@@ -2796,6 +2843,17 @@ def _bridge_to_pipeline_payload(
             _copy_task_config(payload, "asr", tasks, "asr_summary", "asr")
             _copy_task_config(payload, "voiceprint", tasks, "voiceprint")
             _copy_task_config(payload, "srt", tasks, "subtitle_file", "srt")
+        # AddMaterial 的当前音频配置存放在 tasks.summary；这是新建音频的主路径。
+        summary_cfg = tasks.get("summary")
+        if isinstance(summary_cfg, dict):
+            if summary_cfg.get("summary_template"):
+                payload["summary_template"] = summary_cfg["summary_template"]
+            if summary_cfg.get("summary_mode"):
+                payload["summary_mode"] = summary_cfg["summary_mode"]
+            if "diarize" in summary_cfg:
+                payload["voiceprint"] = {"enabled": bool(summary_cfg["diarize"])}
+            if summary_cfg.get("speaker_count") is not None:
+                payload["speaker_count"] = summary_cfg["speaker_count"]
         # 音频笔记不进入音乐/复刻能力；旧配置字段不再透传，避免历史设置重新触发这些流程。
         # R21.P3.S1: 透传 preflight 新字段（background_for_recognition）
         _preflight = tasks.get("preflight")
@@ -3053,6 +3111,8 @@ def generate_note(workspace_id: str, req: GenerateNoteRequest) -> Dict[str, Any]
     _task_payload["summary_template"] = req.summary_template
     _task_payload["diarize"] = req.diarize
     _task_payload["summary_mode"] = req.summary_mode
+    if req.speaker_count is not None:
+        _task_payload["speaker_count"] = req.speaker_count
     if req.user_notes.strip():
         _task_payload["user_notes"] = req.user_notes.strip()
     try:

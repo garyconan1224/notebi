@@ -30,6 +30,7 @@ class TaskStatus(str, Enum):
     TRANSLATE = "TRANSLATE"    # N10: 翻译
     STORE = "STORE"            # 入库（写入任务数据库）
     SUCCESS = "SUCCESS"
+    PARTIAL = "PARTIAL"        # 核心产物可用，但用户选择的后续阶段未完成
     FAILED = "FAILED"
     CANCELLED = "CANCELLED"
     AWAITING_CONFIRM = "AWAITING_CONFIRM"  # A3: VAD 无人声，等待用户确认切音乐模式
@@ -58,7 +59,12 @@ LEGACY_STATUS_MAP: Dict[str, TaskStatus] = {
 
 # 终结态集合（用于 delete/SSE 终止判断等）。
 TERMINAL_STATUS_VALUES: FrozenSet[str] = frozenset(
-    {TaskStatus.SUCCESS.value, TaskStatus.FAILED.value, TaskStatus.CANCELLED.value}
+    {
+        TaskStatus.SUCCESS.value,
+        TaskStatus.PARTIAL.value,
+        TaskStatus.FAILED.value,
+        TaskStatus.CANCELLED.value,
+    }
 )
 
 

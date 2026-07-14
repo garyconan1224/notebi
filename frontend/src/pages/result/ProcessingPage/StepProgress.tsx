@@ -13,6 +13,7 @@ const STEP_DEFS: Record<string, StepDef> = {
   PENDING:       { id: 'PENDING',       name: '排队',     icon: Download },
   DOWNLOAD:      { id: 'DOWNLOAD',      name: '下载',     icon: Download },
   TRANSCRIBE:    { id: 'TRANSCRIBE',    name: '音频转录', icon: Subtitles },
+  DIARIZE:      { id: 'DIARIZE',      name: '说话人分析', icon: Subtitles },
   ANALYZE:       { id: 'ANALYZE',       name: '画面分析', icon: Eye },
   ANALYZE_NOTE:  { id: 'ANALYZE_NOTE',  name: '生成笔记', icon: BookMarked },
   SUCCESS:       { id: 'SUCCESS',       name: '完成',     icon: Check },
@@ -32,7 +33,7 @@ type NoteKind = 'video' | 'audio' | 'image' | 'image_text' | 'text' | ''
  * 图文：    （链接含下载）→分析→生成笔记→完成（无转录）
  * 文字：    生成笔记→完成
  */
-function buildStepSequence(sourceType: SourceType, noteKind: NoteKind): string[] {
+function buildStepSequence(sourceType: SourceType, noteKind: NoteKind, speakerAnalysis = false): string[] {
   const isLocal = sourceType === 'local'
   const isImageLike = noteKind === 'image' || noteKind === 'image_text'
   const isMedia = noteKind === 'video' || noteKind === 'audio' || isImageLike
@@ -46,6 +47,9 @@ function buildStepSequence(sourceType: SourceType, noteKind: NoteKind): string[]
 
   // 转录（视频 + 音频）
   if (noteKind === 'video' || noteKind === 'audio') ids.push('TRANSCRIBE')
+
+  // 音频的说话人分析复用后端 ASR 状态，但有独立的进度区间（66%~72%）。
+  if (noteKind === 'audio' && speakerAnalysis) ids.push('DIARIZE')
 
   // 分析（视频 + 图文，音频无）
   if (noteKind === 'video' || isImageLike) ids.push('ANALYZE')
@@ -72,7 +76,7 @@ export interface StepWithState {
 }
 
 /** 后端 status → 当前激活的 UI 步骤 id */
-function statusToActiveId(currentStatus: string, stepIds: string[]): string {
+function statusToActiveId(currentStatus: string, stepIds: string[], progress = 0): string {
   // 终态
   if (currentStatus === 'SUCCESS') return 'SUCCESS'
 
@@ -83,6 +87,7 @@ function statusToActiveId(currentStatus: string, stepIds: string[]): string {
 
   // 转录
   if (currentStatus === 'ASR') {
+    if (stepIds.includes('DIARIZE') && progress >= 0.66) return 'DIARIZE'
     return stepIds.includes('TRANSCRIBE') ? 'TRANSCRIBE' : 'ANALYZE_NOTE'
   }
 
@@ -108,8 +113,9 @@ export function deriveSteps(
   progress: number,
   sourceType: SourceType = '',
   noteKind: NoteKind = '',
+  speakerAnalysis = false,
 ): StepWithState[] {
-  const stepIds = buildStepSequence(sourceType, noteKind)
+  const stepIds = buildStepSequence(sourceType, noteKind, speakerAnalysis)
   const steps: StepDef[] = stepIds.map(id => STEP_DEFS[id]).filter(Boolean)
 
   // 终态 / 非进度状态
@@ -120,18 +126,25 @@ export function deriveSteps(
     return steps.map(s => ({ ...s, state: 'queued' as StepState, pct: 0 }))
   }
 
-  const activeId = statusToActiveId(currentStatus, stepIds)
+  const activeId = statusToActiveId(currentStatus, stepIds, progress)
   const activeIdx = steps.findIndex(s => s.id === activeId)
+  // 音频任务后端整体进度中，ASR 固定占 30%~65%。节点内应展示该阶段
+  // 自身的 0%~100%，这样真实分块回调才不会看起来仍然卡在 30%。
+  const activeProgress = noteKind === 'audio' && currentStatus === 'ASR'
+    ? activeId === 'DIARIZE'
+      ? Math.max(0, Math.min(1, (progress - 0.66) / 0.06))
+      : Math.max(0, Math.min(1, (progress - 0.30) / 0.35))
+    : progress
   // #19: 转录(ASR)与分析(FRAMES/VLM)在后端并行，不能因 status 落在其一就把另一轨标完成。
   // 激活步骤属于并行组时，组内步骤统一 running，直到进入「生成笔记」(activeId 离开并行组) 才整体判完成。
   const activeInParallel = PARALLEL_STEP_IDS.has(activeId)
 
   return steps.map((step, idx) => {
     if (activeInParallel && PARALLEL_STEP_IDS.has(step.id)) {
-      return { ...step, state: 'running', pct: progress }
+      return { ...step, state: 'running', pct: activeProgress }
     }
     if (idx < activeIdx) return { ...step, state: 'done', pct: 1 }
-    if (idx === activeIdx) return { ...step, state: progress >= 1 ? 'done' : 'running', pct: progress }
+    if (idx === activeIdx) return { ...step, state: activeProgress >= 1 ? 'done' : 'running', pct: activeProgress }
     return { ...step, state: 'queued', pct: 0 }
   })
 }
@@ -143,6 +156,7 @@ interface StepProgressProps {
   progress: number
   sourceType?: SourceType
   noteKind?: NoteKind
+  speakerAnalysis?: boolean
 }
 
 export function StepProgress({
@@ -150,8 +164,9 @@ export function StepProgress({
   progress,
   sourceType = '',
   noteKind = '',
+  speakerAnalysis = false,
 }: StepProgressProps) {
-  const steps = deriveSteps(currentStatus, progress, sourceType, noteKind)
+  const steps = deriveSteps(currentStatus, progress, sourceType, noteKind, speakerAnalysis)
 
   return (
     <div className="step-rail">

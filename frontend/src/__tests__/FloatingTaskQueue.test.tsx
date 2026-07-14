@@ -86,6 +86,25 @@ describe('FloatingTaskQueue v2', () => {
     expect(screen.queryByText('Cancelled task')).toBeNull()
   })
 
+  it('PARTIAL 任务保留在队列并显示部分完成', () => {
+    useTaskStore.setState({
+      tasks: [
+        makeTask({
+          task_id: 'partial',
+          status: 'PARTIAL',
+          payload: { title: '部分完成任务' },
+          error: '说话人分析失败',
+        }),
+      ],
+    })
+
+    render(<FloatingTaskQueue />)
+    fireEvent.click(screen.getByRole('button', { name: /任务/ }))
+
+    expect(screen.getByText('部分完成任务')).toBeTruthy()
+    expect(screen.getByText('部分完成')).toBeTruthy()
+  })
+
   it('F3.2: 失败任务用 errorCategories 友好文案展示（限流），原始错误走 title', () => {
     useTaskStore.setState({
       tasks: [

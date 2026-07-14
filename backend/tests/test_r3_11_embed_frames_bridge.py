@@ -34,6 +34,18 @@ def _make_video_item(
     )
 
 
+def _make_audio_item(tasks: dict | None = None) -> WorkspaceItem:
+    return WorkspaceItem(
+        item_id="audio-1",
+        type=ItemType.AUDIO.value,
+        source="local",
+        source_value="/tmp/interview.m4a",
+        name="测试访谈",
+        status=ItemStatus.PENDING.value,
+        preflight=PreflightConfig(tasks=tasks),
+    )
+
+
 _ws = WorkspaceRecord(workspace_id="ws-1", name="测试工作空间")
 
 
@@ -107,3 +119,24 @@ class TestEmbedFramesBridge:
         assert pf.get("max_embed_frames") == 5
         assert "summary_path" not in pf
         assert "summary_depth" not in pf
+
+
+class TestAudioSummaryBridge:
+    def test_tasks_summary_is_forwarded_to_audio_payload(self):
+        item = _make_audio_item(tasks={
+            "summary": {
+                "embed_frames": False,
+                "summary_template": "detailed",
+                "diarize": True,
+                "summary_mode": "speaker_aware",
+                "speaker_count": 2,
+            },
+        })
+
+        task_type, payload = _bridge_to_pipeline_payload(item, _ws)
+
+        assert task_type == "audio"
+        assert payload["summary_template"] == "detailed"
+        assert payload["summary_mode"] == "speaker_aware"
+        assert payload["voiceprint"] == {"enabled": True}
+        assert payload["speaker_count"] == 2

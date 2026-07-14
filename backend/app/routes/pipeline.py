@@ -34,6 +34,10 @@ class TaskCreateRequest(BaseModel):
     )
 
 
+class TaskRetryRequest(BaseModel):
+    stage: Optional[str] = Field(default=None, description="可选，仅重试指定失败阶段")
+
+
 # 轻量列表也需要的 result 展示字段白名单（封面/标题/类型/时长）——卡片渲染必需，体积小。
 # 完整 result（含总结 md / 转录 / 分镜）仍只在 include_result=True 或详情接口返回。
 _LIST_RESULT_DISPLAY_KEYS = (
@@ -150,12 +154,14 @@ def cancel_task(task_id: str) -> Dict[str, Any]:
 
 
 @router.post("/tasks/{task_id}/retry")
-def retry_task(task_id: str) -> Dict[str, Any]:
+def retry_task(task_id: str, req: Optional[TaskRetryRequest] = None) -> Dict[str, Any]:
     try:
-        rec = _runner.retry_task(task_id)
+        rec = _runner.retry_task(task_id, stage=req.stage if req else None)
         return rec.to_dict()
     except KeyError as err:
         raise HTTPException(status_code=404, detail=str(err)) from err
+    except ValueError as err:
+        raise HTTPException(status_code=409, detail=str(err)) from err
 
 
 class ConfirmMusicRequest(BaseModel):

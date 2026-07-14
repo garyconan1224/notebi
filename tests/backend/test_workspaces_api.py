@@ -302,8 +302,8 @@ def test_add_url_item_rejects_invalid_url(
     assert ws["items"] == []
 
 
-def test_bridge_audio_accepts_ip9_boolean_task_ids() -> None:
-    """IP.9 audio task IDs from AddMaterialModal are booleans and must map through."""
+def test_bridge_audio_maps_note_tasks_without_retired_music_features() -> None:
+    """Audio note bridge keeps ASR/subtitles and drops retired music/replica fields."""
     workspace = WorkspaceRecord(workspace_id="ws-audio", name="audio")
     item = WorkspaceItem(
         item_id="audio-1",
@@ -329,10 +329,10 @@ def test_bridge_audio_accepts_ip9_boolean_task_ids() -> None:
     assert payload["text_model"] == "chat-model"
     assert payload["asr"] is True
     assert payload["srt"] is True
-    assert payload["music"] is False
-    assert payload["vocal_separation"] is True
-    assert payload["music_transcribe"] is False
-    assert payload["prompt_generation"] is True
+    assert "music" not in payload
+    assert "vocal_separation" not in payload
+    assert "music_transcribe" not in payload
+    assert "prompt_generation" not in payload
 
 
 def test_bridge_video_url_routes_to_note_task() -> None:
@@ -505,6 +505,43 @@ def test_sync_item_with_tasks_success_maps_to_done(tmp_path: Path) -> None:
             # 没污染 store
             assert isolated_store.get(ws_id).items[0].status == "pending"
             assert isolated_store.get(ws_id).items[0].results == {}
+
+
+def test_sync_item_with_tasks_partial_maps_to_partial_with_usable_result(tmp_path: Path) -> None:
+    isolated_store = WorkspaceStore(root=tmp_path / "workspaces")
+    mock_runner = MagicMock()
+    mock_runner.store.get.return_value = _make_task(
+        "PARTIAL",
+        result={
+            "transcript": "转录已完成",
+            "partial_failure": {
+                "stage": "diarization",
+                "code": "inference_failed",
+                "message": "说话人分析失败",
+            },
+        },
+    )
+
+    app = FastAPI()
+    with (
+        patch.object(ws_module, "_store", isolated_store),
+        patch.object(ws_module, "_pipeline_runner", mock_runner),
+    ):
+        app.include_router(ws_module.router)
+        with TestClient(app) as c:
+            ws_id = c.post("/workspaces", json={"name": "partial"}).json()["workspace_id"]
+            c.post(f"/workspaces/{ws_id}/items", json={
+                "type": "audio",
+                "source": "local",
+                "source_value": "/tmp/interview.m4a",
+            })
+            isolated_store.get(ws_id).items[0].related_task_ids = ["audio-partial"]
+
+            item = c.get(f"/workspaces/{ws_id}").json()["items"][0]
+
+    assert item["status"] == "partial"
+    assert item["results"]["transcript"] == "转录已完成"
+    assert item["results"]["partial_failure"]["stage"] == "diarization"
 
 
 def test_sync_item_with_tasks_running_maps_to_processing(tmp_path: Path) -> None:

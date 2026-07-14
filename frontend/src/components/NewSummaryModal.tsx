@@ -60,6 +60,7 @@ interface NewSummaryModalProps {
   creating: boolean
   defaultTemplate?: string
   allowSpeakerAware?: boolean
+  speakerAwareAvailable?: boolean
   onSubmit: (opts: {
     template: string
     summaryMode: 'general' | 'speaker_aware'
@@ -75,6 +76,7 @@ export function NewSummaryModal({
   creating,
   defaultTemplate,
   allowSpeakerAware = false,
+  speakerAwareAvailable = true,
   onSubmit,
   onClose,
 }: NewSummaryModalProps) {
@@ -221,10 +223,13 @@ export function NewSummaryModal({
                   type="checkbox"
                   aria-label="区分说话人"
                   checked={summaryMode === 'speaker_aware'}
+                  disabled={!speakerAwareAvailable}
                   onChange={(event) => handleSpeakerAwareChange(event.target.checked)}
                 />
                 <span className="nsm-toggle-label">区分说话人</span>
-                <span className="nsm-toggle-hint">默认关闭</span>
+                <span className="nsm-toggle-hint">
+                  {speakerAwareAvailable ? '默认关闭' : '请重新分析并开启“区分说话人”'}
+                </span>
               </label>
               {summaryMode === 'speaker_aware' && (
                 <div className="nsm-speaker-aware-note">

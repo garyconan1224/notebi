@@ -12,7 +12,7 @@ export interface LibraryItem {
   source: 'url' | 'local'
   source_value: string
   name: string
-  status: 'pending' | 'processing' | 'done' | 'failed'
+  status: 'pending' | 'processing' | 'partial' | 'done' | 'failed'
   created_at: string
   updated_at: string
   duration_seconds: number | null

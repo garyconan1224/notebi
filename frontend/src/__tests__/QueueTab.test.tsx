@@ -49,4 +49,25 @@ describe('QueueTab', () => {
     expect(screen.getByText('A task')).toBeTruthy()
     expect(screen.queryByText('B task')).toBeNull()
   })
+
+  it('把 PARTIAL 显示为可查看且可重试说话人的部分完成状态', () => {
+    const task = makeTask('audio-partial', 'workspace-a', '访谈')
+    task.task_type = 'audio'
+    task.status = 'PARTIAL'
+    task.progress = 1
+    task.result = {
+      transcript: '已保存转录',
+      partial_failure: { stage: 'diarization', message: '模型失败' },
+    }
+    useTaskStore.setState({ tasks: [task] })
+
+    render(
+      <MemoryRouter>
+        <QueueTab workspaceId="workspace-a" />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getAllByText('部分完成').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: /重试说话人/ })).toBeTruthy()
+  })
 })

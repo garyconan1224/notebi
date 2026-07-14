@@ -8,7 +8,7 @@ export type NoteMediaKind = 'auto' | 'video' | 'image_text' | 'audio' | 'mixed'
 /** 分析范围：仅对 sniff 同时返回 video+audio 时生效 */
 export type AnalysisScope = 'audio_only' | 'visual_only'
 export type ItemSource = 'url' | 'local'
-export type ItemStatus = 'pending' | 'processing' | 'done' | 'failed'
+export type ItemStatus = 'pending' | 'processing' | 'partial' | 'done' | 'failed'
 export type WorkspaceStatus = 'active' | 'processing' | 'analyzed' | 'archived'
 
 /** 前置配置（设计文档第 4 章）。 */

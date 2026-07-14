@@ -375,11 +375,11 @@ export default function ResultsOverview() {
           className="ov-status-chip"
           style={{
             background: item.status === 'done' ? 'var(--okl)' : item.status === 'failed' ? 'var(--errl)' : 'var(--bg-sunken)',
-            color: item.status === 'done' ? 'var(--accent-green)' : item.status === 'failed' ? 'var(--accent-pink)' : 'var(--ink-3)',
+            color: item.status === 'done' ? 'var(--accent-green)' : item.status === 'failed' ? 'var(--accent-pink)' : item.status === 'partial' ? 'var(--accent-2)' : 'var(--ink-3)',
           }}
         >
-          <span className="dot" style={{ background: item.status === 'done' ? 'var(--accent-green)' : item.status === 'failed' ? 'var(--accent-pink)' : 'var(--ink-4)' }} />
-          {item.status === 'done' ? '完成' : item.status === 'processing' ? '处理中' : item.status === 'failed' ? '失败' : item.status}
+          <span className="dot" style={{ background: item.status === 'done' ? 'var(--accent-green)' : item.status === 'failed' ? 'var(--accent-pink)' : item.status === 'partial' ? 'var(--accent-2)' : 'var(--ink-4)' }} />
+          {item.status === 'done' ? '完成' : item.status === 'processing' ? '处理中' : item.status === 'partial' ? '部分完成' : item.status === 'failed' ? '失败' : item.status}
         </span>
         {result.source === 'demo_fixture' && (
           <span className="mono" style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, background: 'var(--accent-warm)', color: '#fff', fontWeight: 600 }}>DEMO</span>

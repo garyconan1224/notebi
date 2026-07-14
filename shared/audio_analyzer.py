@@ -2,7 +2,7 @@
 
 提供给 `handle_audio_task` 的可独立测试的纯函数 / 数据类：
 - VAD：silero-vad 检测人声片段
-- 说话人分离：pyannote.audio（缺包 / 缺 HF_TOKEN 时 graceful skip）
+- 说话人分离：sherpa-onnx 跨平台离线优先，pyannote.audio 可回退
 - 音乐分析：librosa BPM / 调性 / 能量曲线
 - 音乐提示词：LLM 根据特征生成 Suno/Udio 通用格式
 - 字幕导出：transcript_segments → .srt / .txt
@@ -16,7 +16,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -57,14 +57,37 @@ class SpeakerSegment:
 class DiarizationResult:
     num_speakers: int
     segments: List[SpeakerSegment] = field(default_factory=list)
+    engine: str = ""
+    model: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "num_speakers": self.num_speakers,
+            "engine": self.engine,
+            "model": self.model,
             "segments": [
                 {"start": s.start, "end": s.end, "speaker": s.speaker}
                 for s in self.segments
             ],
+        }
+
+
+class DiarizationError(RuntimeError):
+    """说话人分析引擎无法完成时返回的结构化错误。"""
+
+    def __init__(self, code: str, message: str, *, engine: str, model: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.engine = engine
+        self.model = model
+
+    def to_dict(self) -> Dict[str, str]:
+        return {
+            "stage": "diarization",
+            "code": self.code,
+            "message": str(self),
+            "engine": self.engine,
+            "model": self.model,
         }
 
 
@@ -131,53 +154,146 @@ def run_vad(audio_path: Path, sampling_rate: int = 16000) -> VadResult:
 # ── 说话人分离 ────────────────────────────────────────────────
 
 
-def run_diarization(audio_path: Path) -> Optional[DiarizationResult]:
-    """pyannote.audio 说话人分离。
-
-    任何一个条件不满足都返回 None（不抛错）：
-    - pyannote.audio 没装
-    - HF_TOKEN / HUGGINGFACE_TOKEN 环境变量没设
-    - 模型加载/推理失败（一般是没同意模型协议）
-    """
+def _run_pyannote_diarization(
+    audio_path: Path,
+    *,
+    num_speakers: Optional[int] = None,
+) -> DiarizationResult:
+    """通过 pyannote Community-1 生成引擎无关的说话人时间段。"""
+    engine = "pyannote"
+    model = "pyannote/speaker-diarization-community-1"
     token = (
         os.environ.get("HF_TOKEN")
         or os.environ.get("HUGGINGFACE_TOKEN")
         or os.environ.get("HUGGING_FACE_HUB_TOKEN")
     )
     if not token:
-        logger.warning(
-            "未检测到 HF_TOKEN 环境变量，跳过说话人分离。"
-            "请去 https://huggingface.co/pyannote/speaker-diarization-3.1 同意协议后 export HF_TOKEN=..."
+        raise DiarizationError(
+            "missing_token",
+            "未检测到 Hugging Face Token，无法执行说话人分析。",
+            engine=engine,
+            model=model,
         )
-        return None
 
     try:
         from pyannote.audio import Pipeline  # type: ignore
-    except ImportError:
-        logger.warning("pyannote.audio 未安装，跳过说话人分离")
-        return None
+    except ImportError as err:
+        raise DiarizationError(
+            "engine_unavailable",
+            "pyannote.audio 未安装，无法执行说话人分析。",
+            engine=engine,
+            model=model,
+        ) from err
 
     try:
         pipeline = Pipeline.from_pretrained(
-            "pyannote/speaker-diarization-3.1",
-            use_auth_token=token,
+            model,
+            token=token,
         )
-        diarization = pipeline(str(audio_path))
+        call_options = {"num_speakers": num_speakers} if num_speakers else {}
+        output = pipeline(str(audio_path), **call_options)
     except Exception as err:
-        logger.warning(
-            f"pyannote 加载/推理失败：{err}；跳过说话人分离。"
-            "常见原因：未同意模型协议 / 网络问题 / 显存不足"
-        )
-        return None
+        raise DiarizationError(
+            "inference_failed",
+            f"pyannote 模型加载或推理失败：{err}",
+            engine=engine,
+            model=model,
+        ) from err
 
     segments: List[SpeakerSegment] = []
     speakers = set()
-    for turn, _, speaker in diarization.itertracks(yield_label=True):
-        segments.append(
-            SpeakerSegment(start=float(turn.start), end=float(turn.end), speaker=str(speaker))
+    diarization = getattr(output, "speaker_diarization", output)
+    if hasattr(diarization, "itertracks"):
+        entries = ((turn, speaker) for turn, _, speaker in diarization.itertracks(yield_label=True))
+    else:
+        entries = iter(diarization)
+    try:
+        for turn, speaker in entries:
+            speaker_id = str(speaker)
+            segments.append(
+                SpeakerSegment(start=float(turn.start), end=float(turn.end), speaker=speaker_id)
+            )
+            speakers.add(speaker_id)
+    except Exception as err:
+        raise DiarizationError(
+            "invalid_output",
+            f"pyannote 返回了无法解析的说话人结果：{err}",
+            engine=engine,
+            model=model,
+        ) from err
+    return DiarizationResult(
+        num_speakers=len(speakers),
+        segments=segments,
+        engine=engine,
+        model=model,
+    )
+
+
+def run_sherpa_diarization(
+    audio_path: Path,
+    *,
+    progress_callback: Optional[Callable[[float, str], None]] = None,
+    num_speakers: Optional[int] = None,
+) -> DiarizationResult:
+    """Lazy bridge keeps the heavyweight sherpa runtime out of module import."""
+    from shared.sherpa_diarizer import run_sherpa_diarization as run
+
+    return run(
+        audio_path,
+        progress_callback=progress_callback,
+        num_speakers=num_speakers,
+    )
+
+
+def run_diarization(
+    audio_path: Path,
+    *,
+    progress_callback: Optional[Callable[[float, str], None]] = None,
+    num_speakers: Optional[int] = None,
+) -> DiarizationResult:
+    """Run WeSpeaker first, then sherpa-onnx/pyannote fallback in auto mode."""
+    engine = os.environ.get("NOTEBI_DIARIZATION_ENGINE", "auto").strip().lower() or "auto"
+    if engine not in {"auto", "wespeaker", "sherpa", "sherpa-onnx", "pyannote"}:
+        raise DiarizationError(
+            "invalid_engine",
+            f"未知说话人分析引擎：{engine}",
+            engine=engine,
+            model="",
         )
-        speakers.add(str(speaker))
-    return DiarizationResult(num_speakers=len(speakers), segments=segments)
+    if engine == "pyannote":
+        return _run_pyannote_diarization(audio_path, num_speakers=num_speakers)
+
+    if engine in {"auto", "wespeaker"}:
+        try:
+            from shared.wespeaker_diarizer import run_wespeaker_diarization
+
+            return run_wespeaker_diarization(
+                audio_path,
+                progress_callback=progress_callback,
+                num_speakers=num_speakers,
+            )
+        except DiarizationError as wespeaker_error:
+            if engine == "wespeaker":
+                raise
+            logger.warning("WeSpeaker 不可用，回退 sherpa-onnx：%s", wespeaker_error)
+
+    try:
+        return run_sherpa_diarization(
+            audio_path,
+            progress_callback=progress_callback,
+            num_speakers=num_speakers,
+        )
+    except DiarizationError as sherpa_error:
+        if engine != "auto":
+            raise
+        has_hf_token = any(
+            os.environ.get(key)
+            for key in ("HF_TOKEN", "HUGGINGFACE_TOKEN", "HUGGING_FACE_HUB_TOKEN")
+        )
+        if not has_hf_token:
+            raise
+        logger.warning("sherpa-onnx 不可用，回退 pyannote：%s", sherpa_error)
+        return _run_pyannote_diarization(audio_path, num_speakers=num_speakers)
 
 
 # ── 音乐分析 ──────────────────────────────────────────────────

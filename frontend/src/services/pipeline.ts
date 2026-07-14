@@ -70,8 +70,12 @@ export async function deletePipelineTask(taskId: string): Promise<void> {
  *
  * 返回新创建的重试任务记录
  */
-export async function retryPipelineTask(taskId: string) {
-  const res = await http.post(`${PIPELINE_TASKS_URL}/${taskId}/retry`)
+export interface RetryTaskOptions {
+  stage?: 'diarization'
+}
+
+export async function retryPipelineTask(taskId: string, options?: RetryTaskOptions) {
+  const res = await http.post(`${PIPELINE_TASKS_URL}/${taskId}/retry`, options)
   return res.data
 }
 

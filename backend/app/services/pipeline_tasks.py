@@ -28,6 +28,7 @@ from shared.settings_store import load_settings
 from shared.storyboard_generator import run_storyboard_generation
 from shared.text_loader import TextDocument, TextLoaderError, load_auto, load_url
 from shared.audio_analyzer import (
+    DiarizationError,
     assign_speakers_to_segments,
     export_srt,
     export_txt,
@@ -4334,6 +4335,266 @@ def handle_image_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
     return {**result, "json_path": str(json_path.resolve())}
 
 
+def _chunk_audio_summary_source(text: str, max_chars: int = 12000) -> List[str]:
+    """按行切分完整转录，避免长音频只总结开头。"""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not lines:
+        return []
+    chunks: List[str] = []
+    current: List[str] = []
+    current_chars = 0
+    for line in lines:
+        if current and current_chars + len(line) + 1 > max_chars:
+            chunks.append("\n".join(current))
+            current = []
+            current_chars = 0
+        if len(line) > max_chars:
+            if current:
+                chunks.append("\n".join(current))
+                current = []
+                current_chars = 0
+            chunks.extend(line[i:i + max_chars] for i in range(0, len(line), max_chars))
+            continue
+        current.append(line)
+        current_chars += len(line) + 1
+    if current:
+        chunks.append("\n".join(current))
+    return chunks
+
+
+def _audio_summary_source(
+    transcript_text: str,
+    transcript_segments: List[Dict[str, Any]],
+    summary_mode: str,
+) -> str:
+    if summary_mode != "speaker_aware":
+        return transcript_text.strip()
+    labeled_lines: List[str] = []
+    for seg in transcript_segments:
+        speaker = str(seg.get("speaker") or "").strip()
+        text = str(seg.get("edited_text") or seg.get("text") or "").strip()
+        if not speaker or not text:
+            continue
+        ts = str(seg.get("t_str") or "").strip()
+        if not ts:
+            sec = int(float(seg.get("t_sec") or seg.get("start") or 0))
+            ts = f"{sec // 60:02d}:{sec % 60:02d}"
+        labeled_lines.append(f"[{ts}] {speaker}：{text}")
+    return "\n".join(labeled_lines)
+
+
+def _generate_audio_summary(
+    *,
+    payload: Dict[str, Any],
+    transcript_text: str,
+    transcript_segments: List[Dict[str, Any]],
+    summary_mode: str,
+    log: Callable[[str], None],
+    progress: Optional[Callable[[float, str], None]] = None,
+) -> str:
+    """用完整转录生成 V0；长音频先分块，再汇总所有分块结果。"""
+    source = _audio_summary_source(transcript_text, transcript_segments, summary_mode)
+    if not source:
+        if summary_mode == "speaker_aware":
+            raise RuntimeError("区分说话人总结缺少可用的说话人标签")
+        return ""
+
+    settings = load_settings()
+    registry = create_default_registry()
+    profile = registry.resolve_default_profile(settings, "chat")
+    provider = registry.build(profile)
+    defaults = getattr(profile, "default_models", None)
+    default_chat = (
+        getattr(defaults, "chat", "")
+        if defaults is not None
+        else ""
+    )
+    if isinstance(defaults, dict):
+        default_chat = defaults.get("chat") or ""
+    chat_model = (
+        str(payload.get("text_model") or "").strip()
+        or str(default_chat or "").strip()
+        or str(getattr(settings, "text_model", "") or "").strip()
+    )
+    if not chat_model:
+        raise RuntimeError("未配置可用于自动总结的 chat model")
+
+    from backend.app.services.summary_templates import get_template
+
+    template_id = str(payload.get("summary_template") or "concise").strip() or "concise"
+    template = get_template(template_id)
+    chunks = _chunk_audio_summary_source(source)
+    if not chunks:
+        return ""
+    log(f"📝 LLM 总结 | template={template.label} ({template_id}) | chunks={len(chunks)}")
+
+    speaker_instruction = ""
+    if summary_mode == "speaker_aware":
+        speaker_instruction = (
+            "请保留每段内容对应的说话人，分别整理观点、共识、分歧、决策和行动项。\n\n"
+        )
+
+    if len(chunks) == 1:
+        prompt = speaker_instruction + template.user_prompt.replace("{transcript}", chunks[0])
+        summary = provider.chat(ChatRequest(
+            model=chat_model,
+            messages=[
+                {"role": "system", "content": template.system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.3,
+            max_tokens=3000,
+        ))
+        if progress:
+            progress(1.0, "摘要生成完成")
+        return summary
+
+    partials: List[str] = []
+    total_calls = len(chunks) + 1
+    for index, chunk in enumerate(chunks, start=1):
+        chunk_prompt = (
+            f"这是完整音频的第 {index}/{len(chunks)} 段。请忠于本段提取主题、关键事实、观点、"
+            "结论与行动项，保留重要说话人归属；不要假设其他分段内容。\n\n"
+            + chunk
+        )
+        partials.append(provider.chat(ChatRequest(
+            model=chat_model,
+            messages=[
+                {"role": "system", "content": template.system_prompt},
+                {"role": "user", "content": speaker_instruction + chunk_prompt},
+            ],
+            temperature=0.2,
+            max_tokens=1800,
+        )))
+        if progress:
+            progress(index / total_calls, f"摘要分块 {index}/{len(chunks)}")
+
+    combined = "\n\n".join(
+        f"### 分段 {index}\n{content}" for index, content in enumerate(partials, start=1)
+    )
+    final_prompt = (
+        speaker_instruction
+        + "下面是覆盖整段音频、按时间顺序生成的分段摘要。请综合全部分段，去重但不要遗漏后半程内容，"
+        "并严格按所选模板输出最终 Markdown。\n\n"
+        + template.user_prompt.replace("{transcript}", combined)
+    )
+    summary = provider.chat(ChatRequest(
+        model=chat_model,
+        messages=[
+            {"role": "system", "content": template.system_prompt},
+            {"role": "user", "content": final_prompt},
+        ],
+        temperature=0.3,
+        max_tokens=4000,
+    ))
+    if progress:
+        progress(1.0, "摘要汇总完成")
+    return summary
+
+
+def _resolve_diarization_retry_audio(parent: TaskRecord, audio_dir: Path) -> Path:
+    result = dict(parent.result or {})
+    audio = result.get("audio") if isinstance(result.get("audio"), dict) else {}
+    candidates = [
+        str(audio.get("local_path") or ""),
+        str(result.get("source") or ""),
+        str(parent.payload.get("source") or ""),
+    ]
+    for raw in candidates:
+        if raw and Path(raw).is_file():
+            return Path(raw)
+    for path in audio_dir.glob(f"{parent.task_id}_*"):
+        if path.is_file() and path.suffix.lower() not in {".json", ".srt", ".txt"}:
+            return path
+    raise RuntimeError("找不到原音频缓存，无法仅重试说话人分析；请重新提交完整任务")
+
+
+def _handle_audio_diarization_retry(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
+    task_id = record.task_id
+    log = lambda msg: runner.append_log(task_id, msg)  # noqa: E731
+    source_task_id = str(record.payload.get("_retry_source_task_id") or record.retry_of or "")
+    parent = runner.store.get(source_task_id)
+    if parent is None or parent.status not in {TaskStatus.PARTIAL.value, TaskStatus.SUCCESS.value}:
+        raise RuntimeError("原终结态音频任务不存在，无法执行阶段重试")
+    parent_result = dict(parent.result or {})
+    segments = [dict(seg) for seg in parent_result.get("transcript_segments") or [] if isinstance(seg, dict)]
+    transcript_text = str(parent_result.get("transcript") or "")
+    if not segments or not transcript_text:
+        raise RuntimeError("原任务没有可复用的转录结果")
+
+    from shared.config import get_workspace_root
+
+    audio_dir = get_workspace_root(record.project_id) / "audio"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    audio_path = _resolve_diarization_retry_audio(parent, audio_dir)
+    log(f"♻️  复用原任务 {source_task_id} 的转录，仅重试说话人分析")
+    runner.store.update(task_id, status=TaskStatus.ASR.value)
+    # 阶段重试沿用完整音频任务的进度契约，前端可以准确显示“说话人分析”而不是转录。
+    runner.set_progress(task_id, 0.66, "说话人分离中...")
+    speaker_count_raw = record.payload.get("speaker_count")
+    speaker_count = (
+        int(speaker_count_raw)
+        if speaker_count_raw is not None and str(speaker_count_raw).strip()
+        else None
+    )
+    diar = run_diarization(
+        audio_path,
+        progress_callback=lambda ratio, message: runner.set_progress(
+            task_id, 0.66 + ratio * 0.06, message
+        ),
+        num_speakers=speaker_count,
+    )
+    segments = refine_segments(assign_speakers_to_segments(segments, diar))
+    log(f"✅ 检测到 {diar.num_speakers} 个说话人，{len(diar.segments)} 段")
+
+    runner.store.update(task_id, status=TaskStatus.SUM.value)
+    summary = _generate_audio_summary(
+        payload=record.payload,
+        transcript_text=transcript_text,
+        transcript_segments=segments,
+        summary_mode="speaker_aware",
+        log=log,
+        progress=lambda ratio, message: runner.set_progress(
+            task_id, 0.72 + ratio * 0.14, message
+        ),
+    )
+    log(f"📋 摘要生成完成，{len(summary)} 字符")
+
+    include_timestamps = bool(record.payload.get("include_timestamps", True))
+    subtitle_paths: Dict[str, str]
+    if include_timestamps:
+        srt_path = audio_dir / f"{task_id}.srt"
+        srt_path.write_text(export_srt(segments), encoding="utf-8")
+        subtitle_paths = {"srt": str(srt_path.resolve())}
+    else:
+        txt_path = audio_dir / f"{task_id}.txt"
+        txt_path.write_text(export_txt(segments, with_speaker=True), encoding="utf-8")
+        subtitle_paths = {"txt": str(txt_path.resolve())}
+
+    audio = dict(parent_result.get("audio") or {})
+    audio["local_path"] = str(audio_path.resolve())
+    result = {
+        **parent_result,
+        "task_id": task_id,
+        "project_id": record.project_id,
+        "transcript_segments": segments,
+        "summary": summary,
+        "summary_mode": "speaker_aware",
+        "audio": audio,
+        "diarization": diar.to_dict(),
+        "subtitle_paths": subtitle_paths,
+        "partial_failure": None,
+        "retry_stage": "diarization",
+        "retry_source_task_id": source_task_id,
+    }
+    runner.store.update(task_id, status=TaskStatus.STORE.value)
+    runner.set_progress(task_id, 0.95, "归档说话人分析与总结...")
+    json_path = audio_dir / f"{task_id}.json"
+    json_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    log(f"✅ 阶段重试产物已归档：{json_path}")
+    return {**result, "json_path": str(json_path.resolve())}
+
+
 def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
     """音频分析任务（Phase X.A）。
 
@@ -4350,6 +4611,9 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
     payload = record.payload
     task_id = record.task_id
     log = lambda msg: runner.append_log(task_id, msg)  # noqa: E731
+
+    if payload.get("_retry_stage") == "diarization":
+        return _handle_audio_diarization_retry(record, runner)
 
     source = str(payload.get("source") or "").strip()
     if not source:
@@ -4374,11 +4638,18 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
     asr_enabled = _task_enabled("asr", True)
     diarization_enabled = _task_enabled("voiceprint", False)
     summary_mode = str(payload.get("summary_mode") or "general").strip() or "general"
+    speaker_count_raw = payload.get("speaker_count")
+    speaker_count = (
+        int(speaker_count_raw)
+        if speaker_count_raw is not None and str(speaker_count_raw).strip()
+        else None
+    )
     subtitle_enabled = _task_enabled("srt", True)
 
     log(
         f"🎵 audio_task | source_type={source_type} | source={source[:80]} | "
-        f"lang={whisper_lang} | diarize={diarization_enabled} | subtitle={subtitle_enabled}"
+        f"lang={whisper_lang} | diarize={diarization_enabled} | "
+        f"speakers={speaker_count or 'auto'} | subtitle={subtitle_enabled}"
     )
 
     # ── 1. FETCH ────────────────────────────────────────────
@@ -4520,90 +4791,47 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
     # ── 3. 说话人分离（N8）──────────────────────────────────
     # 区分说话人总结必须先得到 diarization，再把标签送入 LLM。
     diarization_dict: Optional[Dict[str, Any]] = None
+    partial_failure: Optional[Dict[str, str]] = None
     if diarization_enabled and vad_result.has_speech:
-        runner.set_progress(task_id, 0.68, "说话人分离（pyannote）...")
-        log("🎤 说话人分离中（pyannote.audio）")
-        diar = run_diarization(audio_local_path)
-        if diar is None:
-            log("⚠️  说话人分离未执行（缺 HF_TOKEN / 模型协议未同意 / 包不可用）")
-        else:
+        runner.set_progress(task_id, 0.66, "根据音色区分说话人...")
+        log("🎤 说话人分离中（sherpa-onnx，失败时回退 pyannote）")
+        try:
+            diar = run_diarization(
+                audio_local_path,
+                progress_callback=lambda ratio, message: runner.set_progress(
+                    task_id, 0.66 + ratio * 0.06, message
+                ),
+                num_speakers=speaker_count,
+            )
             diarization_dict = diar.to_dict()
             log(f"✅ 检测到 {diar.num_speakers} 个说话人，{len(diar.segments)} 段")
             if transcript_segments:
                 transcript_segments = assign_speakers_to_segments(transcript_segments, diar)
+        except DiarizationError as err:
+            partial_failure = err.to_dict()
+            log(f"⚠️  说话人分析失败：{err}")
 
     # ── 4. SUMMARIZE ─────────────────────────────────────────
     runner.store.update(task_id, status=TaskStatus.SUM.value)
     runner.set_progress(task_id, 0.72, "生成摘要中...")
     summary = ""
 
-    if transcript_text and api_key:
+    if transcript_text and partial_failure is None:
         log("📝 调用 chat model 生成摘要...")
-        registry = create_default_registry()
-        profile = registry.resolve_default_profile(settings, "chat")
-        provider = registry.build(profile)
-        chat_model = (
-            str(payload.get("text_model") or "").strip()
-            or getattr(profile.default_models, "chat", None)
-            or (getattr(settings, "text_model", "") or "").strip()
-        )
-        if chat_model:
-            try:
-                # R18: 优先使用 summary_template（新模板系统）
-                summary_template_id = str(payload.get("summary_template") or "").strip()
-                summary_input = transcript_text[:12000]
-                if summary_mode == "speaker_aware":
-                    labeled_lines = []
-                    for seg in transcript_segments:
-                        if not isinstance(seg, dict) or not str(seg.get("speaker") or "").strip():
-                            continue
-                        text = str(seg.get("edited_text") or seg.get("text") or "").strip()
-                        if not text:
-                            continue
-                        ts = str(seg.get("t_str") or "").strip()
-                        if not ts:
-                            sec = int(float(seg.get("t_sec") or seg.get("start") or 0))
-                            ts = f"{sec // 60:02d}:{sec % 60:02d}"
-                        labeled_lines.append(f"[{ts}] {seg['speaker']}：{text}")
-                    if not labeled_lines:
-                        log("⚠️  区分说话人总结跳过：没有可用的说话人标签")
-                        summary_input = ""
-                    else:
-                        summary_input = "\n".join(labeled_lines)[:12000]
-                summary_max_tokens = 1200
-                if summary_input and summary_template_id:
-                    from backend.app.services.summary_templates import get_template
-                    tpl = get_template(summary_template_id)
-                    prompt = tpl.user_prompt.replace("{transcript}", summary_input)
-                    if summary_mode == "speaker_aware":
-                        prompt = (
-                            "请保留每段内容对应的说话人，分别整理观点、共识、分歧、决策和行动项。\n\n"
-                            + prompt
-                        )
-                    summary_max_tokens = 3000
-                    log(f"📝 LLM 总结 | template={tpl.label} ({summary_template_id})")
-                elif summary_input:
-                    prompt = f"请将以下音频转写内容总结为 100-200 字的中文摘要：\n\n{summary_input[:3000]}"
-                    if summary_mode == "speaker_aware":
-                        prompt = (
-                            "请按说话人分别归纳观点，并标出共识、分歧和行动项。\n\n"
-                            + prompt
-                        )
-                    log("📝 LLM 总结 | template=default (100-200字摘要)")
-                else:
-                    prompt = ""
-                if prompt:
-                    summary = provider.chat(
-                        ChatRequest(
-                            model=chat_model,
-                            messages=[{"role": "user", "content": prompt}],
-                            temperature=0.3,
-                            max_tokens=summary_max_tokens,
-                        )
-                    )
-                    log(f"📋 摘要生成完成，{len(summary)} 字符")
-            except Exception as err:
-                log(f"⚠️  摘要生成失败：{err}")
+        try:
+            summary = _generate_audio_summary(
+                payload=payload,
+                transcript_text=transcript_text,
+                transcript_segments=transcript_segments,
+                summary_mode=summary_mode,
+                log=log,
+                progress=lambda ratio, message: runner.set_progress(
+                    task_id, 0.72 + ratio * 0.14, message
+                ),
+            )
+            log(f"📋 摘要生成完成，{len(summary)} 字符")
+        except Exception as err:
+            log(f"⚠️  摘要生成失败：{err}")
 
     subtitle_paths: Dict[str, str] = {}
 
@@ -4616,6 +4844,23 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         if proper_nouns and api_key:
             try:
                 runner.set_progress(task_id, 0.88, "专有名词修正...")
+                correction_registry = create_default_registry()
+                correction_profile = correction_registry.resolve_default_profile(settings, "chat")
+                correction_provider = correction_registry.build(correction_profile)
+                correction_defaults = getattr(correction_profile, "default_models", None)
+                correction_model = (
+                    str(payload.get("text_model") or "").strip()
+                    or str(getattr(correction_defaults, "chat", "") or "").strip()
+                    or str(getattr(settings, "text_model", "") or "").strip()
+                )
+                if isinstance(correction_defaults, dict):
+                    correction_model = (
+                        str(payload.get("text_model") or "").strip()
+                        or str(correction_defaults.get("chat") or "").strip()
+                        or str(getattr(settings, "text_model", "") or "").strip()
+                    )
+                if not correction_model:
+                    raise RuntimeError("未配置字幕校对 chat model")
                 segments_json = json.dumps(
                     [{"idx": i, "text": s.get("text", "")} for i, s in enumerate(transcript_segments)],
                     ensure_ascii=False,
@@ -4631,8 +4876,8 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
                         f"只改专有名词，不改其他文字。输出 JSON：[{{\"idx\": 原始idx, \"original\": 原文, \"corrected\": 修正后}}]。\n\n"
                         f"专有名词清单：{proper_nouns}\n\n转写片段：{chunk}"
                     )
-                    resp = provider.chat(ChatRequest(
-                        model=chat_model,
+                    resp = correction_provider.chat(ChatRequest(
+                        model=correction_model,
                         messages=[{"role": "user", "content": correction_prompt}],
                         temperature=0.1,
                         max_tokens=2000,
@@ -4705,6 +4950,7 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
             "duration_str": "",
             "mime": audio_mime,
             "size_bytes": len(audio_bytes),
+            "local_path": str(audio_local_path.resolve()),
         },
         "tracks_meta": {
             "total_sec": audio_duration_sec,
@@ -4714,10 +4960,22 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         "diarization": diarization_dict,
         "subtitle_paths": subtitle_paths,
     }
+    if partial_failure is not None:
+        result["partial_failure"] = partial_failure
     json_path = audio_dir / f"{task_id}.json"
     json_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    runner.set_progress(task_id, 1.0, "音频任务完成")
+    if partial_failure is not None:
+        runner.store.update(
+            task_id,
+            status=TaskStatus.PARTIAL.value,
+            progress=1.0,
+            result=result,
+            error=partial_failure["message"],
+        )
+        log("⚠️  转录已完成，但说话人分析未完成，可稍后仅重试说话人分析")
+    else:
+        runner.set_progress(task_id, 1.0, "音频任务完成")
     log(f"✅ 产物已归档：{json_path}")
 
     return {**result, "json_path": str(json_path.resolve())}

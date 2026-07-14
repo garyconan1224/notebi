@@ -29,6 +29,11 @@ MLX_MODEL_MAP: dict[str, str] = {
     "large-v3-turbo": "mlx-community/whisper-large-v3-turbo",
 }
 
+# mlx-whisper 会在单次 transcribe 内部一次性处理完整文件，无法提供中间进度。
+# 长音频按 5 分钟切块后逐块调用，完成块数就是可验证的真实转录进度。
+MLX_TRANSCRIBE_CHUNK_SECONDS = 300
+MLX_WHISPER_SAMPLE_RATE = 16_000
+
 
 def resolve_mlx_repo_id(model_size: str) -> str:
     if model_size not in MLX_MODEL_MAP:
@@ -291,42 +296,63 @@ def transcribe_file_with_mlx_whisper(
     _ensure_model_downloaded(
         repo_id,
         log_callback=log_callback,
-        progress_callback=progress_callback,
+        progress_callback=lambda ratio, msg: _emit_progress(ratio * 0.05, msg),
     )
 
     _emit(f"🧠 mlx-whisper 开始转录 | model={model_name} lang={language or 'auto'}")
-    _emit_progress(0.0, "转录中...")
+    _emit_progress(0.05, "转录中...")
     t0 = time.perf_counter()
 
-    transcribe_kwargs: dict[str, Any] = {}
-    if language:
-        transcribe_kwargs["language"] = language
-    if initial_prompt:
-        transcribe_kwargs["initial_prompt"] = initial_prompt
+    from mlx_whisper.audio import load_audio
 
-    result = mlx_whisper.transcribe(
-        str(path),
-        path_or_hf_repo=repo_id,
-        **transcribe_kwargs,
-    )
-
-    elapsed = time.perf_counter() - t0
-    segments_raw = result.get("segments", [])
-    detected_lang = result.get("language", "unknown")
-
+    audio = load_audio(str(path), sr=MLX_WHISPER_SAMPLE_RATE)
+    total_samples = len(audio)
+    chunk_samples = MLX_TRANSCRIBE_CHUNK_SECONDS * MLX_WHISPER_SAMPLE_RATE
+    total_chunks = max(1, (total_samples + chunk_samples - 1) // chunk_samples)
+    total_duration = total_samples / MLX_WHISPER_SAMPLE_RATE
+    detected_lang = language or "unknown"
     parts: List[str] = []
     seg_dicts: List[Dict[str, Any]] = []
-    for seg in segments_raw:
-        text = str(seg.get("text", "")).strip()
-        if text:
+    for chunk_idx in range(total_chunks):
+        start_sample = chunk_idx * chunk_samples
+        end_sample = min(total_samples, start_sample + chunk_samples)
+        chunk = audio[start_sample:end_sample]
+        chunk_offset = start_sample / MLX_WHISPER_SAMPLE_RATE
+
+        transcribe_kwargs: dict[str, Any] = {}
+        if language:
+            transcribe_kwargs["language"] = language
+        elif detected_lang != "unknown":
+            transcribe_kwargs["language"] = detected_lang
+        if initial_prompt:
+            transcribe_kwargs["initial_prompt"] = initial_prompt
+
+        result = mlx_whisper.transcribe(
+            chunk,
+            path_or_hf_repo=repo_id,
+            **transcribe_kwargs,
+        )
+        detected_lang = str(result.get("language") or detected_lang)
+        for seg in result.get("segments", []):
+            text = str(seg.get("text", "")).strip()
+            if not text:
+                continue
             parts.append(text)
             seg_dicts.append({
-                "start": float(seg.get("start", 0.0)),
-                "end": float(seg.get("end", 0.0)),
+                "start": chunk_offset + float(seg.get("start", 0.0)),
+                "end": min(total_duration, chunk_offset + float(seg.get("end", 0.0))),
                 "text": text,
             })
 
-    total_duration = seg_dicts[-1]["end"] if seg_dicts else 0.0
+        completed = chunk_idx + 1
+        processed_minutes = min(total_duration, end_sample / MLX_WHISPER_SAMPLE_RATE) / 60
+        total_minutes = total_duration / 60
+        _emit_progress(
+            0.05 + (completed / total_chunks) * 0.95,
+            f"转录 {completed}/{total_chunks} · 已处理 {processed_minutes:.0f}/{total_minutes:.0f} 分钟",
+        )
+
+    elapsed = time.perf_counter() - t0
     _emit_progress(1.0, "转录完成")
     _emit(f"✅ mlx-whisper 转录完成 | {len(seg_dicts)} 段 | {elapsed:.1f}s | lang={detected_lang}")
 

@@ -256,17 +256,23 @@ def refine_segments(
     """
     result: List[Dict[str, object]] = []
     for seg in segments:
+        speaker_meta = {
+            key: seg[key]
+            for key in ("speaker", "speaker_confidence")
+            if seg.get(key) is not None
+        }
         text = str(seg.get("text", "")).strip()
         if not text:
             continue
         start = float(seg.get("start") or 0)
         end = float(seg.get("end") or start)
         if _char_len(text) <= max_chars:
-            result.append({"start": start, "end": end, "text": text})
+            result.append({"start": start, "end": end, "text": text, **speaker_meta})
             continue
         pieces = _split_text(text, max_chars, min_chars)
         if len(pieces) <= 1:
-            result.append({"start": start, "end": end, "text": text})
+            result.append({"start": start, "end": end, "text": text, **speaker_meta})
             continue
-        result.extend(_allocate_time(pieces, start, end, min_dur=min_dur))
+        refined = _allocate_time(pieces, start, end, min_dur=min_dur)
+        result.extend({**piece, **speaker_meta} for piece in refined)
     return result

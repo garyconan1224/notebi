@@ -8,7 +8,7 @@ import type { WorkspaceItem, WorkspaceRecord } from '@/types/workspace'
 
 /** 任务在「同素材一行」聚合时的状态排序：运行中 > 排队 > 失败 > 已完成 */
 function statusRank(status: string): number {
-  if (status === 'FAILED') return 2
+  if (status === 'FAILED' || status === 'PARTIAL') return 2
   if (isTaskTerminal(status)) return 1 // SUCCESS / CANCELLED
   if (status === 'PENDING') return 3
   return 4 // DOWNLOAD / ASR / VLM / FRAMES / SUM / RUNNING…
@@ -28,7 +28,7 @@ interface QueueTabProps {
   workspace?: WorkspaceRecord | null
 }
 
-type QueueState = 'running' | 'queued' | 'error' | 'done'
+type QueueState = 'running' | 'queued' | 'partial' | 'error' | 'done'
 
 interface QueueRow {
   groupKey: string
@@ -85,6 +85,7 @@ function itemThumbnail(item?: WorkspaceItem): string {
 
 function rowState(tasks: TaskRecord[], item?: WorkspaceItem): QueueState {
   if (item?.status === 'failed' || tasks.some((t) => t.status === 'FAILED')) return 'error'
+  if (item?.status === 'partial' || tasks.some((t) => t.status === 'PARTIAL')) return 'partial'
   if (tasks.some((t) => !isTaskTerminal(t.status) && t.status !== 'PENDING')) return 'running'
   if (tasks.some((t) => t.status === 'PENDING')) return 'queued'
   if (item?.status === 'done' || tasks.some((t) => t.status === 'SUCCESS')) return 'done'
@@ -92,7 +93,7 @@ function rowState(tasks: TaskRecord[], item?: WorkspaceItem): QueueState {
 }
 
 function rowProgress(tasks: TaskRecord[], state: QueueState): number {
-  if (state === 'done') return 1
+  if (state === 'done' || state === 'partial') return 1
   const download = tasks.find((t) => t.task_type === 'download')
   const main = tasks.find((t) => ['note', 'analyze', 'text', 'audio', 'image', 'create', 'storyboard'].includes(t.task_type))
   if (download && main) {
@@ -198,6 +199,7 @@ export function QueueTab({ workspaceId, workspace }: QueueTabProps) {
   const running = rows.filter((r) => r.state === 'running').length
   const queued = rows.filter((r) => r.state === 'queued').length
   const failed = rows.filter((r) => r.state === 'error').length
+  const partial = rows.filter((r) => r.state === 'partial').length
   const done = rows.filter((r) => r.state === 'done').length
   const overall = rows.length ? Math.round(rows.reduce((sum, row) => sum + row.progress, 0) / rows.length * 100) : 0
   const eta = estimateRemainingSeconds(rows)
@@ -248,6 +250,7 @@ export function QueueTab({ workspaceId, workspace }: QueueTabProps) {
           <span><span className="queue-stat-dot" data-state="running" /> 运行 <b>{running}</b></span>
           <span><span className="queue-stat-dot" data-state="queued" /> 排队 <b>{queued}</b></span>
           <span><span className="queue-stat-dot" data-state="done" /> 完成 <b>{done}</b></span>
+          <span><span className="queue-stat-dot" data-state="partial" /> 部分完成 <b>{partial}</b></span>
           <span><span className="queue-stat-dot" data-state="error" /> 失败 <b>{failed}</b></span>
           <span><Clock3 size={13} /> 剩余 <b>{formatEta(eta)}</b></span>
         </div>
@@ -258,13 +261,13 @@ export function QueueTab({ workspaceId, workspace }: QueueTabProps) {
           const t = row.task
           const pct = Math.round(row.progress * 100)
           const failedTask = row.tasks.find((task) => task.status === 'FAILED')
-          const openLabel = row.state === 'done' ? '查看结果' : '查看进度'
+          const openLabel = row.state === 'done' || row.state === 'partial' ? '查看结果' : '查看进度'
           const canOpenResult = Boolean(row.item)
           const logOpen = openLogKey === row.groupKey
           const latestLogs = row.logs.slice(-24)
 
           const handleOpen = () => {
-            if (row.item && row.state === 'done') {
+            if (row.item && (row.state === 'done' || row.state === 'partial')) {
               navigate(resolveItemRoute(workspaceId, row.item))
               return
             }
@@ -299,7 +302,7 @@ export function QueueTab({ workspaceId, workspace }: QueueTabProps) {
                 </div>
                 <div className="qp-progress-cell">
                   <div className="qp-progress-meta">
-                    <span>{row.state === 'done' ? '完成' : row.state === 'error' ? '失败' : row.state === 'queued' ? '排队中' : `${pct}%`}</span>
+                    <span>{row.state === 'done' ? '完成' : row.state === 'partial' ? '部分完成' : row.state === 'error' ? '失败' : row.state === 'queued' ? '排队中' : `${pct}%`}</span>
                     <span>{shortTime(t.updated_at)}</span>
                   </div>
                   <div className="qp-bar">
@@ -329,6 +332,15 @@ export function QueueTab({ workspaceId, workspace }: QueueTabProps) {
                       onClick={() => retryTask(failedTask.task_id)}
                     >
                       <RefreshCw size={12} /> 重试
+                    </button>
+                  )}
+                  {row.state === 'partial' && t.status === 'PARTIAL' && (
+                    <button
+                      className="btn btn-ghost"
+                      style={{ height: 30, fontSize: 12 }}
+                      onClick={() => retryTask(t.task_id, { stage: 'diarization' })}
+                    >
+                      <RefreshCw size={13} />重试说话人
                     </button>
                   )}
                 </div>

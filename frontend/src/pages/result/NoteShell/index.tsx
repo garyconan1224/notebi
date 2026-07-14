@@ -238,35 +238,34 @@ function extractAudioKeywords(text: string, max = 4): string[] {
 
 function buildAudioChapters(transcript: VideoResultTranscriptLine[]): AudioChapter[] {
   if (transcript.length === 0) return []
-  const chapters: AudioChapter[] = []
-  let group: VideoResultTranscriptLine[] = []
-  let groupStart = transcript[0]?.t_sec ?? 0
+  const firstTime = transcript[0]?.t_sec ?? 0
+  const lastTime = transcript[transcript.length - 1]?.t_sec ?? firstTime
+  const span = Math.max(1, lastTime - firstTime)
+  const bucketCount = Math.min(12, Math.max(1, Math.ceil(span / 42)))
+  const bucketSpan = span / bucketCount
+  const buckets = Array.from({ length: bucketCount }, () => [] as VideoResultTranscriptLine[])
 
-  const flush = (nextStart?: number) => {
-    if (group.length === 0) return
+  for (const line of transcript) {
+    const bucketIdx = Math.min(
+      bucketCount - 1,
+      Math.max(0, Math.floor((line.t_sec - firstTime) / bucketSpan)),
+    )
+    buckets[bucketIdx].push(line)
+  }
+
+  const groups = buckets.filter((group) => group.length > 0)
+  return groups.map((group, idx) => {
     const text = group.map((line) => line.text).join(' ')
     const keywords = extractAudioKeywords(text, 4)
-    chapters.push({
-      start: groupStart,
-      end: nextStart ?? group[group.length - 1]?.t_sec ?? groupStart,
+    const nextStart = groups[idx + 1]?.[0]?.t_sec
+    return {
+      start: group[0]?.t_sec ?? firstTime,
+      end: nextStart ?? lastTime,
       title: keywords.length > 0 ? keywords.slice(0, 3).join(' / ') : compactText(text, 18),
       summary: compactText(text, 54),
       keywords,
-    })
-    group = []
-  }
-
-  for (const line of transcript) {
-    if (group.length === 0) groupStart = line.t_sec
-    const elapsed = line.t_sec - groupStart
-    if (group.length > 0 && (elapsed >= 42 || group.length >= 7)) {
-      flush(line.t_sec)
-      groupStart = line.t_sec
     }
-    group.push(line)
-  }
-  flush()
-  return chapters.slice(0, 12)
+  })
 }
 
 function safeFilename(name: string): string {
@@ -819,6 +818,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [imageLoadError, setImageLoadError] = useState<Record<number, boolean>>({})
   const handleTimeUpdate = useCallback((t: number) => setCurrentTime(t), [])
   const handleSeek = useCallback((sec: number) => {
+    // 先更新转录轴，再等待媒体元素的异步 seek/timeupdate，避免点击字幕后短暂显示旧行。
+    setCurrentTime(sec)
     videoRef.current?.seekTo(sec)
     audioRef.current?.seekTo(sec)
     mediaCompanionRef.current?.seekTo(sec)
@@ -1138,7 +1139,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         search_web: opts.searchWeb,
         summary_mode: opts.summaryMode,
       })
-      showOperationNotice(`${templateName} v${s.version} 生成完成`, 'success')
+      showOperationNotice(`${templateName} V${s.version} 生成完成`, 'success')
       refreshSummaries()
     } catch (err: unknown) {
       const axiosData = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -1269,7 +1270,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const hasTags = hasRenderableTags(tags)
   const activeSummary = summaries.find((x) => x.summary_id === activeSummaryId)
   const versionButtonLabel = activeSummary
-    ? `${summaryGroupLabel(summaryGroupKey(activeSummary))} · ${activeSummary.name || `v${activeSummary.version}`}`
+    ? `${summaryGroupLabel(summaryGroupKey(activeSummary))} · ${activeSummary.name || `V${activeSummary.version}`}`
     : `主笔记 v${noteVersion}`
 
   // 7.3: 视频笔记三列布局标志
@@ -1310,6 +1311,18 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const sourceLabel = sourceUrl ? platformLabelFromUrl(sourceUrl) : '本地素材'
   const effectiveVideoDuration = note.media?.video?.duration || videoDuration
   const effectiveAudioDuration = audioDuration
+  const speakerStatsMap = new Map<string, { count: number; duration: number }>()
+  transcriptLines.forEach((line, index) => {
+    const speakerId = String(line.speaker || '').trim()
+    if (!speakerId) return
+    const nextTime = transcriptLines[index + 1]?.t_sec
+    const endTime = nextTime ?? effectiveAudioDuration ?? line.t_sec
+    const current = speakerStatsMap.get(speakerId) ?? { count: 0, duration: 0 }
+    current.count += 1
+    current.duration += Math.max(0, endTime - line.t_sec)
+    speakerStatsMap.set(speakerId, current)
+  })
+  const totalSpeakerDuration = [...speakerStatsMap.values()].reduce((sum, stat) => sum + stat.duration, 0)
   const sourceMarker = sourceMarkerFromUrl(sourceUrl)
   const mediaDuration = isVideoNote ? effectiveVideoDuration : isAudioNote ? effectiveAudioDuration : 0
   const saveStatusNode = (
@@ -1436,7 +1449,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                                 }}
                               >
                                 <span>
-                                  <strong>{s.name || `v${s.version}`}</strong>
+                                  <strong>{s.name || `V${s.version}`}</strong>
                                   <small>
                                     {[s.model_used || '默认模型', formatDateTime(s.created_at)].filter(Boolean).join(' · ')}
                                   </small>
@@ -1991,11 +2004,15 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
             {/* 转录 */}
             {!isPip && transcriptLines.length > 0 ? (
                   <div id="audio-transcript" className="nibi-note-transcript-wrap">
-                    {speakerIds.length > 0 && (
+                    {speakerIds.length > 0 ? (
                       <div className="nibi-audio-speaker-chips" aria-label="说话人">
                         <span className="nibi-audio-speaker-title">说话人</span>
                         {speakerIds.map((speakerId) => {
                           const displayName = speakerMap[speakerId] || speakerId.replace(/^SPEAKER_/, 'S')
+                          const speakerStat = speakerStatsMap.get(speakerId)
+                          const speakerPercent = totalSpeakerDuration > 0 && speakerStat
+                            ? Math.round((speakerStat.duration / totalSpeakerDuration) * 100)
+                            : 0
                           const isEditing = editingSpeakerId === speakerId
                           return isEditing ? (
                             <input
@@ -2022,10 +2039,18 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                               }}
                             >
                               <span className="nibi-audio-speaker-dot" />
-                              {displayName}
+                              <span>{displayName}</span>
+                              {speakerStat && (
+                                <small>{speakerStat.count} 段 · {formatTimecode(speakerStat.duration)} · {speakerPercent}%</small>
+                              )}
                             </button>
                           )
                         })}
+                      </div>
+                    ) : (
+                      <div className="nibi-audio-speaker-empty">
+                        <strong>暂无说话人信息</strong>
+                        <span>重新分析并启用“区分说话人”后，将按人物显示颜色、名称与发言占比。</span>
                       </div>
                     )}
                     <LNTranscriptPanel
@@ -2037,6 +2062,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                   onSaved={refreshAfterTranscriptEdit}
                   translations={note.translations ?? null}
                   speakerMap={speakerMap}
+                  speakerPresentation="detailed"
+                  optimizeLongTranscript
                   title="转录文本"
                   countLabel={`${transcriptCount} 条`}
                 />
@@ -2092,6 +2119,18 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                     </div>
                   )
                 })()}
+                {summaries.length === 0 && (
+                  <div id="audio-summary" className="note-section nibi-summary-empty" style={{ marginTop: 16 }}>
+                    <h2>内容总结</h2>
+                    <div className="nibi-summary-empty-card">
+                      <strong>尚未生成总结</strong>
+                      <span>转录已保留，你可以立即生成默认总结。</span>
+                      <button type="button" onClick={() => setShowNewSummaryModal(true)}>
+                        生成默认总结
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {/* 正文 */}
                 <div id="audio-note" className="note-section" style={{ marginTop: summaries.length > 0 ? 0 : 16 }}>
                   <div className="nibi-note-editor-panel">
@@ -2406,6 +2445,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
           creating={creatingSummary}
           defaultTemplate={note.summary_hint?.default_template}
           allowSpeakerAware={isAudioNote}
+          speakerAwareAvailable={speakerIds.length > 0}
           onSubmit={handleCreateSummary}
           onClose={() => setShowNewSummaryModal(false)}
         />

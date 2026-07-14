@@ -30,6 +30,9 @@ vi.mock('@/config/product', () => ({
 vi.mock('@/hooks/useSystemStats', () => ({
   useSystemStats: () => ({ stats: null, online: true }),
 }))
+vi.mock('@/hooks/useHealthPulse', () => ({
+  useHealthPulse: () => ({ online: true, data: null, error: null, lastCheckedAt: null, bootstrapping: false }),
+}))
 
 vi.mock('@/components/FloatingTaskQueue', () => ({
   FloatingTaskQueue: () => null,

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { TaskRecord } from '@/types/task'
 import { isTaskTerminal } from '@/types/task'
-import { cancelPipelineTask, retryPipelineTask } from '@/services/pipeline'
+import { cancelPipelineTask, retryPipelineTask, type RetryTaskOptions } from '@/services/pipeline'
 import { toast } from 'sonner'
 
 interface TaskStoreState {
@@ -21,7 +21,7 @@ interface TaskStoreState {
   setCurrentTask: (taskId: string | null) => void
   setIsPolling: (isPolling: boolean) => void
   cancelTask: (taskId: string) => Promise<void>
-  retryTask: (taskId: string) => Promise<void>
+  retryTask: (taskId: string, options?: RetryTaskOptions) => Promise<void>
 
   // 便利方法
   getTask: (taskId: string) => TaskRecord | undefined
@@ -65,7 +65,7 @@ export const useTaskStore = create<TaskStoreState>()(
                 return { ...existing, result: existing.result, log: existing.log }
               }
               // status 不能从 SUCCESS/FAILED 退回 RUNNING/PENDING
-              const higherStatus = new Set(['SUCCESS', 'FAILED', 'CANCELLED'])
+              const higherStatus = new Set(['SUCCESS', 'PARTIAL', 'FAILED', 'CANCELLED'])
               if (higherStatus.has(existing.status) && !higherStatus.has(t.status)) {
                 return { ...existing, result: existing.result, log: existing.log }
               }
@@ -174,15 +174,17 @@ export const useTaskStore = create<TaskStoreState>()(
       },
 
       // 调用后端 retry 接口，创建新的重试任务（后端返回新任务记录）
-      retryTask: async (taskId) => {
+      retryTask: async (taskId, options) => {
         try {
-          const newTask = await retryPipelineTask(taskId)
+          const newTask = options
+            ? await retryPipelineTask(taskId, options)
+            : await retryPipelineTask(taskId)
           // 将新的重试任务追加到列表
           set((state) => ({
             tasks: [newTask, ...state.tasks],
             currentTaskId: newTask.task_id, // 自动切换到新重试任务
           }))
-          toast.success('任务已重新提交')
+          toast.success(options?.stage === 'diarization' ? '说话人分析已重新提交' : '任务已重新提交')
         } catch (err) {
           console.error(`[taskStore] retryTask ${taskId} failed:`, err)
           toast.error('重试失败，请稍后再试')
