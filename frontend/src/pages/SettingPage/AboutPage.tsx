@@ -143,7 +143,7 @@ export default function AboutPage() {
             </div>
             <div className="settings-row-control" style={{ justifyContent: 'flex-start' }}>
               <a
-                href="https://github.com/your-org/nibi"
+                href="https://github.com/your-org/notebi"
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{ fontSize: 'var(--sm)', fontWeight: 500, color: 'var(--acc)' }}

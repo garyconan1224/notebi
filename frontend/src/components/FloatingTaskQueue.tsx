@@ -12,6 +12,7 @@ import './FloatingTaskQueue.css'
 /* ── helpers ── */
 
 type DisplayState = 'running' | 'queued' | 'partial' | 'error'
+type RetryStage = 'diarization' | 'summary'
 
 interface QueueRow {
   id: string
@@ -25,6 +26,7 @@ interface QueueRow {
   workspaceId: string
   itemId?: string
   failedTaskIds: string[]
+  retryStage?: RetryStage
 }
 
 function displayState(status: string): DisplayState {
@@ -178,6 +180,11 @@ export function FloatingTaskQueue() {
         const state = displayState(t.status)
         const displayProgress = Math.round(progress * 100)
         const payload = (t.payload ?? {}) as Record<string, unknown>
+        const result = (t.result ?? {}) as Record<string, unknown>
+        const partialFailure = result.partial_failure as Record<string, unknown> | undefined
+        const retryStage: RetryStage | undefined = state === 'partial'
+          ? (partialFailure?.stage === 'summary' ? 'summary' : 'diarization')
+          : undefined
         return {
           id: t.task_id,
           groupKey,
@@ -190,6 +197,7 @@ export function FloatingTaskQueue() {
           workspaceId: t.project_id,
           itemId: payload?.item_id as string | undefined,
           failedTaskIds,
+          retryStage,
         }
       })
   }, [tasks])
@@ -225,8 +233,10 @@ export function FloatingTaskQueue() {
   }
 
   const handleCancelOrHide = async (row: QueueRow) => {
-    if (row.status === 'FAILED') {
-      const taskIds = row.failedTaskIds.length > 0 ? row.failedTaskIds : [row.id]
+    if (row.status === 'FAILED' || row.status === 'PARTIAL') {
+      const taskIds = row.status === 'FAILED' && row.failedTaskIds.length > 0
+        ? row.failedTaskIds
+        : [row.id]
       for (const taskId of taskIds) {
         removeTask(taskId)
       }
@@ -234,7 +244,7 @@ export function FloatingTaskQueue() {
       const failedDeletes = results.filter((result) => result.status === 'rejected')
       if (failedDeletes.length > 0) {
         console.error('[FloatingTaskQueue] delete failed tasks failed:', failedDeletes)
-        toast.error('清除历史任务失败，请稍后再试')
+        toast.error('清除任务失败，请稍后再试')
       }
       return
     }
@@ -372,6 +382,7 @@ export function FloatingTaskQueue() {
           <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
             {rows.map((r) => {
               const isActive = currentTaskId === r.id
+              const partialRetryLabel = r.retryStage === 'summary' ? '重试摘要' : '重试说话人'
               return (
                 <div
                   key={r.groupKey}
@@ -459,20 +470,24 @@ export function FloatingTaskQueue() {
                     {r.state === 'partial' && (
                       <button
                         className="btn btn-ghost"
-                        aria-label={`仅重试说话人分析 ${r.title}`}
+                        aria-label={`仅${partialRetryLabel} ${r.title}`}
                         style={{ height: 20, padding: '0 7px', fontSize: 10, gap: 4 }}
                         onClick={(e) => {
                           e.stopPropagation()
-                          void retryTask(r.id, { stage: 'diarization' })
+                          void retryTask(r.id, { stage: r.retryStage ?? 'diarization' })
                         }}
                       >
-                        <RotateCcw size={10} />重试说话人
+                        <RotateCcw size={10} />{partialRetryLabel}
                       </button>
                     )}
-                    {r.state !== 'partial' && (
+                    {(r.state === 'error' || r.state === 'partial' || r.state === 'running' || r.state === 'queued') && (
                       <button
                         className="btn btn-ghost"
-                        aria-label={r.status === 'FAILED' ? `清除失败任务 ${r.title}` : `取消任务 ${r.title}`}
+                        aria-label={r.status === 'FAILED'
+                          ? `清除失败任务 ${r.title}`
+                          : r.status === 'PARTIAL'
+                            ? `清除部分完成任务 ${r.title}`
+                            : `取消任务 ${r.title}`}
                         style={{ height: 20, padding: '0 7px', fontSize: 10, color: 'var(--ink-3)' }}
                         onClick={(e) => {
                           e.stopPropagation()

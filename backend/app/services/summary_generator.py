@@ -13,11 +13,12 @@ from typing import Dict, List, Tuple
 logger = logging.getLogger(__name__)
 
 from backend.app.models.workspace import ItemSummary, WorkspaceItem
+from backend.app.services.speaker_labels import apply_speaker_map
 from backend.app.services.summary_templates import get_template, TEMPLATES
 from shared.config import DATA_DIR
 from shared.settings_store import load_settings
 
-# 所有 9 种模板 ID（配图规则注入目标）
+# 所有已注册模板 ID（配图规则注入目标）
 _ALL_TEMPLATE_IDS = frozenset(TEMPLATES.keys())
 
 
@@ -576,7 +577,7 @@ def build_prompt(
     if background.strip():
         user_prompt = f"【背景信息】\n{background.strip()}\n\n{user_prompt}"
 
-    # Stage 4: 带图模式 → 9 种模板全部注入配图规则（*FRAME-[mm:ss] 占位符）
+    # Stage 4: 带图模式 → 所有已注册模板注入配图规则（*FRAME-[mm:ss] 占位符）
     if item.type == "video" and embed_frames and template_id in _ALL_TEMPLATE_IDS:
         from backend.app.services.summary_templates import FRAME_PLACEHOLDER_RULE
         system_prompt = system_prompt + FRAME_PLACEHOLDER_RULE
@@ -1085,6 +1086,10 @@ def generate_summary(
                 transcript_segments,
                 (item.results or {}).get("speaker_map") or {},
             )
+            content_md = apply_speaker_map(
+                content_md,
+                (item.results or {}).get("speaker_map") or {},
+            )
         if item.type == "video" and embed_frames:
             from backend.app.services.frame_placeholder import resolve_frame_placeholders
 
@@ -1120,6 +1125,10 @@ def generate_summary(
         content_md = _strip_unsupported_speaker_qualifiers(
             content_md,
             transcript_segments,
+            (item.results or {}).get("speaker_map") or {},
+        )
+        content_md = apply_speaker_map(
+            content_md,
             (item.results or {}).get("speaker_map") or {},
         )
 

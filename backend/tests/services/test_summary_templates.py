@@ -13,6 +13,7 @@ def test_all_template_ids_loadable():
         "oral", "steps", "outline", "qa", "actions", "tool_recommendation",
         "science_popularization", "standard",
         "speaker_meeting", "speaker_interview", "speaker_customer_reception",
+        "speaker_consultant_detailed", "speaker_consultant_meeting_customer_voice",
     ]
     assert list_template_ids() == expected_ids
     for tid in expected_ids:
@@ -67,6 +68,30 @@ def test_speaker_aware_business_templates_have_evidence_contracts():
         assert "不得编造" in template.system_prompt
         assert "说话人标签必须原样" in template.system_prompt
         assert "时间" in template.system_prompt
+
+
+def test_consultant_speaker_templates_preserve_their_distinct_output_contracts():
+    """咨询师录音模板必须分别锁定“按议题观点”与“按会谈流程”的输出结构。"""
+    expectations = {
+        "speaker_consultant_detailed": {
+            "label": "咨询师录音版本详细总结",
+            "terms": ["主谈人", "会谈对象", "按议题", "XXX补充", "小结", "待确认", "长录音", "6–12 个", "每点至少"],
+        },
+        "speaker_consultant_meeting_customer_voice": {
+            "label": "咨询师录音版会议纪要/客户声音",
+            "terms": ["按会谈流程", "开场", "客户问题", "我方回应", "follow up", "不输出总标题", "长录音", "8–16 个", "完整问答闭环"],
+        },
+    }
+
+    for template_id, expected in expectations.items():
+        template = get_template(template_id)
+        assert template.label == expected["label"]
+        assert template.speaker_aware_only is True
+        assert set(("style_audio", "style_video_with_frames", "style_video_text_only")).issubset(template.style_categories)
+        for term in expected["terms"]:
+            assert term in template.system_prompt, f"{template_id} contract 缺少「{term}」"
+        assert "不得编造" in template.system_prompt
+        assert "说话人标签必须原样" in template.system_prompt
 
 
 def test_speaker_template_override_preserves_scope(monkeypatch):

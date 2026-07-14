@@ -52,7 +52,7 @@ _TRANSLATE_MODEL_CANDIDATES = (
     "Qwen/Qwen3-8B",
 )
 
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -77,6 +77,7 @@ from backend.app.services.note_assembler import (
     note_dir,
 )
 from backend.app.services.note_exporter import build_note_export_response
+from backend.app.services.speaker_labels import apply_speaker_map
 from backend.app.services.summary_generator import generate_summary
 from backend.app.services.summary_templates import list_template_ids
 from backend.app.services.video_result_demo import build_demo_video_result
@@ -4291,46 +4292,11 @@ class SpeakerMapRequest(BaseModel):
     speaker_map: Dict[str, str]
 
 
-def _regenerate_speaker_summaries(workspace_id: str, item_id: str) -> None:
-    """说话人改名后，异步追加新的区分说话人总结版本。"""
-    try:
-        rec = _store.get(workspace_id)
-        if rec is None:
-            return
-        item = _find_item(rec, item_id)
-        targets = [s for s in item.summaries if s.summary_mode == "speaker_aware"]
-        for previous in targets:
-            try:
-                refreshed = generate_summary(
-                    item,
-                    previous.template,
-                    previous.background_for_summary,
-                    summary_mode="speaker_aware",
-                )
-                refreshed.version = _store.next_version_for_template(
-                    workspace_id, item_id, previous.template,
-                )
-                _store.add_item_summary(workspace_id, item_id, refreshed)
-            except Exception:
-                logger.exception(
-                    "speaker-aware summary regeneration failed: workspace=%s item=%s template=%s",
-                    workspace_id,
-                    item_id,
-                    previous.template,
-                )
-    except Exception:
-        logger.exception(
-            "speaker-aware summary regeneration worker failed: workspace=%s item=%s",
-            workspace_id,
-            item_id,
-        )
-
-
 @router.patch("/{workspace_id}/items/{item_id}/speaker_map")
 def update_speaker_map(
-    workspace_id: str, item_id: str, req: SpeakerMapRequest, background_tasks: BackgroundTasks
+    workspace_id: str, item_id: str, req: SpeakerMapRequest
 ) -> Dict[str, Any]:
-    """保存说话人名称映射到 item.results。"""
+    """保存说话人名称映射，并同步更新已有的区分说话人总结。"""
     rec = _store.get(workspace_id)
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
@@ -4341,13 +4307,15 @@ def update_speaker_map(
     has_speaker_summaries = any(
         summary.summary_mode == "speaker_aware" for summary in item.summaries
     )
-    if has_speaker_summaries:
-        background_tasks.add_task(_regenerate_speaker_summaries, workspace_id, item_id)
+    updated_count = _store.update_speaker_summary_labels(
+        workspace_id, item_id, req.speaker_map
+    )
     return {
         "speaker_map": req.speaker_map,
         "summary_refresh": {
-            "status": "queued" if has_speaker_summaries else "not_needed",
-            "reason": "说话人名称已更新，区分说话人总结将在后台生成新版本。"
+            "status": "updated" if has_speaker_summaries else "not_needed",
+            "updated_count": updated_count,
+            "reason": f"已同步替换 {updated_count} 份区分说话人总结中的名称。"
             if has_speaker_summaries
             else "当前没有区分说话人总结需要更新。",
         },
@@ -4790,14 +4758,20 @@ def _summary_source_present(results: Dict[str, Any]) -> bool:
 
 @router.get("/{workspace_id}/items/{item_id}/summaries")
 def list_summaries(workspace_id: str, item_id: str) -> List[Dict[str, Any]]:
-    """列出该 item 的所有总结（按 template 分组，按 version 排序）。"""
+    """列出该 item 的所有总结（按素材级 version 排序）。"""
     rec = _store.get(workspace_id)
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
     item = _find_item(rec, item_id)
-    # 按 template 分组再按 version 排序
-    sorted_summaries = sorted(item.summaries, key=lambda s: (s.template, s.version))
-    return [s.to_dict() for s in sorted_summaries]
+    speaker_map = (item.results or {}).get("speaker_map") or {}
+    sorted_summaries = sorted(item.summaries, key=lambda s: (s.version, s.created_at, s.summary_id))
+    response: List[Dict[str, Any]] = []
+    for summary in sorted_summaries:
+        data = summary.to_dict()
+        if summary.summary_mode == "speaker_aware":
+            data["content_md"] = apply_speaker_map(data.get("content_md") or "", speaker_map)
+        response.append(data)
+    return response
 
 
 @router.post("/{workspace_id}/items/{item_id}/summaries", status_code=201)
@@ -4843,7 +4817,7 @@ async def create_summary(
         _pb = list(item.results.get("json_output_basenames") or [])
         item.results = dict(_materialize_video_results_from_analyze(item.results, preferred_basenames=_pb))
 
-    next_ver = _store.next_version_for_template(workspace_id, item_id, req.template)
+    next_ver = _store.next_summary_version(workspace_id, item_id)
 
     def _do_generate() -> ItemSummary:
         summary = generate_summary(
@@ -4877,7 +4851,13 @@ def get_summary(workspace_id: str, item_id: str, summary_id: str) -> Dict[str, A
     summary = next((s for s in item.summaries if s.summary_id == summary_id), None)
     if summary is None:
         raise HTTPException(status_code=404, detail=f"summary not found: {summary_id}")
-    return summary.to_dict()
+    data = summary.to_dict()
+    if summary.summary_mode == "speaker_aware":
+        data["content_md"] = apply_speaker_map(
+            data.get("content_md") or "",
+            (item.results or {}).get("speaker_map") or {},
+        )
+    return data
 
 
 @router.delete("/{workspace_id}/items/{item_id}/summaries/{summary_id}")
@@ -4993,6 +4973,7 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
 
     # 从 task store 回填最新 SUCCESS result；note.md 已存在时也需要回填，
     # 因为 retry 成功可能晚于旧 note.md 的首次惰性组装。
+    latest_result_task = None
     if item.related_task_ids:
         for tid in reversed(item.related_task_ids):
             task = _pipeline_runner.store.get(tid)
@@ -5000,6 +4981,7 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
                 merged = dict(item.results or {})
                 merged.update(task.result)
                 item.results = merged
+                latest_result_task = task
                 break
 
     # 惰性组装：目录不存在或 note.md 缺失时触发；旧自动稿则按最新结果刷新。
@@ -5127,6 +5109,13 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
     if _dst:
         summary_hint["default_template"] = _dst
 
+    raw_summary_failure = results.get("partial_failure")
+    summary_failure = (
+        raw_summary_failure
+        if isinstance(raw_summary_failure, dict) and raw_summary_failure.get("stage") == "summary"
+        else None
+    )
+
     return {
         "frontmatter": frontmatter,
         "source_md": source_md,
@@ -5139,6 +5128,9 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
         # 音频说话人改名需要随 /note 回显，保证刷新后字幕和总结入口仍使用用户名称。
         "speaker_map": results.get("speaker_map", {}) if item_type == "audio" else {},
         "summary_hint": summary_hint,
+        # 自动总结失败时，结果页必须拿到原因和可重试的任务 ID，不能只显示空态。
+        "summary_failure": summary_failure,
+        "summary_retry_task_id": latest_result_task.task_id if summary_failure and latest_result_task else "",
     }
 
 

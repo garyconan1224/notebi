@@ -5,7 +5,7 @@ import { useTaskStore } from '@/store/taskStore'
 import { usePipelineTasks } from '@/hooks/usePipelineTasks'
 import { isTaskTerminal, getStatusText } from '@/types/task'
 import type { TaskRecord } from '@/types/task'
-import { isWorkspaceKindAllowed, type WorkspaceKind } from '@/config/product'
+import { isWorkspaceKindAllowed, productConfig, type WorkspaceKind } from '@/config/product'
 
 const STATE_PILL_CLASS: Record<string, string> = {
   done:      'status-pill status-done',
@@ -94,7 +94,8 @@ function taskToNoteCard(t: TaskRecord): NoteCard {
   const summary = descFromResult(result)
 
   // 来源标签
-  const src = (result.source_name || result.platform || payload.platform || 'Nibi') as string
+  const rawSource = (result.source_name || result.platform || payload.platform || productConfig.name) as string
+  const src = rawSource.trim().toLowerCase() === 'nibi' ? productConfig.name : rawSource
 
   // 封面
   const resultAudio = result.audio as Record<string, unknown> | undefined

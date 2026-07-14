@@ -19,6 +19,7 @@ import { downloadItemNoteExport, downloadTranscript, exportItemNoteObsidian, get
 import type { VideoResultTranscriptLine } from '@/services/workspaces'
 import type { ItemNote } from '@/types/workspace'
 import { createSummary, deleteSummary, listSummaries, renameSummary, type ItemSummary } from '@/services/summaries'
+import { retryPipelineTask } from '@/services/pipeline'
 import { MarkdownToc, extractToc, slugify } from '@/components/MarkdownToc'
 import { platformLabelFromUrl } from './note-shell-utils'
 import { Badge } from '@/components/ui/badge'
@@ -100,6 +101,8 @@ const TEMPLATE_LABELS: Record<string, string> = {
   speaker_meeting: '会议纪要（区分说话人）',
   speaker_interview: '线下采访（区分说话人）',
   speaker_customer_reception: '客户接待（区分说话人）',
+  speaker_consultant_detailed: '咨询师录音版本详细总结',
+  speaker_consultant_meeting_customer_voice: '咨询师录音版会议纪要/客户声音',
 }
 const tl = (id: string) => TEMPLATE_LABELS[id] ?? id
 
@@ -448,6 +451,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   // 新建总结（复用 NewSummaryModal）
   const [showNewSummaryModal, setShowNewSummaryModal] = useState(false)
   const [creatingSummary, setCreatingSummary] = useState(false)
+  const [retryingAutoSummary, setRetryingAutoSummary] = useState(false)
   const [editorPrefsOpen, setEditorPrefsOpen] = useState(false)
   const editorPrefsRef = useRef<HTMLDivElement>(null)
   const [editorPrefs, setEditorPrefs] = useState<NoteEditorPrefs>(readEditorPrefs)
@@ -538,6 +542,12 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     return map
   }, [summaries])
 
+  const orderedSummaries = useMemo(() => [...summaries].sort((a, b) => (
+    a.version - b.version
+    || a.created_at.localeCompare(b.created_at)
+    || a.summary_id.localeCompare(b.summary_id)
+  )), [summaries])
+
   const summaryGroupLabel = useCallback((key: string) => {
     const [mode, template] = key.split('::', 2)
     return mode === 'speaker_aware' ? `区分说话人 · ${tl(template)}` : tl(template)
@@ -560,6 +570,12 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
       .catch(() => {})
     return () => { cancelled = true }
   }, [workspaceId, itemId, activeSummaryId, summariesVersion])
+
+  useEffect(() => {
+    if (!activeSummaryId) return
+    const active = summaries.find((summary) => summary.summary_id === activeSummaryId)
+    if (active) switchEditorBody(active.content_md)
+  }, [activeSummaryId, summaries, switchEditorBody])
 
   useEffect(() => {
     window.localStorage.setItem(VIDEO_SPLIT_STORAGE_KEY, String(Math.round(noteLeftPct)))
@@ -868,6 +884,21 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   }, [workspaceId, itemId])
 
   useEffect(() => { fetchNote() }, [fetchNote])
+
+  const handleRetryAutoSummary = useCallback(async () => {
+    const taskId = note?.summary_retry_task_id
+    if (!taskId) return
+    setRetryingAutoSummary(true)
+    try {
+      await retryPipelineTask(taskId, { stage: 'summary' })
+      toast.success('已开始仅重试摘要，转录和说话人结果不会重复处理。')
+      await fetchNote()
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : '重试摘要失败')
+    } finally {
+      setRetryingAutoSummary(false)
+    }
+  }, [fetchNote, note?.summary_retry_task_id])
 
   // 字幕保存成功后轻量刷新 source.md（不 setLoading、不重置正文编辑态；字幕编辑只动 source.md/transcript）
   const refreshAfterTranscriptEdit = useCallback(async () => {
@@ -1284,9 +1315,11 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     setSpeakerMap(updated)
     try {
       const result = await updateSpeakerMap(workspaceId, itemId, updated)
+      refreshSummaries()
+      const updatedCount = result.summary_refresh?.updated_count ?? 0
       toast.success(
-        result.summary_refresh?.status === 'queued'
-          ? '说话人已更新，区分说话人总结正在生成新版本'
+        result.summary_refresh?.status === 'updated'
+          ? `说话人已更新，已同步刷新 ${updatedCount} 份区分说话人总结`
           : '说话人已更新',
       )
     } catch {
@@ -1403,11 +1436,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 {summaries.length === 0 ? (
                   <div className="nibi-note-version-empty">暂无 AI 总结版本，可点击“新建总结”生成。</div>
                 ) : (
-                  [...templateGroups.entries()].map(([tmpl, versions], gi) => (
-                    <div key={tmpl}>
-                      {gi > 0 && <div className="nibi-note-version-divider" />}
-                      <div className="nibi-note-version-group">{summaryGroupLabel(tmpl)}</div>
-                      {versions.map((s) => {
+                  orderedSummaries.map((s) => {
                         const isActive = s.summary_id === activeSummaryId
                         const isRenaming = renameTargetId === s.summary_id
                         return (
@@ -1435,9 +1464,9 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                                 }}
                               >
                                 <span>
-                                  <strong>{s.name || `V${s.version}`}</strong>
+                                  <strong>{`V${s.version}`}{s.name ? ` · ${s.name}` : ''}</strong>
                                   <small>
-                                    {[s.model_used || '默认模型', formatDateTime(s.created_at)].filter(Boolean).join(' · ')}
+                                    {[summaryGroupLabel(summaryGroupKey(s)), s.model_used || '默认模型', formatDateTime(s.created_at)].filter(Boolean).join(' · ')}
                                   </small>
                                 </span>
                                 {isActive && <Check size={13} />}
@@ -1451,9 +1480,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                             )}
                           </div>
                         )
-                      })}
-                    </div>
-                  ))
+                      })
                 )}
               </div>
             )}
@@ -2115,11 +2142,27 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                   <div id="audio-summary" className="note-section nibi-summary-empty" style={{ marginTop: 16 }}>
                     <h2>内容总结</h2>
                     <div className="nibi-summary-empty-card">
-                      <strong>尚未生成总结</strong>
-                      <span>转录已保留，你可以立即生成默认总结。</span>
-                      <button type="button" onClick={() => setShowNewSummaryModal(true)}>
-                        生成默认总结
-                      </button>
+                      {note.summary_failure?.stage === 'summary' ? (
+                        <>
+                          <strong>自动总结暂未完成</strong>
+                          <span>{note.summary_failure.code === 'rate_limited'
+                            ? '模型服务当前繁忙，转录和说话人结果已保留。'
+                            : '自动总结失败，转录和说话人结果已保留。'}</span>
+                          {note.summary_retry_task_id && (
+                            <button type="button" onClick={() => void handleRetryAutoSummary()} disabled={retryingAutoSummary}>
+                              {retryingAutoSummary ? '正在重试…' : '仅重试摘要'}
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <strong>尚未生成总结</strong>
+                          <span>转录已保留，你可以立即生成默认总结。</span>
+                          <button type="button" onClick={() => setShowNewSummaryModal(true)}>
+                            生成默认总结
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}

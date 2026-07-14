@@ -127,6 +127,36 @@ class TestBuildPrompt:
         assert "[00:12] 嘉宾 A：嘉宾补充" in usr_p
         assert "[01:01:01] 未识别说话人：后半程未标记内容" in usr_p
 
+    @pytest.mark.parametrize(
+        ("template_id", "required_instruction"),
+        [
+            ("speaker_consultant_detailed", "**小结**"),
+            ("speaker_consultant_meeting_customer_voice", "客户问题 → 我方回应 → 客户反馈 / follow up"),
+        ],
+    )
+    def test_consultant_speaker_templates_keep_video_speaker_evidence(
+        self,
+        template_id: str,
+        required_instruction: str,
+    ) -> None:
+        item = _make_item(
+            type="video",
+            results={
+                "transcript": "原始转写不带身份",
+                "transcript_segments": [
+                    {"t_sec": 0, "t_str": "00:00", "speaker": "SPEAKER_00", "text": "介绍当前业务挑战"},
+                    {"t_sec": 18, "t_str": "00:18", "speaker": "SPEAKER_01", "text": "补充客户关注成本"},
+                ],
+                "speaker_map": {"SPEAKER_00": "李总", "SPEAKER_01": "客户 CEO"},
+            },
+        )
+
+        sys_p, usr_p = build_prompt(item, template_id, summary_mode="speaker_aware")
+
+        assert required_instruction in sys_p
+        assert "[00:00] 李总：介绍当前业务挑战" in usr_p
+        assert "[00:18] 客户 CEO：补充客户关注成本" in usr_p
+
     def test_speaker_aware_output_drops_unsupported_identity_qualifiers(self) -> None:
         segments = [
             {"speaker": "SPEAKER_00", "text": "发言"},
@@ -266,7 +296,7 @@ class TestGenerateSummary:
 
     @patch("backend.app.services.summary_generator._call_llm")
     def test_speaker_aware_summary_records_mode(self, mock_llm: MagicMock) -> None:
-        mock_llm.return_value = ("speaker summary", "model")
+        mock_llm.return_value = ("# 待确认_SPEAKER_00\n\nSPEAKER_00 指出关键结论", "model")
         item = _make_item(
             type="audio",
             results={
@@ -278,6 +308,7 @@ class TestGenerateSummary:
         )
         result = generate_summary(item, "concise", summary_mode="speaker_aware")
         assert result.summary_mode == "speaker_aware"
+        assert result.content_md == "# 待确认_主持人\n\n主持人 指出关键结论"
 
     @patch("backend.app.services.summary_generator._call_llm")
     @patch("backend.app.services.pipeline_tasks._generate_audio_summary")
@@ -467,12 +498,12 @@ class TestWorkspaceStoreSummaryHelpers:
         ver = store.next_version_for_template("ws-1", "item-1", "concise")
         assert ver == 1
 
-    def test_next_version_different_templates_independent(self) -> None:
+    def test_next_version_is_global_across_templates(self) -> None:
         store = _make_store_with_item()
         s1 = ItemSummary(summary_id="s1", template="concise", version=0)
         store.add_item_summary("ws-1", "item-1", s1)
         ver = store.next_version_for_template("ws-1", "item-1", "detailed")
-        assert ver == 0  # 不同 template 独立计数，首版 = v0
+        assert ver == 1  # 同一素材内不区分模板，连续编号为 v0、v1、v2
 
     def test_add_item_summary(self) -> None:
         store = _make_store_with_item()

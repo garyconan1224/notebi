@@ -70,7 +70,7 @@ function baselineFromDetail(detail: ProviderDetail): EditDraft {
 
 const EMPTY_DRAFT: EditDraft = { api_key: '', base_url: '', enabled: false, name: '' }
 
-/** Provider 颜色映射（用于 pc-logo 背景） — 用 Nibi token 色域 */
+/** Provider 颜色映射（用于 pc-logo 背景） — 用 NoteBi token 色域 */
 function providerColor(kind: string): string {
   const map: Record<string, string> = {
     anthropic:      'var(--acc)',   // amber accent

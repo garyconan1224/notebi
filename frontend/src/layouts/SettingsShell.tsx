@@ -79,7 +79,7 @@ export function SettingsShell() {
           <span className="text-[var(--mut)] text-xs">/</span>
           <LangSwitcher />
         </div>
-        <div className="eyebrow">SETTINGS · LOCAL · ~/.nibi</div>
+        <div className="eyebrow">SETTINGS · LOCAL · {productConfig.name.toUpperCase()}</div>
         <h1>设置</h1>
         <p>
           模型、API 密钥、下载路径、分析默认偏好。所有设置本地存储，不上传到服务器。

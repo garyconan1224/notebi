@@ -4621,6 +4621,47 @@ def _parse_audio_coverage_audit(raw: str, expected_ids: List[str]) -> Dict[str, 
     }
 
 
+_RETRYABLE_SUMMARY_ERROR_MARKERS = (
+    "429",
+    "rate limit",
+    "rate-limit",
+    "too busy",
+    "overloaded",
+    "temporar",
+    "timeout",
+    "timed out",
+    "connection reset",
+    "502",
+    "503",
+    "504",
+)
+
+
+def _is_retryable_summary_error(error: Exception) -> bool:
+    return any(marker in str(error).lower() for marker in _RETRYABLE_SUMMARY_ERROR_MARKERS)
+
+
+def _chat_with_retry(
+    provider: Any,
+    request: ChatRequest,
+    *,
+    log: Callable[[str], None],
+    attempts: int = 3,
+    sleep: Callable[[float], None] = time.sleep,
+) -> str:
+    """对临时性 LLM 拒绝做有限退避，避免把可恢复的 429 变成空摘要。"""
+    for attempt in range(1, attempts + 1):
+        try:
+            return provider.chat(request)
+        except Exception as err:
+            if attempt >= attempts or not _is_retryable_summary_error(err):
+                raise
+            delay = float(2 ** attempt)
+            log(f"⚠️  LLM 暂时不可用（{err}），{delay:.0f} 秒后第 {attempt + 1}/{attempts} 次重试")
+            sleep(delay)
+    raise RuntimeError("LLM 重试状态异常")
+
+
 def _audit_audio_summary_coverage(
     *,
     provider: Any,
@@ -4628,6 +4669,7 @@ def _audit_audio_summary_coverage(
     summary: str,
     combined_partials: str,
     expected_ids: List[str],
+    log: Callable[[str], None],
 ) -> Dict[str, Any]:
     audit_prompt = (
         "你是严格的长音频总结覆盖审计员。请逐个对照分段摘要和最终总结，判断每个分段的关键事实、"
@@ -4638,12 +4680,16 @@ def _audit_audio_summary_coverage(
         f"\n\n最终总结：\n{summary}"
         f"\n\n按时间顺序的分段摘要：\n{combined_partials}"
     )
-    raw = provider.chat(ChatRequest(
-        model=chat_model,
-        messages=[{"role": "user", "content": audit_prompt}],
-        temperature=0.0,
-        max_tokens=2500,
-    ))
+    raw = _chat_with_retry(
+        provider,
+        ChatRequest(
+            model=chat_model,
+            messages=[{"role": "user", "content": audit_prompt}],
+            temperature=0.0,
+            max_tokens=2500,
+        ),
+        log=log,
+    )
     return _parse_audio_coverage_audit(raw, expected_ids)
 
 
@@ -4745,15 +4791,19 @@ def _generate_audio_summary(
 
     if len(chunks) == 1:
         prompt = speaker_instruction + template.user_prompt.replace("{transcript}", chunks[0])
-        summary = provider.chat(ChatRequest(
-            model=chat_model,
-            messages=[
-                {"role": "system", "content": template.system_prompt},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.3,
-            max_tokens=3000,
-        ))
+        summary = _chat_with_retry(
+            provider,
+            ChatRequest(
+                model=chat_model,
+                messages=[
+                    {"role": "system", "content": template.system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.3,
+                max_tokens=3000,
+            ),
+            log=log,
+        )
         if progress:
             progress(1.0, "摘要生成完成")
         return summary
@@ -4794,15 +4844,19 @@ def _generate_audio_summary(
             + "\n\n"
             + chunk
         )
-        partial = provider.chat(ChatRequest(
-            model=chat_model,
-            messages=[
-                {"role": "system", "content": chunk_system_prompt},
-                {"role": "user", "content": speaker_instruction + chunk_prompt},
-            ],
-            temperature=0.2,
-            max_tokens=2000,
-        ))
+        partial = _chat_with_retry(
+            provider,
+            ChatRequest(
+                model=chat_model,
+                messages=[
+                    {"role": "system", "content": chunk_system_prompt},
+                    {"role": "user", "content": speaker_instruction + chunk_prompt},
+                ],
+                temperature=0.2,
+                max_tokens=2000,
+            ),
+            log=log,
+        )
         marker = f"<!-- CHUNK_COMPLETE:{chunk_id} -->"
         if marker not in partial:
             partial_boundary_fallback_ids.append(chunk_id)
@@ -4813,15 +4867,19 @@ def _generate_audio_summary(
                 "每项附说话人和时间。禁止逐句复述。"
                 f"最后一行必须是 `{marker}`。\n\n{chunk}"
             )
-            retried = provider.chat(ChatRequest(
-                model=chat_model,
-                messages=[
-                    {"role": "system", "content": chunk_system_prompt},
-                    {"role": "user", "content": speaker_instruction + retry_prompt},
-                ],
-                temperature=0.1,
-                max_tokens=1500,
-            ))
+            retried = _chat_with_retry(
+                provider,
+                ChatRequest(
+                    model=chat_model,
+                    messages=[
+                        {"role": "system", "content": chunk_system_prompt},
+                        {"role": "user", "content": speaker_instruction + retry_prompt},
+                    ],
+                    temperature=0.1,
+                    max_tokens=1500,
+                ),
+                log=log,
+            )
             if marker in retried:
                 partial = retried
             else:
@@ -4866,15 +4924,19 @@ def _generate_audio_summary(
         + "\n\n"
         + template.user_prompt.replace("{transcript}", combined)
     )
-    summary = provider.chat(ChatRequest(
-        model=chat_model,
-        messages=[
-            {"role": "system", "content": template.system_prompt + media_frame_rule},
-            {"role": "user", "content": final_prompt},
-        ],
-        temperature=0.3,
-        max_tokens=8000,
-    ))
+    summary = _chat_with_retry(
+        provider,
+        ChatRequest(
+            model=chat_model,
+            messages=[
+                {"role": "system", "content": template.system_prompt + media_frame_rule},
+                {"role": "user", "content": final_prompt},
+            ],
+            temperature=0.3,
+            max_tokens=8000,
+        ),
+        log=log,
+    )
     if summary_mode == "speaker_aware":
         # 直接由音频/视频流水线调用时也要执行与 summaries API 相同的
         # 说话人身份安全网，避免模型把 SPEAKER_00 擅自扩写成职业或角色。
@@ -4884,13 +4946,27 @@ def _generate_audio_summary(
     if progress:
         progress((len(chunks) + 1) / total_calls, "校验摘要覆盖范围")
 
-    audit = _audit_audio_summary_coverage(
-        provider=provider,
-        chat_model=chat_model,
-        summary=summary,
-        combined_partials=combined,
-        expected_ids=chunk_ids,
-    )
+    try:
+        audit = _audit_audio_summary_coverage(
+            provider=provider,
+            chat_model=chat_model,
+            summary=summary,
+            combined_partials=combined,
+            expected_ids=chunk_ids,
+            log=log,
+        )
+    except Exception as err:
+        # 覆盖审计是质量增强项；最终摘要已拿到时，不能因审计服务暂时繁忙而丢弃正文。
+        log(f"⚠️  覆盖审计暂不可用，保留已生成摘要：{err}")
+        if coverage is not None:
+            coverage.update({
+                "audit_passes": 0,
+                "missing_chunk_ids": [],
+                "status": "audit_unavailable",
+            })
+        if progress:
+            progress(1.0, "摘要已生成，覆盖审计稍后可重试")
+        return summary
     audit_passes = 1
     required_sections = _summary_required_sections(template.system_prompt)
     structural_missing = _summary_missing_sections(summary, required_sections)
@@ -4924,24 +5000,41 @@ def _generate_audio_summary(
             f"\n\n当前总结：\n{summary}"
             f"\n\n遗漏分段摘要：\n{missing_sections}"
         )
-        summary = provider.chat(ChatRequest(
-            model=chat_model,
-            messages=[
-                {"role": "system", "content": template.system_prompt},
-                {"role": "user", "content": repair_prompt},
-            ],
-            temperature=0.2,
-            max_tokens=8000,
-        ))
+        summary = _chat_with_retry(
+            provider,
+            ChatRequest(
+                model=chat_model,
+                messages=[
+                    {"role": "system", "content": template.system_prompt},
+                    {"role": "user", "content": repair_prompt},
+                ],
+                temperature=0.2,
+                max_tokens=8000,
+            ),
+            log=log,
+        )
         if progress:
             progress((len(chunks) + 2) / total_calls, "复审摘要覆盖范围")
-        audit = _audit_audio_summary_coverage(
-            provider=provider,
-            chat_model=chat_model,
-            summary=summary,
-            combined_partials=combined,
-            expected_ids=chunk_ids,
-        )
+        try:
+            audit = _audit_audio_summary_coverage(
+                provider=provider,
+                chat_model=chat_model,
+                summary=summary,
+                combined_partials=combined,
+                expected_ids=chunk_ids,
+                log=log,
+            )
+        except Exception as err:
+            log(f"⚠️  覆盖复审暂不可用，保留已生成摘要：{err}")
+            if coverage is not None:
+                coverage.update({
+                    "audit_passes": 1,
+                    "missing_chunk_ids": [],
+                    "status": "audit_unavailable",
+                })
+            if progress:
+                progress(1.0, "摘要已生成，覆盖复审稍后可重试")
+            return summary
         audit_passes = 2
         structural_missing = _summary_missing_sections(summary, required_sections)
         deterministic_missing = (
@@ -5016,6 +5109,17 @@ def _resolve_diarization_retry_audio(parent: TaskRecord, audio_dir: Path) -> Pat
         if path.is_file() and path.suffix.lower() not in {".json", ".srt", ".txt"}:
             return path
     raise RuntimeError("找不到原音频缓存，无法仅重试说话人分析；请重新提交完整任务")
+
+
+def _summary_failure_details(error: Exception) -> Dict[str, str]:
+    reason = str(error).strip() or error.__class__.__name__
+    if len(reason) > 240:
+        reason = reason[:237] + "..."
+    return {
+        "stage": "summary",
+        "code": "rate_limited" if _is_retryable_summary_error(error) else "generation_failed",
+        "message": f"摘要生成失败：{reason}",
+    }
 
 
 def _handle_audio_diarization_retry(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
@@ -5107,6 +5211,89 @@ def _handle_audio_diarization_retry(record: TaskRecord, runner: TaskRunner) -> D
     return {**result, "json_path": str(json_path.resolve())}
 
 
+def _handle_audio_summary_retry(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
+    """复用既有转写和说话人标签，仅重试因 LLM 暂不可用而失败的摘要。"""
+    task_id = record.task_id
+    log = lambda msg: runner.append_log(task_id, msg)  # noqa: E731
+    source_task_id = str(record.payload.get("_retry_source_task_id") or record.retry_of or "")
+    parent = runner.store.get(source_task_id)
+    if parent is None or parent.status not in {TaskStatus.PARTIAL.value, TaskStatus.SUCCESS.value}:
+        raise RuntimeError("原终结态音频任务不存在，无法仅重试摘要")
+
+    parent_result = dict(parent.result or {})
+    transcript_text = str(parent_result.get("transcript") or "")
+    segments = [dict(seg) for seg in parent_result.get("transcript_segments") or [] if isinstance(seg, dict)]
+    if not transcript_text:
+        raise RuntimeError("原任务没有可复用的转录结果")
+
+    summary_mode = str(record.payload.get("summary_mode") or parent_result.get("summary_mode") or "general")
+    if summary_mode == "speaker_aware" and not any(str(seg.get("speaker") or "").strip() for seg in segments):
+        raise RuntimeError("原任务没有可复用的说话人标签，无法生成区分说话人总结")
+
+    audio_dir = get_workspace_root(record.project_id) / "audio"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    log(f"♻️  复用原任务 {source_task_id} 的转录，仅重试摘要")
+    runner.store.update(task_id, status=TaskStatus.SUM.value)
+    runner.set_progress(task_id, 0.72, "重新生成摘要...")
+    summary_coverage: Dict[str, Any] = {}
+
+    try:
+        summary = _generate_audio_summary(
+            payload=record.payload,
+            transcript_text=transcript_text,
+            transcript_segments=segments,
+            summary_mode=summary_mode,
+            log=log,
+            progress=lambda ratio, message: runner.set_progress(
+                task_id, 0.72 + ratio * 0.20, message
+            ),
+            coverage=summary_coverage,
+        )
+    except Exception as err:
+        failure = _summary_failure_details(err)
+        result = {
+            **parent_result,
+            "task_id": task_id,
+            "project_id": record.project_id,
+            "summary": "",
+            "summary_coverage": summary_coverage,
+            "summary_mode": summary_mode,
+            "partial_failure": failure,
+            "retry_stage": "summary",
+            "retry_source_task_id": source_task_id,
+        }
+        json_path = audio_dir / f"{task_id}.json"
+        json_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        runner.store.update(
+            task_id,
+            status=TaskStatus.PARTIAL.value,
+            progress=1.0,
+            result=result,
+            error=failure["message"],
+        )
+        log(f"⚠️  {failure['message']}；可稍后仅重试摘要")
+        return {**result, "json_path": str(json_path.resolve())}
+
+    result = {
+        **parent_result,
+        "task_id": task_id,
+        "project_id": record.project_id,
+        "transcript_segments": segments,
+        "summary": summary,
+        "summary_coverage": summary_coverage,
+        "summary_mode": summary_mode,
+        "partial_failure": None,
+        "retry_stage": "summary",
+        "retry_source_task_id": source_task_id,
+    }
+    runner.store.update(task_id, status=TaskStatus.STORE.value)
+    runner.set_progress(task_id, 0.95, "归档重新生成的摘要...")
+    json_path = audio_dir / f"{task_id}.json"
+    json_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    log(f"✅ 摘要阶段重试产物已归档：{json_path}")
+    return {**result, "json_path": str(json_path.resolve())}
+
+
 def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
     """音频分析任务（Phase X.A）。
 
@@ -5126,6 +5313,8 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
 
     if payload.get("_retry_stage") == "diarization":
         return _handle_audio_diarization_retry(record, runner)
+    if payload.get("_retry_stage") == "summary":
+        return _handle_audio_summary_retry(record, runner)
 
     source = str(payload.get("source") or "").strip()
     if not source:
@@ -5345,7 +5534,8 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
             )
             log(f"📋 摘要生成完成，{len(summary)} 字符")
         except Exception as err:
-            log(f"⚠️  摘要生成失败：{err}")
+            partial_failure = _summary_failure_details(err)
+            log(f"⚠️  {partial_failure['message']}")
 
     subtitle_paths: Dict[str, str] = {}
 
@@ -5457,6 +5647,7 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         "summary": summary,
         "summary_coverage": summary_coverage,
         "summary_mode": summary_mode,
+        "summary_template": str(payload.get("summary_template") or ""),
         "audio": {
             "title": audio_title,
             "filename": audio_filename,
@@ -5488,7 +5679,10 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
             result=result,
             error=partial_failure["message"],
         )
-        log("⚠️  转录已完成，但说话人分析未完成，可稍后仅重试说话人分析")
+        if partial_failure.get("stage") == "summary":
+            log("⚠️  转录和说话人分析已完成，但摘要未完成，可稍后仅重试摘要")
+        else:
+            log("⚠️  转录已完成，但说话人分析未完成，可稍后仅重试说话人分析")
     else:
         runner.set_progress(task_id, 1.0, "音频任务完成")
     log(f"✅ 产物已归档：{json_path}")

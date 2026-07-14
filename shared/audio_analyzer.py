@@ -564,7 +564,7 @@ def export_vtt(
 
 def export_ass(
     segments: List[Dict[str, Any]],
-    title: str = "Nibi Export",
+    title: str = "NoteBi Export",
     speaker_map: Optional[Dict[Tuple[float, float], str]] = None,
 ) -> str:
     """transcript_segments → ASS (Advanced SubStation Alpha) 字符串。"""

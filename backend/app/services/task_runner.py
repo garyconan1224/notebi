@@ -222,23 +222,27 @@ class TaskRunner:
                 dict(rec.payload),
                 retry_of=rec.task_id,
             )
-        if stage != "diarization":
+        if stage not in {"diarization", "summary"}:
             raise ValueError(f"unsupported retry stage: {stage}")
         if rec.task_type != "audio" or rec.status not in {
             TaskStatus.PARTIAL.value,
             TaskStatus.SUCCESS.value,
         }:
-            raise ValueError("diarization retry requires a terminal audio task")
+            raise ValueError(f"{stage} retry requires a terminal audio task")
         failure = rec.result.get("partial_failure") if isinstance(rec.result, dict) else None
-        if rec.status == TaskStatus.PARTIAL.value and (
-            not isinstance(failure, dict) or failure.get("stage") != "diarization"
-        ):
-            raise ValueError("task has no retryable diarization failure")
-        if not rec.result.get("transcript_segments"):
+        if rec.status == TaskStatus.PARTIAL.value:
+            if not isinstance(failure, dict) or failure.get("stage") != stage:
+                raise ValueError(f"task has no retryable {stage} failure")
+        if stage == "diarization" and not rec.result.get("transcript_segments"):
             raise ValueError("task has no reusable transcript segments")
+        if stage == "summary":
+            if not rec.result.get("transcript"):
+                raise ValueError("task has no reusable transcript")
+            if rec.status == TaskStatus.SUCCESS.value and rec.result.get("summary"):
+                raise ValueError("task already has a generated summary")
 
         payload = dict(rec.payload)
-        payload["_retry_stage"] = "diarization"
+        payload["_retry_stage"] = stage
         payload["_retry_source_task_id"] = rec.task_id
         return self.create_task(rec.project_id, rec.task_type, payload, retry_of=rec.task_id)
 

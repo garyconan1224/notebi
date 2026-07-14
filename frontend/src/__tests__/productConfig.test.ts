@@ -8,10 +8,11 @@ describe('product config', () => {
     expect(resolveProductMode('unknown')).toBe('nibi')
   })
 
-  it('keeps nibi as the mixed product mode', () => {
+  it('keeps the legacy nibi mode internally while presenting NoteBi', () => {
     const config = getProductConfig('nibi')
 
-    expect(config.name).toBe('Nibi')
+    expect(config.name).toBe('NoteBi')
+    expect(config.storagePrefix).toBe('nibi')
     expect(config.allowedKinds).toEqual(['note', 'replica'])
     expect(config.defaultKind).toBe('note')
     expect(config.showKnowledge).toBe(true)

@@ -258,7 +258,7 @@ def _build_readme(title: str, item_type: str) -> str:
 3. 结合无时间轴转写文本做进一步编辑
 
 ---
-由 Nibi 自动生成
+由 NoteBi 自动生成
 """
     if item_type == "文本":
         return f"""# 复刻工作包
@@ -285,7 +285,7 @@ def _build_readme(title: str, item_type: str) -> str:
 3. 根据 prompts.json 中的提示词进行二次创作
 
 ---
-由 Nibi 自动生成
+由 NoteBi 自动生成
 """
     return f"""# 复刻工作包
 
@@ -318,7 +318,7 @@ def _build_readme(title: str, item_type: str) -> str:
 4. 根据需要微调提示词中的关键词
 
 ---
-由 Nibi 自动生成
+由 NoteBi 自动生成
 """
 
 
@@ -959,7 +959,7 @@ def export_ln_obsidian(workspace_id: str, format: str = "obsidian"):
 title: {title}
 source: {source}
 created: {today}
-tags: [学习笔记, nibi]
+tags: [学习笔记, notebi]
 ---
 
 """
@@ -1092,7 +1092,7 @@ def export_text_note(workspace_id: str, item_id: str, format: str = "md"):
 title: {title}
 source: {source_url}
 created: {today}
-tags: [文章笔记, nibi]
+tags: [文章笔记, notebi]
 ---
 
 """
@@ -1223,7 +1223,7 @@ def export_collection_html(workspace_id: str) -> StreamingResponse:
         })
 
     ctx = {
-        "title": rec.name or "Nibi 合集",
+        "title": rec.name or "NoteBi 合集",
         "material_count": len(rec.items),
         "date": date.today().isoformat(),
         "notes": notes_data,

@@ -116,14 +116,17 @@ describe('NewSummaryModal', () => {
     expect(screen.getByText('常用模板')).toBeTruthy()
     fireEvent.click(screen.getByRole('checkbox', { name: '区分说话人' }))
     expect(screen.getByText('区分说话人的总结方式')).toBeTruthy()
-    expect(screen.getByRole('button', { name: /会议纪要/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /咨询师录音版本详细总结/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /咨询师录音版会议纪要\/客户声音/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^会议纪要逐人立场/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /线下采访/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /客户接待/ })).toBeTruthy()
+    expect(screen.queryByText('更多模板：')).toBeNull()
     fireEvent.click(screen.getByText('生成'))
 
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       summaryMode: 'speaker_aware',
-      template: 'speaker_meeting',
+      template: 'speaker_consultant_detailed',
     }))
   })
 

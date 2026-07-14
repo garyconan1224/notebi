@@ -16,7 +16,7 @@ load_dotenv_if_present()
 
 # ── 路径常量 ──────────────────────────────────────────────────
 
-# Nibi 项目根目录
+# NoteBi 项目根目录
 ROOT_DIR: Path = Path(__file__).resolve().parent.parent
 
 # 共享数据目录

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """BiliNote 兼容适配层（Phase A.2 重写）。
 
-目标：把 BiliNote 风格的 `/api/*` 请求薄包装后转发到 Nibi
+目标：把 BiliNote 风格的 `/api/*` 请求薄包装后转发到 NoteBi
 pipeline 任务引擎（`backend/app/routes/pipeline.py` 的 `_store` / `_runner`），
 避免出现第二套独立任务引擎。
 
@@ -125,7 +125,7 @@ class VideoRequest(BaseModel):
     video_understanding: bool = False
     video_interval: int = 0
     grid_size: List[int] = Field(default_factory=lambda: [3, 3])
-# ── Nibi 扩展字段（BiliNote 原协议无）──
+# ── NoteBi 扩展字段（BiliNote 原协议无）──
     project_id: Optional[str] = None
     task_type: Literal["download", "analyze", "storyboard", "note"] = "note"
 

@@ -628,7 +628,7 @@ export async function updateSpeakerMap(
   workspaceId: string,
   itemId: string,
   speakerMap: Record<string, string>,
-): Promise<{ speaker_map: Record<string, string>; summary_refresh?: { status: string; reason: string } }> {
+): Promise<{ speaker_map: Record<string, string>; summary_refresh?: { status: string; reason: string; updated_count?: number } }> {
   const { data } = await http.patch(`${BASE}/${workspaceId}/items/${itemId}/speaker_map`, {
     speaker_map: speakerMap,
   })

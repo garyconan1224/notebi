@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, CheckCircle2, ChevronDown, Clock, Copy, FileAudio, FileText, Image as ImageIcon, Layers, LayoutTemplate, Link2, Lock, PenTool, PlayCircle, Plus, Search, Settings2, Upload, Video, Wand2, X } from 'lucide-react'
+import { Check, CheckCircle2, ChevronDown, Clock, Copy, FileAudio, FileText, Image as ImageIcon, Layers, Link2, PlayCircle, Plus, Search, Settings2, Upload, Video, Wand2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   Dialog,
@@ -133,6 +133,8 @@ const MORE_STYLES = [
 
 /** 音频勾选区分说话人后使用的专属总结方式；底层仍复用现有模板 ID。 */
 const SPEAKER_AWARE_STYLES = [
+  { id: 'speaker_consultant_detailed', label: '咨询师录音版本详细总结', desc: '按议题提炼主谈人观点，保留数据、案例、金句与补充发言' },
+  { id: 'speaker_consultant_meeting_customer_voice', label: '咨询师录音版会议纪要/客户声音', desc: '按会谈流程呈现双方观点、客户反馈、问答闭环和后续动作' },
   { id: 'speaker_meeting', label: '会议纪要', desc: '逐人立场、决议、负责人/截止与风险' },
   { id: 'speaker_interview', label: '线下采访', desc: 'Q&A、受访者主题观点、证据与分歧' },
   { id: 'speaker_customer_reception', label: '客户接待', desc: '痛点、需求、异议、决策链与双方承诺' },
@@ -535,7 +537,6 @@ export function AddMaterialModal({
   const showFrameAnalysisSettings = selectedAction === 'replica' || showVideoNoteSettings
   const showSpeakerSettings = selectedAction === 'note' && (showVideoNoteSettings || showAudioNoteSettings)
   const advancedSummaryParts = [
-    ...(showSpeakerSettings ? ['发言人'] : []),
     ...(showImageTextNoteSettings ? ['图文理解'] : []),
     '补充说明',
   ]
@@ -545,7 +546,7 @@ export function AddMaterialModal({
   const selectedSpeakerCount = speakerCount === 'auto' ? undefined : Number(speakerCount)
   const visiblePrimaryStyleOptions = speakerAwareMedia ? SPEAKER_AWARE_STYLES : primaryStyleOptions
   const visibleMoreStyleOptions = speakerAwareMedia
-    ? styleOptions.filter((style) => !SPEAKER_AWARE_STYLE_IDS.has(style.id))
+    ? []
     : moreStyleOptions
 
   const handleDiarizeChange = (enabled: boolean) => {
@@ -1616,7 +1617,10 @@ export function AddMaterialModal({
                       <div className="gen-field">
                         <span className="gen-field-label">{speakerAwareMedia ? '区分说话人的总结方式' : '笔记风格'}</span>
                         <Select value={noteStyle} onValueChange={setNoteStyle}>
-                          <SelectTrigger style={{ fontSize: 13 }}>
+                          <SelectTrigger
+                            aria-label={speakerAwareMedia ? '区分说话人的总结方式' : '笔记风格'}
+                            style={{ fontSize: 13 }}
+                          >
                             <SelectValue placeholder="选择风格" />
                           </SelectTrigger>
                           <SelectContent>
@@ -1647,6 +1651,42 @@ export function AddMaterialModal({
                         </Select>
                       </div>
                     </div>
+                    {showSpeakerSettings && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14 }}>
+                        <label className="gen-toggle">
+                          <Switch checked={diarizeOn} onCheckedChange={handleDiarizeChange} />
+                          <span className="gen-toggle-text">
+                            <span className="gen-field-label">区分说话人</span>
+                            <span className="kw" style={{ fontSize: 11 }}>
+                              开启后在转写中标注不同说话人，并使用区分说话人的专属总结方式
+                            </span>
+                          </span>
+                        </label>
+                        {speakerAwareMedia && (
+                          <div className="gen-field">
+                            <span className="gen-field-label">预计说话人数</span>
+                            <Select
+                              value={speakerCount}
+                              onValueChange={(value) => setSpeakerCount(value as SpeakerCountChoice)}
+                            >
+                              <SelectTrigger aria-label="预计说话人数" style={{ fontSize: 13 }}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="auto">自动判断</SelectItem>
+                                <SelectItem value="2">2 人</SelectItem>
+                                <SelectItem value="3">3 人</SelectItem>
+                                <SelectItem value="4">4 人</SelectItem>
+                                <SelectItem value="5">5 人</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <span className="kw" style={{ fontSize: 11 }}>
+                              已知人数时建议明确选择；超过 5 人请使用自动判断。
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
                 {showFrameAnalysisSettings && (
@@ -1772,44 +1812,6 @@ export function AddMaterialModal({
                   </button>
                   {advancedOpen && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14 }}>
-                      {showSpeakerSettings && (
-                        <>
-                          <label className="gen-toggle">
-                            <Switch checked={diarizeOn} onCheckedChange={handleDiarizeChange} />
-                            <span className="gen-toggle-text">
-                              <span className="gen-field-label">{showAudioNoteSettings ? '区分说话人' : '区分发言人'}</span>
-                              <span className="kw" style={{ fontSize: 11 }}>
-                                {showAudioNoteSettings
-                                  ? '开启后使用区分说话人的总结方式，并在转写中标注不同说话人'
-                                  : '开启后在转写中标注不同说话人（实验功能）'}
-                              </span>
-                            </span>
-                          </label>
-                          {speakerAwareMedia && (
-                            <div className="gen-field">
-                              <span className="gen-field-label">预计说话人数</span>
-                              <Select
-                                value={speakerCount}
-                                onValueChange={(value) => setSpeakerCount(value as SpeakerCountChoice)}
-                              >
-                                <SelectTrigger aria-label="预计说话人数" style={{ fontSize: 13 }}>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="auto">自动判断</SelectItem>
-                                  <SelectItem value="2">2 人</SelectItem>
-                                  <SelectItem value="3">3 人</SelectItem>
-                                  <SelectItem value="4">4 人</SelectItem>
-                                  <SelectItem value="5">5 人</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <span className="kw" style={{ fontSize: 11 }}>
-                                已知人数时建议明确选择；超过 5 人请使用自动判断。
-                              </span>
-                            </div>
-                          )}
-                        </>
-                      )}
                       <div className="gen-field">
                         <span className="gen-field-label">补充说明</span>
                         <Textarea
@@ -1824,20 +1826,6 @@ export function AddMaterialModal({
                 </div>
               </>
             )}
-
-            <div className="modal-future-actions">
-              {[{ id: 'ai_video', label: 'AI视频', icon: <Video size={12} /> },
-                { id: 'storyboard', label: '分镜脚本', icon: <LayoutTemplate size={12} /> },
-                { id: 'rewrite', label: '二创改写', icon: <PenTool size={12} /> }].map(item => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => toast('该功能即将上线')}
-                >
-                  {item.icon} {item.label} <Lock size={10} />
-                </button>
-              ))}
-            </div>
           </div>
         </div>
 

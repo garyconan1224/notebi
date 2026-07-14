@@ -64,6 +64,36 @@ class TestListSummaries:
         resp = client.get("/workspaces/ws-1/items/nonexistent/summaries")
         assert resp.status_code == 404
 
+    def test_list_orders_versions_globally_across_templates(
+        self, _patch_store: WorkspaceStore,
+    ) -> None:
+        item = _patch_store.get_item("ws-1", "item-1")
+        item.summaries.extend([
+            ItemSummary(summary_id="v0", template="standard", version=0),
+            ItemSummary(summary_id="v2", template="speaker_consultant_detailed", version=2),
+            ItemSummary(summary_id="v1", template="speaker_consultant_meeting_customer_voice", version=1),
+        ])
+
+        resp = client.get("/workspaces/ws-1/items/item-1/summaries")
+        assert resp.status_code == 200
+        assert [summary["summary_id"] for summary in resp.json()] == ["v0", "v1", "v2"]
+
+    def test_list_applies_saved_speaker_names_to_existing_summary(
+        self, _patch_store: WorkspaceStore,
+    ) -> None:
+        item = _patch_store.get_item("ws-1", "item-1")
+        item.results["speaker_map"] = {"SPEAKER_00": "主持人"}
+        item.summaries.append(ItemSummary(
+            summary_id="speaker-v0", template="concise", version=0,
+            summary_mode="speaker_aware",
+            content_md="# 待确认_SPEAKER_00\n\nSPEAKER_00 提出关键结论",
+        ))
+
+        resp = client.get("/workspaces/ws-1/items/item-1/summaries")
+
+        assert resp.status_code == 200
+        assert resp.json()[0]["content_md"] == "# 待确认_主持人\n\n主持人 提出关键结论"
+
 
 # ── POST create ────────────────────────────────────────────────
 
@@ -171,7 +201,7 @@ class TestCreateSummary:
         assert mock_gen.call_args.kwargs["summary_mode"] == "speaker_aware"
 
     @patch("backend.app.routes.workspaces.generate_summary")
-    def test_speaker_map_queues_new_speaker_summary_version(
+    def test_speaker_map_updates_existing_speaker_summary_in_place(
         self, mock_gen: MagicMock, _patch_store: WorkspaceStore,
     ) -> None:
         item = _patch_store.get_item("ws-1", "item-1")
@@ -183,22 +213,24 @@ class TestCreateSummary:
         }
         item.summaries.append(ItemSummary(
             summary_id="speaker-v0", template="concise", version=0,
-            summary_mode="speaker_aware", content_md="旧总结",
+            summary_mode="speaker_aware", content_md="SPEAKER_00 提出旧总结",
         ))
-        mock_gen.return_value = ItemSummary(
-            summary_id="speaker-v1", template="concise", version=0,
-            summary_mode="speaker_aware", content_md="新总结",
-        )
+        item.summaries.append(ItemSummary(
+            summary_id="general-v1", template="concise", version=1,
+            summary_mode="general", content_md="SPEAKER_00 出现在普通总结中",
+        ))
 
         resp = client.patch("/workspaces/ws-1/items/item-1/speaker_map", json={
             "speaker_map": {"SPEAKER_00": "主持人"},
         })
         assert resp.status_code == 200
-        assert resp.json()["summary_refresh"]["status"] == "queued"
-        assert mock_gen.call_args.kwargs["summary_mode"] == "speaker_aware"
+        assert resp.json()["summary_refresh"]["status"] == "updated"
+        assert resp.json()["summary_refresh"]["updated_count"] == 1
+        mock_gen.assert_not_called()
         summaries = _patch_store.get_item("ws-1", "item-1").summaries
         assert [s.version for s in summaries] == [0, 1]
-        assert summaries[0].content_md == "旧总结"
+        assert summaries[0].content_md == "主持人 提出旧总结"
+        assert summaries[1].content_md == "SPEAKER_00 出现在普通总结中"
 
     @patch("backend.app.routes.workspaces.generate_summary")
     def test_llm_failure(self, mock_gen: MagicMock) -> None:

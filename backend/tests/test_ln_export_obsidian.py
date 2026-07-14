@@ -138,7 +138,7 @@ class TestLnExportObsidian:
             # 应包含 frontmatter
             assert "---" in md_content
             assert "title: 学习笔记" in md_content
-            assert "tags: [学习笔记, nibi]" in md_content
+            assert "tags: [学习笔记, notebi]" in md_content
 
             # 图片语法应已改写
             assert "![[attachments/shot-000012-143025.png]]" in md_content

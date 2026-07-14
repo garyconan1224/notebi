@@ -40,8 +40,10 @@ const MORE_STYLES: { value: string; label: string; desc: string }[] = [
   { value: 'science_popularization', label: '知识科普', desc: '通俗语言讲原理+类比+常见误区，适合科普' },
 ]
 
-/** 音频勾选“区分说话人”后，只展示与发言归属最相关的总结方式。 */
+/** 音频或视频勾选“区分说话人”后，只展示与发言归属最相关的总结方式。 */
 const SPEAKER_AWARE_CARDS: { value: string; label: string; desc: string }[] = [
+  { value: 'speaker_consultant_detailed', label: '咨询师录音版本详细总结', desc: '按议题提炼主谈人观点，保留数据、案例、金句与补充发言' },
+  { value: 'speaker_consultant_meeting_customer_voice', label: '咨询师录音版会议纪要/客户声音', desc: '按会谈流程呈现双方观点、客户反馈、问答闭环和后续动作' },
   { value: 'speaker_meeting', label: '会议纪要', desc: '逐人立场、决议、负责人/截止与风险' },
   { value: 'speaker_interview', label: '线下采访', desc: 'Q&A、受访者主题观点、证据与分歧' },
   { value: 'speaker_customer_reception', label: '客户接待', desc: '痛点、需求、异议、决策链与双方承诺' },
@@ -138,7 +140,7 @@ export function NewSummaryModal({
   const visibleQuickOptions = summaryMode === 'speaker_aware' ? SPEAKER_AWARE_CARDS : quickOptions
   const visibleQuickValues = new Set(visibleQuickOptions.map((c) => c.value))
   const visibleMoreOptions = summaryMode === 'speaker_aware'
-    ? templateOptions.filter((option) => !SPEAKER_AWARE_VALUES.has(option.value))
+    ? []
     : moreOptions
 
   // ── 模型选择：复用 providerStore + configStore 记忆 ──
@@ -261,32 +263,34 @@ export function NewSummaryModal({
           </div>
 
           {/* 更多模板下拉 */}
-          <div className="nsm-section">
-            <div className="nsm-row">
-              <span className="nsm-section-label" style={{ margin: 0 }}>更多模板：</span>
-              <select
-                value={visibleQuickValues.has(template) ? '' : template}
-                onChange={(e) => e.target.value && chooseTemplate(e.target.value)}
-                className="nsm-select"
-              >
-                <option value="" disabled>选择其他模板</option>
-                {visibleMoreOptions.map((o) => (
-                  <option key={o.value} value={o.value} title={o.desc}>{o.label}</option>
-                ))}
-              </select>
-              <span
-                title={visibleMoreOptions.find((o) => o.value === template)?.desc}
-                style={{ display: visibleQuickValues.has(template) ? 'none' : 'inline-flex', cursor: 'help' }}
-              >
-                <HelpCircle size={14} style={{ opacity: 0.5 }} />
-              </span>
-            </div>
-            {!visibleQuickValues.has(template) && visibleMoreOptions.find((o) => o.value === template) && (
-              <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
-                {visibleMoreOptions.find((o) => o.value === template)!.desc}
+          {visibleMoreOptions.length > 0 && (
+            <div className="nsm-section">
+              <div className="nsm-row">
+                <span className="nsm-section-label" style={{ margin: 0 }}>更多模板：</span>
+                <select
+                  value={visibleQuickValues.has(template) ? '' : template}
+                  onChange={(e) => e.target.value && chooseTemplate(e.target.value)}
+                  className="nsm-select"
+                >
+                  <option value="" disabled>选择其他模板</option>
+                  {visibleMoreOptions.map((o) => (
+                    <option key={o.value} value={o.value} title={o.desc}>{o.label}</option>
+                  ))}
+                </select>
+                <span
+                  title={visibleMoreOptions.find((o) => o.value === template)?.desc}
+                  style={{ display: visibleQuickValues.has(template) ? 'none' : 'inline-flex', cursor: 'help' }}
+                >
+                  <HelpCircle size={14} style={{ opacity: 0.5 }} />
+                </span>
               </div>
-            )}
-          </div>
+              {!visibleQuickValues.has(template) && visibleMoreOptions.find((o) => o.value === template) && (
+                <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
+                  {visibleMoreOptions.find((o) => o.value === template)!.desc}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 模型选择（与 PreflightConfigPanel 对齐的双下拉） */}
           <div className="nsm-section">

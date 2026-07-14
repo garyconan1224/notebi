@@ -71,7 +71,7 @@ export async function deletePipelineTask(taskId: string): Promise<void> {
  * 返回新创建的重试任务记录
  */
 export interface RetryTaskOptions {
-  stage?: 'diarization'
+  stage?: 'diarization' | 'summary'
 }
 
 export async function retryPipelineTask(taskId: string, options?: RetryTaskOptions) {

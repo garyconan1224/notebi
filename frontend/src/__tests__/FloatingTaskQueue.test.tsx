@@ -105,6 +105,32 @@ describe('FloatingTaskQueue v2', () => {
     expect(screen.getByText('部分完成')).toBeTruthy()
   })
 
+  it('摘要阶段 PARTIAL 显示仅重试摘要，并允许单独清除任务', async () => {
+    useTaskStore.setState({
+      tasks: [
+        makeTask({
+          task_id: 'partial-summary',
+          status: 'PARTIAL',
+          payload: { title: '摘要未完成任务' },
+          result: { partial_failure: { stage: 'summary' } },
+          error: '摘要生成失败',
+        }),
+      ],
+    })
+
+    render(<FloatingTaskQueue />)
+    fireEvent.click(screen.getByRole('button', { name: /任务/ }))
+
+    fireEvent.click(screen.getByRole('button', { name: '仅重试摘要 摘要未完成任务' }))
+    await waitFor(() => {
+      expect(retryMock).toHaveBeenCalledWith('partial-summary', { stage: 'summary' })
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '清除部分完成任务 摘要未完成任务' }))
+    expect(useTaskStore.getState().tasks.find((task) => task.task_id === 'partial-summary')).toBeUndefined()
+    await waitFor(() => expect(deleteMock).toHaveBeenCalledWith('partial-summary'))
+  })
+
   it('F3.2: 失败任务用 errorCategories 友好文案展示（限流），原始错误走 title', () => {
     useTaskStore.setState({
       tasks: [

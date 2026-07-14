@@ -190,6 +190,14 @@ export interface ItemNote {
     content_category?: string
     default_template?: string
   }
+  /** 自动总结失败时的可读错误；转录和媒体结果仍可继续使用。 */
+  summary_failure?: {
+    stage: 'summary'
+    code: string
+    message: string
+  } | null
+  /** 对应的终结态音频任务，供页面只重试摘要而不重复转写。 */
+  summary_retry_task_id?: string
 }
 
 /** 中文展示文案——状态 */

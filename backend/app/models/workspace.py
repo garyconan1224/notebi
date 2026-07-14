@@ -113,7 +113,7 @@ class ItemSummary:
 
     summary_id: str  # uuid4
     template: str  # 模板 id（concise / detailed / ...）
-    version: int  # 同 template 自增，0, 1, 2, 3 ...
+    version: int  # 同一素材内全局自增，0, 1, 2, 3 ...
     summary_mode: str = "general"  # general | speaker_aware
     name: str = ""  # 用户自定义版本名（空则用默认标签）
     background_for_summary: str = ""  # 这次生成用的「总结用背景」

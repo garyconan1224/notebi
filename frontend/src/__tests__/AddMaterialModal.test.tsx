@@ -495,7 +495,7 @@ describe('AddMaterialModal', () => {
     expect(generateNoteMock).not.toHaveBeenCalled()
   })
 
-  it('音频笔记只显示音频相关高级项', () => {
+  it('音频笔记直接显示区分说话人设置，且不展示非笔记功能', async () => {
     render(
       <AddMaterialModal
         open={true}
@@ -514,21 +514,28 @@ describe('AddMaterialModal', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: /音频笔记/ }))
-    fireEvent.click(screen.getByRole('button', { name: /高级设置/ }))
-
+    await waitFor(() => {
+      expect(fetchTemplatesMock).toHaveBeenCalledWith('style_audio')
+    })
     expect(screen.queryByText('笔记里配图')).toBeNull()
     expect(screen.queryByText('视觉模型')).toBeNull()
     expect(screen.queryByText('取画面')).toBeNull()
     expect(screen.getByText('区分说话人')).toBeTruthy()
-    expect(screen.getByText('补充说明')).toBeTruthy()
+    expect(screen.queryByPlaceholderText(/可选：输入额外要求/)).toBeNull()
+    expect(screen.queryByText('AI视频')).toBeNull()
+    expect(screen.queryByText('分镜脚本')).toBeNull()
+    expect(screen.queryByText('二创改写')).toBeNull()
 
     const speakerSwitch = screen.getByRole('switch')
     expect(speakerSwitch).toHaveProperty('ariaChecked', 'false')
     fireEvent.click(speakerSwitch)
     expect(screen.getByText('区分说话人的总结方式')).toBeTruthy()
-    expect(screen.getByText('会议纪要')).toBeTruthy()
+    expect(screen.getByText('咨询师录音版本详细总结')).toBeTruthy()
     expect(screen.getByRole('combobox', { name: '预计说话人数' })).toBeTruthy()
     expect(screen.getByText('自动判断')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /高级设置/ }))
+    expect(screen.getByPlaceholderText(/可选：输入额外要求/)).toBeTruthy()
   })
 
   it('音频可把预计说话人数提交给任务', async () => {
@@ -550,8 +557,9 @@ describe('AddMaterialModal', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: /音频笔记/ }))
-    fireEvent.click(screen.getByRole('button', { name: /高级设置/ }))
     fireEvent.click(screen.getByRole('switch'))
+    fireEvent.click(screen.getByRole('combobox', { name: '区分说话人的总结方式' }))
+    fireEvent.click(screen.getByRole('option', { name: /咨询师录音版会议纪要\/客户声音/ }))
     fireEvent.click(screen.getByRole('combobox', { name: '预计说话人数' }))
     fireEvent.click(screen.getByRole('option', { name: '2 人' }))
     fireEvent.click(screen.getByRole('button', { name: /开始生成/ }))
@@ -571,6 +579,7 @@ describe('AddMaterialModal', () => {
           diarize: true,
           speaker_count: 2,
           summary_mode: 'speaker_aware',
+          summary_template: 'speaker_consultant_meeting_customer_voice',
         }),
       )
     })

@@ -18,7 +18,8 @@ export interface ProductConfig {
 const PRODUCT_CONFIGS: Record<ProductMode, ProductConfig> = {
   nibi: {
     mode: 'nibi',
-    name: 'Nibi',
+    // 保留 legacy mode 与 storagePrefix，避免既有本地数据失效；所有界面统一显示 NoteBi。
+    name: 'NoteBi',
     allowedKinds: ['note', 'replica'],
     defaultKind: 'note',
     storagePrefix: 'nibi',

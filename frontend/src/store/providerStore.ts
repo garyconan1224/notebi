@@ -168,6 +168,8 @@ export const useProviderStore = create<ProviderStoreState>()(
                   enabled: typeof body.enabled === 'boolean' ? body.enabled : p.enabled,
                   has_api_key:
                     typeof body.has_api_key === 'boolean' ? body.has_api_key : p.has_api_key,
+                  capabilities: Array.isArray(body.capabilities) ? body.capabilities : p.capabilities,
+                  default_models: body.default_models ?? p.default_models,
                 }
               : p,
           ),

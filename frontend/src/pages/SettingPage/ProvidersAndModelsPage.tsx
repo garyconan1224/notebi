@@ -162,9 +162,9 @@ function DefaultModelsSection() {
     async function load() {
       try {
         const res = await http.get('/providers')
-        const payload = res.data.data ?? res.data
+        const payload = res.data
         // /providers now returns { data: [...], default_provider_for_chat: "...", ... }
-        const list: any[] = Array.isArray(payload) ? payload : (payload.data ?? [])
+        const list: any[] = Array.isArray(payload) ? payload : (payload?.data ?? [])
         const result: ProviderOption[] = []
         for (const p of list) {
           const models: string[] = []
@@ -255,14 +255,10 @@ function DefaultModelsSection() {
     <div className="space-y-4">
       {(Object.keys(ROLE_LABELS) as Array<'chat' | 'vision' | 'embedding' | 'rerank'>).map((role) => {
         const current = defaults[role]
-        const eligibleProviders = providers.filter((p) => {
-          if (!p.enabled) return false
-          if (role === 'chat') return p.capabilities?.includes('chat')
-          if (role === 'vision') return p.capabilities?.includes('vision')
-          if (role === 'embedding') return p.capabilities?.includes('embedding')
-          if (role === 'rerank') return p.capabilities?.includes('rerank')
-          return false
-        })
+        // 新建的 OpenAI 兼容 provider 初始只声明 chat；模型角色由用户在
+        // 此处选择后再持久化为 capability。因此不能用旧 capability 把它
+        // 从候选列表排除，否则视觉/嵌入/重排模型永远无从配置。
+        const eligibleProviders = providers.filter((p) => p.enabled)
         const currentProviderName = current.providerId
           ? providers.find((p) => p.id === current.providerId)?.name ?? current.providerId
           : ''

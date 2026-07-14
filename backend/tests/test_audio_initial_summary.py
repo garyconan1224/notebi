@@ -8,6 +8,84 @@ from backend.app.models.workspace import WorkspaceItem, WorkspaceRecord
 from backend.app.services.workspace_store import WorkspaceStore
 
 
+def test_audio_summary_chat_retries_rate_limited_provider() -> None:
+    """短暂的 429 不应直接留下空摘要。"""
+    import backend.app.services.pipeline_tasks as pipeline_tasks
+
+    provider = MagicMock()
+    provider.chat.side_effect = [
+        RuntimeError('HTTP 429: {"message":"System is too busy now."}'),
+        "# 已恢复的总结",
+    ]
+    delays: list[float] = []
+    logs: list[str] = []
+
+    result = pipeline_tasks._chat_with_retry(
+        provider,
+        MagicMock(),
+        log=logs.append,
+        sleep=lambda delay: delays.append(delay),
+    )
+
+    assert result == "# 已恢复的总结"
+    assert provider.chat.call_count == 2
+    assert delays == [2.0]
+    assert any("429" in message and "重试" in message for message in logs)
+
+
+def test_summary_stage_retry_reuses_existing_transcript(tmp_path: Path, monkeypatch) -> None:
+    """摘要失败后仅重试总结，不能重新转写或重新做说话人识别。"""
+    import backend.app.services.pipeline_tasks as pipeline_tasks
+
+    parent = TaskRecord(
+        task_id="audio-parent",
+        project_id="default_project",
+        task_type="audio",
+        status=TaskStatus.PARTIAL.value,
+        payload={
+            "summary_template": "speaker_consultant_detailed",
+            "summary_mode": "speaker_aware",
+        },
+        result={
+            "transcript": "SPEAKER_00 [00:00] 已有转写内容",
+            "transcript_segments": [
+                {"t_sec": 0, "t_str": "00:00", "speaker": "SPEAKER_00", "text": "已有转写内容"},
+            ],
+            "audio": {"local_path": "/tmp/interview.m4a"},
+            "partial_failure": {"stage": "summary", "code": "rate_limited", "message": "系统繁忙"},
+        },
+    )
+    retry = TaskRecord(
+        task_id="audio-summary-retry",
+        project_id="default_project",
+        task_type="audio",
+        status=TaskStatus.PENDING.value,
+        payload={
+            "_retry_stage": "summary",
+            "_retry_source_task_id": parent.task_id,
+            "summary_template": "speaker_consultant_detailed",
+            "summary_mode": "speaker_aware",
+        },
+        retry_of=parent.task_id,
+    )
+    runner = MagicMock()
+    runner.store.get.return_value = parent
+    monkeypatch.setattr(pipeline_tasks, "get_workspace_root", lambda _project_id: tmp_path)
+    monkeypatch.setattr(
+        pipeline_tasks,
+        "_generate_audio_summary",
+        MagicMock(return_value="# 重新生成的咨询师总结"),
+    )
+
+    result = pipeline_tasks._handle_audio_summary_retry(retry, runner)
+
+    assert result["summary"] == "# 重新生成的咨询师总结"
+    assert result["transcript_segments"] == parent.result["transcript_segments"]
+    assert result["partial_failure"] is None
+    assert result["retry_stage"] == "summary"
+    assert (tmp_path / "audio" / "audio-summary-retry.json").exists()
+
+
 def test_audio_task_summary_is_persisted_as_default_v0(
     tmp_path: Path, monkeypatch,
 ) -> None:

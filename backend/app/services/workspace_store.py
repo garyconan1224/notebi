@@ -29,6 +29,7 @@ from backend.app.models.workspace import (
     WorkspaceRecord,
     WorkspaceStatus,
 )
+from backend.app.services.speaker_labels import apply_speaker_map
 from shared.config import DATA_DIR
 
 WORKSPACE_DIR: Path = DATA_DIR / "workspaces"
@@ -282,10 +283,8 @@ class WorkspaceStore:
                 raise KeyError(f"item not found: {item_id}")
             return item
 
-    def next_version_for_template(
-        self, workspace_id: str, item_id: str, template_id: str
-    ) -> int:
-        """返回该 item + template 的下一个 version 号。"""
+    def next_summary_version(self, workspace_id: str, item_id: str) -> int:
+        """返回该素材的下一个总结版本号（所有模板共用连续序号）。"""
         with self._lock:
             rec = self._records.get(workspace_id)
             if rec is None:
@@ -293,8 +292,14 @@ class WorkspaceStore:
             item = next((it for it in rec.items if it.item_id == item_id), None)
             if item is None:
                 raise KeyError(f"item not found: {item_id}")
-            existing = [s for s in item.summaries if s.template == template_id]
-            return max((s.version for s in existing), default=-1) + 1
+            return max((s.version for s in item.summaries), default=-1) + 1
+
+    def next_version_for_template(
+        self, workspace_id: str, item_id: str, template_id: str
+    ) -> int:
+        """兼容旧调用：总结版本现已改为素材级连续编号。"""
+        del template_id
+        return self.next_summary_version(workspace_id, item_id)
 
     def add_item_summary(
         self, workspace_id: str, item_id: str, summary: ItemSummary
@@ -311,6 +316,31 @@ class WorkspaceStore:
             item.updated_at = _now_iso()
             self._save(rec)
             return summary
+
+    def update_speaker_summary_labels(
+        self, workspace_id: str, item_id: str, speaker_map: Dict[str, str]
+    ) -> int:
+        """将已有区分说话人总结中的原始标签原地替换为用户名称。"""
+        with self._lock:
+            rec = self._records.get(workspace_id)
+            if rec is None:
+                raise KeyError(f"workspace not found: {workspace_id}")
+            item = next((it for it in rec.items if it.item_id == item_id), None)
+            if item is None:
+                raise KeyError(f"item not found: {item_id}")
+            updated_count = 0
+            for summary in item.summaries:
+                if summary.summary_mode != "speaker_aware":
+                    continue
+                content_md = apply_speaker_map(summary.content_md or "", speaker_map)
+                if content_md == summary.content_md:
+                    continue
+                summary.content_md = content_md
+                updated_count += 1
+            if updated_count:
+                item.updated_at = _now_iso()
+                self._save(rec)
+            return updated_count
 
     def delete_item_summary(
         self, workspace_id: str, item_id: str, summary_id: str

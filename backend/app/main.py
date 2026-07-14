@@ -103,7 +103,7 @@ def _build_cors_origins() -> list[str]:
     return [f"http://localhost:{port}", f"http://127.0.0.1:{port}"]
 
 
-app = FastAPI(title="Nibi API", version=_APP_VERSION, lifespan=lifespan)
+app = FastAPI(title="NoteBi API", version=_APP_VERSION, lifespan=lifespan)
 
 # 静态文件挂载：/static → data/ 目录（关键帧图片、项目资源等）
 app.mount("/static", StaticFiles(directory=str(_ROOT_DIR / "data")), name="static")

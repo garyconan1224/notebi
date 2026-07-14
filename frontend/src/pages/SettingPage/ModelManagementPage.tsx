@@ -94,9 +94,9 @@ const ModelManagementPage = () => {
     try {
       setListLoading(true)
       const res = await http.get('/providers')
-      const payload: any = res.data.data ?? res.data
+      const payload: any = res.data
       // /providers now returns { data: [...], default_provider_for_chat: "...", ... }
-      const list: ProviderSummary[] = Array.isArray(payload) ? payload : (payload.data ?? [])
+      const list: ProviderSummary[] = Array.isArray(payload) ? payload : (payload?.data ?? [])
       setProviders(list.map(p => ({
         ...p,
         models: [],
@@ -210,6 +210,7 @@ const ModelManagementPage = () => {
         p.id === providerId
           ? {
               ...p,
+              capabilities: updated.capabilities ?? p.capabilities,
               default_models: updated.default_models ?? {
                 ...(provider?.default_models ?? {}),
                 [backendRole]: next ? modelId : '',
@@ -263,10 +264,11 @@ const ModelManagementPage = () => {
   const groupedList: ModelProviderGroupItem[] = useMemo(
     () =>
       providers
-          // capability 过滤:all 通过;其余仅保留声明对应 capability 的 provider
+          // 新 provider 的 capability 在用户首次选定角色模型时才会保存；
+          // 角色筛选不能在此之前把候选 provider 隐藏掉。
         .filter((p) => {
           if (capFilter === 'all') return true
-          return Array.isArray(p.capabilities) && p.capabilities.includes(capFilter)
+          return p.enabled
         })
         .map((p) => {
           const filteredModels = !lowerKw

@@ -233,6 +233,15 @@ def update_provider(provider_id: str, req: ProviderUpdateRequest) -> Dict[str, A
                 updated_default_models.pop(key, None)
         profile_dict["default_models"] = updated_default_models
 
+        # 创建提供商时只声明 chat；当用户明确为其他角色选定模型时，
+        # 同步把该角色写入 capability。否则全局默认虽已保存，运行时
+        # registry 仍会因 capability 缺失而拒绝解析该 provider。
+        updated_capabilities = list(profile.capabilities)
+        for role in touched_model_roles:
+            if updated_default_models.get(role) and role not in updated_capabilities:
+                updated_capabilities.append(role)
+        profile_dict["capabilities"] = updated_capabilities
+
     new_profile = ProviderProfile.from_dict(profile_dict)
 
     # 更新 settings 中的 providers

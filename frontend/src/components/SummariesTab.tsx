@@ -57,6 +57,8 @@ const TEMPLATE_LABEL_MAP: Record<string, string> = {
   speaker_meeting: '会议纪要（区分说话人）',
   speaker_interview: '线下采访（区分说话人）',
   speaker_customer_reception: '客户接待（区分说话人）',
+  speaker_consultant_detailed: '咨询师录音版本详细总结',
+  speaker_consultant_meeting_customer_voice: '咨询师录音版会议纪要/客户声音',
 }
 
 function templateLabel(id: string): string {

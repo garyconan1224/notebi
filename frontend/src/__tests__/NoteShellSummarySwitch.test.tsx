@@ -13,7 +13,9 @@ const mocks = vi.hoisted(() => ({
   createSummary: vi.fn(),
   deleteSummary: vi.fn(),
   renameSummary: vi.fn(),
+  updateSpeakerMap: vi.fn(),
   downloadTranscript: vi.fn(),
+  retryPipelineTask: vi.fn(),
 }))
 
 vi.mock('@/services/workspaces', async (importOriginal) => {
@@ -22,6 +24,7 @@ vi.mock('@/services/workspaces', async (importOriginal) => {
     ...actual,
     getItemNote: mocks.getItemNote,
     putItemNote: mocks.putItemNote,
+    updateSpeakerMap: mocks.updateSpeakerMap,
     downloadTranscript: mocks.downloadTranscript,
   }
 })
@@ -31,6 +34,10 @@ vi.mock('@/services/summaries', () => ({
   createSummary: mocks.createSummary,
   deleteSummary: mocks.deleteSummary,
   renameSummary: mocks.renameSummary,
+}))
+
+vi.mock('@/services/pipeline', () => ({
+  retryPipelineTask: mocks.retryPipelineTask,
 }))
 
 vi.mock('sonner', () => ({
@@ -131,7 +138,16 @@ describe('NoteShell summary switching', () => {
     mocks.getItemNote.mockResolvedValue(MAIN_NOTE)
     mocks.putItemNote.mockResolvedValue(MAIN_NOTE)
     mocks.listSummaries.mockResolvedValue([SUMMARY_V0])
+    mocks.updateSpeakerMap.mockResolvedValue({
+      speaker_map: { SPEAKER_00: '主持人' },
+      summary_refresh: {
+        status: 'updated',
+        reason: '已同步替换 1 份区分说话人总结',
+        updated_count: 1,
+      },
+    })
     mocks.downloadTranscript.mockResolvedValue(undefined)
+    mocks.retryPipelineTask.mockResolvedValue({ task_id: 'audio-summary-retry' })
   })
 
   it('点击总结版本只切换正文，不写回主笔记', async () => {
@@ -151,6 +167,27 @@ describe('NoteShell summary switching', () => {
     expectAnyEditorToContain('总结正文')
     expect(screen.getByRole('button', { name: /标准总结 · V0/ })).not.toBeNull()
     expect(mocks.putItemNote).not.toHaveBeenCalled()
+  })
+
+  it('总结版本菜单按素材级 V0、V1、V2 连续排序，不按模板分组排序', async () => {
+    mocks.listSummaries.mockResolvedValue([
+      { ...SUMMARY_V0, summary_id: 'summary-v2', template: 'standard', version: 2 },
+      { ...SUMMARY_V0, summary_id: 'summary-v0', template: 'speaker_consultant_detailed', version: 0, summary_mode: 'speaker_aware' },
+      { ...SUMMARY_V0, summary_id: 'summary-v1', template: 'speaker_consultant_meeting_customer_voice', version: 1, summary_mode: 'speaker_aware' },
+    ])
+
+    render(
+      <MemoryRouter>
+        <NoteShell workspaceId="ws-1" itemId="item-1" />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => expectAnyEditorToContain('主笔记正文'))
+    fireEvent.click(screen.getByRole('button', { name: /主笔记 v1/ }))
+
+    const versions = Array.from(document.querySelectorAll('.nibi-note-version-choice strong'))
+      .map((node) => node.textContent)
+    expect(versions).toEqual(['V0', 'V1', 'V2'])
   })
 
   it.each([
@@ -185,6 +222,29 @@ describe('NoteShell summary switching', () => {
 
     expect(await screen.findByText('尚未生成总结')).not.toBeNull()
     expect(screen.getByRole('button', { name: '生成默认总结' })).not.toBeNull()
+  })
+
+  it('音频自动总结因服务繁忙失败时给出仅重试摘要的入口', async () => {
+    mocks.getItemNote.mockResolvedValue({
+      ...AUDIO_NOTE,
+      summary_failure: { stage: 'summary', code: 'rate_limited', message: '摘要生成失败：服务繁忙' },
+      summary_retry_task_id: 'audio-failed-summary',
+    })
+    mocks.listSummaries.mockResolvedValue([])
+
+    render(
+      <MemoryRouter>
+        <NoteShell workspaceId="ws-1" itemId="item-1" />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('自动总结暂未完成')).not.toBeNull()
+    expect(screen.getByText('模型服务当前繁忙，转录和说话人结果已保留。')).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '仅重试摘要' }))
+
+    await waitFor(() => {
+      expect(mocks.retryPipelineTask).toHaveBeenCalledWith('audio-failed-summary', { stage: 'summary' })
+    })
   })
 
   it('长音频关键时间点覆盖到音频末段', async () => {
@@ -231,6 +291,49 @@ describe('NoteShell summary switching', () => {
         'item-1',
         'speaker_grouped',
       )
+    })
+  })
+
+  it('改名说话人后刷新当前区分说话人总结正文', async () => {
+    const rawSummary = {
+      ...SUMMARY_V0,
+      summary_mode: 'speaker_aware' as const,
+      content_md: '# 总结\n\nSPEAKER_00 提出关键结论',
+    }
+    const renamedSummary = {
+      ...rawSummary,
+      content_md: '# 总结\n\n主持人 提出关键结论',
+    }
+    mocks.getItemNote.mockResolvedValue({
+      ...AUDIO_NOTE,
+      transcript: [{ t_sec: 0, t_str: '00:00', text: '开场。', speaker: 'SPEAKER_00' }],
+    })
+    mocks.listSummaries.mockImplementation(() => Promise.resolve(
+      mocks.updateSpeakerMap.mock.calls.length > 0 ? [renamedSummary] : [rawSummary],
+    ))
+
+    render(
+      <MemoryRouter>
+        <NoteShell workspaceId="ws-1" itemId="item-1" />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /主笔记 v1/ })).not.toBeNull()
+    })
+    fireEvent.click(screen.getByRole('button', { name: /主笔记 v1/ }))
+    fireEvent.click(screen.getByRole('button', { name: /V0/ }))
+    expectAnyEditorToContain('SPEAKER_00 提出关键结论')
+
+    fireEvent.click(screen.getByRole('button', { name: /S00/ }))
+    const input = document.querySelector<HTMLInputElement>('.nibi-audio-speaker-input')
+    expect(input).not.toBeNull()
+    fireEvent.change(input!, { target: { value: '主持人' } })
+    fireEvent.keyDown(input!, { key: 'Enter' })
+
+    await waitFor(() => {
+      expect(mocks.updateSpeakerMap).toHaveBeenCalledWith('ws-1', 'item-1', { SPEAKER_00: '主持人' })
+      expectAnyEditorToContain('主持人 提出关键结论')
     })
   })
 })

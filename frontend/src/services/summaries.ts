@@ -23,7 +23,7 @@ export interface ItemSummary {
   created_at: string
 }
 
-/** GET 列表（按 template 分组，按 version 排序）。 */
+/** GET 列表（按素材级连续 version 排序）。 */
 export async function listSummaries(
   workspaceId: string,
   itemId: string,
