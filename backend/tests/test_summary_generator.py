@@ -123,6 +123,18 @@ class TestBuildPrompt:
         assert "[00:12] 嘉宾 A：嘉宾补充" in usr_p
         assert "[01:01:01] 未识别说话人：后半程未标记内容" in usr_p
 
+    def test_audio_prompt_does_not_inject_video_frame_rule(self) -> None:
+        """音频总结没有画面，不能把视频配图占位规则注入给模型。"""
+        item = _make_item(
+            type="audio",
+            results={"transcript": "只有音频的内容"},
+        )
+
+        sys_p, usr_p = build_prompt(item, "concise", embed_frames=True)
+
+        assert "FRAME-[mm:ss]" not in sys_p
+        assert "[[图N]]" not in usr_p
+
     def test_speaker_only_template_rejects_general_summary_mode(self) -> None:
         item = _make_item(type="audio")
 
@@ -284,6 +296,39 @@ class TestGenerateSummary:
         assert payload["provider_id"] == "provider"
         assert payload["text_model"] == "long-model"
         assert payload["summary_background"] == "内部会议"
+
+    @patch("backend.app.services.summary_generator._call_llm")
+    @patch("backend.app.services.pipeline_tasks._generate_audio_summary")
+    def test_long_speaker_source_uses_hierarchical_pipeline_even_when_plain_text_is_short(
+        self,
+        mock_long_summary: MagicMock,
+        mock_one_shot: MagicMock,
+    ) -> None:
+        """区分说话人标签可能放大输入，阈值必须按实际送入模型的材料计算。"""
+        def fake_long_summary(**kwargs: object) -> str:
+            coverage = kwargs["coverage"]
+            assert isinstance(coverage, dict)
+            coverage.update({"source_chars": 13001, "chunk_count": 2, "status": "complete"})
+            return "# 分层说话人总结"
+
+        mock_long_summary.side_effect = fake_long_summary
+        mock_one_shot.side_effect = AssertionError("长说话人材料不应走单次 LLM")
+        item = _make_item(
+            type="audio",
+            results={
+                "transcript": "原始转写较短",
+                "transcript_segments": [
+                    {"start": 0, "speaker": "SPEAKER_00", "text": "甲" * 7000},
+                    {"start": 60, "speaker": "SPEAKER_01", "text": "乙" * 7000},
+                ],
+            },
+        )
+
+        result = generate_summary(item, "speaker_meeting", summary_mode="speaker_aware")
+
+        assert result.content_md == "# 分层说话人总结"
+        assert result.coverage["chunk_count"] == 2
+        mock_one_shot.assert_not_called()
 
     @patch("backend.app.services.summary_generator._call_llm")
     def test_llm_called_with_correct_prompts(self, mock_llm: MagicMock) -> None:

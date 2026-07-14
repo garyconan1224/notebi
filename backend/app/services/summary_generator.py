@@ -455,7 +455,7 @@ def build_prompt(
     else:
         transcript = plain_text
 
-    if summary_mode == "speaker_aware" and item.type == "audio":
+    if summary_mode == "speaker_aware" and item.type in {"audio", "video"}:
         speaker_transcript = _speaker_aware_transcript(item)
         if speaker_transcript:
             transcript = speaker_transcript
@@ -531,7 +531,7 @@ def build_prompt(
         user_prompt = f"【背景信息】\n{background.strip()}\n\n{user_prompt}"
 
     # Stage 4: 带图模式 → 9 种模板全部注入配图规则（*FRAME-[mm:ss] 占位符）
-    if embed_frames and not _is_image_text_item(item) and template_id in _ALL_TEMPLATE_IDS:
+    if item.type == "video" and embed_frames and template_id in _ALL_TEMPLATE_IDS:
         from backend.app.services.summary_templates import FRAME_PLACEHOLDER_RULE
         system_prompt = system_prompt + FRAME_PLACEHOLDER_RULE
 
@@ -986,7 +986,15 @@ def generate_summary(
     transcript_segments = (item.results or {}).get("transcript_segments", [])
     if not isinstance(transcript_segments, list):
         transcript_segments = []
-    if item.type == "audio" and len(long_source) > 12000:
+    speaker_source = (
+        _speaker_aware_transcript(item)
+        if summary_mode == "speaker_aware"
+        else ""
+    )
+    # 区分说话人模式会为每段增加时间和说话人标签；长文阈值必须按实际
+    # 送入分层管线的材料计算，而不是只看未标注的 transcript 字符数。
+    summary_source = speaker_source or long_source
+    if item.type == "audio" and len(summary_source) > 12000:
         from backend.app.services.pipeline_tasks import _generate_audio_summary
 
         coverage: Dict[str, Any] = {}
@@ -1037,13 +1045,13 @@ def generate_summary(
     # R3.2: 后处理 — [[图N]] → ![desc](/static/path)
     # ⚠️ 这里的模板集合必须与上面「注入配图提示」的集合（约 line 450）保持一致，
     # 否则会出现「LLM 标了 [[图N]] 却没被替换成真图」（#3 教学笔记没图的根因）。
-    if template_id in {"standard", "detailed", "lecture", "steps"}:
+    if item.type == "video" and template_id in {"standard", "detailed", "lecture", "steps"}:
         frames = _collect_frames(item)
         content_md = _postprocess_frames(content_md, frames)
 
     # Stage 4: 通用占位符后处理 — *FRAME-[mm:ss] → 真图 URL
     # video 类素材且有 frames 时才替换；无 frames 时占位符直接清除
-    if not _is_image_text_item(item) and embed_frames:
+    if item.type == "video" and embed_frames:
         from backend.app.services.frame_placeholder import resolve_frame_placeholders
         frames_raw = _collect_frames(item)
         content_md = resolve_frame_placeholders(content_md, frames_raw)

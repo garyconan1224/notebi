@@ -514,6 +514,7 @@ def export_transcript_by_speaker(
     """按说话人首次出现顺序归组，输出无时间轴、无技术 speaker ID 的文章。"""
     groups: Dict[str, List[str]] = {}
     names = speaker_map or {}
+    fallback_names: Dict[str, str] = {}
     for seg in segments:
         text = str(seg.get("edited_text") or seg.get("text") or "").strip()
         if not text:
@@ -521,7 +522,12 @@ def export_transcript_by_speaker(
         speaker_id = str(seg.get("speaker") or "").strip()
         display_name = str(names.get(speaker_id) or "").strip()
         if not display_name:
-            display_name = speaker_id if speaker_id and not speaker_id.startswith("SPEAKER_") else "未识别说话人"
+            if speaker_id:
+                if speaker_id not in fallback_names:
+                    fallback_names[speaker_id] = f"说话人 {len(fallback_names) + 1}"
+                display_name = fallback_names[speaker_id]
+            else:
+                display_name = "未识别说话人"
         groups.setdefault(display_name, []).append(text)
     return "\n\n".join(
         f"【{speaker}】\n{_transcript_paragraphs(units, paragraph_chars)}"

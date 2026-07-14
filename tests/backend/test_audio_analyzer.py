@@ -120,6 +120,20 @@ def test_export_transcript_by_speaker_groups_renamed_speakers():
     assert "00:0" not in grouped
 
 
+def test_export_transcript_by_speaker_keeps_unrenamed_speakers_separate():
+    """没有 speaker_map 时，也不能把不同的 diarization speaker 合并。"""
+    grouped = export_transcript_by_speaker([
+        {"text": "甲方发言。", "speaker": "SPEAKER_00"},
+        {"text": "乙方发言。", "speaker": "SPEAKER_01"},
+        {"text": "甲方补充。", "speaker": "SPEAKER_00"},
+    ])
+
+    assert grouped.count("【说话人") == 2
+    assert "甲方发言。甲方补充。" in grouped
+    assert "乙方发言。" in grouped
+    assert "SPEAKER_" not in grouped
+
+
 # ── speaker 映射 ──────────────────────────────────────────────
 
 
