@@ -1,10 +1,12 @@
 # AI Handoff
 
-## 当前执行指针（2026-07-12）
+## 当前执行指针（2026-07-14）
 
-- **当前任务**：音频统一笔记页改造，重点是“区分说话人总结”。
-- **执行计划**：[`docs/plans/audio-speaker-aware-result-page-2026-07-12.md`](plans/audio-speaker-aware-result-page-2026-07-12.md)，当前 `status: done`。
-- **用户授权**：本轮用户明确授权 Codex 执行；该授权只覆盖上述计划，不改变其它任务的默认角色边界。
+- **当前任务**：开源跨平台整理 + 仅 Windows 的源码可见离线懒人包。
+- **执行材料**：[`docs/open-source-cross-platform-and-windows-bundle-2026-07-14.md`](open-source-cross-platform-and-windows-bundle-2026-07-14.md)、[`docs/WINDOWS_OFFLINE_BUNDLE.md`](WINDOWS_OFFLINE_BUNDLE.md)、[`docs/OPEN_SOURCE_RELEASE.md`](OPEN_SOURCE_RELEASE.md)。
+- **用户决策**：开源版整理 macOS / Windows / Linux；懒人包当前只做 Windows；不做封闭 EXE，必须保留源码并支持 `.bat` 一键启动；昇腾模型配置、provider、模型名和地址逻辑不改。
+- **本轮提交**：`b85de59 feat: add cross-platform release and Windows offline bundle`。
+- **GitHub 状态**：只完成本地发布材料和验证，尚未创建远程仓库、上传或切换 Public。
 - **强制停点**：实际代码、数据结构、接口、依赖、产品行为与计划不一致时，必须立即停下询问用户，不得自行假设。
 - **产品重点**：新建总结和添加素材弹窗默认使用普通总结；音频勾选“区分说话人”后才显示专属总结方式，并透传现有 `speaker_aware` 链路；说话人重命名后自动生成新总结版本，旧版本保持不变。
 - **保留范围**：播放器、真实波形、转写、字幕编辑/翻译/导出、说话人识别、总结版本、NoteBi 笔记编辑/章节/导出/问 AI 等现有音频能力。
@@ -18,6 +20,10 @@
 - **已完成**：P0-F 真实波形已接入后端 `waveform_peaks`（240 个 RMS 峰值），前端播放器优先渲染真实内容；音频峰值单测通过。
 - **已完成**：P0-G 音频专属音乐分析、音乐转写、音乐模式、人声分离、提示词入口已移除；视频音乐和视频/图片视觉提示词保留。
 - **已完成**：P0-H 结果页/处理页新增音频错误分类与建议，设置 → 分析默认偏好 → 音频错误说明提供原因卡片；前端 183 tests、build 通过。
+- **已完成**：新增源码级跨平台发布入口与 Windows 双模式 `start-notebi.bat`：有内置 `runtime` 时走完全离线模式，没有 `runtime` 时走 `.venv` + Node.js 源码模式。
+- **已完成**：新增 Windows 离线包构建器、模型 `manifest.json` 和 SHA256 预检；启动器不执行 pip/npm/模型下载，并将 Hugging Face 与 sherpa-onnx 模型缓存指向包内目录。
+- **已完成**：README、macOS / Windows 安装页、Windows 离线包说明、昇腾内网说明和开源发布清单已整理。
+- **已验证**：后端 406 passed、前端 204 passed、前端生产 build、脚本 compileall、源码预检和临时 Windows 包清单预检通过；未在真实 Windows 机器执行 `.bat`。
 - **当前决策**：音频统一使用 `/note`；`/audio_detail` 只做兼容跳转。以 NoteShell 音频分支承载音频结果页 UI 与全部 NoteBi 能力，不嵌套两个完整页面。
 - **本轮验收结论**：P0-A～P0-I 已完成。`/notes`、设置页、真实音频 `/note` 浏览器 smoke 无控制台错误；旧 `/audio_detail` 最终重定向到 `/note`；新建总结可选普通/区分说话人；音频错误说明卡片可见；真实 `.m4a` 可生成 240 个非均匀波形峰值。
 - **当前下一步**：等待用户验收反馈；除非用户提出新范围，不继续扩大音频清理或改动视频/图片流程。
@@ -40,9 +46,10 @@ Last updated: 2026-07-12（**当前指针，给所有 AI 工具优先读取**）
 
 ## 下一步候选（按优先级）
 
-1. **继续 NoteBi Phase 1 验收**：按 `docs/plans/NoteBi_Phase1.md` 检查 product mode、kind filtering、replica cleanup、导航/设置/结果页隔离是否完整。
-2. **做真实素材回归**：视频和音频处理链路需要用户提供或指定可用素材；无真实素材时只能跑 smoke/unit 测试，不能宣称完整业务通过。
-3. **清理残留 Nibi 文案**：README、启动器、规则文档里的旧项目名只改协作/启动层；业务 UI 文案是否从 Nibi 统一换成 NoteBi，需要用户确认后再做。
+1. **Windows 实机验收**：在 Windows x64 解压真实 runtime + 模型包，断网运行 `start-notebi.bat`，验证 ASR、说话人、导出和日志。
+2. **准备正式模型包**：在联网构建机固定 Python / 依赖 / 模型版本，预热 HF 和 sherpa 缓存，生成真实 SHA256 manifest。
+3. **GitHub 发布**：用户确认仓库名、远程地址和公开时机后，执行敏感信息扫描、创建远程仓库、推送和 Release；当前不自动 push。
+4. **继续 NoteBi Phase 1 / 真实素材验收**：无真实素材时只能跑 smoke/unit 测试，不能宣称完整业务通过。
 
 ## 当前禁止事项
 
