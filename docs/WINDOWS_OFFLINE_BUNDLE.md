@@ -32,6 +32,8 @@ NoteBi-Windows-x64-offline/
 
 构建机可以联网准备依赖和模型，华为内网运行机不需要联网。构建脚本只做复制、哈希和压缩，不执行 pip、npm、Hugging Face 或 ModelScope 下载。
 
+打包前必须先在源码目录执行 `./build-notebi.sh`，它会把前端编译为 NoteBi 模式；不能直接使用未设置 `VITE_PRODUCT_MODE` 时生成的 `frontend/dist`。
+
 ```bash
 python scripts/build_windows_offline_bundle.py \
   --source-root . \

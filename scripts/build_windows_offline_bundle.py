@@ -135,6 +135,12 @@ def build_bundle(
         raise FileExistsError(f"output already exists; choose another path: {output_dir}")
     if not (source_root / "frontend" / "dist" / "index.html").is_file():
         raise ValueError("frontend/dist/index.html not found; build the frontend before packaging")
+    frontend_index = (source_root / "frontend" / "dist" / "index.html").read_text(encoding="utf-8")
+    if 'name="notebi-product-mode" content="notebi"' not in frontend_index:
+        raise ValueError(
+            'frontend/dist was not built with VITE_PRODUCT_MODE=notebi; '
+            "run ./build-notebi.sh before packaging"
+        )
 
     output_dir.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(source_root, output_dir, ignore=_ignore_source)
