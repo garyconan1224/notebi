@@ -1,225 +1,217 @@
-<h1 align="center">Nibi</h1>
+<h1 align="center">NoteBi</h1>
 
-<p align="center"><i>本地优先的 AI 多媒体笔记与创作工作台 · 把视频 / 图文 / 音频 / 文字整理成结构化笔记</i></p>
+<p align="center"><i>本地优先的 AI 多媒体笔记工具 · 把视频、音频、图文和文字整理成可编辑的结构化笔记</i></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" />
-  <img src="https://img.shields.io/badge/frontend-react%2019-blue" />
-  <img src="https://img.shields.io/badge/backend-fastapi-green" />
+  <img src="https://img.shields.io/badge/frontend-React%2019-blue" />
+  <img src="https://img.shields.io/badge/backend-FastAPI-green" />
   <img src="https://img.shields.io/badge/python-3.11%2B-yellow" />
   <img src="https://img.shields.io/badge/local--first-%E2%9C%93-success" />
 </p>
 
 ---
 
-## ✨ 项目简介
+## NoteBi 是什么
 
-**Nibi** 是一个本地优先（local-first）的 AI 内容创作工具：粘贴一条视频 / 图文链接，或导入本地视频、音频、文字素材，Nibi 会自动转写、理解、并生成结构清晰的 Markdown 笔记、总结与可复刻的创作提示词。
+NoteBi 是一个本地优先的内容笔记工具。它可以导入本地视频、音频、图片、文字或公开内容链接，完成转写、说话人识别、字幕翻译、结构化总结和多格式导出。
 
-运行时数据、模型配置、下载缓存和工作区内容**默认全部保存在本机**，不上传、不入仓。你只需自备所需的模型服务 Key，即可离线在自己的电脑上把素材沉淀成知识。
+默认情况下，素材、笔记、模型缓存和运行日志都保存在本机。NoteBi 不会把本地文件自动上传到项目维护者的服务器；是否调用第三方模型服务，由使用者自己在设置中配置。
 
-> 本项目定位为个人学习、研究与本地创作辅助工具。请遵守第三方平台条款、内容版权与所在地法律法规。
+> 本项目处于持续开发阶段。请遵守第三方平台条款、素材版权、模型许可证和所在地法律法规。
 
----
+## 功能
 
-## 🔧 功能特性
+- 视频、音频、图片、文字和公开链接导入
+- 本地语音转写、字幕编辑和字幕翻译
+- 说话人识别、说话人改名和角色标注
+- 普通总结与区分说话人的会议、访谈、客户接待等总结
+- 总结版本保留、时间点跳转和原始素材回看
+- Markdown、HTML、PDF、Word、Obsidian 等导出
+- 本地知识库、向量检索和跨笔记问答
+- OpenAI-compatible 模型服务配置
+- 支持把 Chat、Embedding、Rerank 分别配置到不同服务
+- 支持通过内网地址接入华为昇腾模型服务
 
-- **多平台素材接入**：YouTube、Bilibili、抖音、小红书、X（Twitter）以及本地视频 / 音频 / 文字
-- **多引擎语音转写**：MLX-Whisper（Apple Silicon）、Fast-Whisper、Groq 远程，字幕自动繁转简
-- **字幕翻译**：一键翻译字幕到目标语言，结果落盘缓存
-- **多模态视频理解**：ASR 转写 + 关键帧 VLM 分析 + LLM 合并总结
-- **多风格总结**：内置多种总结风格模板，可编辑、可重置、保留多版本
-- **结构化笔记**：自动生成带时间戳锚点、可点击跳转原片的 Markdown 笔记，支持所见即所得编辑
-- **总结配图**：按占位符规则在总结中自动插入关键帧配图
-- **混合笔记**：同一素材同时做视频截帧 + 图文提取 + 说话人分离
-- **本地知识库**：把多篇笔记建成本地向量库，基于 RAG 做跨笔记 AI 问答（嵌入 / 重排模型可配置）
-- **复刻提示词**：从素材反推可复用的创作提示词，卡片化展示、一键复制 / 导出
-- **多格式导出**：Markdown / HTML / PDF / Word / 长图 / PPTX / Obsidian
-- **多模型供应商**：SiliconFlow、Anthropic、OpenAI 兼容接口，供应商与默认模型可自由配置
+## 运行方式选择
 
----
+| 方式 | 适用对象 | 运行条件 |
+|---|---|---|
+| 源码模式 | 开发者、需要改代码的人 | Python、Node.js、FFmpeg |
+| Windows 离线懒人包 | 不想安装开发环境、需要内网运行的人 | 解压后的内置 runtime 和模型 |
+| 昇腾内网模式 | 使用华为内网模型的人 | NoteBi 客户端 + 内网 OpenAI-compatible 服务 |
 
-## 📸 界面预览
+Windows 懒人包保留完整源码，不把业务封装进不可修改的 EXE。详见 [Windows 离线懒人包说明](docs/WINDOWS_OFFLINE_BUNDLE.md)。
 
-### 🎬 视频笔记结果页
+## 快速开始：macOS
 
-左侧视频播放器 + 关键帧时间轴 + 逐句转写（可切原文 / 双语 / 译文），中间结构化笔记正文（带时间戳锚点、可点击跳转原片），右侧自动生成的目录导航。
+### 环境要求
 
-![视频笔记结果页](docs/screenshots/video-note.png)
+- macOS 12+
+- Python 3.11+
+- Node.js 18+
+- FFmpeg
+- 可访问的模型服务，或已经准备好的本地模型缓存
 
-### 🎧 音频笔记结果页
-
-波形播放器 + 逐句时间戳转写，右侧转录统计、音频信息与摘要预览；勾选「说话人音色区分」后可自动识别说话人。
-
-![音频笔记结果页](docs/screenshots/audio-note.png)
-
-### 🖼 图文笔记结果页（小红书 / X）
-
-左侧原帖图集逐张浏览，右侧把图文内容提炼成「观点 / 方法 / 可带走的结论」等结构化笔记，并自动打标签。
-
-![图文笔记结果页](docs/screenshots/imagetext-note.png)
-
-### 📝 文本笔记结果页
-
-左侧可编辑源文本，中间生成带标签的摘要与结构化笔记，右侧目录导航。
-
-![文本笔记结果页](docs/screenshots/text-note.png)
-
-### 🎨 复刻提示词页
-
-从画面帧反推可复用的创作提示词，支持 Midjourney / Gemini / GPT Image / JSON 多种格式，一键复制或导出脚本。
-
-![复刻提示词页](docs/screenshots/replica-prompt.png)
-
-### ⏳ 处理流程
-
-添加素材后走「排队 → 转写 → 生成笔记 → 完成」的可视化流水线，实时进度可查。
-
-![处理流程](docs/screenshots/pipeline-progress.png)
-
----
-
-## 🧱 技术栈
-
-| 层 | 技术 |
-|---|---|
-| 前端 | React 19 · TypeScript · Vite 6 · Tailwind 4 |
-| 后端 | Python 3.11 · FastAPI · SQLAlchemy · SQLite |
-| 转写 | MLX-Whisper · Fast-Whisper · Groq |
-| 下载 | yt-dlp · ffmpeg |
-| 知识库 | faiss 向量检索 + 可配置嵌入 / 重排模型 |
-
----
-
-## 🚀 快速开始
-
-> 环境要求：macOS（启动脚本以 macOS 为主，依赖 Homebrew）、Python 3.11+、Node 18+、ffmpeg。首次启动脚本会自动检测并协助安装缺失依赖。Linux 用户可参照脚本手动安装依赖后单独启动前后端。
+首次安装依赖：
 
 ```bash
-# 1. 首次启动（自动检测/安装依赖、创建 .venv、装前后端依赖）
-./start.sh
-
-# 日常开发快速启动
-./dev.sh
-
-# 2. 浏览器打开
-open http://localhost:5177
+./start-notebi.command
 ```
 
-启动脚本会自动：
-
-- 检测 / 安装 Homebrew、Python 3.11+、ffmpeg、Node、pnpm
-- 创建 `.venv` 并安装 `requirements.txt`
-- 并行启动 FastAPI 后端（默认 `8000`）+ Vite 前端（默认 `5177`）
-
-首次使用请到 **设置页** 配置模型供应商与 API Key（也可在项目根拷贝 `local_settings.example.py` 为 `local_settings.py` 填写）。
-
----
-
-## ⚙️ 依赖说明
-
-### 🎬 FFmpeg
-
-音视频转码依赖 FFmpeg，需单独安装：
+开发启动：
 
 ```bash
-# macOS (brew)
-brew install ffmpeg
-
-# Ubuntu / Debian
-sudo apt update && sudo apt install -y ffmpeg
-
-# Windows
-# 请从官网下载安装：https://ffmpeg.org/download.html
+./dev-notebi.sh
 ```
 
-### 🗣 语音转写引擎
+启动后访问：
 
-- **Apple Silicon (M 系列)**：默认走 MLX-Whisper，本地推理最快
-- **其它平台 / CPU**：可用 Fast-Whisper（首启自动下载模型）
-- **不想本地跑**：配置 `GROQ_API_KEY` 走远程转写
-
----
-
-## 🔑 环境变量
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `BACKEND_PORT` | `8000` | 后端端口 |
-| `VITE_PORT` | `5177` | 前端端口 |
-| `SILICONFLOW_API_KEY` | - | SiliconFlow API Key（模型调用） |
-| `ANTHROPIC_API_KEY` | - | 可选，使用 Anthropic 模型时填写 |
-| `GROQ_API_KEY` | - | 可选，使用远程 ASR 时填写 |
-
-> 复制 `.env.example` 为 `.env` 后按需修改；不要把真实 Key 提交进仓库。
-
----
-
-## 📁 目录结构
-
-```
-.
-├── backend/     FastAPI 任务中心与 Provider / Pipeline / Transcript / RAG 路由
-├── frontend/    React 19 + Vite 6 前端（唯一入口）
-├── shared/      前后端共享：配置、Provider、工具（knowledge_base、转写路由等）
-├── src/         vidmirror 核心 Provider 抽象
-├── scripts/     运行前自检、清理脚本
-├── tests/       后端与前端单测
-└── docs/        公开文档（规格、工作流、发布清单等）
+```text
+http://localhost:5181
 ```
 
----
-
-## 🛠 开发指南
+停止：
 
 ```bash
-# 单独启动（调试用）
-uvicorn backend.app.main:app --reload --port 8000   # 后端
-cd frontend && pnpm dev                              # 前端
-
-# 测试
-pytest tests/backend -q          # 后端
-cd frontend && pnpm lint         # 前端 ESLint
-cd frontend && pnpm build        # tsc -b && vite build
-
-# 启动前自检
-python3 scripts/preflight_check.py
+./stop-notebi.command
 ```
 
-任务日志流式接口：
+完整 macOS 说明见 [INSTALL_MACOS.md](docs/INSTALL_MACOS.md)。当前 macOS 启动器会检查并安装开发依赖，因此不适合华为内网。华为内网请使用 Windows 离线包或按照 [昇腾内网说明](docs/ASCEND_INTRANET.md) 部署。
 
-- `GET /pipeline/tasks/{task_id}/events`（Server-Sent Events）
-- `WebSocket /pipeline/tasks/{task_id}/ws`
+## 快速开始：Windows 源码模式
 
-贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)，安全问题见 [SECURITY.md](SECURITY.md)。
+完整 Windows 说明见 [INSTALL_WINDOWS.md](docs/INSTALL_WINDOWS.md)。
 
----
+源码模式适合需要改 Python、React 或模型适配代码的用户。
 
-## 🧠 Roadmap
+### 1. 安装基础环境
 
-- [x] 多平台笔记（YouTube / Bilibili / 抖音 / 小红书 / X）
-- [x] 多引擎语音转写 + 繁转简
-- [x] 字幕翻译（落盘缓存）
-- [x] 多风格总结 + 时间戳锚点笔记
-- [x] 本地知识库 RAG 问答
-- [x] 多格式导出（含 PDF / Word / Obsidian）
-- [ ] 更多平台与更完善的桌面端体验
+安装 Python 3.11、Node.js 18+ 和 FFmpeg，并确保 `python`、`npm`、`ffmpeg` 可以在终端中使用。
 
----
+### 2. 安装 Python 依赖
 
-## 🔎 代码参考 / 致谢
+在仓库根目录运行：
 
-- 产品形态与交互深受开源项目 [BiliNote](https://github.com/JefferyHcool/BiliNote) 启发，特此致谢。
-- 视频下载基于 [yt-dlp](https://github.com/yt-dlp/yt-dlp)，语音转写基于 [MLX-Whisper](https://github.com/ml-explore/mlx-examples) / [faster-whisper](https://github.com/SYSTRAN/faster-whisper)。
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
 
----
+### 3. 安装前端依赖
 
-## 📜 License
+```powershell
+cd frontend
+npm install
+cd ..
+```
+
+### 4. 启动
+
+```text
+双击 start-notebi.bat
+```
+
+如果没有 `runtime\python\python.exe`，启动器会自动进入源码开发模式，使用 `.venv` 和本机 Node.js。启动日志在 `.local\backend.log`、`.local\frontend.log`。
+
+停止：
+
+```text
+双击 stop-notebi.bat
+```
+
+## 快速开始：Windows 离线懒人包
+
+正式发行包解压后包含 `runtime\python`、`runtime\ffmpeg`、`frontend\dist` 和 `models`，不需要安装 Node.js，也不需要执行 pip 安装。
+
+```text
+解压 NoteBi-Windows-x64-offline.zip
+双击 start-notebi.bat
+浏览器打开 http://127.0.0.1:5181
+```
+
+启动器会：
+
+1. 检查内置 Python、FFmpeg、前端构建产物和模型清单。
+2. 校验模型 SHA256。
+3. 设置离线环境变量，禁止运行时下载模型。
+4. 启动本地 FastAPI 和静态前端服务。
+5. 自动打开浏览器并写入 `logs`。
+
+它不会执行 `pip install`、不会访问 Hugging Face 或 ModelScope，也不会修改当前的模型 provider 配置。
+
+## 模型配置
+
+NoteBi 当前的模型配置仍然通过应用内的「设置 → 模型与渠道」完成，配置内容落在本机 `.local/settings.json`。本项目的打包脚本不会复制、覆盖或提交这个文件。
+
+支持的常见配置方式：
+
+- OpenAI-compatible 服务：填写服务地址、模型名和 API Key。
+- 本机模型服务：填写 `http://127.0.0.1:<port>/v1`。
+- 华为昇腾内网服务：填写内网节点的 OpenAI-compatible 地址和模型名。
+- Chat、Embedding、Rerank：可以分别指定不同 provider。
+
+首次启动没有模型服务时，界面仍然可以打开；需要生成总结、翻译或知识库问答时，再配置对应能力的模型。
+
+## 华为昇腾内网
+
+推荐让 Windows NoteBi 作为客户端，把大模型推理放在内网 Linux/昇腾节点：
+
+```text
+Windows NoteBi ──内网 HTTP──> 昇腾模型服务
+                              ├─ Chat
+                              ├─ Embedding
+                              └─ Rerank
+```
+
+NoteBi 不内置或改写昇腾驱动、CANN、vLLM-Ascend 和现有模型配置。详细部署边界、离线转移流程和配置位置见 [ASCEND_INTRANET.md](docs/ASCEND_INTRANET.md)。
+
+## 开发与验证
+
+```bash
+# 后端测试
+./.venv/bin/python -m pytest backend/tests -q
+
+# 前端测试与构建
+cd frontend
+pnpm test --run
+pnpm build
+cd ..
+
+# 源码树预检
+./.venv/bin/python scripts/portable_preflight.py --mode source --root .
+```
+
+Windows 离线包构建需要一台可以准备 Windows runtime 和模型缓存的构建机：
+
+```bash
+python scripts/build_windows_offline_bundle.py \
+  --source-root . \
+  --output ./release/NoteBi-Windows-x64-offline \
+  --runtime /path/to/prepared/windows-runtime \
+  --models /path/to/prepared/models \
+  --zip ./release/NoteBi-Windows-x64-offline.zip
+```
+
+构建脚本只复制已准备好的文件，不联网下载依赖或模型。完整参数和目录约定见 [WINDOWS_OFFLINE_BUNDLE.md](docs/WINDOWS_OFFLINE_BUNDLE.md)。
+
+## 目录结构
+
+```text
+backend/        FastAPI API、任务和处理流程
+frontend/       React + TypeScript 前端
+shared/         配置、provider、转写、说话人和知识库共享模块
+scripts/        预检、启动、静态服务和发行包工具
+docs/           安装、开源和内网部署文档
+backend/tests/  后端测试
+```
+
+## 贡献与安全
+
+- 贡献说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+- 安全问题见 [SECURITY.md](SECURITY.md)，不要在公开 Issue 中提交密钥、Cookie 或私人素材。
+- 支持范围见 [SUPPORT.md](SUPPORT.md)。
+
+## License
 
 [MIT](LICENSE)
-
----
-
-## ⭐ Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=garyconan1224/nibi&type=Date)](https://www.star-history.com/#garyconan1224/nibi&Date)

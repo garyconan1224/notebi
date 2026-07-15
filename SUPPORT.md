@@ -1,6 +1,6 @@
 # Support
 
-Nibi is a local-first creator tool. Support is community best-effort.
+NoteBi is a local-first note tool. Support is community best-effort.
 
 ## Good Issue Reports
 

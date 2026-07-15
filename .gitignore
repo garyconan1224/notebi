@@ -39,6 +39,7 @@ frontend/.playwright-cli/
 frontend/dist/
 frontend/tsconfig.tsbuildinfo
 product-builds/
+release/
 GEMINI.md
 local_settings.py
 node_modules/

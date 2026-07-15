@@ -1,13 +1,13 @@
 # NoteBi 独立启动说明
 
-这个目录是独立的 NoteBi 源码目录：`/Users/conan/Desktop/notebi`。
+这个目录是 NoteBi 源码目录。完整的跨平台安装和 Windows 离线懒人包说明请先阅读根目录 `README.md`。
 
 ## 最快打开
 
 双击：
 
 ```bash
-/Users/conan/Desktop/notebi/启动 NoteBi.command
+启动 NoteBi.command
 ```
 
 启动成功后浏览器会自动打开。也可以手动打开：
@@ -27,7 +27,7 @@ http://localhost:8001/health
 双击：
 
 ```bash
-/Users/conan/Desktop/notebi/停止 NoteBi.command
+停止 NoteBi.command
 ```
 
 或在终端运行：
@@ -64,7 +64,16 @@ cd /Users/conan/Desktop/notebi
 - 前端：`5181`
 - 后端：`8001`
 
-这两个端口和原 Nibi 默认端口分开，方便同时保留原项目。
+这两个端口是 NoteBi 的默认端口，便于与其他本地项目并行运行。
+
+## Windows
+
+Windows 源码模式和 Windows 离线懒人包统一使用：
+
+```text
+start-notebi.bat
+stop-notebi.bat
+```
 
 ## 首次启动说明
 

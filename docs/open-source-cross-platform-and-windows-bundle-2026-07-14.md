@@ -7,12 +7,12 @@
 
 NoteBi 的前端和 FastAPI 本地服务本身适合跨平台，但当前“开发启动方式”还不是跨平台产品：启动器是 Bash/macOS 优先，依赖安装和 FFmpeg 仍依赖用户环境，模型与 Python 原生依赖没有按平台锁定。
 
-建议采用两条发布线：
+用户已确认采用两条发布线：
 
 1. **开源源码线**：macOS / Windows / Linux 都能按文档启动，保留浏览器访问本地服务的模式。
-2. **桌面发行线**：用 Tauri 2 打包 React 静态前端，后端作为平台 sidecar；发布 Windows x64、macOS Apple Silicon、macOS Intel 三个包。Tauri 官方支持将 Python API server 或 PyInstaller 可执行文件作为 sidecar，并要求按目标架构提供不同二进制。
+2. **Windows 离线源码包**：只做 Windows，包含完整源码、内置 Python、FFmpeg、前端构建产物和已准备的模型，解压后双击 `.bat` 启动。
 
-Windows 懒人包不要把所有大模型都硬塞进一个压缩包。应拆成“运行时包 + 模型包/模型服务配置”：运行时包解压即可启动，首次运行只需选择本地模型目录或填写模型服务地址；模型权重按许可证、硬件和体积单独下载。
+Windows 懒人包不做封闭 EXE。可以按体积提供 runtime 包和完整模型包两个 Release Asset；华为内网使用时，也可以把二者合并成一个 ZIP。运行时不下载依赖和模型。
 
 ## 当前代码检查结果
 
@@ -59,12 +59,12 @@ requirements-linux-x64.txt
 
 其中 `core` 放 FastAPI、HTTP、字幕、文件解析等基础能力；ASR、说话人分析、PDF/OCR、向量库按能力组安装。这样没有 GPU 或不需要 PDF 的用户不会被无关依赖阻塞。
 
-### B. 桌面发行模式
+### B. 桌面壳（当前不纳入交付）
 
-推荐 Tauri 2，而不是把 Node.js 和一个开发服务器交给最终用户：
+Tauri 2 或其他桌面壳可以作为以后可选的产品化方向，但当前不作为验收条件。用户明确需要保留源码、方便拿到华为内网适配，因此第一版使用 `.bat` 和 Python 脚本更合适：
 
 ```text
-Tauri desktop shell
+Optional desktop shell
 ├── bundled frontend/dist
 ├── NoteBi backend sidecar
 ├── ffmpeg / ffprobe sidecar
@@ -76,15 +76,16 @@ Tauri desktop shell
 
 1. 第一版使用“内置 CPython + 已构建 site-packages + 启动参数”，便于排查动态导入和模型插件问题。
 2. 稳定后再评估 PyInstaller 单文件/目录包，减少用户可见文件，但不以“单文件”为验收条件。
-3. Tauri 只负责窗口、启动/停止 sidecar、日志和打包；业务 API 继续由 FastAPI 提供，减少一次重写。
+3. 如果以后采用桌面壳，只负责窗口、启动/停止服务、日志和打包；业务 API 继续由 FastAPI 提供，减少重写范围。
 
 ## Windows 懒人包设计
 
-目标是“解压 → 双击 `NoteBi.exe` → 配置模型 → 使用”，建议提供 `NoteBi-Windows-x64-lite.zip` 和可选的 `NoteBi-Windows-x64-models.zip`：
+目标是“解压 → 双击 `start-notebi.bat` → 配置模型 → 使用”，建议提供 `NoteBi-Windows-x64-runtime.zip` 和可选的 `NoteBi-Windows-x64-models.zip`；华为内网再提供合并后的完整包：
 
 ```text
 NoteBi/
-├── NoteBi.exe                    # Tauri 启动器
+├── start-notebi.bat              # 源码可见的一键启动入口
+├── stop-notebi.bat
 ├── runtime/
 │   ├── python/                   # 内置 CPython，固定版本
 │   ├── backend/                  # FastAPI 与已验证依赖
@@ -129,19 +130,20 @@ API Key 只从环境变量或本地未跟踪配置读取；懒人包不预置任
 
 ## 模型包策略
 
-### 默认随包提供
+### Windows 完整离线包随包提供
 
 - FFmpeg / FFprobe。
-- 轻量、许可证明确的说话人或 VAD 模型（若体积和许可证允许）。
-- 模型清单、校验和、下载器和本地路径选择器。
+- 经过预热并验证的本地 ASR / 说话人模型缓存。
+- 模型清单、SHA256 校验和、许可证来源。
+- OpenAI-compatible 内网模型服务的配置说明，不包含真实密钥。
 
-### 默认不随包提供
+### 公开开源仓库默认不随包提供
 
 - 大型 Chat LLM 权重。
 - 需要特定 GPU/NPU、驱动、CANN、CUDA 或商业许可的模型。
-- `marker-pdf` 等可能触发 GB 级下载的模型。
+- 真实 API Key、内网地址和用户数据。
 
-原因不是功能做不到，而是权重体积、许可证、显存/NPU 内存和硬件后端都不同。把这些内容强行放进一个 Windows 压缩包，会导致下载巨大、升级困难，也无法保证每台机器能运行。
+华为内网完整包可以包含经许可的模型权重；公开仓库则只提交构建脚本和模型清单格式。
 
 ## 华为昇腾兼容边界
 
@@ -174,11 +176,11 @@ CI 至少做三层：
 
 ## 分阶段实施顺序
 
-1. **P1：先完成平台路径和 preflight**：数据目录、FFmpeg 查找、端口、模型配置、Windows PowerShell 启动。
-2. **P2：拆分依赖与锁版本**：core / platform / optional requirements，生成 Windows x64 与 macOS arm64 的可复现安装环境。
-3. **P3：做 Windows portable zip**：内置 CPython、后端、前端、FFmpeg、配置向导，不先做模型全量捆绑。
-4. **P4：做 Tauri 桌面壳**：统一 macOS/Windows 启停、日志、系统托盘和安装包。
-5. **P5：发布模型 pack 与昇腾部署文档**：模型清单、下载校验、许可证、vLLM-Ascend/MindIE 部署示例。
+1. **P1：完成源码跨平台启动入口和 preflight**：macOS、Windows、Linux 的文档和启动方式。
+2. **P2：完成 Windows 源码/离线双模式 `.bat`**：源码模式使用 `.venv`，离线模式使用内置 runtime。
+3. **P3：完成 Windows offline bundle 构建器**：源码、CPython、FFmpeg、前端、模型清单和 SHA256。
+4. **P4：发布 README、开源清单和昇腾内网文档**：不上传密钥、用户数据和内部地址。
+5. **P5：维护者确认后再创建 GitHub Release**：上传 Windows runtime 包和华为内网完整包；桌面壳作为以后可选方向。
 
 ## 官方依据
 

@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for taking the time to improve Nibi.
+Thanks for taking the time to improve NoteBi.
 
 ## Before You Start
 
@@ -12,13 +12,13 @@ Thanks for taking the time to improve Nibi.
 ## Local Setup
 
 ```bash
-./start.sh
+./start-notebi.command
 ```
 
 For development:
 
 ```bash
-./dev.sh
+./dev-notebi.sh
 ```
 
 Frontend:
