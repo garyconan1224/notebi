@@ -106,6 +106,11 @@ def start(root: Path, *, backend_port: int, frontend_port: int, open_browser: bo
         print(f"端口 {backend_port} 或 {frontend_port} 已被占用，请先运行 stop-notebi.bat。")
         return 1
 
+    # 构建包会排除开发机的用户素材；FastAPI 静态挂载和运行时存储
+    # 仍需要这些空目录，因此在首次启动时创建，而不是把用户数据带进 ZIP。
+    (root / "data").mkdir(parents=True, exist_ok=True)
+    (root / "projects").mkdir(parents=True, exist_ok=True)
+
     logs = root / "logs"
     logs.mkdir(parents=True, exist_ok=True)
     backend_log: TextIO = (logs / "backend.log").open("a", encoding="utf-8")

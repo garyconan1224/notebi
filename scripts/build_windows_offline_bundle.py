@@ -24,6 +24,8 @@ EXCLUDED_DIRS = {
     ".venv",
     ".local",
     ".pytest_cache",
+    ".playwright-cli",
+    ".playwright-mcp",
     "__pycache__",
     "node_modules",
     "data",
@@ -32,6 +34,7 @@ EXCLUDED_DIRS = {
     "product-builds",
     "test-results",
     "dist",
+    "release",
 }
 EXCLUDED_FILES = {".env", "package-lock.json"}
 

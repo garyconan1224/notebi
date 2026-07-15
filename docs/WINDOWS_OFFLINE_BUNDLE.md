@@ -53,6 +53,7 @@ python scripts/build_windows_offline_bundle.py \
 懒人包不会因为“模型文件放在 models 目录”就自动改变 NoteBi 的模型语义。当前代码使用既有模型加载方式：
 
 - faster-whisper / Hugging Face 模型放到 `models/.cache/hub`，启动器会把 `HF_HOME` 和 `HF_HUB_CACHE` 指向这里。
+- Windows ZIP 使用 `snapshots/<revision>/` 下的普通文件快照，不依赖符号链接；预检和 ASR 状态检查会识别这种离线布局。
 - sherpa-onnx 说话人模型放到 `models/sherpa`，启动器会通过已有的 `NOTEBI_SHERPA_MODEL_DIR` 环境变量指向这里。
 - Chat、Embedding、Rerank 模型仍通过现有「设置 → 模型与渠道」配置，不改 provider 结构。
 

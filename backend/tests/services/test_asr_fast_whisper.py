@@ -7,7 +7,11 @@ from __future__ import annotations
 
 import pytest
 
-from backend.app.services.asr_fast_whisper import _has_audio_stream, transcribe_file_with_fast_whisper
+from backend.app.services.asr_fast_whisper import (
+    _has_audio_stream,
+    _scan_model_cache_bytes,
+    transcribe_file_with_fast_whisper,
+)
 
 
 # ── _has_audio_stream ──────────────────────────────────────────
@@ -112,3 +116,21 @@ class TestTranscribeNoAudioEarlyReturn:
         logs: list[str] = []
         transcribe_file_with_fast_whisper(str(fake_video), log_callback=logs.append)
         assert any("无音轨" in msg for msg in logs)
+
+
+class TestFlatSnapshotCache:
+    """Windows 解压包使用无符号链接的 snapshots 布局。"""
+
+    def test_scans_snapshot_files_without_blobs(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HF_HUB_CACHE", str(tmp_path))
+        snapshot = (
+            tmp_path
+            / "models--Systran--faster-whisper-flat-model"
+            / "snapshots"
+            / "revision"
+        )
+        snapshot.mkdir(parents=True)
+        (snapshot / "model.bin").write_bytes(b"model")
+        (snapshot / "config.json").write_bytes(b"{}")
+
+        assert _scan_model_cache_bytes("flat-model") == (7, 0)
