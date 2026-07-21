@@ -98,7 +98,6 @@ STYLE_CATEGORIES: Dict[str, str] = {
     "style_video_text_only": "视频笔记提示词（不带图）",
     "style_audio": "音频笔记提示词",
     "style_image_text": "图文笔记提示词",
-    "style_replica": "复刻提示词",
     "style_text": "文本 / 网页笔记提示词",
 }
 

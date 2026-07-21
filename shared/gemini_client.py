@@ -66,7 +66,7 @@ class GeminiVideoClient:
 
         Args:
             video_path: 本地视频文件路径
-            intent: 视频意图（learning / replica / 默认）
+            intent: 视频意图（learning / 默认）
             prompt_template: 已组装好的 prompt 文本
 
         Returns:

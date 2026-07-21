@@ -20,7 +20,6 @@ ALL_STYLE_CATEGORIES = (
     "style_video_text_only",
     "style_audio",
     "style_image_text",
-    "style_replica",
     "style_text",
 )
 

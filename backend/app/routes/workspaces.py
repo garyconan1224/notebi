@@ -727,7 +727,7 @@ _EXTENSION_TYPE_MAP: Dict[str, str] = {
 class WorkspaceCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120, description="工作空间名称")
     background: Dict[str, Any] = Field(default_factory=dict)
-    kind: str = Field(default="note", description="合集类型：note|replica")
+    kind: str = Field(default="note", description="合集类型：note")
     source: str = Field(default="manual", description="manual|inbox|...")
     source_meta: Dict[str, Any] = Field(default_factory=dict)
 
@@ -755,11 +755,7 @@ class GenerateNoteRequest(BaseModel):
     image_mode: str = Field(default="vision", description="提取模式: vision 或 ocr")
     frame_interval: int = Field(default=5, description="截帧间隔，多少秒截一帧")
     vision_model: str = Field(default="", description="视觉模型 ID（空=用系统默认）")
-    intent: str = Field(default="note", description="任务意图：note / replica / collect 等")
-    replica_kind: str = Field(
-        default="prompt",
-        description="复刻二级类型：prompt（复刻提示词）/ story（拉片分析）/ compete（竞品对标）",
-    )
+    intent: str = Field(default="note", description="任务意图：note / learning / collect 等")
     note_media_kind: str = Field(
         default="auto",
         description="笔记子类型：auto / video / image_text / audio / text",
@@ -804,7 +800,7 @@ class BatchSourceResolveRequest(BaseModel):
 
 class BatchSourceImportRequest(BaseModel):
     workspace_name: str = Field(default="", max_length=120)
-    kind: str = Field(default="note", pattern="^(note|replica)$")
+    kind: str = Field(default="note", pattern="^note$")
     source_type: str = Field(
         default="multi_url",
         pattern="^(multi_url|youtube_playlist|bilibili_multipart|bilibili_favorites|bilibili_uploader)$",
@@ -817,7 +813,6 @@ class BatchSourceImportRequest(BaseModel):
     frame_interval: int = Field(default=5, ge=1, le=120)
     vision_model: str = Field(default="")
     intent: str = Field(default="note")
-    replica_kind: str = Field(default="prompt")
     note_media_kind: str = Field(default="video")
     summary_template: str = Field(default="standard")
     diarize: bool = Field(default=False)
@@ -829,7 +824,7 @@ class BatchSourceImportRequest(BaseModel):
 class PreflightSaveRequest(BaseModel):
     """前置配置保存请求体（设计文档第 4 章）。"""
 
-    intent: str = Field(default="", description='"learning" | "replica" | ""')
+    intent: str = Field(default="", description='"learning" | ""')
     background_overrides: Dict[str, Any] = Field(default_factory=dict)
     models: Dict[str, str] = Field(
         default_factory=dict,
@@ -846,7 +841,7 @@ class AutoCreateRequest(BaseModel):
 
     hint_url: Optional[str] = Field(default=None, description="提示 URL，用于推导名称")
     hint_text: Optional[str] = Field(default=None, description="提示文本，用于推导名称")
-    kind: str = Field(default="note", description="合集类型：note|replica")
+    kind: str = Field(default="note", description="合集类型：note")
 
 
 class SniffUrlRequest(BaseModel):
@@ -1208,12 +1203,11 @@ def _enrich_workspace(rec: WorkspaceRecord) -> Dict[str, Any]:
 def create_workspace(req: WorkspaceCreateRequest) -> Dict[str, Any]:
     """新建一个工作空间。"""
     bg = WorkspaceBackground.from_dict(req.background or {})
-    kind = req.kind if req.kind in ("note", "replica") else "note"
     rec = WorkspaceRecord(
         workspace_id=str(uuid.uuid4()),
         name=req.name.strip(),
         background=bg,
-        kind=kind,
+        kind="note",
         source=req.source.strip() or "manual",
         source_meta=dict(req.source_meta or {}),
     )
@@ -1746,7 +1740,6 @@ def _create_batch_note_task(
             "intent": req.intent or "note",
         },
         "intent": req.intent or "note",
-        "replica_kind": req.replica_kind or "prompt",
         "note_media_kind": req.note_media_kind or "video",
         "source_type": "link",
         "kind_hint": item.type,
@@ -1774,11 +1767,10 @@ def _create_batch_note_task(
 def auto_create_workspace(req: AutoCreateRequest) -> Dict[str, Any]:
     """根据 hint URL/text 用 LLM 生成名字，自动建空间。"""
     name = _generate_workspace_name(req.hint_url, req.hint_text)
-    kind = req.kind if req.kind in ("note", "replica") else "note"
     rec = WorkspaceRecord(
         workspace_id=str(uuid.uuid4()),
         name=name,
-        kind=kind,
+        kind="note",
     )
     _store.create(rec)
     return rec.to_dict()
@@ -2089,17 +2081,11 @@ def _item_primary_task_status(item: WorkspaceItem) -> Optional[str]:
 
 def _compute_primary_view(item: "WorkspaceItem", results: dict) -> str:
     """计算前端该进哪个页。"""
-    intent = getattr(item.preflight, "intent", "") if item.preflight else ""
-    has_frames = bool(results.get("frames")) or bool(results.get("json_outputs"))
-    
-    if has_frames and intent == "replica":
-        return "replica"
-        
     # 有笔记数据（转写/总结/执行过 note 任务）
     has_note_data = bool(results.get("transcript")) or bool(results.get("summary")) or any("note" in t for t in (item.related_task_ids or []))
     if has_note_data:
         return "note"
-        
+
     return "note"
 
 
@@ -2321,7 +2307,7 @@ def import_batch_source(req: BatchSourceImportRequest) -> Dict[str, Any]:
         workspace_name = workspace_name[:120].rstrip()
     workspace_id = str(uuid.uuid4())
     items: List[WorkspaceItem] = []
-    intent = req.intent or ("replica" if req.kind == "replica" else "note")
+    intent = req.intent or "note"
 
     for idx, entry in enumerate(req.items, start=1):
         url = _validate_batch_network_url(entry.source_url)
@@ -2343,7 +2329,6 @@ def import_batch_source(req: BatchSourceImportRequest) -> Dict[str, Any]:
                         "summary_template": req.summary_template,
                         "diarize": req.diarize,
                     },
-                    **({"replica_kind": req.replica_kind} if req.kind == "replica" else {}),
                 },
             ),
             results={
@@ -2883,10 +2868,6 @@ def _bridge_to_pipeline_payload(
                 payload["background_for_recognition"] = _preflight["background_for_recognition"]
         if "intent" not in payload and item.preflight.intent:
             payload["intent"] = item.preflight.intent
-        # replica 二级类型透传（前端存 tasks.replica_kind）
-        _rk = tasks.get("replica_kind")
-        if _rk:
-            payload["replica_kind"] = _rk
         # R3.11: 透传嵌图配置（embed_frames / max_embed_frames）
         # 前端存 tasks.summary.embed_frames / tasks.summary.max_embed_frames
         _summary_cfg = tasks.get("summary")
@@ -2936,10 +2917,6 @@ def _bridge_to_pipeline_payload(
             payload["background_for_recognition"] = _preflight["background_for_recognition"]
     if "intent" not in payload and item.preflight.intent:
         payload["intent"] = item.preflight.intent
-    # replica 二级类型透传
-    _rk = tasks.get("replica_kind")
-    if _rk:
-        payload["replica_kind"] = _rk
     _summary_cfg = tasks.get("summary")
     _pf: Dict[str, Any] = payload.get("preflight") or {}
     if isinstance(_summary_cfg, dict):
@@ -3096,7 +3073,6 @@ def generate_note(workspace_id: str, req: GenerateNoteRequest) -> Dict[str, Any]
         _task_payload["vision_model"] = req.vision_model.strip()
     # 意图分流：记录用户选择的任务意图和笔记子类型
     _task_payload["intent"] = req.intent or "note"
-    _task_payload["replica_kind"] = req.replica_kind or "prompt"
     _task_payload["note_media_kind"] = req.note_media_kind or "auto"
     # #19: 写入 source_type + kind_hint，ProcessingPage 动态步骤矩阵需要
     _task_payload["source_type"] = "link"
@@ -4063,108 +4039,6 @@ def update_frame_title(
         raise HTTPException(status_code=404, detail=str(err)) from err
 
     return {"ok": True, "frame_idx": frame_idx, "title": req.title}
-
-
-# ── C-3 复刻包导出 ─────────────────────────────────────────
-
-
-class ReproduceExportRequest(BaseModel):
-    frame_indices: List[int] = Field(..., min_length=1)
-
-
-@router.post("/{workspace_id}/items/{item_id}/reproduce/export")
-def export_reproduce_package(
-    workspace_id: str, item_id: str, req: ReproduceExportRequest
-) -> StreamingResponse:
-    """打包选中帧为复刻工作包 zip 流式返回。"""
-    rec = _store.get(workspace_id)
-    if rec is None:
-        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
-    item = _find_item(rec, item_id)
-
-    # 复用 get_item_result 的数据获取逻辑
-    v_results = dict(item.results or {})
-    v_overlay = _sync_item_with_tasks(item)
-    if v_overlay and v_overlay.get("results"):
-        v_results = dict(v_overlay.get("results", {}))
-
-    preferred_basenames: List[str] = []
-    for tid in reversed(item.related_task_ids):
-        task = _pipeline_runner.store.get(tid)
-        if task is None or task.task_type != "analyze" or task.status != TaskStatus.SUCCESS.value:
-            continue
-        preferred_basenames = list(task.payload.get("video_basenames") or [])
-        if preferred_basenames:
-            break
-    v_results = _materialize_video_results_from_analyze(v_results, preferred_basenames=preferred_basenames)
-    frames = v_results.get("frames", [])
-
-    # 过滤有效帧索引
-    valid = [i for i in req.frame_indices if 0 <= i < len(frames)]
-    if not valid:
-        raise HTTPException(status_code=400, detail="no valid frame indices")
-
-    data_root = _ROOT_DIR / "data"
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        # frames/*.jpg
-        for i in valid:
-            fr = frames[i]
-            img_path = fr.get("image_path") or fr.get("frame_image_path") or ""
-            if img_path.startswith("/static/"):
-                fs_path = data_root / img_path[len("/static/"):]
-            else:
-                fs_path = None
-            if fs_path and fs_path.is_file():
-                zf.writestr(f"frames/{i:03d}.jpg", fs_path.read_bytes())
-
-        # prompts.txt
-        lines = []
-        for i in valid:
-            fr = frames[i]
-            ts = fr.get("ts", "")
-            title = fr.get("title", "")
-            prompt = fr.get("prompt_mj") or fr.get("prompt_video") or ""
-            lines.append(f"--- Frame {i} ({ts}) {title} ---\n{prompt}\n")
-        zf.writestr("prompts.txt", "\n".join(lines))
-
-        # styles.json — 所有选中帧的 tags 汇总
-        styles = {}
-        for i in valid:
-            tags = frames[i].get("tags", {})
-            for dim, vals in tags.items():
-                if isinstance(vals, list):
-                    styles.setdefault(dim, [])
-                    for v in vals:
-                        if v not in styles[dim]:
-                            styles[dim].append(v)
-        zf.writestr("styles.json", json.dumps(styles, ensure_ascii=False, indent=2))
-
-        # manifest.json
-        manifest = {
-            "workspace_id": workspace_id,
-            "item_id": item_id,
-            "video_title": v_results.get("video", {}).get("title", ""),
-            "frame_count": len(valid),
-            "frames": [
-                {
-                    "index": i,
-                    "ts": frames[i].get("ts", ""),
-                    "title": frames[i].get("title", ""),
-                    "shot_type": frames[i].get("shot_type", ""),
-                }
-                for i in valid
-            ],
-        }
-        zf.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
-
-    buf.seek(0)
-    filename = f"reproduce_{item_id[:8]}.zip"
-    return StreamingResponse(
-        buf,
-        media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
 
 
 # ── Phase 3B.2：单工作空间语义检索 ─────────────────────────

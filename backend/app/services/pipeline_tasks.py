@@ -270,13 +270,6 @@ def _get_video_model_prompt(intent: str) -> str:
             + "4. 重点提取知识点、公式、定义、示例\n"
             + "5. summary 按「主题 → 核心要点 → 关键结论」组织\n"
         )
-    if intent == "replica":
-        return (
-            "你是一个视频拆片/翻拍分析专家。\n"
-            + base
-            + "4. 标注镜头切换、转场、画面构图变化\n"
-            + "5. summary 按「结构 → 每段作用 → 拍摄手法」组织\n"
-        )
     return base
 
 
@@ -2630,9 +2623,6 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
 
     # ── 0. 解析步骤列表 ────────────────────────────────────────
     steps: List[str] = payload.get("steps") or ["download", "transcribe", "analyze", "note"]
-    # 复刻提示词：只跑下载+截帧，跳过 transcribe 和 note 总结
-    if str(payload.get("intent") or "") == "replica" and str(payload.get("replica_kind") or "prompt") == "prompt":
-        steps = ["download", "analyze"]
     completed_steps: List[str] = []
 
     # ── 1. 取 payload 字段 ─────────────────────────────────────
@@ -2730,18 +2720,13 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         images_from_download = probe["images"] or images_from_download
         background_context = probe["background_context"]
         steps = probe["steps"]
-        # 复刻提示词：PROBE 可能覆盖 steps，需重新裁剪
-        if str(payload.get("intent") or "") == "replica" and str(payload.get("replica_kind") or "prompt") == "prompt":
-            steps = ["download", "analyze"]
         _source_title = str((dl_result or {}).get("title") or "").strip()
         if not _source_title:
             _source_title = str(probe.get("source_title") or "").strip()
 
         # R4.7: 配图关闭时跳过截帧+VLM（省掉重 API 调用），笔记只用转写文本
-        # replica prompt 必须保留 analyze（画面分析是复刻的核心），不受 embed_frames 控制
         _pf = payload.get("preflight") or {}
-        _is_replica_prompt = str(payload.get("intent") or "") == "replica" and str(payload.get("replica_kind") or "prompt") == "prompt"
-        if not _is_replica_prompt and not _pf.get("embed_frames", True) and "analyze" in steps:
+        if not _pf.get("embed_frames", True) and "analyze" in steps:
             steps = [s for s in steps if s != "analyze"]
             runner.append_log(task_id, "⏭️ embed_frames=False → 跳过截帧分析")
 
@@ -3291,12 +3276,6 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         )
     else:
         json_paths = sorted(project_json_dir.glob("*_视觉数据.json"))
-
-    # ── 6.7 复刻提示词边界检查：analyze 必须产出帧 ───────────
-    if str(payload.get("intent") or "") == "replica" and str(payload.get("replica_kind") or "prompt") == "prompt":
-        _has_frames = bool(json_paths) or bool(analysis_text)
-        if not _has_frames:
-            raise RuntimeError("复刻提示词失败：视频截帧未产出任何画面（可能是纯音频或视频损坏）")
 
     # ── 6.8. R3.5: 自动生成总结，作为 note.md 默认正文 ──────
     # R3.11: 读取嵌图配置

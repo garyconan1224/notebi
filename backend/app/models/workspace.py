@@ -70,7 +70,7 @@ class PreflightConfig:
     background_overrides: Dict[str, Any] = field(default_factory=dict)
     models: Dict[str, str] = field(default_factory=dict)  # {vision: id, text: id, video: id}
     tasks: Dict[str, Any] = field(default_factory=dict)   # 与 item.type 关联的勾选 + 子参数
-    intent: str = ""  # "learning" | "replica" | ""
+    intent: str = ""  # "learning" | ""
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
