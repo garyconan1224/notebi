@@ -93,7 +93,7 @@ interface AddMaterialModalProps {
 }
 
 type NoteMediaKind = 'auto' | 'video' | 'image_text' | 'audio' | 'mixed'
-type ActionType = 'note' | 'replica' | 'ai_video' | 'storyboard' | 'rewrite'
+type ActionType = 'note' | 'replica' | 'ai_video' | 'rewrite'
 type SourceMode = 'auto' | 'single' | 'batch'
 type SpeakerCountChoice = 'auto' | '2' | '3' | '4' | '5'
 const DEFAULT_ACTION: ActionType = productConfig.defaultKind === 'replica' ? 'replica' : 'note'

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { AlertTriangle, ArrowLeft, ArrowRight, BookOpen, Clapperboard, Download, Loader2, MessageSquare, RotateCcw } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ArrowRight, BookOpen, Download, Loader2, MessageSquare, RotateCcw } from 'lucide-react'
 
 import {
   type AudioResult,
@@ -559,15 +559,6 @@ export default function ResultsOverview() {
               <BookOpen size={14} />
               <span>{ITEM_TYPE_TEXT[itemType]}详情</span>
             </button>
-            {isFeatureEnabled('showStoryboard') && (
-              <button
-                className="ov-side-action"
-                onClick={() => navigate(`/storyboard?workspace=${workspaceId}&item=${itemId}`)}
-              >
-                <Clapperboard size={14} />
-                <span>进入分镜</span>
-              </button>
-            )}
             <button
               className="ov-side-action"
               onClick={() => navigate(`/workspaces/${workspaceId}?tab=chat`)}

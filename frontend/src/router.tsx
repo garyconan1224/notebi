@@ -37,7 +37,6 @@ const WorkbenchPage = lazy(() => import('@/pages/WorkbenchPage/index'))
 const KnowledgePage = lazy(() => import('@/pages/KnowledgePage/index'))
 const ProcessingPage = lazy(() => import('@/pages/result/ProcessingPage/index'))
 const BatchProcessingPage = lazy(() => import('@/pages/result/BatchProcessingPage/index'))
-const StoryboardPage = lazy(() => import('@/pages/StoryboardPage/index'))
 const LibraryPage = lazy(() => import('@/pages/LibraryPage/index'))
 const NoteShell = lazy(() => import('@/pages/result/NoteShell/index'))
 
@@ -131,7 +130,6 @@ export const router = createBrowserRouter([
         path: 'processing/:taskId',
         element: withSuspense(<ProcessingPage />),
       },
-      { path: 'storyboard', element: guardRoute(isFeatureEnabled('showStoryboard'), withSuspense(<StoryboardPage />)) },
       {
         path: 'settings',
         element: withSuspense(<SettingPage />),

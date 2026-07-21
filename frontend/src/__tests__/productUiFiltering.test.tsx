@@ -11,8 +11,6 @@ const { productConfigMock } = vi.hoisted(() => ({
     storagePrefix: 'notebi',
     showKnowledge: true,
     showReplica: false,
-    showStoryboard: false,
-    showDirector: false,
     showPromptFormat: false,
   },
 }))

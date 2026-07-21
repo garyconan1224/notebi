@@ -25,7 +25,6 @@ from shared.config import (
     get_workspace_videos_dir,
 )
 from shared.settings_store import load_settings
-from shared.storyboard_generator import run_storyboard_generation
 from shared.text_loader import TextDocument, TextLoaderError, load_auto, load_url
 from shared.audio_analyzer import (
     DiarizationError,
@@ -1448,36 +1447,6 @@ def handle_create_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]
     out_file = runtime_dir / f"{record.task_id}.md"
     out_file.write_text(content, encoding="utf-8")
     return {"content": content, "artifact_path": str(out_file)}
-
-
-def handle_storyboard_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
-    payload = record.payload
-    runner.set_progress(record.task_id, 0.02, "Storyboard pipeline starting")
-    raw_paths = payload.get("image_paths") or []
-    image_paths = [str(x) for x in raw_paths] if isinstance(raw_paths, list) else []
-    raw_bn = payload.get("rag_json_basenames")
-    rag_basenames = [str(x) for x in raw_bn] if isinstance(raw_bn, list) else None
-    rag_kpid = str(payload.get("rag_knowledge_project_id") or "").strip() or None
-
-    result = run_storyboard_generation(
-        project_id=record.project_id,
-        product_name=str(payload.get("product_name") or ""),
-        core_features=str(payload.get("core_features") or ""),
-        web_enrichment_md=str(payload.get("web_enrichment_md") or ""),
-        api_key=str(payload.get("api_key") or "").strip() or load_settings().openai_api_key,
-        anthropic_key=str(payload.get("anthropic_key") or "").strip() or load_settings().anthropic_api_key,
-        vision_model=str(payload.get("vision_model") or ""),
-        text_model=str(payload.get("text_model") or ""),
-        embedding_model=str(payload.get("embedding_model") or ""),
-        text_backend=str(payload.get("text_backend") or ""),
-        anthropic_model=str(payload.get("anthropic_model") or ""),
-        image_paths=image_paths,
-        rag_knowledge_project_id=rag_kpid,
-        rag_json_basenames=rag_basenames,
-        log=lambda m: runner.append_log(record.task_id, m),
-    )
-    runner.set_progress(record.task_id, 1.0, "Storyboard finished")
-    return result
 
 
 def _persist_intermediate(runner: TaskRunner, task_id: str, result_patch: Dict[str, Any]) -> None:
@@ -5848,7 +5817,6 @@ def register_pipeline_handlers(runner: TaskRunner) -> None:
     runner.register("download",  handle_download_task)
     runner.register("analyze",   handle_analyze_task)
     runner.register("create",    handle_create_task)
-    runner.register("storyboard", handle_storyboard_task)
     runner.register("note",      handle_note_task)
     runner.register("text",      handle_text_task)
     runner.register("image",     handle_image_task)

@@ -26,7 +26,7 @@ _TERMINAL_STATUSES = TERMINAL_STATUS_VALUES
 
 class TaskCreateRequest(BaseModel):
     project_id: str
-    task_type: str = Field(description="download|analyze|create|storyboard|note|text|image|audio")
+    task_type: str = Field(description="download|analyze|create|note|text|image|audio")
     payload: Dict[str, Any] = Field(default_factory=dict)
     steps: List[str] = Field(
         default=["download", "transcribe", "analyze", "note"],

@@ -12,7 +12,7 @@ const PIPELINE_TASKS_URL = '/pipeline/tasks'
  *
  * 请求体（TaskCreateRequest）：
  *   - project_id  : string             — 项目 ID（crypto.randomUUID()）
- *   - task_type   : 'download'|'analyze'|'create'|'storyboard'|'note'|'text'|'image'|'audio'
+ *   - task_type   : 'download'|'analyze'|'create'|'note'|'text'|'image'|'audio'
  *   - payload     : AnalyzePayload | DownloadPayload
  *
  * analyze payload 新增字段：

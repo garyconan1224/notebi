@@ -26,7 +26,7 @@ export interface TaskLogEntry {
 export interface TaskRecord {
   task_id: string
   project_id: string
-  task_type: string                    // download|analyze|create|storyboard|note
+  task_type: string                    // download|analyze|create|note
   payload: Record<string, unknown>
   status: string                       // TaskStatus 值
   progress: number                     // 0.0 ~ 1.0
@@ -119,7 +119,7 @@ export interface DownloadPayload {
 // 任务创建请求
 export interface TaskCreateRequest {
   project_id: string
-  task_type: 'download' | 'analyze' | 'create' | 'storyboard' | 'note' | 'text' | 'image' | 'audio'
+  task_type: 'download' | 'analyze' | 'create' | 'note' | 'text' | 'image' | 'audio'
   payload: AnalyzePayload | DownloadPayload | Record<string, unknown>
   /** 可选步骤编排，仅对 note 任务生效。默认全量执行。 */
   steps?: string[]

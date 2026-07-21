@@ -17,8 +17,6 @@ describe('product config', () => {
   it('only exposes NoteBi note-facing features', () => {
     expect(productConfig.showKnowledge).toBe(true)
     expect(productConfig.showReplica).toBe(false)
-    expect(productConfig.showStoryboard).toBe(false)
-    expect(productConfig.showDirector).toBe(false)
     expect(productConfig.showPromptFormat).toBe(false)
   })
 
@@ -32,8 +30,6 @@ describe('product config', () => {
   it('reports feature flags from the fixed NoteBi config', () => {
     expect(isFeatureEnabled('showKnowledge')).toBe(true)
     expect(isFeatureEnabled('showReplica')).toBe(false)
-    expect(isFeatureEnabled('showStoryboard')).toBe(false)
-    expect(isFeatureEnabled('showDirector')).toBe(false)
     expect(isFeatureEnabled('showPromptFormat')).toBe(false)
   })
 

@@ -136,7 +136,6 @@ class TaskRunner:
             "image": TaskStatus.FRAMES.value,
             "audio": TaskStatus.ASR.value,
             "create": TaskStatus.FRAMES.value,
-            "storyboard": TaskStatus.FRAMES.value,
             "summary": TaskStatus.SUM.value,
         }
         initial_status = _INITIAL_STATUS.get(record.task_type, TaskStatus.DOWNLOAD.value)

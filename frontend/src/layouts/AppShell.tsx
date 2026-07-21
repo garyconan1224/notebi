@@ -4,12 +4,10 @@ import {
   Home,
   Plus,
   Sparkles,
-  Film,
   FileText,
   Copy,
   BookOpen,
   Star,
-  Wand2,
   Search,
   Settings,
   PanelLeftClose,
@@ -49,9 +47,7 @@ const NAV_ITEMS: NavItem[] = [
 ]
 
 const BOTTOM_ITEMS: NavItem[] = [
-  { id: 'storyboard',  path: '/storyboard',  icon: Film,       label: '分镜', visible: isFeatureEnabled('showStoryboard') },
   { id: 'favorites',   path: '/favorites',   icon: Star,       label: '收藏夹' },
-  { id: 'director',    path: '#',            icon: Wand2,      label: 'AI 导演',  placeholder: true, badge: 'Phase C', visible: isFeatureEnabled('showDirector') },
   { id: 'search',      path: '/search',      icon: Search,     label: '搜索' },
   { id: 'settings',    path: '/settings',    icon: Settings,   label: '设置' },
 ]

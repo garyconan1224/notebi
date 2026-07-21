@@ -14,8 +14,6 @@ export interface ProductConfig {
   storagePrefix: string
   showKnowledge: boolean
   showReplica: boolean
-  showStoryboard: boolean
-  showDirector: boolean
   showPromptFormat: boolean
 }
 
@@ -26,8 +24,6 @@ export const productConfig: ProductConfig = {
   storagePrefix: 'notebi',
   showKnowledge: true,
   showReplica: false,
-  showStoryboard: false,
-  showDirector: false,
   showPromptFormat: false,
 }
 
@@ -39,8 +35,6 @@ export function isFeatureEnabled(feature: keyof Pick<
   ProductConfig,
   | 'showKnowledge'
   | 'showReplica'
-  | 'showStoryboard'
-  | 'showDirector'
   | 'showPromptFormat'
 >): boolean {
   return Boolean(productConfig[feature])
