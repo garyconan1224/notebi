@@ -261,7 +261,7 @@ export function TripleTrack({
                     color: on ? '#fff' : 'var(--ink-3)',
                   }}
                 >
-                  {(f.prompt_mj ?? '').substring(0, 65)}{f.prompt_mj && f.prompt_mj.length > 0 ? '…' : ''}
+                  {(f.description ?? '').substring(0, 65)}{f.description && f.description.length > 65 ? '…' : ''}
                 </div>
                 <div style={{ display: 'flex', gap: 3, marginTop: 6, flexWrap: 'wrap' }}>
                   {tagFlat.map((t) => (

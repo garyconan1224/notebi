@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-"""Phase 1I — 复刻工作包 zip 导出（最简版）。
+"""笔记素材包 zip 导出。
 
 接口（挂在 /workspaces prefix 下）:
 - GET /{workspace_id}/items/{item_id}/export  返回 application/zip
 
-MVP 只导 4 样东西：
-  reference_frames/   帧截图（真图片或占位 .txt）
-  prompts.json        提示词数据
+每个素材包导出视觉理解与笔记素材：
+  reference_frames/   帧截图说明（视频）/ 原图信息（图片）
+  analysis.json       视觉理解数据（描述、标签、OCR 等）
   subtitles.srt       字幕文件（视频有，图片空）
   README.md           使用说明
 """
@@ -69,7 +69,7 @@ def _get_video_data(item: WorkspaceItem) -> Dict[str, Any]:
 def _get_image_data(item: WorkspaceItem) -> Dict[str, Any]:
     """获取图片结果数据（真数据或 demo fixture）。"""
     results = item.results or {}
-    has_real = isinstance(results, dict) and results.get("description") and results.get("prompts")
+    has_real = isinstance(results, dict) and results.get("description")
     if has_real:
         payload = dict(results)
         payload.setdefault("source", "item_results")
@@ -81,7 +81,6 @@ def _get_image_data(item: WorkspaceItem) -> Dict[str, Any]:
         "description": "（示例）图片内容描述",
         "ocr_text": "",
         "exif": {"time": "", "location": ""},
-        "prompts": {"mj": "", "sd": {"positive": "", "negative": ""}, "json": ""},
         "tags": {},
     }
 
@@ -180,8 +179,8 @@ def _sanitize_zip_prefix(name: str) -> str:
     return safe or "unnamed"
 
 
-def _build_prompts_json_video(frames: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """从视频帧提取提示词数据。"""
+def _build_analysis_json_video(frames: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """从视频帧提取视觉理解数据。"""
     out: list[Dict[str, Any]] = []
     for f in frames:
         out.append({
@@ -189,44 +188,41 @@ def _build_prompts_json_video(frames: List[Dict[str, Any]]) -> List[Dict[str, An
             "ts": f.get("ts", ""),
             "shot_type": f.get("shot_type", ""),
             "title": f.get("title", ""),
-            "prompt_mj": f.get("prompt_mj", ""),
-            "prompt_sd": f.get("prompt_sd", {}),
-            "prompt_video": f.get("prompt_video", ""),
+            "description": f.get("description", ""),
+            "tags": f.get("tags", {}),
         })
     return out
 
 
-def _build_prompts_json_image(data: Dict[str, Any]) -> Dict[str, Any]:
-    """从图片结果提取提示词数据。"""
+def _build_analysis_json_image(data: Dict[str, Any]) -> Dict[str, Any]:
+    """从图片结果提取视觉理解数据。"""
     return {
         "title": data.get("image", {}).get("title", ""),
         "description": data.get("description", ""),
-        "prompt_mj": data.get("prompts", {}).get("mj", ""),
-        "prompt_sd": data.get("prompts", {}).get("sd", {}),
+        "ocr_text": data.get("ocr_text", ""),
         "tags": data.get("tags", {}),
     }
 
 
-def _build_prompts_json_audio(data: Dict[str, Any]) -> Dict[str, Any]:
-    """从音频结果提取 prompts 数据。"""
+def _build_analysis_json_audio(data: Dict[str, Any]) -> Dict[str, Any]:
+    """从音频结果提取理解数据。"""
     return {
         "summary": data.get("summary", ""),
         "segments_count": len(data.get("segments", [])),
     }
 
 
-def _build_prompts_json_text(data: Dict[str, Any]) -> Dict[str, Any]:
-    """从文本结果提取 prompts 数据。"""
+def _build_analysis_json_text(data: Dict[str, Any]) -> Dict[str, Any]:
+    """从文本结果提取理解数据。"""
     return {
         "title": data.get("title", ""),
         "summary": data.get("summary", ""),
-        "prompts": data.get("prompts", {}),
     }
 
 
 def _build_readme(title: str, item_type: str) -> str:
     if item_type == "音频":
-        return f"""# 复刻工作包
+        return f"""# 笔记素材包
 
 ## 基本信息
 - 素材名称：{title}
@@ -249,7 +245,7 @@ def _build_readme(title: str, item_type: str) -> str:
 - 定位特定片段
 - 按章节浏览内容
 
-### prompts.json
+### analysis.json
 元数据信息（摘要、分段数等）。
 
 ## 使用建议
@@ -261,7 +257,7 @@ def _build_readme(title: str, item_type: str) -> str:
 由 NoteBi 自动生成
 """
     if item_type == "文本":
-        return f"""# 复刻工作包
+        return f"""# 笔记素材包
 
 ## 基本信息
 - 素材名称：{title}
@@ -276,18 +272,17 @@ def _build_readme(title: str, item_type: str) -> str:
 ### summary.md
 文本内容摘要。
 
-### prompts.json
-分析结果元数据（标题、摘要、提示词等）。
+### analysis.json
+分析结果元数据（标题、摘要等）。
 
 ## 使用建议
 1. 先看 summary.md 了解整体内容
 2. 需要原文时查阅 source.md
-3. 根据 prompts.json 中的提示词进行二次创作
 
 ---
 由 NoteBi 自动生成
 """
-    return f"""# 复刻工作包
+    return f"""# 笔记素材包
 
 ## 基本信息
 - 素材名称：{title}
@@ -298,24 +293,22 @@ def _build_readme(title: str, item_type: str) -> str:
 
 ### reference_frames/
 参考帧截图。每张图片的文件名包含时间戳和镜头类型，可用于：
-- 作为 AI 图片/视频生成的参考图
 - 分析构图、光影、色调
+- 作为笔记配图素材
 
-### prompts.json
-所有提示词数据，按时间顺序排列。包含：
-- `prompt_mj`：Midjourney 格式提示词
-- `prompt_sd`：Stable Diffusion 格式（positive + negative）
-- `prompt_video`：视频生成提示词（仅视频素材）
+### analysis.json
+视觉理解数据，按时间顺序排列。包含：
+- `description`：画面描述
+- `tags`：标签（风格、光线、构图、色彩等）
 
 ### subtitles.srt
 字幕文件（SRT 格式），仅视频素材包含内容。
 可导入剪辑软件用于字幕对齐。
 
 ## 使用建议
-1. 先浏览 reference_frames/ 找到你喜欢的镜头
-2. 打开 prompts.json 查看对应提示词
-3. 将提示词粘贴到 Midjourney / Stable Diffusion / 可灵等工具中生成
-4. 根据需要微调提示词中的关键词
+1. 浏览 reference_frames/ 查看关键帧
+2. 打开 analysis.json 查看画面理解数据
+3. 用 subtitles.srt 做字幕对齐
 
 ---
 由 NoteBi 自动生成
@@ -324,7 +317,7 @@ def _build_readme(title: str, item_type: str) -> str:
 
 @router.get("/{workspace_id}/items/{item_id}/export")
 def export_workspace_item(workspace_id: str, item_id: str) -> StreamingResponse:
-    """导出复刻工作包 zip（Phase 1I 最简版）。"""
+    """导出笔记素材包 zip。"""
     rec = _store.get(workspace_id)
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
@@ -343,28 +336,28 @@ def export_workspace_item(workspace_id: str, item_id: str) -> StreamingResponse:
         frames = data.get("frames", [])
         transcript = data.get("transcript", [])
         title = data.get("video", {}).get("title", item.name)
-        prompts_data: Any = _build_prompts_json_video(frames)
+        analysis_data: Any = _build_analysis_json_video(frames)
         srt_content = _build_srt(transcript)
     elif item_type == ItemType.IMAGE.value:
         data = _get_image_data(item)
         frames = []
         transcript = []
         title = data.get("image", {}).get("title", item.name)
-        prompts_data = _build_prompts_json_image(data)
+        analysis_data = _build_analysis_json_image(data)
         srt_content = ""
     elif item_type == ItemType.AUDIO.value:
         data = _get_audio_data(item)
         frames = []
         transcript = data.get("transcript", [])
         title = item.name
-        prompts_data = _build_prompts_json_audio(data)
+        analysis_data = _build_analysis_json_audio(data)
         srt_content = ""
     elif item_type == ItemType.TEXT.value:
         data = _get_text_data(item)
         frames = []
         transcript = []
         title = data.get("title", item.name) or item.name
-        prompts_data = _build_prompts_json_text(data)
+        analysis_data = _build_analysis_json_text(data)
         srt_content = ""
     else:
         raise HTTPException(
@@ -387,11 +380,10 @@ def export_workspace_item(workspace_id: str, item_id: str) -> StreamingResponse:
                         f"时间: {f.get('ts', '')}\n"
                         f"类型: {f.get('shot_type', '')}\n"
                         f"描述: {f.get('description', '')}\n"
-                        f"\nMidjourney 提示词:\n{f.get('prompt_mj', '')}\n"
                     )
                     zf.writestr(fname, content)
             zf.writestr("subtitles.srt", srt_content)
-            zf.writestr("prompts.json", json.dumps(prompts_data, ensure_ascii=False, indent=2))
+            zf.writestr("analysis.json", json.dumps(analysis_data, ensure_ascii=False, indent=2))
 
         elif item_type == ItemType.IMAGE.value:
             # image: reference_frames/ + subtitles.srt（空）
@@ -400,7 +392,7 @@ def export_workspace_item(workspace_id: str, item_id: str) -> StreamingResponse:
                 "reference_frames/source_image.txt",
                 f"原始图片 URL: {img_url}\n标题: {title}\n",
             )
-            zf.writestr("prompts.json", json.dumps(prompts_data, ensure_ascii=False, indent=2))
+            zf.writestr("analysis.json", json.dumps(analysis_data, ensure_ascii=False, indent=2))
             zf.writestr("subtitles.srt", srt_content)
 
         elif item_type == ItemType.AUDIO.value:
@@ -416,13 +408,13 @@ def export_workspace_item(workspace_id: str, item_id: str) -> StreamingResponse:
                 zf.writestr("转写文本（无时间轴·区分说话人）.txt", grouped)
             zf.writestr("summary.md", data.get("summary", ""))
             zf.writestr("segments.json", json.dumps(data.get("segments", []), ensure_ascii=False, indent=2))
-            zf.writestr("prompts.json", json.dumps(prompts_data, ensure_ascii=False, indent=2))
+            zf.writestr("analysis.json", json.dumps(analysis_data, ensure_ascii=False, indent=2))
 
         elif item_type == ItemType.TEXT.value:
-            # text: source.md + summary.md + prompts.json
+            # text: source.md + summary.md + analysis.json
             zf.writestr("source.md", data.get("content") or data.get("markdown", ""))
             zf.writestr("summary.md", data.get("summary", ""))
-            zf.writestr("prompts.json", json.dumps(prompts_data, ensure_ascii=False, indent=2))
+            zf.writestr("analysis.json", json.dumps(analysis_data, ensure_ascii=False, indent=2))
 
         # README.md（所有类型通用）
         item_type_str = {"video": "视频", "image": "图片", "audio": "音频", "text": "文本"}.get(item_type, item_type)
@@ -430,10 +422,10 @@ def export_workspace_item(workspace_id: str, item_id: str) -> StreamingResponse:
 
     buf.seek(0)
 
-    # 文件名：复刻工作包_{title}_{YYYY-MM-DD}.zip
+    # 文件名：笔记素材包_{title}_{YYYY-MM-DD}.zip
     safe_title = title.replace("/", "_").replace("\\", "_").replace(" ", "_")[:50]
     today = date.today().isoformat()
-    filename = f"复刻工作包_{safe_title}_{today}.zip"
+    filename = f"笔记素材包_{safe_title}_{today}.zip"
     # RFC5987 编码
     filename_star = f"UTF-8''{quote(filename)}"
 
@@ -455,7 +447,7 @@ class BatchExportRequest(BaseModel):
 
 @router.post("/{workspace_id}/items/batch-export")
 def batch_export_items(workspace_id: str, req: BatchExportRequest) -> StreamingResponse:
-    """批量导出多个素材为一个 zip，每个素材一个子目录。"""
+    """批量导出多个素材为一个笔记素材包 zip，每个素材一个子目录。"""
     rec = _store.get(workspace_id)
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
@@ -481,19 +473,19 @@ def batch_export_items(workspace_id: str, req: BatchExportRequest) -> StreamingR
             if item_type == ItemType.IMAGE.value:
                 data = _get_image_data(item)
                 title = data.get("image", {}).get("title", item.name)
-                prompts_data = _build_prompts_json_image(data)
+                analysis_data = _build_analysis_json_image(data)
                 img_url = data.get("image", {}).get("image_url", "")
                 zf.writestr(
                     f"{prefix}/reference_frames/source_image.txt",
                     f"原始图片 URL: {img_url}\n标题: {title}\n",
                 )
-                zf.writestr(f"{prefix}/prompts.json", json.dumps(prompts_data, ensure_ascii=False, indent=2))
+                zf.writestr(f"{prefix}/analysis.json", json.dumps(analysis_data, ensure_ascii=False, indent=2))
             elif item_type == ItemType.VIDEO.value:
                 data = _get_video_data(item)
                 frames = data.get("frames", [])
                 transcript = data.get("transcript", [])
                 title = data.get("video", {}).get("title", item.name)
-                prompts_data = _build_prompts_json_video(data.get("frames", []))
+                analysis_data = _build_analysis_json_video(data.get("frames", []))
                 srt_content = _build_srt(transcript)
                 if frames:
                     for f in frames:
@@ -505,23 +497,22 @@ def batch_export_items(workspace_id: str, req: BatchExportRequest) -> StreamingR
                             f"时间: {f.get('ts', '')}\n"
                             f"类型: {f.get('shot_type', '')}\n"
                             f"描述: {f.get('description', '')}\n"
-                            f"\nMidjourney 提示词:\n{f.get('prompt_mj', '')}\n"
                         )
                         zf.writestr(fname, content)
                 zf.writestr(f"{prefix}/subtitles.srt", srt_content)
-                zf.writestr(f"{prefix}/prompts.json", json.dumps(prompts_data, ensure_ascii=False, indent=2))
+                zf.writestr(f"{prefix}/analysis.json", json.dumps(analysis_data, ensure_ascii=False, indent=2))
             elif item_type == ItemType.TEXT.value:
                 data = _get_text_data(item)
                 title = data.get("title", item.name) or item.name
-                prompts_data = _build_prompts_json_text(data)
+                analysis_data = _build_analysis_json_text(data)
                 zf.writestr(f"{prefix}/source.md", data.get("content") or data.get("markdown", ""))
                 zf.writestr(f"{prefix}/summary.md", data.get("summary", ""))
-                zf.writestr(f"{prefix}/prompts.json", json.dumps(prompts_data, ensure_ascii=False, indent=2))
+                zf.writestr(f"{prefix}/analysis.json", json.dumps(analysis_data, ensure_ascii=False, indent=2))
             elif item_type == ItemType.AUDIO.value:
                 data = _get_audio_data(item)
                 transcript = data.get("transcript", [])
                 segments = data.get("segments", [])
-                prompts_data = _build_prompts_json_audio(data)
+                analysis_data = _build_analysis_json_audio(data)
                 article = export_transcript_article(segments) or _build_transcript_txt(transcript)
                 grouped = export_transcript_by_speaker(
                     segments,
@@ -532,7 +523,7 @@ def batch_export_items(workspace_id: str, req: BatchExportRequest) -> StreamingR
                     zf.writestr(f"{prefix}/转写文本（无时间轴·区分说话人）.txt", grouped)
                 zf.writestr(f"{prefix}/summary.md", data.get("summary", ""))
                 zf.writestr(f"{prefix}/segments.json", json.dumps(data.get("segments", []), ensure_ascii=False, indent=2))
-                zf.writestr(f"{prefix}/prompts.json", json.dumps(prompts_data, ensure_ascii=False, indent=2))
+                zf.writestr(f"{prefix}/analysis.json", json.dumps(analysis_data, ensure_ascii=False, indent=2))
             else:
                 continue
 
@@ -543,7 +534,7 @@ def batch_export_items(workspace_id: str, req: BatchExportRequest) -> StreamingR
 
     buf.seek(0)
     today = date.today().isoformat()
-    filename = f"批量导出_{workspace_id[:8]}_{today}.zip"
+    filename = f"笔记素材包_批量_{workspace_id[:8]}_{today}.zip"
     filename_star = f"UTF-8''{quote(filename)}"
 
     return StreamingResponse(

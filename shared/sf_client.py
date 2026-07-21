@@ -286,7 +286,7 @@ def analyze_video_frame(
 ) -> dict[str, str]:
     """
     调用视觉大模型分析单帧图片（视频分析专用）。
-    返回 {"description_zh": "...", "image_prompt_en": "..."}
+    返回 {"content_zh": "...", "description_zh": "..."}
     """
     prompt = (
         f"你是一位资深的视频内容分析师。这张图片截取自名为《{video_title}》的视频。\n\n"
@@ -294,16 +294,14 @@ def analyze_video_frame(
         "角度一·内容理解（最重要）：这张图在讲什么？是什么界面/场景？有什么关键信息？\n"
         "例如：标题文字、菜单列表、数据指标、代码片段、图表含义、操作步骤、关键结论。\n"
         "目标是让没看过视频的人通过你的解读，理解这帧传达的核心信息。\n\n"
-        "角度二·画面描述：简要描述画面的视觉构成（主体、布局、配色），用于将来复刻。\n\n"
+        "角度二·画面描述：简要描述画面的视觉构成（主体、布局、配色）。\n\n"
         "必须严格按照以下 JSON 格式输出，不要有任何 markdown 代码块标记，不要有多余废话：\n"
         "{\n"
         '  "content_zh": "【内容理解】这张图展示的是……关键信息有……，'
         "它在视频中的作用是……（如果是纯黑/纯白过渡帧，写「纯色过渡帧」）。"
         ' 目标：让读者不用看视频就知道这帧在讲什么。至少写 2-3 句话。",\n'
         '  "description_zh": "【画面描述】简要描述画面的视觉构成、布局和配色。'
-        ' 如果是纯色过渡帧，写「纯色过渡帧」。",\n'
-        '  "image_prompt_en": "英文提示词，用于 AI 复刻此画面。分 2-3 段描述核心视觉元素、'
-        '场景环境、镜头视角。如果是纯色过渡帧，则留空。"\n'
+        ' 如果是纯色过渡帧，写「纯色过渡帧」。"\n'
         "}"
     )
     payload = {
@@ -335,11 +333,10 @@ def analyze_video_frame(
                 return {
                     "content_zh": parsed.get("content_zh", ""),
                     "description_zh": parsed.get("description_zh", ""),
-                    "image_prompt_en": parsed.get("image_prompt_en", ""),
                 }
         except json.JSONDecodeError:
             pass
-    return {"content_zh": "", "description_zh": raw, "image_prompt_en": ""}
+    return {"content_zh": "", "description_zh": raw}
 
 
 def analyze_video_frames_batch(
@@ -351,7 +348,7 @@ def analyze_video_frames_batch(
     """
     批量分析多帧图片（视频分析专用）。
     一次请求传入 N 张帧，返回长度=N 的列表，按输入顺序对齐。
-    每个元素: {"description_zh": "...", "image_prompt_en": "..."}
+    每个元素: {"content_zh": "...", "description_zh": "..."}
     若解析失败或长度不符 → raise，由调用方回退逐帧。
     """
     import re
@@ -361,14 +358,13 @@ def analyze_video_frames_batch(
         f"我按时间顺序给你 {n} 张图片，截取自视频《{video_title}》。\n"
         f"请严格输出一个 JSON 数组，长度必须等于 {n}，第 i 个元素对应第 i 张图。\n"
         "每个元素格式：\n"
-        '{"index": i(从1开始), "content_zh": "...", "description_zh": "...", "image_prompt_en": "..."}\n'
+        '{"index": i(从1开始), "content_zh": "...", "description_zh": "..."}\n'
         "不要 markdown 代码块，直接输出 JSON 数组。\n\n"
         "content_zh（最重要）：这张图在讲什么？是什么界面/场景？有什么关键信息？"
         "（标题/菜单/数据/代码/图表/操作步骤/关键结论）。"
         "目标是让没看过视频的人通过你的解读理解这帧传达的核心信息。至少 2-3 句话。"
         "如果是纯黑/纯白过渡帧，写「纯色过渡帧」。\n"
-        "description_zh：简要描述画面的视觉构成、布局和配色（用于将来复刻）。纯色过渡帧写「纯色过渡帧」。\n"
-        "image_prompt_en：英文提示词，用于 AI 复刻此画面，分 2-3 段描述。纯色过渡帧留空。"
+        "description_zh：简要描述画面的视觉构成、布局和配色。纯色过渡帧写「纯色过渡帧」。"
     )
 
     # 构造 content: text + 每张图
@@ -429,7 +425,6 @@ def analyze_video_frames_batch(
         result.append({
             "content_zh": item.get("content_zh", ""),
             "description_zh": item.get("description_zh", ""),
-            "image_prompt_en": item.get("image_prompt_en", ""),
         })
     return result
 

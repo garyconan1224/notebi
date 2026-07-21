@@ -1,43 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, BarChart2, Check, Copy, Download, FileText, Settings2, Star } from 'lucide-react'
+import { ArrowLeft, BarChart2, Check, Copy, Download, FileText, Star } from 'lucide-react'
 
 import {
   type ImageCompareResult,
   type ImageResult,
-  type PromptVersion,
-  addPromptVersion,
-  // downloadExport, -- N11: 导出功能 UI 隐藏
   getImageCompare,
   getImageResult,
-  listPromptVersions,
 } from '@/services/workspaces'
-import { PromptVersionStack } from '@/components/result/PromptVersionStack'
-import {
-  type PromptFormat,
-  type PromptFormatsConfig,
-  getPromptFormatsConfig,
-  imageToFrameAdapter,
-  isJsonFormat,
-  renderJsonForImage,
-  renderTemplate,
-  savePromptFormatsConfig,
-} from '@/services/promptFormats'
 import { ASSOCIATION_DIRECTION_LABELS, type AssociationDirection } from '@/lib/preflightTasks'
 import { SummariesTab } from '@/components/SummariesTab'
 
 import './tokens.css'
 import './image-result.css'
 import { ItemTagsPanel } from '@/components/workspace/ItemTagsPanel'
-
-const ACTIVE_LIMIT = 3
-
-interface TabDescriptor {
-  key: string
-  label: string
-  format: PromptFormat
-}
 
 export default function ImageResultPage() {
   const { workspaceId = '', itemId = '' } = useParams<{ workspaceId: string; itemId: string }>()
@@ -49,13 +26,8 @@ export default function ImageResultPage() {
     | { kind: 'error'; message: string }
   const [fetchState, setFetchState] = useState<FetchState>({ kind: 'loading' })
 
-  const [promptStyle, setPromptStyle] = useState<string>('')
   const [copied, setCopied] = useState(false)
   const [favored, setFavored] = useState(false)
-  const [formatsCfg, setFormatsCfg] = useState<PromptFormatsConfig | null>(null)
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const [pickerSelection, setPickerSelection] = useState<string[]>([])
-  const [promptVersions, setPromptVersions] = useState<PromptVersion[]>([])
   const [contentTab, setContentTab] = useState<'content' | 'summary'>('content')
 
   // N9: 多图对比
@@ -63,18 +35,7 @@ export default function ImageResultPage() {
   const [compareData, setCompareData] = useState<ImageCompareResult | null>(null)
   const [compareLoading, setCompareLoading] = useState(false)
 
-  // 拉提示词格式配置
-  useEffect(() => {
-    let cancelled = false
-    getPromptFormatsConfig()
-      .then((data) => {
-        if (!cancelled) setFormatsCfg(data)
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [])
-
-  // 拉图片结果 + 提示词版本（合并为单个 effect 避免重复 cleanup）
+  // 拉图片结果
   useEffect(() => {
     let cancelled = false
     getImageResult(workspaceId, itemId)
@@ -86,62 +47,17 @@ export default function ImageResultPage() {
         const message = err instanceof Error ? err.message : '加载图片结果失败'
         setFetchState({ kind: 'error', message })
       })
-    listPromptVersions(workspaceId, itemId)
-      .then((data) => {
-        if (!cancelled) setPromptVersions(data)
-      })
-      .catch(() => {})
     return () => { cancelled = true }
   }, [workspaceId, itemId])
 
   const result = fetchState.kind === 'ready' ? fetchState.data : null
 
-  // 构造 tabs：复用 VideoResultPage 的逻辑
-  const tabs = useMemo<TabDescriptor[]>(() => {
-    const formats = formatsCfg?.formats ?? []
-    const imageFormats = formats.filter((f) => f.category === 'image')
-    if (!imageFormats.length) return []
-    const idMap = new Map(imageFormats.map((f) => [f.id, f]))
-    const active = formatsCfg?.active_image_ids ?? []
-    const picked: PromptFormat[] = []
-    for (const id of active) {
-      const fmt = idMap.get(id)
-      if (fmt && !isJsonFormat(fmt) && !picked.find((p) => p.id === fmt.id)) {
-        picked.push(fmt)
-      }
-    }
-    if (picked.length < ACTIVE_LIMIT) {
-      for (const fmt of imageFormats) {
-        if (picked.length >= ACTIVE_LIMIT) break
-        if (isJsonFormat(fmt)) continue
-        if (!picked.find((p) => p.id === fmt.id)) picked.push(fmt)
-      }
-    }
-    const jsonFmt = imageFormats.find((f) => isJsonFormat(f))
-    const built: TabDescriptor[] = picked.slice(0, ACTIVE_LIMIT).map((f) => ({
-      key: f.id,
-      label: f.name,
-      format: f,
-    }))
-    if (jsonFmt) built.push({ key: jsonFmt.id, label: jsonFmt.name, format: jsonFmt })
-    return built
-  }, [formatsCfg])
-
-  const activeTab = tabs.find((t) => t.key === promptStyle) ?? tabs[0]
-
-  const promptText = useMemo(() => {
-    if (!result || !activeTab) return ''
-    if (isJsonFormat(activeTab.format)) return renderJsonForImage(result)
-    const frame = imageToFrameAdapter(result)
-    return renderTemplate(activeTab.format.template, frame)
-  }, [result, activeTab])
-
-  const handleCopy = useCallback(() => {
-    if (!promptText) return
-    navigator.clipboard?.writeText(promptText).catch(() => {})
+  const handleCopyDescription = useCallback(() => {
+    if (!result?.description) return
+    navigator.clipboard?.writeText(result.description).catch(() => {})
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1800)
-  }, [promptText])
+  }, [result?.description])
 
   const handleFavorite = useCallback(() => {
     setFavored((prev) => {
@@ -150,17 +66,6 @@ export default function ImageResultPage() {
       return next
     })
   }, [])
-
-  /* N11: 导出功能 UI 隐藏（代码保留，见 SPEC §8.2）
-  const handleExport = useCallback(async () => {
-    try {
-      await downloadExport(workspaceId, itemId)
-      toast.success('工作包已下载')
-    } catch (err) {
-      toast.error('导出失败：' + (err instanceof Error ? err.message : '未知'))
-    }
-  }, [workspaceId, itemId])
-  */
 
   const handleCompare = useCallback(async () => {
     setCompareLoading(true)
@@ -175,12 +80,6 @@ export default function ImageResultPage() {
     }
   }, [workspaceId, itemId])
 
-  const handleAddPromptVersion = useCallback(async (content: string) => {
-    const pv = await addPromptVersion(workspaceId, itemId, content)
-    setPromptVersions((prev) => [...prev, pv])
-    toast.success(`已保存 v${pv.version}`)
-  }, [workspaceId, itemId])
-
   const handleDownloadImage = useCallback(() => {
     if (!result?.image.image_url) return
     const a = document.createElement('a')
@@ -189,54 +88,17 @@ export default function ImageResultPage() {
     a.click()
   }, [result?.image.image_url, result?.image.title])
 
-  const openPicker = useCallback(() => {
-    if (!formatsCfg) return
-    setPickerSelection(tabs.filter((t) => !isJsonFormat(t.format)).map((t) => t.key))
-    setPickerOpen(true)
-  }, [formatsCfg, tabs])
-
-  const togglePickerId = useCallback((id: string) => {
-    setPickerSelection((cur) => {
-      if (cur.includes(id)) return cur.filter((x) => x !== id)
-      if (cur.length >= ACTIVE_LIMIT) {
-        toast.error(`最多选 ${ACTIVE_LIMIT} 个`)
-        return cur
-      }
-      return [...cur, id]
-    })
-  }, [])
-
-  const savePicker = useCallback(async () => {
-    if (!formatsCfg) return
-    if (pickerSelection.length !== ACTIVE_LIMIT) {
-      toast.error(`请选满 ${ACTIVE_LIMIT} 个`)
-      return
-    }
-    try {
-      const saved = await savePromptFormatsConfig({ active_image_ids: pickerSelection })
-      setFormatsCfg(saved)
-      setPickerOpen(false)
-      toast.success('已更新提示词格式 tabs')
-    } catch (err) {
-      toast.error('保存失败：' + (err instanceof Error ? err.message : '未知'))
-    }
-  }, [formatsCfg, pickerSelection])
-
-  // 键盘快捷键：C 复制、F 收藏、1-9 切 tab
+  // 键盘快捷键：C 复制描述、F 收藏
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null
       if (target && ['INPUT', 'TEXTAREA'].includes(target.tagName)) return
-      if (e.key === 'c' || e.key === 'C') handleCopy()
+      if (e.key === 'c' || e.key === 'C') handleCopyDescription()
       else if (e.key === 'f' || e.key === 'F') handleFavorite()
-      else if (e.key >= '1' && e.key <= '9') {
-        const idx = parseInt(e.key, 10) - 1
-        if (idx < tabs.length) setPromptStyle(tabs[idx].key)
-      }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [handleCopy, handleFavorite, tabs])
+  }, [handleCopyDescription, handleFavorite])
 
   if (fetchState.kind === 'loading') {
     return (
@@ -299,27 +161,18 @@ export default function ImageResultPage() {
 
       {/* ════════ 右：信息面板 ════════ */}
       <div className="im-right">
-        {/* 提示词 tabs 标题行 */}
+        {/* tabs：内容 / 总结 */}
         <div className="vd-tabs-bar">
-          <span className="eyebrow" style={{ flex: 1 }}>提示词格式</span>
-          <button className="im-settings-btn" onClick={openPicker} title="选择 3 个图片类格式作为 tabs（JSON 自动附加）">
-            <Settings2 size={11} /> 选择
-          </button>
+          <span className="eyebrow" style={{ flex: 1 }}>图片分析</span>
         </div>
 
-        {/* tabs 按钮行 */}
         <div className="vd-tabs-row">
-          {tabs.map((t) => (
-            <button key={t.key} className="vd-tab-btn" data-active={contentTab === 'content' && promptStyle === t.key} onClick={() => { setContentTab('content'); setPromptStyle(t.key) }}>
-              {t.label}
-            </button>
-          ))}
+          <button className="vd-tab-btn" data-active={contentTab === 'content'} onClick={() => setContentTab('content')}>
+            内容
+          </button>
           <button className="vd-tab-btn" data-active={contentTab === 'summary'} onClick={() => setContentTab('summary')}>
             总结
           </button>
-          {!tabs.length && contentTab !== 'summary' && (
-            <span className="mono" style={{ fontSize: 10, color: 'var(--mut)' }}>（提示词格式未加载）</span>
-          )}
         </div>
 
         {/* 可滚动内容区 */}
@@ -330,11 +183,6 @@ export default function ImageResultPage() {
             </div>
           ) : (
           <>
-          {/* 提示词文本 */}
-          <div className="im-prompt-text">
-            {promptText}
-          </div>
-
           {/* 内容识别描述 */}
           <div className="im-section">
             <div className="eyebrow im-section-label">内容识别描述</div>
@@ -425,23 +273,15 @@ export default function ImageResultPage() {
               </div>
             </div>
           )}
-
-          {/* 提示词版本栈 */}
-          <div style={{ marginTop: 14 }}>
-            <PromptVersionStack
-              versions={promptVersions}
-              onAddVersion={handleAddPromptVersion}
-            />
-          </div>
           </>
           )}
         </div>
 
         {/* 底部操作按钮 */}
         <div className="im-actions">
-          <button className="im-btn-main" onClick={handleCopy}>
+          <button className="im-btn-main" onClick={handleCopyDescription}>
             {copied ? <Check size={14} /> : <Copy size={14} />}
-            {copied ? '已复制！' : '一键复制提示词'}
+            {copied ? '已复制！' : '复制描述'}
           </button>
           <button
             className="im-btn-sub"
@@ -473,21 +313,10 @@ export default function ImageResultPage() {
             导出原图
           </button>
           <span className="im-shortcut-hint">
-            快捷键：C 复制 · F 收藏 · 1/2/3 切格式
+            快捷键：C 复制描述 · F 收藏
           </span>
         </div>
       </div>
-
-      {/* FormatPicker 弹窗 */}
-      {pickerOpen && formatsCfg && (
-        <FormatPicker
-          allFormats={formatsCfg.formats.filter((f) => f.category === 'image' && !isJsonFormat(f))}
-          selection={pickerSelection}
-          onToggle={togglePickerId}
-          onCancel={() => setPickerOpen(false)}
-          onSave={savePicker}
-        />
-      )}
 
       {/* N9: 多图对比弹窗 */}
       {compareOpen && compareData && (
@@ -496,67 +325,6 @@ export default function ImageResultPage() {
           onClose={() => setCompareOpen(false)}
         />
       )}
-    </div>
-  )
-}
-
-// ── FormatPicker 弹窗（复用 VideoResultPage 的实现） ───────
-
-interface FormatPickerProps {
-  allFormats: PromptFormat[]
-  selection: string[]
-  onToggle: (id: string) => void
-  onCancel: () => void
-  onSave: () => void
-}
-
-function FormatPicker({ allFormats, selection, onToggle, onCancel, onSave }: FormatPickerProps) {
-  return (
-    <div className="vm-image-scope im-picker-overlay" onClick={onCancel}>
-      <div className="im-picker-panel" onClick={(e) => e.stopPropagation()}>
-        <div>
-          <div className="im-picker-title">选择 3 个图片类格式</div>
-          <div className="im-picker-hint">
-            选中的格式将作为提示词 tabs 显示，JSON 格式始终附加在末尾。
-          </div>
-        </div>
-        <div className="im-picker-list">
-          {allFormats.map((fmt) => {
-            const selected = selection.includes(fmt.id)
-            return (
-              <button
-                key={fmt.id}
-                className="im-picker-item"
-                data-selected={selected}
-                onClick={() => onToggle(fmt.id)}
-              >
-                <div className="im-picker-check">
-                  {selected && <Check size={12} color="#fff" />}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="im-picker-fmt-name">{fmt.name}</div>
-                  {fmt.description && (
-                    <div className="im-picker-fmt-desc">{fmt.description}</div>
-                  )}
-                </div>
-              </button>
-            )
-          })}
-          {!allFormats.length && (
-            <div className="im-compare-empty">
-              暂无可用的图片类格式
-            </div>
-          )}
-        </div>
-        <div className="im-picker-actions">
-          <button className="im-picker-cancel" onClick={onCancel}>
-            取消
-          </button>
-          <button className="im-picker-confirm" onClick={onSave}>
-            确认（{selection.length}/{ACTIVE_LIMIT}）
-          </button>
-        </div>
-      </div>
     </div>
   )
 }

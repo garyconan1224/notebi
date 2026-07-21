@@ -854,12 +854,6 @@ class ProbeDurationRequest(BaseModel):
     url: str
 
 
-class PromptVersionRequest(BaseModel):
-    """提示词版本新增请求体。"""
-
-    content: str = Field(min_length=1, description="提示词内容")
-
-
 # ── 内部小工具 ────────────────────────────────────────────
 
 
@@ -3224,14 +3218,14 @@ def _locate_analyze_report_dir(
 
 
 def _is_target_frame_format(frames: list) -> bool:
-    """检查 frames 是否已经是目标格式（包含 image_path, sec, ts, prompt_mj 等字段）。
+    """检查 frames 是否已经是目标格式（包含 image_path, sec, ts 等字段）。
     只检查第一帧，因为所有帧应该格式一致。
     """
     if not frames:
         return False
     first = frames[0]
     # 目标格式必须包含这些字段
-    required_fields = ("image_path", "sec", "ts", "prompt_mj")
+    required_fields = ("image_path", "sec", "ts")
     return all(field in first for field in required_fields)
 
 
@@ -3266,7 +3260,7 @@ def _materialize_video_results_from_analyze(
     """
     if not isinstance(results, dict):
         return results
-    # C-0 fix: 只有 frames 已具备目标字段（image_path, sec, ts, prompt_mj）才可以提前返回
+    # C-0 fix: 只有 frames 已具备目标字段（image_path, sec, ts）才可以提前返回
     if results.get("frames") and _is_target_frame_format(results["frames"]):
         return results  # 已是目标格式
     # N7b 路径 1：字幕直接总结结果，无需从 JSON 文件物化
@@ -3339,11 +3333,6 @@ def _materialize_video_results_from_analyze(
                     img_path = "/static/" + str(candidate.relative_to(data_root)).replace("\\", "/")
                 except ValueError:
                     img_path = ""
-        # C-0 fix: 从 image_prompt_en 映射到 prompt_mj，prompt_sd/prompt_video 兜底
-        image_prompt_en = fr.get("image_prompt_en") or fr.get("prompt_mj") or ""
-        prompt_mj = image_prompt_en
-        prompt_sd = fr.get("prompt_sd") or {"positive": image_prompt_en, "negative": ""}
-        prompt_video = fr.get("prompt_video") or image_prompt_en
         frames.append({
             "idx": idx,
             "sec": sec_val,
@@ -3357,9 +3346,6 @@ def _materialize_video_results_from_analyze(
             "shot_type": fr.get("shot_type", ""),
             "title": fr.get("title", ""),
             "subtitle": fr.get("subtitle", ""),
-            "prompt_mj": prompt_mj,
-            "prompt_sd": prompt_sd,
-            "prompt_video": prompt_video,
             "tags": fr.get("tags", {}),
         })
     return {
@@ -3901,7 +3887,6 @@ def get_text_result(workspace_id: str, item_id: str) -> Dict[str, Any]:
     查找顺序：
       1. item.results（task_runner 已回写）
       2. item.related_task_ids → task_store → 磁盘 JSON 文件
-    同时附带 prompt_versions 供前端展示提示词版本栈。
     """
     rec = _store.get(workspace_id)
     if rec is None:
@@ -3925,9 +3910,6 @@ def get_text_result(workspace_id: str, item_id: str) -> Dict[str, Any]:
     if has_real:
         payload = dict(results)
         payload.setdefault("source", "item_results")
-        payload["prompt_versions"] = [
-            pv.to_dict() for pv in rec.prompt_versions.get(item_id) or []
-        ]
         return payload
 
     # 回退：从 task_store + 磁盘文件读取
@@ -3941,17 +3923,11 @@ def get_text_result(workspace_id: str, item_id: str) -> Dict[str, Any]:
         if "content" in task_result and bool(task_result.get("title")):
             payload = dict(task_result)
             payload.setdefault("source", "task_result")
-            payload["prompt_versions"] = [
-                pv.to_dict() for pv in rec.prompt_versions.get(item_id) or []
-            ]
             return payload
         # 再尝试磁盘 JSON
         disk_data = _read_text_result_from_disk(task_id, project_id)
         if disk_data and "content" in disk_data:
             disk_data.setdefault("source", "disk_json")
-            disk_data["prompt_versions"] = [
-                pv.to_dict() for pv in rec.prompt_versions.get(item_id) or []
-            ]
             return disk_data
 
     raise HTTPException(
@@ -3984,31 +3960,6 @@ def update_text_content(
     _store.update_item(workspace_id, item_id, results=results)
     saved_at = datetime.now(timezone.utc).isoformat()
     return {"content": req.content, "saved_at": saved_at}
-
-
-# ── 提示词版本栈（Phase 2C.2）────────────────────────────
-
-
-@router.post("/{workspace_id}/items/{item_id}/prompts/versions")
-def add_prompt_version(
-    workspace_id: str, item_id: str, req: PromptVersionRequest
-) -> Dict[str, Any]:
-    """为指定素材追加一个提示词版本。"""
-    try:
-        pv = _store.add_prompt_version(workspace_id, item_id, req.content)
-    except KeyError as err:
-        raise HTTPException(status_code=404, detail=str(err)) from err
-    return pv.to_dict()
-
-
-@router.get("/{workspace_id}/items/{item_id}/prompts/versions")
-def list_prompt_versions(workspace_id: str, item_id: str) -> List[Dict[str, Any]]:
-    """列出指定素材的所有提示词版本。"""
-    try:
-        versions = _store.list_prompt_versions(workspace_id, item_id)
-    except KeyError as err:
-        raise HTTPException(status_code=404, detail=str(err)) from err
-    return [pv.to_dict() for pv in versions]
 
 
 # ── C-5 帧标题改名 ─────────────────────────────────────────

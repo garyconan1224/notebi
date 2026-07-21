@@ -9,13 +9,11 @@ import {
   type StructuredSummary,
   type MaybeAligned,
   normalizeAligned,
-  addPromptVersion,
   getTextItemResult,
   getTextCompare,
   exportTextNote,
   updateTextContent,
 } from '@/services/workspaces'
-import { PromptVersionStack } from '@/components/result/PromptVersionStack'
 
 import './tokens.css'
 import './text-result.css'
@@ -250,7 +248,6 @@ export default function TextResultPage() {
   }, [workspaceId, itemId])
 
   const result = fetchState.kind === 'ready' ? fetchState.data : null
-  const promptVersions = result?.prompt_versions ?? []
 
   const chatSystemPrompt = useMemo(() => {
     if (!result) return ''
@@ -271,18 +268,6 @@ export default function TextResultPage() {
     parts.push('', '回答指引：基于上述文章内容作答；回答使用中文。')
     return parts.join('\n')
   }, [result])
-
-  const handleAddVersion = useCallback(async (content: string) => {
-    const pv = await addPromptVersion(workspaceId, itemId, content)
-    setFetchState((prev) => {
-      if (prev.kind !== 'ready') return prev
-      return {
-        kind: 'ready',
-        data: { ...prev.data, prompt_versions: [...prev.data.prompt_versions, pv] },
-      }
-    })
-    toast.success(`已保存 v${pv.version}`)
-  }, [workspaceId, itemId])
 
   const handleFavorite = useCallback(() => {
     setFavored((prev) => {
@@ -646,12 +631,6 @@ export default function TextResultPage() {
               {result.source_url && <div>来源：{result.source_url}</div>}
             </div>
           </div>
-
-          {/* 提示词版本栈 */}
-          <PromptVersionStack
-            versions={promptVersions}
-            onAddVersion={handleAddVersion}
-          />
           </>
           )}
         </div>

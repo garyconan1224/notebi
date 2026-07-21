@@ -169,12 +169,6 @@ def _format_results(item_type: str, results: Dict[str, Any], query: str = "") ->
     if description:
         lines.append(f"- 描述：{_truncate(description, 400)}")
 
-    prompts = results.get("frame_prompts") or results.get("prompts")
-    if isinstance(prompts, list) and prompts:
-        sample = [str(p) for p in prompts[:3] if p]
-        if sample:
-            lines.append(f"- 提示词样例：{' | '.join(_truncate(s, 120) for s in sample)}")
-
     if not lines:
         # 兜底：把整个 results dict 简短预览
         preview = ", ".join(f"{k}=..." for k in list(results.keys())[:6])

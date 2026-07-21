@@ -69,7 +69,7 @@ def test_build_context_multi_type_results():
             source="local",
             source_value="/y.png",
             name="图片 B",
-            results={"ocr_text": "OCR 文字 Y", "frame_prompts": ["a cinematic shot", "warm tone"]},
+            results={"ocr_text": "OCR 文字 Y", "description": "一张电影感画面"},
         ),
         WorkspaceItem(
             item_id="t1",
@@ -86,7 +86,7 @@ def test_build_context_multi_type_results():
     assert ctx.used_item_ids == ["v1", "img1", "t1"]
     assert "视频摘要 X" in ctx.system_prompt
     assert "OCR 文字 Y" in ctx.system_prompt
-    assert "a cinematic shot" in ctx.system_prompt
+    assert "一张电影感画面" in ctx.system_prompt
     assert "文档摘要 Z" in ctx.system_prompt
 
 

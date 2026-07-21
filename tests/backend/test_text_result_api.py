@@ -3,7 +3,7 @@ from __future__ import annotations
 """Phase 2C.2 — 文本结果页 API 测试。
 
 验证：
-  happy path — text item 有 task 结果时 GET text_result 返回正文 + 摘要 + prompt_versions
+  happy path — text item 有 task 结果时 GET text_result 返回正文 + 摘要
   error path — text 任务未跑完时 404
   error path — 非 text item 调 text_result 返回 400
 """
@@ -89,37 +89,6 @@ def test_text_result_from_task_result(client: TestClient, tmp_path: Path) -> Non
     assert data["title"] == "测试文章"
     assert data["content"] == "这是一篇测试文章的正文。"
     assert data["summary"] == "这是摘要。"
-    assert "prompt_versions" in data
-
-
-def test_text_result_with_prompt_versions(client: TestClient) -> None:
-    """text result 应包含 prompt_versions。"""
-    ws_id, item_id, _ = _create_ws_with_text_item(client)
-
-    # 加两个提示词版本
-    base = f"/workspaces/{ws_id}/items/{item_id}/prompts/versions"
-    client.post(base, json={"content": "提示词 v1"})
-    client.post(base, json={"content": "提示词 v2"})
-
-    # 模拟 task result
-    mock_task = MagicMock()
-    mock_task.result = {
-        "title": "文章",
-        "content": "正文",
-        "summary": "",
-        "char_count": 2,
-        "source_type": "url",
-        "source": "https://example.com",
-        "meta": {},
-    }
-    ws_module._store.update_item(ws_id, item_id, related_task_ids=["task-002"])
-    ws_module._pipeline_runner.store.get.return_value = mock_task
-
-    resp = client.get(f"/workspaces/{ws_id}/items/{item_id}/text_result")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert len(data["prompt_versions"]) == 2
-    assert data["prompt_versions"][0]["content"] == "提示词 v1"
 
 
 # ── Error path ────────────────────────────────────────────────────────────────

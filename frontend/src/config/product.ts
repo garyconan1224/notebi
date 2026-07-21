@@ -3,7 +3,7 @@
 // 本模块只保留固定的 NoteBi 常量与本地存储 helper。
 //
 // 注意：allowedKinds / defaultKind / isWorkspaceKindAllowed / isFeatureEnabled 等
-// 仍被部分页面引用，它们会在复刻、分镜、提示词生产能力被逐步删除（后续阶段）后
+// 仍被部分页面引用，它们会在复刻、分镜能力被逐步删除（后续阶段）后
 // 连同各自的消费代码一起移除，不属于长期保留的开关。
 export type WorkspaceKind = 'note'
 
@@ -13,7 +13,6 @@ export interface ProductConfig {
   defaultKind: WorkspaceKind
   storagePrefix: string
   showKnowledge: boolean
-  showPromptFormat: boolean
 }
 
 export const productConfig: ProductConfig = {
@@ -22,7 +21,6 @@ export const productConfig: ProductConfig = {
   defaultKind: 'note',
   storagePrefix: 'notebi',
   showKnowledge: true,
-  showPromptFormat: false,
 }
 
 export function isWorkspaceKindAllowed(kind?: string | null): kind is WorkspaceKind {
@@ -32,7 +30,6 @@ export function isWorkspaceKindAllowed(kind?: string | null): kind is WorkspaceK
 export function isFeatureEnabled(feature: keyof Pick<
   ProductConfig,
   | 'showKnowledge'
-  | 'showPromptFormat'
 >): boolean {
   return Boolean(productConfig[feature])
 }

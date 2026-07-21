@@ -4052,8 +4052,6 @@ def handle_image_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
     assoc_params = payload.get("assoc") or {}
     assoc_enabled = isinstance(assoc_params, dict) and assoc_params.get("enabled", False)
     assoc_directions = assoc_params.get("directions", ["usage"]) if assoc_enabled else []
-    fp_params = payload.get("prompt") or {}
-    prompt_format = fp_params.get("format", "mj") if isinstance(fp_params, dict) else "mj"
 
     from shared.config import get_workspace_root
 
@@ -4223,28 +4221,10 @@ def handle_image_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         "" if ocr_text
         else '"ocr_text": "图中可见文字（无则空字符串）",\n'
     )
-    # N9: 根据 prompt_format 调整提示词部分
-    if prompt_format == "sd":
-        prompt_block = (
-            '"prompts": {\n'
-            '   "sd": {"positive": "Stable Diffusion 正向提示词（英文）", "negative": "负向提示词"}\n'
-            ' }'
-        )
-    elif prompt_format == "json":
-        prompt_block = '"prompts": {\n   "json": "结构化场景描述（英文 JSON 字符串）"\n }'
-    else:
-        prompt_block = (
-            '"prompts": {\n'
-            '   "mj": "Midjourney 提示词（英文，50-80词）",\n'
-            '   "sd": {"positive": "Stable Diffusion 正向提示词（英文）", "negative": "负向提示词"},\n'
-            '   "json": "结构化场景描述（英文 JSON 字符串）"\n'
-            ' }'
-        )
 
     if not api_key:
         log("⚠️  未提供 api_key，跳过视觉分析")
         description = ""
-        prompts: Dict[str, Any] = {"mj": "", "sd": {"positive": "", "negative": ""}, "json": ""}
         tags: Dict[str, List[str]] = {}
     else:
         registry = create_default_registry()
@@ -4258,7 +4238,6 @@ def handle_image_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         if not vision_model:
             log("⚠️  未配置 vision_model，跳过视觉分析")
             description = ""
-            prompts = {"mj": "", "sd": {"positive": "", "negative": ""}, "json": ""}
             tags = {}
         else:
             log(f"🔍 调用 vision model={vision_model}")
@@ -4267,7 +4246,6 @@ def handle_image_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
                 "JSON 结构如下：\n"
                 '{"description": "中文详细描述（100-200字）",\n'
                 f' {ocr_json_line}'
-                f' {prompt_block},\n'
                 ' "tags": {"subject": [], "scene": [], "style": [], "lighting": [], "color": [], "composition": []}}'
             )
             try:
@@ -4295,7 +4273,6 @@ def handle_image_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
             # PaddleOCR 优先；仅当 PaddleOCR 无结果时用 VLM 的 ocr_text
             if not ocr_text:
                 ocr_text = str(parsed.get("ocr_text") or "")
-            prompts = parsed.get("prompts") or {"mj": "", "sd": {"positive": "", "negative": ""}, "json": ""}
             tags = parsed.get("tags") or {}
 
     log(f"📊 分析完成 | description={description[:40]}...")
@@ -4351,7 +4328,6 @@ def handle_image_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         "source_type": source_type,
         "description": description,
         "ocr_text": ocr_text,
-        "prompts": prompts,
         "tags": tags,
     }
     if exif_data:

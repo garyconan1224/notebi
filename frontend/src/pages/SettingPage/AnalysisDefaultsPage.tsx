@@ -1,20 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import ScreenshotPage from './ScreenshotPage'
 import TranscriberPage from './TranscriberPage'
-import PromptFormatPage from './PromptFormatPage'
 import PerformanceTierPage from './PerformanceTierPage'
 import { useSettingsShellStore } from '@/store/settingsShellStore'
 import { CARD_COLUMN_OPTIONS, useLibraryStore, type CardColumns } from '@/store/libraryStore'
-import { isFeatureEnabled } from '@/config/product'
 import { AUDIO_ERROR_GUIDANCE } from '@/lib/errorCategories'
 
-type TabKey = 'performance' | 'display' | 'screenshot' | 'transcriber' | 'prompt' | 'defaults' | 'audio-errors'
+type TabKey = 'performance' | 'display' | 'screenshot' | 'transcriber' | 'defaults' | 'audio-errors'
 
 /**
  * 分析默认偏好（SPEC §3.5 第 4 页）。
  *
- * 合并原 ScreenshotPage + TranscriberPage + PromptFormatPage + 任务勾选默认偏好
+ * 合并原 ScreenshotPage + TranscriberPage + 任务勾选默认偏好
  * 为一个设置页，内部用 Tabs 切换子视图。
  *
  * 保存/重置入口：子页面继续通过 useSettingsShellStore 推送 SaveBar；
@@ -23,13 +21,6 @@ type TabKey = 'performance' | 'display' | 'screenshot' | 'transcriber' | 'prompt
 export default function AnalysisDefaultsPage() {
   const { t } = useTranslation('settings')
   const [tab, setTab] = useState<TabKey>('performance')
-  const showPromptTab = isFeatureEnabled('showPromptFormat')
-
-  useEffect(() => {
-    if (!showPromptTab && tab === 'prompt') {
-      setTab('performance')
-    }
-  }, [showPromptTab, tab])
 
   // 订阅 SaveBar state：子页 push，本组件渲染按钮
   const saveBar = useSettingsShellStore((s) => s.saveBarState)
@@ -43,7 +34,7 @@ export default function AnalysisDefaultsPage() {
         <div>
           <h2>分析默认偏好</h2>
           <div className="settings-header-desc">
-            截帧、转写、提示词、性能档位等分析任务的默认配置
+            截帧、转写、性能档位等分析任务的默认配置
           </div>
         </div>
         <div className="settings-header-actions">
@@ -98,14 +89,6 @@ export default function AnalysisDefaultsPage() {
         >
           {t('layout.menu.transcriber', '转写设置')}
         </TabBtn>
-        {showPromptTab && (
-          <TabBtn
-            active={tab === 'prompt'}
-            onClick={() => setTab('prompt')}
-          >
-            {t('layout.menu.promptFormats', '提示词模板')}
-          </TabBtn>
-        )}
         <TabBtn
           active={tab === 'defaults'}
           onClick={() => setTab('defaults')}
@@ -126,7 +109,6 @@ export default function AnalysisDefaultsPage() {
         {tab === 'display' && <DisplayDefaultsPanel />}
         {tab === 'screenshot' && <ScreenshotPage />}
         {tab === 'transcriber' && <TranscriberPage />}
-        {showPromptTab && tab === 'prompt' && <PromptFormatPage />}
         {tab === 'defaults' && <TaskDefaultsPlaceholder />}
         {tab === 'audio-errors' && <AudioErrorGuidancePanel />}
       </div>

@@ -2,7 +2,6 @@
 
 测试 _materialize_video_results_from_analyze 函数的正确性：
 - raw frames + json_outputs：输出结构化 frames
-- image_prompt_en 能正确进入 prompt_mj
 - raw absolute frame_image_path 能转成 /static/... image_path
 - summary_path=subtitle 不被错误物化
 - 多 json_outputs 时 preferred_basenames 仍能选中正确视觉 JSON
@@ -56,7 +55,7 @@ class TestIsTargetFrameFormat:
     def test_partial_required_fields(self):
         """部分目标字段存在，不算目标格式。"""
         frames = [
-            {"image_path": "/static/path.jpg", "sec": 1.0, "ts": "00:00:01"}
+            {"image_path": "/static/path.jpg", "sec": 1.0}  # 缺少 ts
         ]
         assert _is_target_frame_format(frames) is False
 
@@ -67,7 +66,7 @@ class TestIsTargetFrameFormat:
                 "image_path": "/static/path.jpg",
                 "sec": 1.0,
                 "ts": "00:00:01",
-                "prompt_mj": "test prompt",
+                "description": "test description",
             }
         ]
         assert _is_target_frame_format(frames) is True
@@ -86,9 +85,6 @@ class TestIsTargetFrameFormat:
                 "shot_type": "",
                 "title": "",
                 "subtitle": "",
-                "prompt_mj": "test prompt",
-                "prompt_sd": {"positive": "test", "negative": ""},
-                "prompt_video": "test prompt",
                 "tags": {},
             }
         ]
@@ -128,7 +124,7 @@ class TestMaterializeVideoResultsFromAnalyze:
                 "image_path": "/static/path.jpg",
                 "sec": 1.0,
                 "ts": "00:00:01",
-                "prompt_mj": "test prompt",
+                "description": "test description",
             }
         ]
         results = {"frames": frames, "json_outputs": ["/some/path.json"]}
@@ -141,12 +137,10 @@ class TestMaterializeVideoResultsFromAnalyze:
             {
                 "timestamp": "00:00:00",
                 "description_zh": "第一帧描述",
-                "image_prompt_en": "first frame prompt",
             },
             {
                 "timestamp": "00:00:05",
                 "description_zh": "第二帧描述",
-                "image_prompt_en": "second frame prompt",
             },
         ]
         json_file = _create_visual_json(tmp_path, "test_video", frames_data)
@@ -168,44 +162,6 @@ class TestMaterializeVideoResultsFromAnalyze:
         assert returned["frames"][0]["description"] == "第一帧描述"
         assert returned["frames"][1]["description"] == "第二帧描述"
 
-    def test_image_prompt_en_maps_to_prompt_mj(self, tmp_path):
-        """image_prompt_en 能正确进入 prompt_mj。"""
-        frames_data = [
-            {
-                "timestamp": "00:00:00",
-                "description_zh": "desc",
-                "image_prompt_en": "MJ style prompt from visual json",
-            },
-        ]
-        json_file = _create_visual_json(tmp_path, "test", frames_data)
-
-        results = {"frames": [], "json_outputs": [str(json_file)]}
-
-        with patch("backend.app.routes.workspaces._ROOT_DIR", tmp_path):
-            returned = _materialize_video_results_from_analyze(results)
-
-        assert returned["frames"][0]["prompt_mj"] == "MJ style prompt from visual json"
-
-    def test_prompt_sd_prompt_video_fallback(self, tmp_path):
-        """prompt_sd/prompt_video 没有源字段时用 image_prompt_en 兜底。"""
-        frames_data = [
-            {
-                "timestamp": "00:00:00",
-                "description_zh": "desc",
-                "image_prompt_en": "fallback prompt",
-            },
-        ]
-        json_file = _create_visual_json(tmp_path, "test", frames_data)
-
-        results = {"frames": [], "json_outputs": [str(json_file)]}
-
-        with patch("backend.app.routes.workspaces._ROOT_DIR", tmp_path):
-            returned = _materialize_video_results_from_analyze(results)
-
-        frame = returned["frames"][0]
-        assert frame["prompt_sd"] == {"positive": "fallback prompt", "negative": ""}
-        assert frame["prompt_video"] == "fallback prompt"
-
     def test_raw_absolute_path_converted_to_static(self, tmp_path):
         """raw absolute frame_image_path 能转成 /static/... image_path。"""
         # 创建 data 子目录结构
@@ -218,7 +174,6 @@ class TestMaterializeVideoResultsFromAnalyze:
             {
                 "timestamp": "00:00:00",
                 "description_zh": "desc",
-                "image_prompt_en": "prompt",
             },
         ]
         json_file = _create_visual_json(tmp_path, "test", frames_data)
@@ -240,7 +195,7 @@ class TestMaterializeVideoResultsFromAnalyze:
     def test_summary_path_subtitle_not_affected(self, tmp_path):
         """summary_path=subtitle 不被错误物化。"""
         frames_data = [
-            {"timestamp": "00:00:00", "description_zh": "desc", "image_prompt_en": "prompt"},
+            {"timestamp": "00:00:00", "description_zh": "desc"},
         ]
         json_file = _create_visual_json(tmp_path, "test", frames_data)
 
@@ -262,8 +217,8 @@ class TestMaterializeVideoResultsFromAnalyze:
     def test_preferred_basenames_selects_correct_json(self, tmp_path):
         """多 json_outputs 时 preferred_basenames 仍能选中正确视觉 JSON。"""
         # 创建两个视觉 JSON
-        visual1 = {"frames": [{"timestamp": "00:00:00", "description_zh": "video1", "image_prompt_en": "prompt1"}]}
-        visual2 = {"frames": [{"timestamp": "00:00:00", "description_zh": "video2", "image_prompt_en": "prompt2"}]}
+        visual1 = {"frames": [{"timestamp": "00:00:00", "description_zh": "video1"}]}
+        visual2 = {"frames": [{"timestamp": "00:00:00", "description_zh": "video2"}]}
 
         json1 = tmp_path / "BV1234567890_视觉数据.json"
         json2 = tmp_path / "BV9876543210_视觉数据.json"
@@ -288,7 +243,7 @@ class TestMaterializeVideoResultsFromAnalyze:
     def test_frame_count_matches_visual_json(self, tmp_path):
         """物化后的 frames 数量应来自视觉 JSON，不是 raw frames。"""
         frames_data = [
-            {"timestamp": f"00:00:{i:02d}", "description_zh": f"frame {i}", "image_prompt_en": f"prompt {i}"}
+            {"timestamp": f"00:00:{i:02d}", "description_zh": f"frame {i}"}
             for i in range(21)
         ]
         json_file = _create_visual_json(tmp_path, "test", frames_data)
@@ -307,12 +262,11 @@ class TestMaterializeVideoResultsFromAnalyze:
         assert len(returned["frames"]) == 21
 
     def test_frame_has_all_required_fields(self, tmp_path):
-        """frame[0] 至少包含 idx、sec、ts、timestamp、description、image_path、prompt_mj、prompt_sd、prompt_video、tags。"""
+        """frame[0] 至少包含 idx、sec、ts、timestamp、description、image_path、tags。"""
         frames_data = [
             {
                 "timestamp": "00:00:00",
                 "description_zh": "test desc",
-                "image_prompt_en": "test prompt",
             },
         ]
         json_file = _create_visual_json(tmp_path, "test", frames_data)
@@ -323,7 +277,7 @@ class TestMaterializeVideoResultsFromAnalyze:
             returned = _materialize_video_results_from_analyze(results)
 
         frame = returned["frames"][0]
-        required_fields = ["idx", "sec", "ts", "timestamp", "description", "image_path", "prompt_mj", "prompt_sd", "prompt_video", "tags"]
+        required_fields = ["idx", "sec", "ts", "timestamp", "description", "image_path", "tags"]
         for field in required_fields:
             assert field in frame, f"Missing required field: {field}"
 
@@ -333,9 +287,9 @@ class TestMaterializeVideoResultsFromAnalyze:
         data_dir = tmp_path / "data"
         data_dir.mkdir()
         frames_data = [
-            {"timestamp": "00:00:00", "description_zh": "f0", "image_prompt_en": "p0"},
-            {"timestamp": "00:00:01", "description_zh": "f1", "image_prompt_en": "p1"},
-            {"timestamp": "00:00:03", "description_zh": "f2", "image_prompt_en": "p2"},  # idx=2, ts=3
+            {"timestamp": "00:00:00", "description_zh": "f0"},
+            {"timestamp": "00:00:01", "description_zh": "f1"},
+            {"timestamp": "00:00:03", "description_zh": "f2"},  # idx=2, ts=3
         ]
         # 在 data 目录下创建视觉 JSON 和 frames 目录
         json_file = data_dir / "BVTest_视觉数据.json"
@@ -364,9 +318,9 @@ class TestMaterializeVideoResultsFromAnalyze:
         data_dir = tmp_path / "data"
         data_dir.mkdir()
         frames_data = [
-            {"timestamp": "00:00:05", "description_zh": "f0", "image_prompt_en": "p0"},
-            {"timestamp": "00:00:05", "description_zh": "f1", "image_prompt_en": "p1"},  # 同 timestamp
-            {"timestamp": "00:00:05", "description_zh": "f2", "image_prompt_en": "p2"},  # 同 timestamp
+            {"timestamp": "00:00:05", "description_zh": "f0"},
+            {"timestamp": "00:00:05", "description_zh": "f1"},  # 同 timestamp
+            {"timestamp": "00:00:05", "description_zh": "f2"},  # 同 timestamp
         ]
         json_file = data_dir / "BVTest_视觉数据.json"
         json_file.write_text(json.dumps({"frames": frames_data}, ensure_ascii=False), encoding="utf-8")

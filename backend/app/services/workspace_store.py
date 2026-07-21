@@ -23,7 +23,6 @@ from backend.app.models.workspace import (
     InlineFrame,
     ItemStatus,
     ItemSummary,
-    PromptVersion,
     WorkspaceBackground,
     WorkspaceItem,
     WorkspaceRecord,
@@ -239,37 +238,6 @@ class WorkspaceStore:
             rec.favorites = [fid for fid in rec.favorites if fid != item_id]
             self._save(rec)
             return rec
-
-    # ── Prompt 版本栈 ──────────────────────────────────────
-
-    def add_prompt_version(
-        self, workspace_id: str, item_id: str, content: str
-    ) -> PromptVersion:
-        """为指定 item 追加一个提示词版本，version 自增。"""
-        with self._lock:
-            rec = self._records.get(workspace_id)
-            if rec is None:
-                raise KeyError(f"workspace not found: {workspace_id}")
-            if not any(it.item_id == item_id for it in rec.items):
-                raise KeyError(f"item not found: {item_id}")
-            versions = rec.prompt_versions.setdefault(item_id, [])
-            next_ver = (versions[-1].version + 1) if versions else 1
-            pv = PromptVersion(version=next_ver, content=content)
-            versions.append(pv)
-            self._save(rec)
-            return pv
-
-    def list_prompt_versions(
-        self, workspace_id: str, item_id: str
-    ) -> List[PromptVersion]:
-        """列出指定 item 的所有提示词版本。"""
-        with self._lock:
-            rec = self._records.get(workspace_id)
-            if rec is None:
-                raise KeyError(f"workspace not found: {workspace_id}")
-            if not any(it.item_id == item_id for it in rec.items):
-                raise KeyError(f"item not found: {item_id}")
-            return list(rec.prompt_versions.get(item_id) or [])
 
     # ── Summary 操作 ──────────────────────────────────────────
 

@@ -335,9 +335,6 @@ export interface VideoResultFrame {
   title: string
   subtitle: string
   description: string
-  prompt_mj: string
-  prompt_sd: { positive: string; negative: string }
-  prompt_video: string
   tags: Record<string, string[]>
   image_path?: string
   /** 后端物化时可能用 timestamp 而非 sec；前端优先用 sec */
@@ -651,13 +648,7 @@ export async function translateTranscriptSegments(
   return res.data
 }
 
-// ── Phase 2C.2: 文本结果页 + 提示词版本栈 ──────────────────
-
-export interface PromptVersion {
-  version: number
-  content: string
-  created_at: string
-}
+// ── Phase 2C.2: 文本结果页 ──────────────────
 
 export interface KeyPoint {
   text: string
@@ -710,7 +701,6 @@ export interface TextResult {
   source_type: string
   source_url: string
   meta: Record<string, unknown>
-  prompt_versions: PromptVersion[]
   /** N10: 联想归纳 {方向: 分析} */
   associations?: Record<string, string>
   /** N10: 改写/润色 {风格: 结果} — T1.2 升级为 AlignedTextSection */
@@ -730,38 +720,14 @@ export async function getTextItemResult(
   return res.data
 }
 
-/** POST /workspaces/{id}/items/{itemId}/prompts/versions — 追加提示词版本 */
-export async function addPromptVersion(
-  workspaceId: string,
-  itemId: string,
-  content: string,
-): Promise<PromptVersion> {
-  const res = await http.post<PromptVersion>(
-    `${BASE}/${workspaceId}/items/${itemId}/prompts/versions`,
-    { content },
-  )
-  return res.data
-}
-
-/** GET /workspaces/{id}/items/{itemId}/prompts/versions — 列出提示词版本 */
-export async function listPromptVersions(
-  workspaceId: string,
-  itemId: string,
-): Promise<PromptVersion[]> {
-  const res = await http.get<PromptVersion[]>(
-    `${BASE}/${workspaceId}/items/${itemId}/prompts/versions`,
-  )
-  return res.data
-}
-
-/** GET /workspaces/{id}/items/{itemId}/export — 下载复刻工作包 zip */
+/** GET /workspaces/{id}/items/{itemId}/export — 下载笔记素材包 zip */
 export async function downloadExport(workspaceId: string, itemId: string): Promise<void> {
   const res = await http.get(`${BASE}/${workspaceId}/items/${itemId}/export`, {
     responseType: 'blob',
   })
   // 从 Content-Disposition 提取文件名
   const disposition = res.headers['content-disposition'] as string | undefined
-  let filename = '复刻工作包.zip'
+  let filename = '笔记素材包.zip'
   if (disposition) {
     const match = disposition.match(/filename\*=(?:UTF-8''|")?([^";]+)/i)
     if (match) filename = decodeURIComponent(match[1])

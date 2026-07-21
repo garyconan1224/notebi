@@ -9,7 +9,6 @@ import type { ItemType } from '@/types/workspace'
 
 // ── 视频 ────────────────────────────────────────────────
 export type VideoCaptureMode = 'interval' | 'scene'
-export type PromptFormat = 'mj' | 'sd' | 'json'
 export type PromptLang = 'zh' | 'en'
 
 export interface VideoFramePromptsParams {
@@ -18,7 +17,6 @@ export interface VideoFramePromptsParams {
   interval_sec: number
   max_frames: number
   scene_frames_per_shot: 2 | 3
-  format: PromptFormat
   lang: PromptLang
 }
 
@@ -76,7 +74,6 @@ export type AssociationDirection =
 
 export interface ImageFramePromptsParams {
   enabled: boolean
-  format: PromptFormat
 }
 
 export interface ImageAssociationParams {
@@ -120,7 +117,6 @@ export const DEFAULT_VIDEO_FRAME_PROMPTS: VideoFramePromptsParams = {
   interval_sec: 5,
   max_frames: 100,
   scene_frames_per_shot: 3,
-  format: 'mj',
   lang: 'en',
 }
 
@@ -145,7 +141,6 @@ export const DEFAULT_MUSIC_ANALYSIS: MusicAnalysisParams = {
 
 export const DEFAULT_IMAGE_FRAME_PROMPTS: ImageFramePromptsParams = {
   enabled: true,
-  format: 'mj',
 }
 
 export const DEFAULT_IMAGE_ASSOCIATION: ImageAssociationParams = {
@@ -275,7 +270,7 @@ export function getTopLevelTasks(type: ItemType): TopLevelTask[] {
   switch (type) {
     case 'video':
       return [
-        { id: 'frame_prompt', label: '画面提示词生成', desc: '截帧 → 视觉模型 → 提示词' },
+        { id: 'frame_prompt', label: '关键帧提取', desc: '截帧 → 视觉模型 → 描述' },
         { id: 'summary', label: '视频文案总结', desc: '三条路径选一' },
         { id: 'srt', label: '字幕导出', desc: '转写后导出 .srt' },
         { id: 'music_analysis', label: '音乐分析', desc: '背景音乐 BPM / Suno-Udio' },
@@ -289,7 +284,7 @@ export function getTopLevelTasks(type: ItemType): TopLevelTask[] {
       return [
         { id: 'describe', label: '内容识别描述', desc: '主体 / 场景 / 色调 / 构图 / 风格' },
         { id: 'ocr', label: 'OCR 文字提取' },
-        { id: 'prompt', label: '画面提示词生成', desc: 'MJ / SD / JSON' },
+        { id: 'prompt', label: '视觉理解分析', desc: '描述 / 标签 / 构图' },
         { id: 'assoc', label: '内容联想总结', desc: '用途 / 设计 / 竞品 / 情绪' },
         { id: 'compare', label: '多图对比', desc: '与同任务其他图片对比' },
       ]

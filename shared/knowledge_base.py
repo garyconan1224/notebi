@@ -112,7 +112,7 @@ def _collect_keyframe_descriptions(obj: Any) -> list[str]:
                     if isinstance(item, str) and item.strip():
                         out.append(item.strip())
                     elif isinstance(item, dict):
-                        # 兼容本项目「视觉数据」JSON：frames[].description_zh / timestamp / image_prompt_en
+                        # 兼容本项目「视觉数据」JSON：frames[].description_zh / timestamp
                         desc = _first_str(
                             item,
                             (
@@ -132,9 +132,6 @@ def _collect_keyframe_descriptions(obj: Any) -> list[str]:
                             line += f"[{ts}] "
                         if desc:
                             line += desc
-                        en_hint = _first_str(item, ("image_prompt_en", "image_prompt", "prompt_en"))
-                        if en_hint and len(en_hint) > 20:
-                            line += f" | EN_Prompt摘录: {en_hint[:400]}{'…' if len(en_hint) > 400 else ''}"
                         if line.strip():
                             out.append(line.strip())
             elif isinstance(raw, str) and raw.strip():

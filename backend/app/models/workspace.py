@@ -88,26 +88,6 @@ class PreflightConfig:
 
 
 @dataclass
-class PromptVersion:
-    """提示词版本栈中的单个版本。"""
-
-    version: int
-    content: str
-    created_at: str = field(default_factory=_now_iso)
-
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "PromptVersion":
-        return cls(
-            version=int(data.get("version") or 1),
-            content=str(data.get("content") or ""),
-            created_at=str(data.get("created_at") or _now_iso()),
-        )
-
-
-@dataclass
 class ItemSummary:
     """单份总结产物（多模板、多版本并存）。"""
 
@@ -308,7 +288,6 @@ class WorkspaceRecord:
     background: WorkspaceBackground = field(default_factory=WorkspaceBackground)
     items: List[WorkspaceItem] = field(default_factory=list)
     favorites: List[str] = field(default_factory=list)  # item_id 列表，复刻清单
-    prompt_versions: Dict[str, List[PromptVersion]] = field(default_factory=dict)
     created_at: str = field(default_factory=_now_iso)
     updated_at: str = field(default_factory=_now_iso)
     kind: str = "note"  # "note" | "replica"，合集类型
@@ -325,10 +304,6 @@ class WorkspaceRecord:
             "background": self.background.to_dict(),
             "items": [it.to_dict() for it in self.items],
             "favorites": list(self.favorites),
-            "prompt_versions": {
-                k: [pv.to_dict() for pv in v]
-                for k, v in self.prompt_versions.items()
-            },
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "kind": self.kind,
@@ -344,14 +319,6 @@ class WorkspaceRecord:
         for it in items_raw:
             if isinstance(it, dict):
                 items.append(WorkspaceItem.from_dict(it))
-        raw_pv = data.get("prompt_versions") or {}
-        prompt_versions: Dict[str, List[PromptVersion]] = {}
-        if isinstance(raw_pv, dict):
-            for k, v in raw_pv.items():
-                if isinstance(v, list):
-                    prompt_versions[str(k)] = [
-                        PromptVersion.from_dict(pv) for pv in v if isinstance(pv, dict)
-                    ]
         raw_status = str(data.get("status") or WorkspaceStatus.ACTIVE.value)
         # 老数据兼容：旧 "completed" 统一映射成 "analyzed"
         if raw_status == "completed":
@@ -384,7 +351,6 @@ class WorkspaceRecord:
             background=WorkspaceBackground.from_dict(data.get("background") or {}),
             items=items,
             favorites=list(data.get("favorites") or []),
-            prompt_versions=prompt_versions,
             created_at=str(data.get("created_at") or _now_iso()),
             updated_at=str(data.get("updated_at") or _now_iso()),
             kind=raw_kind,

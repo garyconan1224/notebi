@@ -244,44 +244,6 @@ def test_intent_and_note_media_kind_in_payload(client):
     assert created_payload["note_media_kind"] == "image_text"
 
 
-def test_replica_generate_note_payload_and_preflight(client):
-    """逐帧复刻入口应写入 item.preflight，并把复刻参数透传给 pipeline。"""
-    c, store, _ = client
-    ws_id = _create_ws(store)
-
-    sniff_result = SniffResult(
-        primary_type="video",
-        possible_types=["video"],
-        platform="bilibili",
-    )
-    with patch.object(ws_module, "sniff_url", return_value=sniff_result):
-        resp = c.post(f"/workspaces/{ws_id}/items/generate-note", json={
-            "url": "https://www.bilibili.com/video/BV1xx",
-            "intent": "replica",
-            "replica_kind": "prompt",
-            "image_mode": "replica_prompt",
-            "frame_interval": 15,
-            "vision_model": "provider/model",
-        })
-
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["item_type"] == "video"
-
-    ws = store.get(ws_id)
-    assert ws is not None
-    item = ws.items[0]
-    assert item.preflight is not None
-    assert item.preflight.intent == "replica"
-
-    created_payload = ws_module._pipeline_runner.create_task.call_args.args[2]
-    assert created_payload["intent"] == "replica"
-    assert created_payload["replica_kind"] == "prompt"
-    assert created_payload["preflight"]["intent"] == "replica"
-    assert created_payload["preflight"]["image_mode"] == "replica_prompt"
-    assert created_payload["preflight"]["frame_prompt"]["interval_sec"] == 15
-    assert created_payload["vision_model"] == "provider/model"
-
 
 def test_intent_defaults_to_note(client):
     """不传 intent/note_media_kind 时应使用默认值。"""

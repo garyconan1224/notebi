@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Phase 1I — 复刻工作包 zip 导出端点测试。
+"""笔记素材包 zip 导出端点测试。
 
 覆盖：
   GET happy path 返回 zip（视频素材）
@@ -58,18 +58,18 @@ def test_export_video_happy_path(client: TestClient) -> None:
     # 解析 zip 内容
     zf = zipfile.ZipFile(io.BytesIO(resp.content))
     names = set(zf.namelist())
-    assert "prompts.json" in names
+    assert "analysis.json" in names
     assert "subtitles.srt" in names
     assert "README.md" in names
     # reference_frames/ 下应有帧文件
     ref_frames = [n for n in names if n.startswith("reference_frames/")]
     assert len(ref_frames) > 0
 
-    # 验证 prompts.json 可解析且有内容
-    prompts = json.loads(zf.read("prompts.json"))
-    assert isinstance(prompts, list)
-    assert len(prompts) > 0
-    assert "prompt_mj" in prompts[0]
+    # 验证 analysis.json 可解析且有内容
+    analysis = json.loads(zf.read("analysis.json"))
+    assert isinstance(analysis, list)
+    assert len(analysis) > 0
+    assert "description" in analysis[0]
 
     # 验证 subtitles.srt 有内容
     srt = zf.read("subtitles.srt").decode()
@@ -84,13 +84,13 @@ def test_export_image_happy_path(client: TestClient) -> None:
 
     zf = zipfile.ZipFile(io.BytesIO(resp.content))
     names = set(zf.namelist())
-    assert "prompts.json" in names
+    assert "analysis.json" in names
     assert "subtitles.srt" in names
     assert "README.md" in names
 
-    # 图片素材的 prompts.json 是 dict
-    prompts = json.loads(zf.read("prompts.json"))
-    assert isinstance(prompts, dict)
+    # 图片素材的 analysis.json 是 dict
+    analysis = json.loads(zf.read("analysis.json"))
+    assert isinstance(analysis, dict)
 
     # subtitles.srt 应为空
     srt = zf.read("subtitles.srt").decode()
@@ -291,8 +291,8 @@ def test_batch_export_happy_path_mixed(client: TestClient) -> None:
 
     zf = zipfile.ZipFile(io.BytesIO(resp.content))
     names = set(zf.namelist())
-    # 两个素材各有一个 prompts.json
-    prompt_files = [n for n in names if n.endswith("prompts.json")]
+    # 两个素材各有一个 analysis.json
+    prompt_files = [n for n in names if n.endswith("analysis.json")]
     assert len(prompt_files) == 2
 
 
@@ -307,7 +307,7 @@ def test_batch_export_image_only(client: TestClient) -> None:
 
     zf = zipfile.ZipFile(io.BytesIO(resp.content))
     names = set(zf.namelist())
-    assert any(n.endswith("prompts.json") for n in names)
+    assert any(n.endswith("analysis.json") for n in names)
 
 
 def test_batch_export_404_workspace(client: TestClient) -> None:

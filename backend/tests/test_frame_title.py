@@ -21,8 +21,8 @@ def _make_store(tmp_dir: str) -> WorkspaceStore:
         "status": "done",
         "results": {
             "frames": [
-                {"idx": 0, "ts": "00:00", "title": "开场", "prompt_mj": "a city"},
-                {"idx": 1, "ts": "00:15", "title": "特写", "prompt_mj": "a face"},
+                {"idx": 0, "ts": "00:00", "title": "开场", "description": "a city"},
+                {"idx": 1, "ts": "00:15", "title": "特写", "description": "a face"},
             ],
         },
         "related_task_ids": [],

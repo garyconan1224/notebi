@@ -16,7 +16,6 @@ describe('product config', () => {
 
   it('only exposes NoteBi note-facing features', () => {
     expect(productConfig.showKnowledge).toBe(true)
-    expect(productConfig.showPromptFormat).toBe(false)
   })
 
   it('only allows the note workspace kind', () => {
@@ -28,7 +27,6 @@ describe('product config', () => {
 
   it('reports feature flags from the fixed NoteBi config', () => {
     expect(isFeatureEnabled('showKnowledge')).toBe(true)
-    expect(isFeatureEnabled('showPromptFormat')).toBe(false)
   })
 
   it('prefixes local storage keys with the NoteBi prefix', () => {

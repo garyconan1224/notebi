@@ -259,113 +259,6 @@ class ProviderProfile:
 
 
 @dataclass(frozen=True)
-class PromptFormat:
-    """提示词格式模板（图片 / 视频两类，前端显示层用）。
-
-    Phase 1G 增强：用户可在设置页自由编辑模板，结果页按选中的 active_*_ids
-    渲染对应平台风格的提示词文本。模板内含 {placeholder}，未识别占位符前端
-    原样保留。
-    """
-
-    id: str
-    name: str
-    category: str  # "image" | "video"
-    template: str = ""
-    description: str = ""
-    is_default: bool = False
-
-    @classmethod
-    def from_dict(cls, data: Any) -> "PromptFormat":
-        if not isinstance(data, dict):
-            return cls(id="", name="", category="image")
-        cat_raw = str(data.get("category") or "image").strip().lower()
-        category = "video" if cat_raw == "video" else "image"
-        return cls(
-            id=str(data.get("id") or "").strip(),
-            name=str(data.get("name") or "").strip(),
-            category=category,
-            template=str(data.get("template") or ""),
-            description=str(data.get("description") or ""),
-            is_default=bool(data.get("is_default", False)),
-        )
-
-
-@dataclass(frozen=True)
-class PromptFormatsConfig:
-    """提示词格式模板配置。
-
-    - formats: 用户实际保存的全部模板。空 tuple 表示从未保存过 → load_settings
-      读取时旁路注入种子（不写盘，待用户首次保存才落库）。
-    - active_image_ids / active_video_ids: 结果页 tabs 选中的 ID 序列。
-      约束：图片类预期 3 个（JSON 由前端永远附加在末尾，不在此处枚举）。
-    """
-
-    formats: tuple[PromptFormat, ...] = ()
-    active_image_ids: tuple[str, ...] = ()
-    active_video_ids: tuple[str, ...] = ()
-
-    @classmethod
-    def from_dict(cls, data: Any) -> "PromptFormatsConfig":
-        if not isinstance(data, dict):
-            return cls()
-        raw_formats = data.get("formats") or []
-        formats: list[PromptFormat] = []
-        seen_ids: set[str] = set()
-        if isinstance(raw_formats, list):
-            for item in raw_formats:
-                fmt = PromptFormat.from_dict(item)
-                if not fmt.id or fmt.id in seen_ids:
-                    continue
-                seen_ids.add(fmt.id)
-                formats.append(fmt)
-        return cls(
-            formats=tuple(formats),
-            active_image_ids=_normalize_id_list(data.get("active_image_ids")),
-            active_video_ids=_normalize_id_list(data.get("active_video_ids")),
-        )
-
-
-def _normalize_id_list(raw: Any) -> tuple[str, ...]:
-    if not isinstance(raw, (list, tuple)):
-        return ()
-    out: list[str] = []
-    for item in raw:
-        s = str(item or "").strip()
-        if s and s not in out:
-            out.append(s)
-    return tuple(out)
-
-
-def _seed_prompt_formats_config() -> PromptFormatsConfig:
-    """从 prompt_format_defaults 构造首次启动的种子。
-
-    放在 settings_store 内部，避免外层依赖；用户首次 POST 保存后才落库。
-    """
-    from shared.prompt_format_defaults import (  # 局部 import 避免顶层循环
-        DEFAULT_ACTIVE_IMAGE_IDS,
-        DEFAULT_ACTIVE_VIDEO_IDS,
-        all_seed_formats,
-    )
-
-    formats = tuple(
-        PromptFormat(
-            id=s["id"],
-            name=s["name"],
-            category=s["category"],
-            template=s["template"],
-            description=s["description"],
-            is_default=s["is_default"],
-        )
-        for s in all_seed_formats()
-    )
-    return PromptFormatsConfig(
-        formats=formats,
-        active_image_ids=DEFAULT_ACTIVE_IMAGE_IDS,
-        active_video_ids=DEFAULT_ACTIVE_VIDEO_IDS,
-    )
-
-
-@dataclass(frozen=True)
 class AppSettings:
     openai_api_key: str = ""
     openai_base_url: str = ""
@@ -384,7 +277,6 @@ class AppSettings:
     default_provider_for_rerank: str = ""
     transcriber: TranscriberConfig = field(default_factory=TranscriberConfig)
     download: DownloadConfig = field(default_factory=DownloadConfig)
-    prompt_formats: PromptFormatsConfig = field(default_factory=PromptFormatsConfig)
     performance: PerformanceConfig = field(default_factory=PerformanceConfig)
     tavily_api_key: str = ""
 
@@ -410,7 +302,6 @@ class AppSettings:
             default_provider_for_rerank=str(data.get("default_provider_for_rerank") or defaults.get("rerank") or ""),
             transcriber=TranscriberConfig.from_dict(data.get("transcriber")),
             download=DownloadConfig.from_dict(data.get("download")),
-            prompt_formats=PromptFormatsConfig.from_dict(data.get("prompt_formats")),
             performance=PerformanceConfig.from_dict(data.get("performance")),
             tavily_api_key=str(data.get("tavily_api_key") or ""),
         )
@@ -458,31 +349,6 @@ def delete_provider(provider_id: str) -> bool:
     new_providers = tuple(p for p in settings.providers if p.id != provider_id)
     save_settings(replace(settings, providers=new_providers))
     return True
-
-
-def load_prompt_formats_with_seed() -> PromptFormatsConfig:
-    """读取 prompt_formats；空（首次）则注入种子，但不写盘。
-
-    种子写盘的时机：用户首次 POST /prompt_formats_config 时由 save_prompt_formats 落库。
-    """
-    cfg = load_settings().prompt_formats
-    if not cfg.formats:
-        return _seed_prompt_formats_config()
-    return cfg
-
-
-def save_prompt_formats(cfg: PromptFormatsConfig) -> PromptFormatsConfig:
-    """整体覆盖写入 prompt_formats，并返回最新值。"""
-    settings = load_settings()
-    save_settings(replace(settings, prompt_formats=cfg))
-    return cfg
-
-
-def reset_prompt_formats() -> PromptFormatsConfig:
-    """恢复种子并写入；返回种子配置。"""
-    seed = _seed_prompt_formats_config()
-    save_prompt_formats(seed)
-    return seed
 
 
 def _parse_providers_with_migration(data: dict[str, Any]) -> tuple[ProviderProfile, ...]:

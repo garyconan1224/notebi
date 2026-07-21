@@ -97,7 +97,6 @@ class AnalysisState:
                 "timestamp": frame_data.get("timestamp"),
                 "content_zh": str(frame_data.get("content_zh") or "")[:280],
                 "description_zh": desc[:280],
-                "image_prompt_en": (str(frame_data.get("image_prompt_en") or ""))[:200],
             },
             "frame_image": img,
             "frame_image_path": path_str,
@@ -491,7 +490,6 @@ def save_results(
             "timestamp": fr["timestamp"],
             "content_zh": fr.get("content_zh", ""),
             "description_zh": fr["description_zh"],
-            "image_prompt_en": fr["image_prompt_en"],
         }
         for fr in frames
     ]
@@ -528,8 +526,6 @@ def _save_markdown(
             if fr.get("content_zh"):
                 f.write(f"- **内容**：{fr['content_zh']}\n")
             f.write(f"- **描述**：{fr['description_zh']}\n")
-            if fr["image_prompt_en"]:
-                f.write(f"- **提示词**：{fr['image_prompt_en']}\n")
             f.write("\n---\n\n")
 
 
@@ -640,7 +636,6 @@ def _compute_avg_brightness(frames_dir: Path, frames: list[dict[str, Any]]) -> f
 def _build_frame_html(fr: dict[str, Any], frames_dir: Path) -> str:
     ts = fr["timestamp"]
     desc = fr["description_zh"]
-    prompt = fr["image_prompt_en"]
     img_file = fr.get("frame_image", "")
     transition = is_transition_frame(desc)
 
@@ -656,13 +651,6 @@ def _build_frame_html(fr: dict[str, Any], frames_dir: Path) -> str:
     parts.append('<div class="fr-txt">')
     parts.append('<div><div class="fr-lbl">👀 画面描述</div>')
     parts.append(f'<div class="fr-desc">{_esc(desc)}</div></div>')
-
-    if prompt:
-        parts.append('<div class="pw">')
-        parts.append('<div class="fr-lbl">🪄 生图提示词</div>')
-        parts.append(f'<div class="pb">{_esc(prompt)}</div>')
-        parts.append('<button class="cb" onclick="cp(this)">📋 复制</button>')
-        parts.append("</div>")
 
     parts.append("</div></div>")
     return "\n".join(parts)
@@ -740,19 +728,17 @@ def _analyze_frame_task(
             result = {
                 "content_zh": ocr_text,
                 "description_zh": "[OCR提取文本] " + (ocr_text if ocr_text else "(无文字)"),
-                "image_prompt_en": ""
             }
         else:
             result = analyze_video_frame(api_key, vision_model, img_b64, product_name)
     except Exception as e:
-        result = {"content_zh": "", "description_zh": f"[分析失败: {e}]", "image_prompt_en": ""}
+        result = {"content_zh": "", "description_zh": f"[分析失败: {e}]"}
     img_filename = make_frame_filename(safe_name, ts)
     save_frame_to_disk(frame_img, frames_dir / img_filename)
     return {
         "timestamp": ts,
         "content_zh": result.get("content_zh", ""),
         "description_zh": result["description_zh"],
-        "image_prompt_en": result["image_prompt_en"],
         "frame_image": img_filename,
     }
 
@@ -817,12 +803,11 @@ def _analyze_frames_batch_task(
                     result = {
                         "content_zh": ocr_text,
                         "description_zh": "[OCR提取文本] " + (ocr_text if ocr_text else "(无文字)"),
-                        "image_prompt_en": ""
                     }
                 else:
                     result = analyze_video_frame(api_key, vision_model, img_b64, product_name)
             except Exception as e:
-                result = {"content_zh": "", "description_zh": f"[分析失败: {e}]", "image_prompt_en": ""}
+                result = {"content_zh": "", "description_zh": f"[分析失败: {e}]"}
             results.append(result)
 
     # 组装 frame_data 并保存图片
@@ -834,7 +819,6 @@ def _analyze_frames_batch_task(
             "timestamp": ts,
             "content_zh": results[i].get("content_zh", ""),
             "description_zh": results[i]["description_zh"],
-            "image_prompt_en": results[i]["image_prompt_en"],
             "frame_image": img_filename,
         })
 
@@ -1016,7 +1000,6 @@ def process_video(
                     batch_result.append({
                         "timestamp": format_timestamp(sec),
                         "description_zh": f"[分析失败: {e}]",
-                        "image_prompt_en": "",
                         "frame_image": "",
                     })
             if batch_result is None:  # worker 在取消信号下跳过了该批
@@ -1136,7 +1119,6 @@ def _reuse_cached_analysis_inner(
             "timestamp": ts_str,
             "content_zh": fr.get("content_zh", ""),
             "description_zh": fr.get("description_zh", ""),
-            "image_prompt_en": fr.get("image_prompt_en", ""),
             "frame_image": fname,      # 仅文件名，供 _save_html/_compute_avg_brightness
             "image_path": img_path,    # 完整路径，供 _postprocess_frames/_collect_frames
         })
