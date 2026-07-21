@@ -81,7 +81,7 @@ export default function KnowledgePage() {
   const [pickerOpen, setPickerOpen] = useState(false)
   const pickerRef = useRef<HTMLDivElement | null>(null)
 
-  // 加载可选的合集列表（note + replica 类型）
+  // 加载可选的合集列表（note 类型）
   useEffect(() => {
     let cancelled = false
     fetchLibrary(false, productConfig.allowedKinds)
@@ -357,7 +357,7 @@ export default function KnowledgePage() {
                           </span>
                           <span className="truncate">{ws.name}</span>
                           <span className="shrink-0 text-[10px] text-muted-foreground">
-                            {ws.kind === 'replica' ? '复刻' : '笔记'}
+                            笔记
                           </span>
                         </button>
                       )

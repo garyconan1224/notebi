@@ -155,7 +155,7 @@ function sortLibraryEntries(entries: LibraryEntry[], sortBy: SortBy): LibraryEnt
   }
 }
 
-export default function LibraryPage({ kind }: { kind?: 'note' | 'replica' } = {}) {
+export default function LibraryPage({ kind }: { kind?: 'note' } = {}) {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const intentFilter = searchParams.get('intent') || ''
@@ -473,10 +473,10 @@ export default function LibraryPage({ kind }: { kind?: 'note' | 'replica' } = {}
     if (!effectiveKind) return
     setCreatingWorkspace(true)
     try {
-      const name = effectiveKind === 'replica' ? '新复刻合集' : '新笔记合集'
+      const name = '新笔记合集'
       await createWorkspace({ name, kind: effectiveKind })
       setSelectedFilters(['collection'])
-      toast.success(`已创建${effectiveKind === 'replica' ? '复刻' : '笔记'}合集`)
+      toast.success('已创建笔记合集')
       await load()
     } catch {
       toast.error('创建合集失败，请重试')
@@ -502,7 +502,7 @@ export default function LibraryPage({ kind }: { kind?: 'note' | 'replica' } = {}
         toast.success('已取消收藏')
       } else {
         await favoriteItem(item.workspace_id, item.item_id)
-        toast.success(`已加入${item.workspace_kind === 'replica' ? '复刻' : '笔记'}收藏`)
+        toast.success('已加入笔记收藏')
       }
       await load()
     } catch {
@@ -526,23 +526,13 @@ export default function LibraryPage({ kind }: { kind?: 'note' | 'replica' } = {}
     }
   }, [data, scopedItems, collectionWorkspaces, collectionWorkspaceIds, itemsByWorkspace])
 
-  const emptyTitle = effectiveKind === 'note'
-    ? '暂无笔记'
-    : effectiveKind === 'replica'
-      ? '暂无复刻'
-      : '暂无笔记'
-  const emptyDesc = effectiveKind === 'note'
-    ? '去工作台添加学习素材，或粘贴一个链接开始吧'
-    : effectiveKind === 'replica'
-      ? '去工作台添加复刻素材，开始创作吧'
-      : '去工作台添加笔记，或粘贴一个链接开始吧'
+  const emptyTitle = '暂无笔记'
+  const emptyDesc = '去工作台添加学习素材，或粘贴一个链接开始吧'
 
-  const pageTone = effectiveKind === 'replica' ? 'replica' : effectiveKind === 'note' ? 'note' : 'library'
-  const pageKicker = effectiveKind === 'replica'
-    ? 'REPLICA LIBRARY'
-    : effectiveKind === 'note'
-      ? 'NOTE LIBRARY'
-      : 'MATERIAL LIBRARY'
+  const pageTone = effectiveKind === 'note' ? 'note' : 'library'
+  const pageKicker = effectiveKind === 'note'
+    ? 'NOTE LIBRARY'
+    : 'MATERIAL LIBRARY'
 
   return (
     <div className={`lib-page lib-page--${pageTone}`}>
@@ -553,21 +543,17 @@ export default function LibraryPage({ kind }: { kind?: 'note' | 'replica' } = {}
           <h2>
             {effectiveKind === 'note'
               ? '所有做过的笔记，都在这里汇总。'
-              : effectiveKind === 'replica'
-                ? '逐帧复刻，画面里的每个细节。'
-                : '所有参考资料，一键检索引用。'}
+              : '所有参考资料，一键检索引用。'}
           </h2>
           <p>
             {effectiveKind === 'note'
               ? '视频、音频、图片和文本都保留各自入口，只把最需要的操作放在第一层。'
-              : effectiveKind === 'replica'
-                ? '对视频和图片进行逐帧拆解与结构分析，沉淀可复用的视觉参考和分镜脚本。'
-                : '导入 PDF、论文、网页和文档，AI 自动建立知识图谱并在笔记和分镜中关联引用。'}
+              : '导入 PDF、论文、网页和文档，AI 自动建立知识图谱并在笔记中关联引用。'}
           </p>
           <div className="lib-hero-actions">
             <button className="lib-cta lib-cta-primary" onClick={() => navigate('/')}>
               <Plus size={15} />
-              {effectiveKind === 'note' || effectiveKind === 'replica' ? '导入内容' : '上传资料'}
+              {effectiveKind === 'note' ? '导入内容' : '上传资料'}
             </button>
             {effectiveKind && (
               <button

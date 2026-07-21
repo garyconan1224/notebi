@@ -13,7 +13,7 @@ import { productConfig, type WorkspaceKind } from '@/config/product'
 import './favorites.css'
 
 type TabKey = 'all' | ItemType
-type KindTabKey = 'all' | 'note' | 'replica'
+type KindTabKey = 'all' | 'note'
 
 interface FavoriteEntry {
   workspace: WorkspaceRecord
@@ -31,7 +31,6 @@ const TAB_DEFS: { key: TabKey; label: string }[] = [
 const KIND_TAB_DEFS: { key: KindTabKey; label: string }[] = [
   { key: 'all', label: '全部收藏' },
   { key: 'note', label: '笔记收藏' },
-  { key: 'replica', label: '复刻收藏' },
 ]
 
 const TYPE_LABEL: Record<string, string> = {
@@ -96,7 +95,7 @@ export default function FavoritesPage() {
     [allowedKinds],
   )
   const kindCounts = useMemo(() => {
-    const acc: Record<KindTabKey, number> = { all: favorites.length, note: 0, replica: 0 }
+    const acc: Record<KindTabKey, number> = { all: favorites.length, note: 0 }
     for (const f of favorites) acc[f.workspace.kind] += 1
     return acc
   }, [favorites])
@@ -205,7 +204,7 @@ function FavoriteCard({ entry }: { entry: FavoriteEntry }) {
   const typeLabel = TYPE_LABEL[item.type] || 'ITEM'
   const coverClass = COVER_CLASS[item.type] || 'cover-video'
   const updatedLabel = new Date(item.updated_at).toLocaleString()
-  const kindLabel = workspace.kind === 'replica' ? '复刻收藏' : '笔记收藏'
+  const kindLabel = '笔记收藏'
 
   return (
     <Link to={resultRouteFor(entry)} style={{ textDecoration: 'none' }}>
@@ -221,7 +220,7 @@ function FavoriteCard({ entry }: { entry: FavoriteEntry }) {
           </div>
           <p className="note-summary">{workspace.name} · {kindLabel}</p>
           <div className="note-meta-row">
-            <span>{workspace.kind === 'replica' ? '复刻' : '笔记'}</span>
+            <span>笔记</span>
             <span>更新于 {updatedLabel}</span>
           </div>
           <div className="note-card-actions">

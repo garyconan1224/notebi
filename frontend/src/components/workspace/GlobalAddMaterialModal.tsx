@@ -77,7 +77,7 @@ export function GlobalAddMaterialModal() {
     if (!isWorkspaceKindAllowed(nextKind)) {
       throw new Error(`${productConfig.name} 不支持创建该类型合集`)
     }
-    const name = rawName.trim() || (nextKind === 'replica' ? '新复刻合集' : '新笔记合集')
+    const name = rawName.trim() || '新笔记合集'
     const created = await createWorkspace({ name, kind: nextKind })
     setWorkspaces((prev) => [...prev, created])
     toast.success(`合集「${name}」已创建`)
@@ -109,9 +109,7 @@ export function GlobalAddMaterialModal() {
     setUploadingLocal(true)
     try {
       const fileType = inferLocalFileType(file)
-      const ws = productConfig.defaultKind === 'replica'
-        ? await createWorkspace({ name: '新复刻合集', kind: 'replica' })
-        : await ensureInbox()
+      const ws = await ensureInbox()
       const updated = await uploadWorkspaceItem(ws.workspace_id, file, {
         name: file.name,
         type: fileType,

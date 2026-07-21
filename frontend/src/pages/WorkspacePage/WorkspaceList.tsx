@@ -63,7 +63,7 @@ export default function WorkspaceList() {
   // 新建模态状态
   const [createOpen, setCreateOpen] = useState(false)
   const [newName, setNewName] = useState('')
-  const [newKind, setNewKind] = useState<'note' | 'replica'>('note')
+  const [newKind, setNewKind] = useState<'note'>('note')
   const [creating, setCreating] = useState(false)
 
   // 删除确认状态
@@ -74,7 +74,7 @@ export default function WorkspaceList() {
   const { filter, setFilter, filterItems, hasActiveFilter } = useTagFilter()
 
   // 合集类型筛选
-  const [kindFilter, setKindFilter] = useState<'all' | 'note' | 'replica'>('all')
+  const [kindFilter, setKindFilter] = useState<'all' | 'note'>('all')
 
   // 工作空间显示规则：若有 tag 筛选，仅展示「至少一个 item 命中筛选」的 workspace；
   // 同时把每个 ws 的 items 过滤一次给 WorkspaceCard 做计数；再按 kind 筛选
@@ -171,14 +171,14 @@ export default function WorkspaceList() {
       {/* 合集类型筛选 */}
       {!loading && items.length > 0 && (
         <div className="flex gap-2">
-          {(['all', 'note', 'replica'] as const).map(k => (
+          {(['all', 'note'] as const).map(k => (
             <Button
               key={k}
               variant={kindFilter === k ? 'default' : 'outline'}
               size="sm"
               onClick={() => setKindFilter(k)}
             >
-              {k === 'all' ? '全部' : k === 'note' ? '📝 笔记' : '🎬 复刻'}
+              {k === 'all' ? '全部' : '📝 笔记'}
             </Button>
           ))}
         </div>
@@ -254,19 +254,10 @@ export default function WorkspaceList() {
             <div className="flex gap-2">
               <Button
                 type="button"
-                variant={newKind === 'note' ? 'default' : 'outline'}
+                variant="default"
                 size="sm"
-                onClick={() => setNewKind('note')}
               >
                 📝 笔记
-              </Button>
-              <Button
-                type="button"
-                variant={newKind === 'replica' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setNewKind('replica')}
-              >
-                🎬 复刻
               </Button>
             </div>
           </div>
@@ -330,8 +321,8 @@ function WorkspaceCard({ workspace, onOpen, onDelete }: WorkspaceCardProps) {
       <CardHeader className="flex-row items-start justify-between space-y-0">
         <div className="flex items-center gap-2">
           <CardTitle className="line-clamp-2 text-base">{workspace.name}</CardTitle>
-          <Badge variant="secondary" className={workspace.kind === 'replica' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}>
-            {workspace.kind === 'replica' ? '🎬 复刻' : '📝 笔记'}
+          <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+            📝 笔记
           </Badge>
         </div>
         <button

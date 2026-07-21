@@ -77,7 +77,6 @@ export const router = createBrowserRouter([
       { path: 'search', element: withSuspense(<SearchPage />) },
       { path: 'library', element: withSuspense(<LibraryPage />) },
       { path: 'notes', element: guardKindRoute('note', withSuspense(<LibraryPage kind="note" />)) },
-      { path: 'replicas', element: guardKindRoute('replica', withSuspense(<LibraryPage kind="replica" />)) },
       { path: 'knowledge', element: guardRoute(isFeatureEnabled('showKnowledge'), withSuspense(<KnowledgePage />)) },
       { path: 'workspaces/:id', element: withSuspense(<TaskboardPage />) },
       {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, BookOpen, Check, CheckSquare, Copy, Download, FileText, Film, ImageIcon, Maximize2, MinusSquare, Pause, Pencil, Play, Settings2, Square, Star, X } from 'lucide-react'
+import { ArrowLeft, Check, CheckSquare, Copy, Download, FileText, ImageIcon, Maximize2, MinusSquare, Pause, Pencil, Play, Settings2, Square, Star, X } from 'lucide-react'
 
 import {
   type PromptVersion,
@@ -79,7 +79,6 @@ export default function VideoResultPage() {
   const { workspaceId = '', itemId = '' } = useParams<{ workspaceId: string; itemId: string }>()
   const navigate = useNavigate()
   const showPromptTools = isFeatureEnabled('showPromptFormat')
-  const allowReplicaTools = isFeatureEnabled('showReplica')
 
   // 合并 loading/result/error 到单一 state，避免在 effect 内多次 setState 触发级联渲染
   type FetchState =
@@ -208,9 +207,7 @@ export default function VideoResultPage() {
     [transcript],
   )
   const totalSec = result?.tracks_meta.total_sec ?? 0
-  const isLearning = result?.intent === 'learning'
-  const showReplicaMode = allowReplicaTools && !isLearning
-  const showNoteMode = !showReplicaMode
+  const showNoteMode = true
 
   // 加载 inline_frames + 推荐（仅学习模式）
   useEffect(() => {
@@ -728,25 +725,6 @@ export default function VideoResultPage() {
           >
             <FileText size={12} /> 统一笔记 <span style={{ fontSize: 9, opacity: 0.6 }}>beta</span>
           </button>
-          {allowReplicaTools && (
-            <div className="vd-mode-toggle">
-              <button
-                className={`vd-mode-btn${showNoteMode ? ' active' : ''}`}
-                data-active={showNoteMode}
-                onClick={() => navigate(`/workspaces/${workspaceId}/items/${itemId}/note`)}
-              >
-                <BookOpen size={12} />
-                <span>笔记</span>
-              </button>
-              <button
-                className={`vd-mode-btn${showReplicaMode ? ' active' : ''}`}
-                data-active={showReplicaMode}
-              >
-                <Film size={12} />
-                <span>复刻</span>
-              </button>
-            </div>
-          )}
           <div style={{ marginLeft: 'auto' }} />
           {result.video.url && (
             <button className="btn-ghost" style={{ height: 28, padding: '0 10px', fontSize: 12 }} onClick={handleDownloadVideo} title="导出视频">
@@ -925,7 +903,7 @@ export default function VideoResultPage() {
   const progress = totalSec > 0 ? Math.min(1, currentSec / totalSec) : 0
 
   return (
-    <div className={`nibi-video-result-scope vd-layout${showReplicaMode ? ' vd-layout--replica' : ''}`}>
+    <div className="nibi-video-result-scope vd-layout">
       {/* ════════ 左：播放器 + 三轨 ════════ */}
       <div className="vd-left">
         {/* 顶部导航 */}
@@ -952,48 +930,10 @@ export default function VideoResultPage() {
               <FileText size={12} /> 统一笔记 <span className="vd-beta">beta</span>
             </button>
           )}
-          {allowReplicaTools && (
-            <div className="vd-mode-toggle">
-              <button
-                className={`vd-mode-btn${showNoteMode ? ' active' : ''}`}
-                data-active={showNoteMode}
-                onClick={() => navigate(`/workspaces/${workspaceId}/items/${itemId}/note`)}
-              >
-                <BookOpen size={12} />
-                <span>笔记</span>
-              </button>
-              <button
-                className={`vd-mode-btn${showReplicaMode ? ' active' : ''}`}
-                data-active={showReplicaMode}
-              >
-                <Film size={12} />
-                <span>复刻</span>
-              </button>
-            </div>
-          )}
           <div className="vd-nav-spacer" />
-          {showReplicaMode && (
-            <>
-              <button className="btn-ghost vd-nav-btn vd-nav-btn--compact" onClick={handleCopyAll} title="一键复制全部帧提示词">
-                <Copy size={12} /> 全复制
-              </button>
-              <button className="btn-ghost vd-nav-btn vd-nav-btn--compact" onClick={handleExportPromptScript} title="导出提示词脚本(.md)">
-                <FileText size={12} /> 导出脚本
-              </button>
-            </>
-          )}
           {result.video.url && (
             <button className="btn-ghost vd-nav-btn vd-nav-btn--compact" onClick={handleDownloadVideo} title="导出视频">
               <Download size={12} /> 视频
-            </button>
-          )}
-          {allowReplicaTools && (
-            <button
-              className="btn-ghost vd-nav-btn vd-nav-btn--compact"
-              onClick={() => navigate('/replicas')}
-              title="查看所有复刻项目"
-            >
-              <Copy size={12} /> 复刻项目
             </button>
           )}
           <div className="vd-dropdown-wrap">

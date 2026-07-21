@@ -100,9 +100,7 @@ export function WorkspaceCard({
     .join(' · ')
   const summaryText = workspace.items_count > 0
     ? `${typeMix || `${workspace.items_count} 项内容`}，可继续生成融合笔记或补充新素材。`
-    : workspace.kind === 'replica'
-      ? '空复刻合集：适合先收纳参考图、视频与分镜素材。'
-      : '空笔记合集：适合按主题收纳视频、音频、图片和文本。'
+    : '空笔记合集：适合按主题收纳视频、音频、图片和文本。'
   const coverThumbnail = workspace.cover_thumbnail
   const collectionTags = useMemo(() => aggregateTags(items), [items])
 
@@ -168,7 +166,7 @@ export function WorkspaceCard({
           <div className="collection-hero-cover">
             <img src={coverThumbnail} alt={`${workspace.name} 封面`} loading="lazy" />
             <div className="collection-hero-overlay">
-              <span>{workspace.kind === 'replica' ? 'REPLICA COLLECTION' : 'NOTE COLLECTION'}</span>
+              <span>NOTE COLLECTION</span>
               <strong>{workspace.items_count} 项内容</strong>
             </div>
           </div>
@@ -187,7 +185,7 @@ export function WorkspaceCard({
                       <img src={item.thumbnail} alt="" loading="lazy" />
                     ) : (
                       <div className="collection-preview-fallback">
-                        <span>{item ? (TYPE_TONE[item.type]?.label ?? item.type.toUpperCase()) : (workspace.kind === 'replica' ? 'REPLICA' : 'NOTE')}</span>
+                        <span>{item ? (TYPE_TONE[item.type]?.label ?? item.type.toUpperCase()) : 'NOTE'}</span>
                         <strong>{item?.name || (index === 0 ? '先往这个合集里放一条内容' : '等待内容')}</strong>
                       </div>
                     )}
@@ -238,7 +236,7 @@ export function WorkspaceCard({
 
         <div className="note-status-line">
           <span className="note-inline-chip note-inline-chip--done">文件夹</span>
-          <span className="note-inline-chip">{workspace.kind === 'replica' ? '复刻合集' : '笔记合集'}</span>
+          <span className="note-inline-chip">笔记合集</span>
         </div>
 
         {collectionTags.length > 0 && (

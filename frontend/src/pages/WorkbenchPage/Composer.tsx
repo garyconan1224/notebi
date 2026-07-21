@@ -6,7 +6,6 @@ import { toast } from 'sonner'
 import { detectPlatform } from './platforms'
 import { normalizeMediaUrl } from '@/lib/url'
 import {
-  createWorkspace,
   sniffUrl,
   ensureInbox,
   uploadWorkspaceItem,
@@ -78,9 +77,7 @@ export function Composer({ onTaskCreated }: ComposerProps) {
     if (!file) return
     setUploading(true)
     try {
-      const ws = productConfig.defaultKind === 'replica'
-        ? await createWorkspace({ name: '新复刻合集', kind: 'replica' })
-        : await ensureInbox()
+      const ws = await ensureInbox()
       const updated = await uploadWorkspaceItem(ws.workspace_id, file, {
         name: file.name,
       })

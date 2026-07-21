@@ -135,9 +135,8 @@ function taskToNoteCard(t: TaskRecord): NoteCard {
   return { id: t.task_id, title, summary, src, type, state, thumb, progress, lastAction, metaLabels }
 }
 
-function taskWorkspaceKind(t: TaskRecord): WorkspaceKind {
-  const payload = (t.payload ?? {}) as Record<string, unknown>
-  return payload.intent === 'replica' || t.task_type === 'replica' ? 'replica' : 'note'
+function taskWorkspaceKind(_t: TaskRecord): WorkspaceKind {
+  return 'note'
 }
 
 interface RecentTasksProps {

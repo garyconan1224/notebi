@@ -5,7 +5,6 @@ import {
   Plus,
   Sparkles,
   FileText,
-  Copy,
   BookOpen,
   Star,
   Search,
@@ -42,7 +41,6 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { id: 'home',       path: '/',           icon: Home,         label: '首页' },
   { id: 'notes',      path: '/notes',      icon: FileText,     label: '笔记', visible: productConfig.allowedKinds.includes('note') },
-  { id: 'replicas',   path: '/replicas',   icon: Copy,         label: '复刻', visible: isFeatureEnabled('showReplica') },
   { id: 'knowledge',  path: '/knowledge',  icon: BookOpen,     label: '知识库', visible: isFeatureEnabled('showKnowledge') },
 ]
 
@@ -215,7 +213,6 @@ export function AppShell({ children }: AppShellProps) {
   const isActive = (item: NavItem) => {
     if (item.id === 'home') return location.pathname === '/'
     if (item.id === 'notes') return location.pathname.startsWith('/notes')
-    if (item.id === 'replicas') return location.pathname.startsWith('/replicas')
     if (item.id === 'knowledge') return location.pathname.startsWith('/knowledge')
     return location.pathname.startsWith(item.path)
   }

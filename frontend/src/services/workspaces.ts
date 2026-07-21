@@ -54,7 +54,7 @@ export async function createWorkspace(
 export async function autoCreateWorkspace(req: {
   hint_url?: string
   hint_text?: string
-  kind?: 'note' | 'replica'
+  kind?: 'note'
 }): Promise<WorkspaceRecord> {
   const res = await http.post<WorkspaceRecord>(`${BASE}/auto-create`, req)
   return res.data
@@ -141,7 +141,7 @@ export interface BatchSourceResolveResponse {
 
 export interface BatchSourceImportRequest {
   workspace_name?: string
-  kind?: 'note' | 'replica'
+  kind?: 'note'
   source_type: string
   source_url?: string
   items: BatchSourceItem[]
@@ -151,7 +151,6 @@ export interface BatchSourceImportRequest {
   frame_interval?: number
   vision_model?: string
   intent?: string
-  replica_kind?: string
   note_media_kind?: string
   summary_template?: string
   diarize?: boolean
@@ -317,7 +316,7 @@ export async function generateNote(
   visionModel: string = '',
   intent: string = 'note',
   noteMediaKind: string = 'auto',
-  extra?: { diarize?: boolean; summary_mode?: 'general' | 'speaker_aware'; speaker_count?: number; summary_template?: string; user_notes?: string; replica_kind?: string },
+  extra?: { diarize?: boolean; summary_mode?: 'general' | 'speaker_aware'; speaker_count?: number; summary_template?: string; user_notes?: string },
 ): Promise<GenerateNoteResponse> {
   const res = await http.post<GenerateNoteResponse>(
     `${BASE}/${workspaceId}/items/generate-note`,
@@ -377,7 +376,7 @@ export interface VideoResult {
   video_template?: string
   /** V3.3: LLM 自动检测到的模板名 */
   detected_template?: string
-  /** R21.P3.S3: 素材意图（learning / replica / 空） */
+  /** R21.P3.S3: 素材意图（learning / 空） */
   intent?: string
 }
 

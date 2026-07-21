@@ -65,18 +65,10 @@ function normalizeResultItemType(...candidates: unknown[]): string {
 function buildResultPath(
   workspaceId: string | undefined,
   itemId: string | undefined,
-  intent: string,
-  itemType: string,
 ): string {
   if (!workspaceId || !itemId) return ''
-  if (intent !== 'replica') return `/workspaces/${workspaceId}/items/${itemId}/note`
-  const detail: Record<string, string> = {
-    video: 'video_detail',
-    image: 'image_result',
-    audio: 'note',
-    text: 'text_result',
-  }
-  return `/workspaces/${workspaceId}/items/${itemId}/${detail[itemType] ?? 'overview'}`
+  // 统一跳转笔记页
+  return `/workspaces/${workspaceId}/items/${itemId}/note`
 }
 
 export default function ProcessingPage() {
@@ -282,7 +274,7 @@ export default function ProcessingPage() {
   const asrSegments: number = Number(result.asr_segments as number) || 0
   // 全局 ETA：所有活跃任务的剩余时间之和，每秒递减
   const etaSec = useGlobalEta()
-  const resultIntent = state?.taskType ?? ((payload.intent as string) === 'replica' ? 'replica' : 'note')
+  const resultIntent = state?.taskType ?? 'note'
   const resultItemType = normalizeResultItemType(
     state?.itemType,
     payload.item_type,
@@ -290,7 +282,7 @@ export default function ProcessingPage() {
     noteKind,
     sourceType,
   )
-  const resultPath = buildResultPath(workspaceId, itemId, resultIntent, resultItemType)
+  const resultPath = buildResultPath(workspaceId, itemId)
 
   const handleViewResult = () => {
     if (!hasUsableResult) return
@@ -308,7 +300,7 @@ export default function ProcessingPage() {
 
   const autoOpenRef = useRef('')
   useEffect(() => {
-    const shouldAutoOpen = resultIntent === 'replica' || resultItemType === 'audio'
+    const shouldAutoOpen = resultItemType === 'audio'
     if (!isSuccess || !shouldAutoOpen || !resultPath) return
     const key = `${taskId}:${resultPath}`
     if (autoOpenRef.current === key) return
@@ -454,7 +446,7 @@ export default function ProcessingPage() {
                 {isSuccess && (
                   <span className="chip chip-success proc-result-arming">
                     <span className="chip-dot" />
-                    完成 ✓ · {resultIntent === 'replica' ? '正在打开复刻结果…' : '正在打开结果…'}
+                    完成 ✓ · 正在打开结果…
                   </span>
                 )}
               </div>

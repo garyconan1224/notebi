@@ -28,7 +28,6 @@ const emptyCaches = (): Record<TemplateCategory, CategoryCache> => ({
   style_video_text_only: emptyCache(),
   style_audio: emptyCache(),
   style_image_text: emptyCache(),
-  style_replica: emptyCache(),
   style_text: emptyCache(),
 })
 

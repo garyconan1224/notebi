@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, CheckCircle2, ChevronDown, Clock, Copy, FileAudio, FileText, Image as ImageIcon, Layers, Link2, PlayCircle, Plus, Search, Settings2, Upload, Video, Wand2, X } from 'lucide-react'
+import { Check, CheckCircle2, ChevronDown, Clock, FileAudio, FileText, Image as ImageIcon, Layers, Link2, PlayCircle, Plus, Search, Settings2, Upload, Video, Wand2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   Dialog,
@@ -41,7 +41,6 @@ import { batchAddItemsToWorkspace, fetchLibrary, type LibraryItem } from '@/serv
 import { fetchTemplates, type TemplateCategory, type VideoTemplateItem } from '@/services/templates'
 import {
   isWorkspaceKindAllowed,
-  productConfig,
   type WorkspaceKind,
 } from '@/config/product'
 import type {
@@ -60,8 +59,8 @@ export interface StagedConfig {
   workspaceIds: string[]
   urlValue?: string
   analysisScope?: AnalysisScope
-  videoIntent?: 'learning' | 'replica'
-  imageMode?: 'replica_prompt' | 'ocr'
+  videoIntent?: 'learning'
+  imageMode?: 'ocr'
 }
 
 interface AddMaterialModalProps {
@@ -71,7 +70,7 @@ interface AddMaterialModalProps {
   workspaceBackgrounds?: Record<string, WorkspaceBackground>
   availableWorkspaces?: WorkspaceRecord[]
   onWorkspaceIdsChange?: (workspaceIds: string[]) => void
-  onCreateWorkspace?: (name: string, kind?: 'note' | 'replica') => Promise<WorkspaceRecord>
+  onCreateWorkspace?: (name: string, kind?: 'note') => Promise<WorkspaceRecord>
   onWorkspaceUpdated?: (workspace: WorkspaceRecord) => void
   sniffResult?: SniffResult | null
   urlValue?: string
@@ -89,14 +88,14 @@ interface AddMaterialModalProps {
   onPickLocalFile?: () => void
   localUploadPending?: boolean
   /** 合集类型，从合集详情页传入时启用硬锁 */
-  workspaceKind?: 'note' | 'replica'
+  workspaceKind?: 'note'
 }
 
 type NoteMediaKind = 'auto' | 'video' | 'image_text' | 'audio' | 'mixed'
-type ActionType = 'note' | 'replica' | 'ai_video' | 'rewrite'
+type ActionType = 'note' | 'ai_video' | 'rewrite'
 type SourceMode = 'auto' | 'single' | 'batch'
 type SpeakerCountChoice = 'auto' | '2' | '3' | '4' | '5'
-const DEFAULT_ACTION: ActionType = productConfig.defaultKind === 'replica' ? 'replica' : 'note'
+const DEFAULT_ACTION: ActionType = 'note'
 
 const NOTE_TYPE_CARDS: { value: NoteMediaKind; label: string; desc: string }[] = [
   { value: 'auto', label: '自动识别', desc: '由系统判断笔记类型' },
@@ -306,7 +305,6 @@ export function AddMaterialModal({
   const [submitting, setSubmitting] = useState(false)
   const [selectedAction, setSelectedAction] = useState<ActionType>(DEFAULT_ACTION)
   const [selectedNoteType, setSelectedNoteType] = useState<NoteMediaKind>('auto')
-  const [replicaKind, setReplicaKind] = useState<'prompt'>('prompt')
   const [embedFrames, setEmbedFrames] = useState(false) // R4.7: 默认关，检测到视觉模型后自动开
   const [selectedVisionModel, setSelectedVisionModel] = useState('') // 空=用系统默认
   const [frameInterval, setFrameInterval] = useState(5)
@@ -370,14 +368,9 @@ export function AddMaterialModal({
     [targetWorkspaceId, workspaceLookup],
   )
   const lockedWorkspaceKind = workspaceKind ?? selectedWorkspaces[0]?.kind
-  const targetWorkspaceKind: WorkspaceKind = lockedWorkspaceKind ?? (selectedAction === 'replica' ? 'replica' : 'note')
+  const targetWorkspaceKind: WorkspaceKind = lockedWorkspaceKind ?? 'note'
   const canUseNote = isWorkspaceKindAllowed('note')
-  const canUseReplica = isWorkspaceKindAllowed('replica') && productConfig.showReplica
-  const dialogDescription = canUseNote && canUseReplica
-    ? '输入素材链接并生成笔记或复刻'
-    : canUseReplica
-      ? '输入素材链接并生成复刻'
-      : '输入素材链接并生成笔记'
+  const dialogDescription = '输入素材链接并生成笔记'
   const selectableWorkspaces = useMemo(
     () => (availableWorkspaces ?? []).filter((ws) => (
       ws.kind === targetWorkspaceKind && isWorkspaceKindAllowed(ws.kind)
@@ -534,7 +527,7 @@ export function AddMaterialModal({
     selectedAction === 'note' && (selectedNoteType === 'audio' || (selectedNoteType === 'auto' && autoResolvedNoteType === 'audio'))
   const showImageTextNoteSettings =
     selectedAction === 'note' && (selectedNoteType === 'image_text' || selectedNoteType === 'mixed' || (selectedNoteType === 'auto' && autoResolvedNoteType === 'image_text'))
-  const showFrameAnalysisSettings = selectedAction === 'replica' || showVideoNoteSettings
+  const showFrameAnalysisSettings = showVideoNoteSettings
   const showSpeakerSettings = selectedAction === 'note' && (showVideoNoteSettings || showAudioNoteSettings)
   const advancedSummaryParts = [
     ...(showImageTextNoteSettings ? ['图文理解'] : []),
@@ -589,7 +582,6 @@ export function AddMaterialModal({
     setSourceMode('auto')
     setSelectedAction(DEFAULT_ACTION)
     setSelectedNoteType('auto')
-    setReplicaKind('prompt')
     setCaptureMode('auto')
     setFrameInterval(5)
     setSelectedVisionModel('')
@@ -716,7 +708,7 @@ export function AddMaterialModal({
         if (!workspaceKind && isWorkspaceKindAllowed(created.kind)) setSelectedAction(created.kind)
       } else {
         // 降级：直接用 createWorkspace 创建（TaskboardPage 场景）
-        const name = workspaceQuery.trim() || (targetWorkspaceKind === 'replica' ? '新复刻合集' : '新笔记合集')
+        const name = workspaceQuery.trim() || '新笔记合集'
         const created = await createWorkspaceSvc({ name, kind: targetWorkspaceKind })
         onWorkspaceIdsChange?.([created.workspace_id])
         if (!workspaceKind && isWorkspaceKindAllowed(created.kind)) setSelectedAction(created.kind)
@@ -883,11 +875,10 @@ export function AddMaterialModal({
         items: selectedBatchItems,
         start: true,
         embed_frames: resolvedNoteKind === 'video' ? embedFrames : false,
-        image_mode: targetWorkspaceKind === 'replica' ? 'replica_prompt' : 'vision',
+        image_mode: 'vision',
         frame_interval: effInterval,
         vision_model: effVisionModel,
-        intent: targetWorkspaceKind === 'replica' ? 'replica' : 'note',
-        replica_kind: replicaKind,
+        intent: 'note',
         note_media_kind: resolvedNoteKind,
         summary_template: noteStyle,
         diarize: diarizeOn,
@@ -930,7 +921,7 @@ export function AddMaterialModal({
           : undefined
         const videoModelId = selectedVisionModel === '__default__' || !selectedVisionModel ? undefined : selectedVisionModel
         await savePreflight(wsId, localFile, {
-          intent: targetWorkspaceKind === 'replica' ? 'replica' : 'learning',
+          intent: 'learning',
           background_overrides: {
             // 后端 /start 从 background_overrides 读 frame_interval_sec
             ...(effInterval != null ? { frame_interval_sec: effInterval } : {}),
@@ -951,8 +942,6 @@ export function AddMaterialModal({
             },
             // 混合笔记：标记 note_media_kind
             ...(resolvedNoteType === 'mixed' ? { note_media_kind: 'mixed' } : {}),
-            // 复刻二级类型（后端 /start 透传到 payload）
-            ...(targetWorkspaceKind === 'replica' ? { replica_kind: replicaKind } : {}),
           },
         })
         const { task_id } = await startItemPipeline(wsId, localFile)
@@ -964,7 +953,7 @@ export function AddMaterialModal({
             url: localFileName || '',
             workspaceId: wsId,
             itemId: localFile,
-            taskType: targetWorkspaceKind === 'replica' ? 'replica' : 'note',
+            taskType: 'note',
             itemType: localFileType ?? (resolvedNoteType === 'audio' ? 'audio' : resolvedNoteType === 'image_text' ? 'image' : 'video'),
           },
         })
@@ -993,9 +982,7 @@ export function AddMaterialModal({
     try {
       let wsId = workspaceIds[0]
       if (!wsId) {
-        const ws = targetWorkspaceKind === 'replica'
-          ? await createWorkspaceSvc({ name: '新复刻合集', kind: 'replica' })
-          : await ensureInbox()
+        const ws = await ensureInbox()
         wsId = ws.workspace_id
       }
 
@@ -1005,16 +992,16 @@ export function AddMaterialModal({
       const effVisionModel = selectedVisionModel === '__default__' ? '' : selectedVisionModel
       const result = await generateNote(
         wsId, effectiveUrl, effectiveSniff?.title ?? undefined,
-        embedFrames, targetWorkspaceKind === 'replica' ? 'replica_prompt' : 'vision', effInterval, effVisionModel,
-        targetWorkspaceKind, selectedNoteType,
-        { diarize: selectedNoteType === 'mixed' ? true : diarizeOn, ...(speakerAwareMedia && selectedSpeakerCount ? { speaker_count: selectedSpeakerCount } : {}), summary_template: noteStyle, ...(speakerAwareMedia ? { summary_mode: 'speaker_aware' as const } : {}), user_notes: userNotes, ...(targetWorkspaceKind === 'replica' ? { replica_kind: replicaKind } : {}), ...(selectedNoteType === 'mixed' ? { note_media_kind: 'mixed' } : {}) },
+        embedFrames, 'vision', effInterval, effVisionModel,
+        'note', selectedNoteType,
+        { diarize: selectedNoteType === 'mixed' ? true : diarizeOn, ...(speakerAwareMedia && selectedSpeakerCount ? { speaker_count: selectedSpeakerCount } : {}), summary_template: noteStyle, ...(speakerAwareMedia ? { summary_mode: 'speaker_aware' as const } : {}), user_notes: userNotes, ...(selectedNoteType === 'mixed' ? { note_media_kind: 'mixed' } : {}) },
       )
-      toast.success(targetWorkspaceKind === 'replica' ? '复刻任务已创建' : '笔记生成中', { description: `${result.item_type} · ${effectiveUrl}` })
+      toast.success('笔记生成中', { description: `${result.item_type} · ${effectiveUrl}` })
 
       onAdded?.()
       onOpenChange(false)
       navigate(`/processing/${result.task_id}`, {
-        state: { url: effectiveUrl, workspaceId: wsId, taskType: targetWorkspaceKind === 'replica' ? 'replica' : 'note', itemId: result.item_id, itemType: result.item_type },
+        state: { url: effectiveUrl, workspaceId: wsId, taskType: 'note', itemId: result.item_id, itemType: result.item_type },
       })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '任务创建失败'
@@ -1431,7 +1418,7 @@ export function AddMaterialModal({
                         {getWorkspaceLabel(workspaceIds[0], '当前合集')}
                       </span>
                     )}
-                    <span className="kw">{targetWorkspaceKind === 'replica' ? '复刻' : '笔记'}</span>
+                    <span className="kw">笔记</span>
                   </div>
                 ) : (
                   <div className="modal-workspace-current modal-workspace-current--empty" aria-hidden="true" />
@@ -1531,7 +1518,7 @@ export function AddMaterialModal({
             <div className="eyebrow" style={{ marginBottom: 10 }}>③ 你要做什么</div>
             {workspaceKind && (
               <div style={{ fontSize: 12, color: 'var(--mut)', marginBottom: 8 }}>
-                动作已锁定为「{workspaceKind === 'replica' ? '复刻' : '笔记'}」合集类型
+                动作已锁定为「笔记」合集类型
               </div>
             )}
             <div className="note-type-grid" style={{ marginBottom: 14 }}>
@@ -1540,59 +1527,18 @@ export function AddMaterialModal({
                   type="button"
                   className="note-type-card"
                   data-active={selectedAction === 'note'}
-                  disabled={workspaceKind === 'replica'}
-                  style={workspaceKind === 'replica' ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
-                  onClick={() => {
-                    if (workspaceKind === 'replica') return
-                    setSelectedAction('note')
-                    // 选了复刻合集却切回笔记 → 清掉冲突的合集选择（变为新建/单独）
-                    if (selectedWorkspaces[0]?.kind === 'replica') onWorkspaceIdsChange?.([])
-                  }}
+                  onClick={() => setSelectedAction('note')}
                 >
                   <div className="ntc-l"><FileText size={16} style={{ display: 'inline', verticalAlign: '-3px', marginRight: 4 }} /> 学习笔记</div>
                   <div className="ntc-d">沉浸式阅读与总结提取</div>
                 </button>
               )}
-              {canUseReplica && (
-                <button
-                  type="button"
-                  className="note-type-card"
-                  data-active={selectedAction === 'replica'}
-                  disabled={workspaceKind === 'note'}
-                  style={workspaceKind === 'note' ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
-                  onClick={() => {
-                    if (workspaceKind === 'note') return
-                    setSelectedAction('replica')
-                    // 选了笔记合集却切到复刻 → 清掉冲突的合集选择（变为新建/单独）
-                    if (selectedWorkspaces[0]?.kind === 'note') onWorkspaceIdsChange?.([])
-                  }}
-                >
-                  <div className="ntc-l"><Copy size={16} style={{ display: 'inline', verticalAlign: '-3px', marginRight: 4 }} /> 逐帧复刻</div>
-                  <div className="ntc-d">提取画面提示词与详细信息</div>
-                </button>
-              )}
             </div>
 
-            {/* 复刻二级：选择复刻类型 */}
-            {selectedAction === 'replica' && (
-              <div className="note-type-grid" style={{ marginBottom: 14 }}>
-                <button
-                  type="button"
-                  className="note-type-card"
-                  data-active={true}
-                  disabled
-                  style={{ cursor: 'default' }}
-                >
-                  <div className="ntc-l"><Copy size={16} style={{ display: 'inline', verticalAlign: '-3px', marginRight: 4 }} /> 提示词复刻</div>
-                  <div className="ntc-d">从视频/图片逐帧提取可复用的画面提示词，用于二次创作/出图</div>
-                </button>
-              </div>
-            )}
-
-            {(selectedAction === 'note' || selectedAction === 'replica') && (
+            {selectedAction === 'note' && (
               <>
                 <div className="eyebrow" style={{ marginBottom: 10 }}>
-                  {selectedAction === 'replica' ? '④ 复刻设置' : '④ 笔记设置'}
+                  ④ 笔记设置
                 </div>
                 {selectedAction === 'note' && (
                   <>
@@ -1702,9 +1648,9 @@ export function AddMaterialModal({
                           }}
                         />
                         <span className="gen-toggle-text">
-                          <span className="gen-field-label">{selectedAction === 'replica' ? '画面分析' : '笔记里配图'}</span>
+                          <span className="gen-field-label">笔记里配图</span>
                           <span className="kw">
-                            {selectedAction === 'replica' ? '关键画面参与复刻' : '带图笔记'}
+                            带图笔记
                           </span>
                         </span>
                       </label>
@@ -1832,7 +1778,7 @@ export function AddMaterialModal({
         <div className="m-foot">
           <span className="mono modal-foot-status">
             <span className="chip-dot" style={{ marginRight: 6 }} />
-            {selectedAction === 'replica' ? '复刻' : '笔记'}
+            笔记
             {selectedAction === 'note' && selectedNoteType !== 'auto'
               ? ` · ${NOTE_TYPE_CARDS.find(c => c.value === selectedNoteType)?.label ?? ''}`
               : ''}

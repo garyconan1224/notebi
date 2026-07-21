@@ -18,7 +18,7 @@ import { batchDeleteItems } from '@/services/library'
 import { AddMaterialModal } from '@/components/workspace/AddMaterialModal'
 import { usePipelineTasks } from '@/hooks/usePipelineTasks'
 import { withStatusToast } from '@/lib/statusToast'
-import { isWorkspaceKindAllowed, productConfig } from '@/config/product'
+import { isWorkspaceKindAllowed } from '@/config/product'
 
 import type { WorkspaceItem, WorkspaceRecord } from '@/types/workspace'
 
@@ -75,7 +75,7 @@ export default function TaskboardPage() {
       .then((data) => {
         if (!ac.signal.aborted) {
           if (!isWorkspaceKindAllowed(data.kind)) {
-            navigate(productConfig.defaultKind === 'replica' ? '/replicas' : '/notes', { replace: true })
+            navigate('/notes', { replace: true })
             return
           }
           setWorkspace(data)
@@ -174,7 +174,7 @@ export default function TaskboardPage() {
         items={workspace.items}
         description={workspace.background.topic || workspace.background.purpose || '合集内的笔记与素材汇总'}
         updatedAt={new Date(workspace.updated_at).toLocaleDateString('zh-CN')}
-        onBack={() => navigate(workspace.kind === 'replica' ? '/replicas' : '/notes')}
+        onBack={() => navigate('/notes')}
         onEditBackground={() => setBgOpen(true)}
         onAddMaterial={() => setAddOpen(true)}
         onExport={() => setExportOpen(true)}
