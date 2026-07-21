@@ -4,7 +4,6 @@ set -e
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 cd "$ROOT_DIR"
 
-export VITE_PRODUCT_MODE="notebi"
 export VITE_BACKEND_BASE_URL="${VITE_BACKEND_BASE_URL:-http://127.0.0.1:8001}"
 
 if ! command -v pnpm >/dev/null 2>&1; then

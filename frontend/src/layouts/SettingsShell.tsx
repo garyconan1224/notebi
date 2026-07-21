@@ -113,7 +113,7 @@ export function SettingsShell() {
           <div className="settings-nav-footer">
             <div className="eyebrow">Build</div>
             <div className="build-version">{version}</div>
-            <div className="build-meta">local · {productConfig.mode}</div>
+            <div className="build-meta">local · NoteBi</div>
           </div>
         </aside>
 

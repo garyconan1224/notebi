@@ -51,7 +51,7 @@ Last updated: 2026-07-12（**当前指针，给所有 AI 工具优先读取**）
 
 - **项目位置**：`/Users/conan/Desktop/notebi`。这是从 `/Users/conan/Desktop/nibi` 拆出的 NoteBi 独立目录。
 - **当前分支**：`codex/qa-notebi-bootstrap`。本仓库由 Codex 初始化为本地接力仓库；不要把它当成原 `/Users/conan/Desktop/nibi` 的工作树。
-- **产品模式**：默认 `VITE_PRODUCT_MODE=notebi`，前端端口 `5181`，后端端口 `8001`。
+- **产品模式**：固定为 NoteBi（多产品模式已在单产品化清理中删除），前端端口 `5181`，后端端口 `8001`。
 - **启动入口**：
   - 用户双击：`启动 NoteBi.command`
   - 终端完整启动：`./start-notebi.command`

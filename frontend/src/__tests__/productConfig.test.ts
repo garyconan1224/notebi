@@ -1,50 +1,44 @@
 import { describe, expect, it } from 'vitest'
-import { getProductConfig, resolveProductMode } from '@/config/product'
+import {
+  isFeatureEnabled,
+  isWorkspaceKindAllowed,
+  productConfig,
+  productStorageKey,
+} from '@/config/product'
 
 describe('product config', () => {
-  it('defaults empty and unknown modes to nibi', () => {
-    expect(resolveProductMode('')).toBe('nibi')
-    expect(resolveProductMode(undefined)).toBe('nibi')
-    expect(resolveProductMode('unknown')).toBe('nibi')
+  it('is fixed to NoteBi with note-only workspaces', () => {
+    expect(productConfig.name).toBe('NoteBi')
+    expect(productConfig.allowedKinds).toEqual(['note'])
+    expect(productConfig.defaultKind).toBe('note')
+    expect(productConfig.storagePrefix).toBe('notebi')
   })
 
-  it('keeps the legacy nibi mode internally while presenting NoteBi', () => {
-    const config = getProductConfig('nibi')
-
-    expect(config.name).toBe('NoteBi')
-    expect(config.storagePrefix).toBe('nibi')
-    expect(config.allowedKinds).toEqual(['note', 'replica'])
-    expect(config.defaultKind).toBe('note')
-    expect(config.showKnowledge).toBe(true)
-    expect(config.showReplica).toBe(true)
-    expect(config.showPromptFormat).toBe(true)
+  it('only exposes NoteBi note-facing features', () => {
+    expect(productConfig.showKnowledge).toBe(true)
+    expect(productConfig.showReplica).toBe(false)
+    expect(productConfig.showStoryboard).toBe(false)
+    expect(productConfig.showDirector).toBe(false)
+    expect(productConfig.showPromptFormat).toBe(false)
+    expect(productConfig.allowReplicaCleanup).toBe(true)
   })
 
-  it('limits notebi to note-facing features', () => {
-    const config = getProductConfig('notebi')
-
-    expect(config.name).toBe('NoteBi')
-    expect(config.allowedKinds).toEqual(['note'])
-    expect(config.defaultKind).toBe('note')
-    expect(config.showKnowledge).toBe(true)
-    expect(config.showReplica).toBe(false)
-    expect(config.showStoryboard).toBe(false)
-    expect(config.showDirector).toBe(false)
-    expect(config.showPromptFormat).toBe(false)
-    expect(config.allowReplicaCleanup).toBe(true)
+  it('only allows the note workspace kind', () => {
+    expect(isWorkspaceKindAllowed('note')).toBe(true)
+    expect(isWorkspaceKindAllowed('replica')).toBe(false)
+    expect(isWorkspaceKindAllowed('')).toBe(false)
+    expect(isWorkspaceKindAllowed(undefined)).toBe(false)
   })
 
-  it('limits replicabi to replica-facing features', () => {
-    const config = getProductConfig('replicabi')
+  it('reports feature flags from the fixed NoteBi config', () => {
+    expect(isFeatureEnabled('showKnowledge')).toBe(true)
+    expect(isFeatureEnabled('showReplica')).toBe(false)
+    expect(isFeatureEnabled('showStoryboard')).toBe(false)
+    expect(isFeatureEnabled('showDirector')).toBe(false)
+    expect(isFeatureEnabled('showPromptFormat')).toBe(false)
+  })
 
-    expect(config.name).toBe('ReplicaBi')
-    expect(config.allowedKinds).toEqual(['replica'])
-    expect(config.defaultKind).toBe('replica')
-    expect(config.showKnowledge).toBe(false)
-    expect(config.showReplica).toBe(true)
-    expect(config.showStoryboard).toBe(true)
-    expect(config.showDirector).toBe(true)
-    expect(config.showPromptFormat).toBe(true)
-    expect(config.allowReplicaCleanup).toBe(false)
+  it('prefixes local storage keys with the NoteBi prefix', () => {
+    expect(productStorageKey('sidebar-collapsed')).toBe('notebi-sidebar-collapsed')
   })
 })

@@ -392,65 +392,6 @@ describe('AddMaterialModal', () => {
     })
   })
 
-  it('选择复刻时提交 intent=replica', async () => {
-    generateNoteMock.mockResolvedValueOnce({
-      task_id: 'task-replica-1',
-      task_type: 'replica',
-      item_type: 'video',
-      item_id: 'item-2',
-      workspace: {},
-    })
-
-    render(
-      <AddMaterialModal
-        open={true}
-        onOpenChange={vi.fn()}
-        workspaceIds={['ws-1']}
-        urlValue="https://example.com/video"
-        sniffResult={{
-          primary_type: 'video',
-          possible_types: ['video'],
-          platform: 'bilibili',
-          title: '复刻测试',
-          thumbnail: null,
-          content_type_header: null,
-        }}
-      />,
-    )
-
-    // 点击复刻大卡
-    fireEvent.click(screen.getByRole('button', { name: /逐帧复刻/ }))
-    // 此时应该切到“④ 复刻设置”
-    expect(screen.queryByText('④ 笔记设置')).toBeNull()
-    expect(screen.getByText('④ 复刻设置')).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: /开始生成/ }))
-
-    await waitFor(() => {
-      expect(generateNoteMock).toHaveBeenCalledWith(
-        'ws-1',
-        'https://example.com/video',
-        '复刻测试',
-        true,
-        'replica_prompt',
-        10,
-        '',
-        'replica',
-        'auto',
-        { diarize: false, summary_template: 'standard', user_notes: '', replica_kind: 'prompt' },
-      )
-    })
-    expect(navigateMock).toHaveBeenCalledWith('/processing/task-replica-1', {
-      state: {
-        url: 'https://example.com/video',
-        workspaceId: 'ws-1',
-        taskType: 'replica',
-        itemId: 'item-2',
-        itemType: 'video',
-      },
-    })
-  })
-
   it('没有工作空间时落入收纳箱，再生成笔记', async () => {
     ensureInboxMock.mockResolvedValue({ workspace_id: '__inbox__', name: '收纳箱' })
 
@@ -583,33 +524,6 @@ describe('AddMaterialModal', () => {
         }),
       )
     })
-  })
-
-  it('复刻设置展示取画面，不展示笔记专属项', () => {
-    render(
-      <AddMaterialModal
-        open={true}
-        onOpenChange={vi.fn()}
-        workspaceIds={['ws-1']}
-        urlValue="https://example.com/video"
-        sniffResult={{
-          primary_type: 'video',
-          possible_types: ['video'],
-          platform: 'bilibili',
-          title: '复刻视频',
-          thumbnail: null,
-          content_type_header: null,
-        }}
-      />,
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: /逐帧复刻/ }))
-    fireEvent.click(screen.getByRole('button', { name: /高级设置/ }))
-
-    expect(screen.queryByText('笔记风格')).toBeNull()
-    expect(screen.queryByText('区分发言人')).toBeNull()
-    expect(screen.getByText('画面分析')).toBeTruthy()
-    expect(screen.getByText('取画面')).toBeTruthy()
   })
 
   it('内部输入链接后自动嗅探并展示视频卡', async () => {

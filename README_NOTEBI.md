@@ -77,10 +77,9 @@ stop-notebi.bat
 
 ## 首次启动说明
 
-第一次双击启动器时会自动检查并安装 Homebrew、Python、ffmpeg、Node.js、pnpm、Python 依赖和前端依赖，可能需要几分钟。启动器会把这个独立目录的 `.env` 自动设置成 NoteBi 模式：
+第一次双击启动器时会自动检查并安装 Homebrew、Python、ffmpeg、Node.js、pnpm、Python 依赖和前端依赖，可能需要几分钟。启动器会把这个独立目录的 `.env` 自动设置好：
 
 ```bash
-VITE_PRODUCT_MODE=notebi
 VITE_PORT=5181
 BACKEND_PORT=8001
 ```

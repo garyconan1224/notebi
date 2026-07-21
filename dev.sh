@@ -10,9 +10,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 cd "$SCRIPT_DIR"
 mkdir -p .local
 
-# 即使从已有终端环境启动，也必须保持 NoteBi 产品模式，不能继承 Nibi。
-export VITE_PRODUCT_MODE="notebi"
-
 # ── 读取端口（.env 优先，否则默认） ──────────────────────────────
 BACKEND_PORT=$(grep -E '^BACKEND_PORT=' .env 2>/dev/null | tail -1 | cut -d= -f2 | tr -d '"' | tr -d "'")
 VITE_PORT=$(grep -E '^VITE_PORT=' .env 2>/dev/null | tail -1 | cut -d= -f2 | tr -d '"' | tr -d "'")

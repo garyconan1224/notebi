@@ -1,8 +1,13 @@
-export type ProductMode = 'nibi' | 'notebi' | 'replicabi'
+// NoteBi 是唯一的本地产品。历史上这里曾通过环境变量在多个产品之间切换功能，
+// 复刻 / 分镜 / 提示词生产能力删除后不再需要多产品配置。
+// 本模块只保留固定的 NoteBi 常量与本地存储 helper。
+//
+// 注意：allowedKinds / defaultKind / isWorkspaceKindAllowed / isFeatureEnabled 等
+// 仍被部分页面引用，它们会在复刻、分镜、提示词生产能力被逐步删除（后续阶段）后
+// 连同各自的消费代码一起移除，不属于长期保留的开关。
 export type WorkspaceKind = 'note' | 'replica'
 
 export interface ProductConfig {
-  mode: ProductMode
   name: string
   allowedKinds: WorkspaceKind[]
   defaultKind: WorkspaceKind
@@ -15,60 +20,18 @@ export interface ProductConfig {
   allowReplicaCleanup: boolean
 }
 
-const PRODUCT_CONFIGS: Record<ProductMode, ProductConfig> = {
-  nibi: {
-    mode: 'nibi',
-    // 保留 legacy mode 与 storagePrefix，避免既有本地数据失效；所有界面统一显示 NoteBi。
-    name: 'NoteBi',
-    allowedKinds: ['note', 'replica'],
-    defaultKind: 'note',
-    storagePrefix: 'nibi',
-    showKnowledge: true,
-    showReplica: true,
-    showStoryboard: true,
-    showDirector: true,
-    showPromptFormat: true,
-    allowReplicaCleanup: false,
-  },
-  notebi: {
-    mode: 'notebi',
-    name: 'NoteBi',
-    allowedKinds: ['note'],
-    defaultKind: 'note',
-    storagePrefix: 'notebi',
-    showKnowledge: true,
-    showReplica: false,
-    showStoryboard: false,
-    showDirector: false,
-    showPromptFormat: false,
-    allowReplicaCleanup: true,
-  },
-  replicabi: {
-    mode: 'replicabi',
-    name: 'ReplicaBi',
-    allowedKinds: ['replica'],
-    defaultKind: 'replica',
-    storagePrefix: 'replicabi',
-    showKnowledge: false,
-    showReplica: true,
-    showStoryboard: true,
-    showDirector: true,
-    showPromptFormat: true,
-    allowReplicaCleanup: false,
-  },
+export const productConfig: ProductConfig = {
+  name: 'NoteBi',
+  allowedKinds: ['note'],
+  defaultKind: 'note',
+  storagePrefix: 'notebi',
+  showKnowledge: true,
+  showReplica: false,
+  showStoryboard: false,
+  showDirector: false,
+  showPromptFormat: false,
+  allowReplicaCleanup: true,
 }
-
-export function resolveProductMode(rawMode: unknown): ProductMode {
-  const mode = String(rawMode ?? '').trim().toLowerCase()
-  if (mode === 'notebi' || mode === 'replicabi') return mode
-  return 'nibi'
-}
-
-export function getProductConfig(rawMode: unknown): ProductConfig {
-  return PRODUCT_CONFIGS[resolveProductMode(rawMode)]
-}
-
-export const productConfig = getProductConfig(import.meta.env.VITE_PRODUCT_MODE)
 
 export function isWorkspaceKindAllowed(kind?: string | null): kind is WorkspaceKind {
   return productConfig.allowedKinds.includes((kind || '') as WorkspaceKind)

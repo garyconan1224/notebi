@@ -234,7 +234,6 @@ fi
 if [[ -f "$PROJECT/.env" ]]; then
     set -a; source "$PROJECT/.env"; set +a
 fi
-VITE_PRODUCT_MODE="notebi"
 VITE_PORT="${VITE_PORT:-5181}"
 BACKEND_PORT="${BACKEND_PORT:-8001}"
 VITE_BACKEND_PORT="${VITE_BACKEND_PORT:-$BACKEND_PORT}"
@@ -275,7 +274,6 @@ sleep 2
 
 # 前端（输出写入日志文件）
 cd "$FRONTEND_DIR"
-VITE_PRODUCT_MODE="$VITE_PRODUCT_MODE" \
 VITE_BACKEND_PORT="$VITE_BACKEND_PORT" \
 VITE_BACKEND_BASE_URL="http://127.0.0.1:$BACKEND_PORT" \
     npm run dev > "$PROJECT/.local/frontend.log" 2>&1 &

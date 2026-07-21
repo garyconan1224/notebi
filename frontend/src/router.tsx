@@ -52,7 +52,7 @@ const withSuspense = (node: ReactNode) => (
   <Suspense fallback={<RouteFallback />}>{node}</Suspense>
 )
 
-const fallbackLibraryPath = productConfig.defaultKind === 'replica' ? '/replicas' : '/notes'
+const fallbackLibraryPath = '/notes'
 
 function guardRoute(enabled: boolean, node: ReactNode, fallback = '/'): ReactNode {
   return enabled ? node : <Navigate to={fallback} replace />
@@ -72,7 +72,7 @@ export const router = createBrowserRouter([
       { path: 'new', element: <Navigate to="/" replace /> },
       {
         path: 'workspaces',
-        element: guardRoute(productConfig.mode === 'nibi', withSuspense(<WorkspaceList />), fallbackLibraryPath),
+        element: withSuspense(<WorkspaceList />),
       },
       { path: 'favorites', element: withSuspense(<FavoritesPage />) },
       { path: 'search', element: withSuspense(<SearchPage />) },
