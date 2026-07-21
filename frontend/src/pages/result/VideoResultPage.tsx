@@ -9,7 +9,6 @@ import {
   type VideoResultFrame,
   addPromptVersion,
   downloadSubtitles,
-  exportReproducePackage,
   getItemResult,
   getItemNote,
   listPromptVersions,
@@ -105,7 +104,6 @@ export default function VideoResultPage() {
   // C-3: 帧多选
   const [selectedFrames, setSelectedFrames] = useState<Set<number>>(new Set())
   const lastClickedIdx = useRef<number>(-1)
-  const [exporting, setExporting] = useState(false)
 
   // C-4: 帧提示词 inline editor
   const [editing, setEditing] = useState(false)
@@ -501,21 +499,6 @@ export default function VideoResultPage() {
     URL.revokeObjectURL(url)
     toast.success('提示词脚本已导出')
   }, [frames, result?.video.title])
-
-  // C-3: 导出复刻包
-  const handleExportReproduce = useCallback(async () => {
-    if (!selectedFrames.size) return
-    setExporting(true)
-    try {
-      const indices = [...selectedFrames].sort((a, b) => a - b)
-      await exportReproducePackage(workspaceId, itemId, indices)
-      toast.success(`已导出 ${indices.length} 帧复刻包`)
-    } catch (err) {
-      toast.error('导出失败：' + (err instanceof Error ? err.message : '未知'))
-    } finally {
-      setExporting(false)
-    }
-  }, [selectedFrames, workspaceId, itemId])
 
   /* N11: 导出功能 UI 隐藏（代码保留，见 SPEC §8.2）
   const handleExport = useCallback(async () => {
@@ -999,9 +982,6 @@ export default function VideoResultPage() {
                 </button>
                 <button className="vd-btn-tool" onClick={handleExportPromptScript} title="导出提示词脚本(.md)">
                   <FileText size={12} /> 导出脚本
-                </button>
-                <button className="vd-btn-tool" onClick={handleExportReproduce} disabled={exporting} title="导出复刻包">
-                  <Download size={12} /> {exporting ? '导出中…' : '导出复刻包'}
                 </button>
                 <button className="vd-btn-tool" onClick={selectAllFrames} title="全选">
                   <CheckSquare size={12} /> 全选
