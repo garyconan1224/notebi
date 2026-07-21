@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from fastapi import HTTPException
 import pytest
 
 from backend.app.models.workspace import WorkspaceItem, WorkspaceRecord
@@ -137,85 +136,3 @@ def test_ask_global_filters_subrange_cache_build_by_kinds(tmp_path, monkeypatch)
     )
 
     assert [source["workspace_id"] for source in result["sources"]] == ["note-1"]
-
-
-def test_workspace_kind_summary_counts_non_trashed_workspaces_and_items(tmp_path, monkeypatch):
-    from backend.app.routes import workspaces
-
-    store = WorkspaceStore(root=tmp_path)
-    note = _record("note-1", "note", "Note")
-    replica = _record("replica-1", "replica", "Replica")
-    replica.items.append(
-        WorkspaceItem(
-            item_id="replica-1-item-2",
-            type="text",
-            source="local",
-            source_value="Replica extra.txt",
-            name="Replica extra item",
-            results={"summary": "Replica extra summary"},
-        )
-    )
-    trashed_replica = _record("replica-trashed", "replica", "Trashed Replica")
-    trashed_replica.trashed = True
-    store.create(note)
-    store.create(replica)
-    store.create(trashed_replica)
-    monkeypatch.setattr(workspaces, "_store", store)
-
-    assert workspaces.workspace_kind_summary() == {
-        "note_count": 1,
-        "replica_count": 1,
-        "note_items": 1,
-        "replica_items": 2,
-    }
-
-
-def test_cleanup_by_kind_trashes_replica_only_and_invalidates_global_cache(
-    tmp_path,
-    monkeypatch,
-):
-    from backend.app.routes import workspaces
-
-    store = WorkspaceStore(root=tmp_path)
-    store.create(_record("note-1", "note", "Note"))
-    store.create(_record("replica-1", "replica", "Replica"))
-    monkeypatch.setattr(workspaces, "_store", store)
-
-    invalidated = []
-    monkeypatch.setattr(
-        workspaces,
-        "invalidate_global_knowledge_caches",
-        lambda: invalidated.append(True),
-    )
-
-    result = workspaces.cleanup_by_kind(
-        workspaces.WorkspaceCleanupByKindRequest(kind="replica", mode="trash")
-    )
-
-    assert result == {
-        "kind": "replica",
-        "mode": "trash",
-        "count": 1,
-        "workspace_ids": ["replica-1"],
-    }
-    assert store.get("note-1").trashed is False
-    assert store.get("replica-1").trashed is True
-    assert invalidated == [True]
-
-
-@pytest.mark.parametrize(
-    ("kind", "mode"),
-    [
-        ("note", "trash"),
-        ("replica", "permanent"),
-    ],
-)
-def test_cleanup_by_kind_rejects_unsafe_scope(kind, mode):
-    from backend.app.routes import workspaces
-
-    with pytest.raises(HTTPException) as exc_info:
-        workspaces.cleanup_by_kind(
-            workspaces.WorkspaceCleanupByKindRequest(kind=kind, mode=mode)
-        )
-
-    assert exc_info.value.status_code == 400

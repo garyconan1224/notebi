@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 from contextlib import asynccontextmanager
@@ -37,7 +38,10 @@ from backend.app.routes.workspaces import router as workspaces_router
 from backend.app.routes.chat import router as chat_router
 from backend.app.routes.link_preview import router as link_preview_router
 from backend.app.routes.knowledge import router as knowledge_router
+from backend.app.services.replica_purge import purge_legacy_replica_workspaces
 from shared.settings_store import ProviderProfile, load_settings, save_settings
+
+logger = logging.getLogger(__name__)
 
 # 应用启动时间（UTC 时间戳），用于计算 uptime
 _APP_START_TS: float = time.time()
@@ -76,10 +80,29 @@ def _seed_siliconflow_provider() -> None:
     print(f"✅ Seeded SiliconFlow provider (base_url={base_url})")
 
 
+def _purge_legacy_replica_data() -> None:
+    """启动期永久删除旧复刻合集，确保对外服务前没有请求能读到 replica 记录。
+
+    复用各 router 模块级 store 单例，使清理直接作用于真实内存索引；清理幂等，
+    失败只记录日志、不阻断启动，下次启动继续重试。
+    """
+    from backend.app.routes.pipeline import _store as task_store
+    from backend.app.routes.workspaces import _store as workspace_store
+
+    try:
+        result = purge_legacy_replica_workspaces(workspace_store, task_store)
+    except Exception:  # noqa: BLE001 - 启动清理失败不应阻断服务
+        logger.exception("legacy replica purge 失败，将在下次启动重试")
+        return
+    if result.get("workspaces_deleted") or result.get("errors"):
+        logger.info("legacy replica purge: %s", result)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """FastAPI 生命周期钩子：启动时自动 seed 默认 provider。"""
+    """FastAPI 生命周期钩子：启动时 seed 默认 provider 并清理旧复刻数据。"""
     _seed_siliconflow_provider()
+    _purge_legacy_replica_data()
     yield
 
 

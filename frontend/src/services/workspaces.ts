@@ -20,20 +20,6 @@ import type {
 
 const BASE = '/workspaces'
 
-export interface WorkspaceKindSummary {
-  note_count: number
-  replica_count: number
-  note_items: number
-  replica_items: number
-}
-
-export interface WorkspaceKindCleanupResponse {
-  kind: 'replica'
-  mode: 'trash'
-  count: number
-  workspace_ids: string[]
-}
-
 /** GET /workspaces — 列表（默认排除 trashed） */
 export async function listWorkspaces(opts?: {
   trashedOnly?: boolean
@@ -46,23 +32,6 @@ export async function listWorkspaces(opts?: {
   opts?.kinds?.forEach((kind) => params.append('kinds', kind))
   const res = await http.get<WorkspaceRecord[]>(BASE, {
     params: params.size ? params : undefined,
-  })
-  return res.data
-}
-
-/** GET /workspaces/kind-summary — 产品拆分迁移用 kind 汇总 */
-export async function getWorkspaceKindSummary(): Promise<WorkspaceKindSummary> {
-  const res = await http.get<WorkspaceKindSummary>(`${BASE}/kind-summary`)
-  return res.data
-}
-
-/** POST /workspaces/cleanup-by-kind — 仅支持把 replica 合集移入回收站 */
-export async function cleanupWorkspacesByKind(
-  kind: 'replica',
-): Promise<WorkspaceKindCleanupResponse> {
-  const res = await http.post<WorkspaceKindCleanupResponse>(`${BASE}/cleanup-by-kind`, {
-    kind,
-    mode: 'trash',
   })
   return res.data
 }

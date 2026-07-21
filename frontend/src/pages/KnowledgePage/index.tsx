@@ -11,7 +11,6 @@ import {
   Plus,
   RefreshCw,
   Send,
-  Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -26,11 +25,6 @@ import {
 } from '@/services/knowledge'
 import { fetchLibrary } from '@/services/library'
 import type { SearchSource } from '@/services/search'
-import {
-  cleanupWorkspacesByKind,
-  getWorkspaceKindSummary,
-  type WorkspaceKindSummary,
-} from '@/services/workspaces'
 import { cn } from '@/lib/utils'
 import { isWorkspaceKindAllowed, productConfig } from '@/config/product'
 
@@ -80,10 +74,6 @@ export default function KnowledgePage() {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<KnowledgeMessage[]>([])
   const scrollRef = useRef<HTMLDivElement | null>(null)
-  const showReplicaCleanup = productConfig.allowReplicaCleanup
-  const [kindSummary, setKindSummary] = useState<WorkspaceKindSummary | null>(null)
-  const [loadingKindSummary, setLoadingKindSummary] = useState(false)
-  const [cleaningReplicas, setCleaningReplicas] = useState(false)
 
   // 合集范围选择
   const [workspaceOptions, setWorkspaceOptions] = useState<WorkspaceOption[]>([])
@@ -143,29 +133,9 @@ export default function KnowledgePage() {
     }
   }, [])
 
-  const refreshKindSummary = useCallback(async () => {
-    if (!showReplicaCleanup) return null
-    setLoadingKindSummary(true)
-    try {
-      const next = await getWorkspaceKindSummary()
-      setKindSummary(next)
-      return next
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : '读取合集类型汇总失败'
-      toast.error(msg)
-      return null
-    } finally {
-      setLoadingKindSummary(false)
-    }
-  }, [showReplicaCleanup])
-
   useEffect(() => {
     void refreshStatus()
   }, [refreshStatus])
-
-  useEffect(() => {
-    void refreshKindSummary()
-  }, [refreshKindSummary])
 
   useEffect(() => {
     if (!status?.running) return
@@ -204,28 +174,6 @@ export default function KnowledgePage() {
       toast.error(msg)
     } finally {
       setRebuilding(false)
-    }
-  }
-
-  const handleCleanupReplicas = async () => {
-    const count = kindSummary?.replica_count ?? 0
-    if (count <= 0 || cleaningReplicas) return
-    const confirmed = window.confirm(
-      `将 ${count} 个复刻合集移入回收站？这不会永久删除数据，但会从 NoteBi 中隐藏，并会清除全局知识库缓存。`,
-    )
-    if (!confirmed) return
-
-    setCleaningReplicas(true)
-    try {
-      const result = await cleanupWorkspacesByKind('replica')
-      toast.success(`已将 ${result.count} 个复刻合集移入回收站`)
-      await refreshKindSummary()
-      await refreshStatus()
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : '清理复刻合集失败'
-      toast.error(msg)
-    } finally {
-      setCleaningReplicas(false)
     }
   }
 
@@ -353,31 +301,6 @@ export default function KnowledgePage() {
           <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
             <AlertCircle size={16} />
             <span>索引未就绪，刷新索引后即可跨全部笔记提问。</span>
-          </div>
-        ) : null}
-
-        {showReplicaCleanup && kindSummary && kindSummary.replica_count > 0 ? (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-            <div className="min-w-0">
-              <div className="font-medium">发现 {kindSummary.replica_count} 个复刻合集未隐藏</div>
-              <div className="mt-0.5 text-xs text-amber-800">
-                共 {kindSummary.replica_items} 个复刻素材，可移入回收站后重新刷新索引。
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void handleCleanupReplicas()}
-              disabled={cleaningReplicas || loadingKindSummary}
-              className="border-amber-300 bg-white/70 text-amber-950 hover:bg-white"
-            >
-              {cleaningReplicas ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <Trash2 size={14} />
-              )}
-              移入回收站
-            </Button>
           </div>
         ) : null}
 

@@ -85,7 +85,6 @@ from backend.app.services.speaker_labels import (
 from backend.app.services.summary_generator import generate_summary
 from backend.app.services.summary_templates import list_template_ids
 from backend.app.services.video_result_demo import build_demo_video_result
-from backend.app.services.global_knowledge import invalidate_global_knowledge_caches
 from backend.app.services.workspace_search_service import search_one_workspace
 from backend.app.services.workspace_store import WorkspaceStore
 from shared.config import DATA_DIR
@@ -737,11 +736,6 @@ class WorkspaceUpdateRequest(BaseModel):
     name: Optional[str] = None
     status: Optional[str] = Field(default=None, description="active|processing|analyzed|archived")
     background: Optional[Dict[str, Any]] = None
-
-
-class WorkspaceCleanupByKindRequest(BaseModel):
-    kind: str = Field(description="Only replica cleanup is supported")
-    mode: str = Field(default="trash", description="Only trash mode is supported")
 
 
 class ItemAddRequest(BaseModel):
@@ -1911,56 +1905,6 @@ def list_workspaces(
     # 隐藏收纳箱，不在合集列表展示
     recs = [r for r in recs if r.source != "inbox"]
     return [_enrich_workspace(r) for r in recs]
-
-
-@router.get("/kind-summary")
-def workspace_kind_summary() -> Dict[str, int]:
-    """Return non-trashed workspace and item counts grouped by product kind."""
-
-    summary = {
-        "note_count": 0,
-        "replica_count": 0,
-        "note_items": 0,
-        "replica_items": 0,
-    }
-    for rec in _store.list_all(include_trashed=False):
-        if rec.kind == "note":
-            summary["note_count"] += 1
-            summary["note_items"] += len(rec.items)
-        elif rec.kind == "replica":
-            summary["replica_count"] += 1
-            summary["replica_items"] += len(rec.items)
-    return summary
-
-
-@router.post("/cleanup-by-kind")
-def cleanup_by_kind(req: WorkspaceCleanupByKindRequest) -> Dict[str, Any]:
-    """Move all non-trashed replica workspaces to trash.
-
-    This endpoint intentionally does not support permanent deletion or note cleanup.
-    """
-
-    if req.kind != "replica" or req.mode != "trash":
-        raise HTTPException(
-            status_code=400,
-            detail="cleanup-by-kind only supports kind=replica and mode=trash",
-        )
-
-    recs = _store.list_all(include_trashed=False, kinds=["replica"])
-    workspace_ids: List[str] = []
-    for rec in recs:
-        _store.update(rec.workspace_id, trashed=True)
-        workspace_ids.append(rec.workspace_id)
-
-    if workspace_ids:
-        invalidate_global_knowledge_caches()
-
-    return {
-        "kind": "replica",
-        "mode": "trash",
-        "count": len(workspace_ids),
-        "workspace_ids": workspace_ids,
-    }
 
 
 # ── Phase L1：资料库聚合端点 ──────────────────────────────

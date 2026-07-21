@@ -20,7 +20,6 @@ describe('product config', () => {
     expect(productConfig.showStoryboard).toBe(false)
     expect(productConfig.showDirector).toBe(false)
     expect(productConfig.showPromptFormat).toBe(false)
-    expect(productConfig.allowReplicaCleanup).toBe(true)
   })
 
   it('only allows the note workspace kind', () => {

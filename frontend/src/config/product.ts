@@ -17,7 +17,6 @@ export interface ProductConfig {
   showStoryboard: boolean
   showDirector: boolean
   showPromptFormat: boolean
-  allowReplicaCleanup: boolean
 }
 
 export const productConfig: ProductConfig = {
@@ -30,7 +29,6 @@ export const productConfig: ProductConfig = {
   showStoryboard: false,
   showDirector: false,
   showPromptFormat: false,
-  allowReplicaCleanup: true,
 }
 
 export function isWorkspaceKindAllowed(kind?: string | null): kind is WorkspaceKind {
@@ -44,7 +42,6 @@ export function isFeatureEnabled(feature: keyof Pick<
   | 'showStoryboard'
   | 'showDirector'
   | 'showPromptFormat'
-  | 'allowReplicaCleanup'
 >): boolean {
   return Boolean(productConfig[feature])
 }

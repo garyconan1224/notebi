@@ -14,7 +14,6 @@ const { productConfigMock } = vi.hoisted(() => ({
     showStoryboard: false,
     showDirector: false,
     showPromptFormat: false,
-    allowReplicaCleanup: true,
   },
 }))
 
