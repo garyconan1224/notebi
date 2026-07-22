@@ -3498,8 +3498,8 @@ def get_item_result(workspace_id: str, item_id: str) -> Dict[str, Any]:
 def _build_demo_image_result(item_id: str, item_name: str) -> Dict[str, Any]:
     """图片结果页 demo fixture（Phase 1H）。
 
-    当 item.results 尚未填充时返回固定示例，保证前端左图右信息 + 提示词 tabs 可跑通。
-    数据对齐 v1.1 §7.4 图片结果页布局。
+    当 item.results 尚未填充时返回固定示例，保证前端左图右信息可跑通。
+    数据对齐 v1.1 §7.4 图片结果页布局（视觉理解：描述/OCR/标签/EXIF）。
     """
     return {
         "source": "demo_fixture",
@@ -3525,14 +3525,6 @@ def _build_demo_image_result(item_id: str, item_name: str) -> Dict[str, Any]:
             "format": "JPEG",
             "size_kb": 8520.3,
         },
-        "prompts": {
-            "mj": "majestic mountain reflection on calm lake, green meadow foreground, golden hour sunset, Swiss Alps, photorealistic, landscape photography, --ar 3:2 --style raw --v 6",
-            "sd": {
-                "positive": "majestic mountain reflection, calm lake, green meadow, golden hour, Swiss Alps, landscape photography, ultra detailed, 8k, masterpiece",
-                "negative": "blurry, low quality, oversaturated, watermark, text",
-            },
-            "json": "",
-        },
         "tags": {
             "subject": ["山脉", "湖泊", "草地"],
             "scene": ["瑞士", "因特拉肯", "阿尔卑斯"],
@@ -3550,7 +3542,7 @@ def get_image_result(workspace_id: str, item_id: str) -> Dict[str, Any]:
     """图片结果页聚合数据（v1.1 §7.4）。
 
     优先返回 item.results 里的真数据；当 results 尚未填充时，
-    退化到 demo fixture，保证前端左图右信息 + 提示词 tabs 可跑通。
+    退化到 demo fixture，保证前端左图右信息可跑通。
     """
     rec = _store.get(workspace_id)
     if rec is None:
@@ -3571,7 +3563,9 @@ def get_image_result(workspace_id: str, item_id: str) -> Dict[str, Any]:
     # X.1 bridge: merge task results overlay so image_result sees real data
     overlay = _sync_item_with_tasks(item)
     results = dict(overlay.get("results", {})) if overlay and overlay.get("results") else dict(item.results or {})
-    has_real = isinstance(results, dict) and results.get("description") and results.get("prompts")
+    has_real = isinstance(results, dict) and (
+        results.get("description") or results.get("ocr_text") or results.get("tags")
+    )
     if has_real:
         payload = dict(results)
         payload.setdefault("source", "item_results")

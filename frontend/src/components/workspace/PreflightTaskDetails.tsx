@@ -18,7 +18,6 @@ import {
   type AssociationDirection,
   type AudioAsrParams,
   type ImageAssociationParams,
-  type ImageFramePromptsParams,
   type MusicAnalysisParams,
   type TextAssociationParams,
   type TextRewriteParams,
@@ -79,14 +78,6 @@ export function TaskDetails({ type, taskId, params, onChange }: TaskDetailsProps
     )
   }
   // 图片
-  if (type === 'image' && taskId === 'prompt') {
-    return (
-      <ImageFramePromptsDetails
-        params={params as unknown as ImageFramePromptsParams}
-        onChange={(p) => onChange(p as unknown as Record<string, unknown>)}
-      />
-    )
-  }
   if (type === 'image' && taskId === 'assoc') {
     return (
       <AssociationDetails
@@ -215,43 +206,7 @@ function VideoFramePromptsDetails({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1">
-          <Label className="text-xs">提示词格式</Label>
-          <Select
-            value={params.format}
-            onValueChange={(v) =>
-              onChange({ ...params, format: v as 'mj' | 'sd' | 'json' })
-            }
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="mj">Midjourney</SelectItem>
-              <SelectItem value="sd">Stable Diffusion</SelectItem>
-              <SelectItem value="json">JSON</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">提示词语言</Label>
-          <Select
-            value={params.lang}
-            onValueChange={(v) =>
-              onChange({ ...params, lang: v as 'zh' | 'en' })
-            }
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="en">English（默认）</SelectItem>
-              <SelectItem value="zh">中文</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      {/* 截帧配置（视觉理解），提示词格式/语言已移除 */}
     </div>
   )
 }
@@ -406,36 +361,6 @@ function MusicAnalysisDetails({
         />
         <span>Udio 提示词格式</span>
       </label>
-    </div>
-  )
-}
-
-// ── 图片 · 提示词 ───────────────────────────────────────
-function ImageFramePromptsDetails({
-  params,
-  onChange,
-}: {
-  params: ImageFramePromptsParams
-  onChange: (next: ImageFramePromptsParams) => void
-}) {
-  return (
-    <div className="space-y-1">
-      <Label className="text-xs">提示词格式</Label>
-      <Select
-        value={params.format}
-        onValueChange={(v) =>
-          onChange({ ...params, format: v as 'mj' | 'sd' | 'json' })
-        }
-      >
-        <SelectTrigger>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="mj">Midjourney</SelectItem>
-          <SelectItem value="sd">Stable Diffusion</SelectItem>
-          <SelectItem value="json">JSON</SelectItem>
-        </SelectContent>
-      </Select>
     </div>
   )
 }

@@ -110,13 +110,28 @@ def purge_legacy_replica_workspaces(
                 continue
 
         # 2. 删除关联任务（project_id == workspace_id）。
+        #    任何任务删除失败 → 保留 workspace 记录，下次启动重试。
+        task_errors = 0
         for task in [t for t in all_tasks if t.project_id == wid]:
             try:
                 if task_store.delete(task.task_id):
                     result["tasks_deleted"] += 1
-            except Exception:  # noqa: BLE001 - 记录错误后继续，不中断整体清理
+                else:
+                    # delete 返回 False：文件删除失败（或记录已不存在），视为失败
+                    logger.error(
+                        "replica purge: 任务删除返回 False task_id=%s", task.task_id,
+                    )
+                    task_errors += 1
+            except Exception:  # noqa: BLE001
                 logger.exception("replica purge: 删除关联任务失败 task_id=%s", task.task_id)
-                result["errors"] += 1
+                task_errors += 1
+        if task_errors:
+            result["errors"] += task_errors
+            logger.error(
+                "replica purge: workspace %s 有 %d 个任务删除失败，保留记录以便重试",
+                wid, task_errors,
+            )
+            continue
 
         # 3. 删除 JSON 记录并从内存索引移除。
         try:

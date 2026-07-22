@@ -82,18 +82,26 @@ def _seed_siliconflow_provider() -> None:
 def _purge_legacy_replica_data() -> None:
     """启动期永久删除旧复刻合集，确保对外服务前没有请求能读到 replica 记录。
 
-    复用各 router 模块级 store 单例，使清理直接作用于真实内存索引；清理幂等，
-    失败只记录日志、不阻断启动，下次启动继续重试。
+    复用各 router 模块级 store 单例，使清理直接作用于真实内存索引。
+    清理幂等；**任何失败（异常或 errors > 0）都会阻断启动**，
+    防止残留 replica 数据在清理失败后被公开接口读取。
     """
     from backend.app.routes.pipeline import _store as task_store
     from backend.app.routes.workspaces import _store as workspace_store
 
     try:
         result = purge_legacy_replica_workspaces(workspace_store, task_store)
-    except Exception:  # noqa: BLE001 - 启动清理失败不应阻断服务
-        logger.exception("legacy replica purge 失败，将在下次启动重试")
-        return
-    if result.get("workspaces_deleted") or result.get("errors"):
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(
+            "legacy replica purge 失败，阻断启动以防止 replica 数据暴露。"
+            "请检查日志并修复后重启。"
+        ) from exc
+    if result.get("errors"):
+        raise RuntimeError(
+            f"legacy replica purge 有 {result['errors']} 个错误，阻断启动。"
+            "请检查日志并修复后重启。"
+        )
+    if result.get("workspaces_deleted"):
         logger.info("legacy replica purge: %s", result)
 
 

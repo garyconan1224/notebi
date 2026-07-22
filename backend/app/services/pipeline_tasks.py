@@ -1406,42 +1406,6 @@ def handle_analyze_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any
     return result
 
 
-def handle_create_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
-    """处理创意内容生成任务"""
-    payload = record.payload
-    query = str(payload.get("prompt") or "").strip()
-    if not query:
-        raise ValueError("create payload.prompt is required")
-
-    settings = load_settings()
-    registry = create_default_registry()
-    profile = registry.resolve_default_profile(settings, "chat")
-    provider = registry.build(profile)
-    model = str(payload.get("model") or profile.default_models.get("chat") or settings.text_model or "").strip()
-    if not model:
-        raise ValueError("create task model is required")
-
-    runner.set_progress(record.task_id, 0.2, f"Generating via {profile.name}")
-    content = provider.chat(
-        ChatRequest(
-            model=model,
-            messages=[
-                {"role": "system", "content": "You are a creative storyboard writer."},
-                {"role": "user", "content": query},
-            ],
-            temperature=float(payload.get("temperature") or 0.7),
-            max_tokens=int(payload.get("max_tokens") or 2048),
-        )
-    )
-    runner.set_progress(record.task_id, 1.0, "Creative generation finished")
-
-    runtime_dir = get_workspace_json_dir(record.project_id).parent / "runtime"
-    runtime_dir.mkdir(parents=True, exist_ok=True)
-    out_file = runtime_dir / f"{record.task_id}.md"
-    out_file.write_text(content, encoding="utf-8")
-    return {"content": content, "artifact_path": str(out_file)}
-
-
 def _persist_intermediate(runner: TaskRunner, task_id: str, result_patch: Dict[str, Any]) -> None:
     """将中间结果合并写入 task.result，保留已有字段。"""
     rec = runner.store.get(task_id)
@@ -5771,7 +5735,6 @@ def handle_av_synthesis_task(record: TaskRecord, runner: TaskRunner) -> Dict[str
 def register_pipeline_handlers(runner: TaskRunner) -> None:
     runner.register("download",  handle_download_task)
     runner.register("analyze",   handle_analyze_task)
-    runner.register("create",    handle_create_task)
     runner.register("note",      handle_note_task)
     runner.register("text",      handle_text_task)
     runner.register("image",     handle_image_task)
