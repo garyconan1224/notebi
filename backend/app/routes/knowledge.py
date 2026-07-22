@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.app.routes.pipeline import _runner as _pipeline_runner
@@ -21,18 +21,16 @@ class KnowledgeAskRequest(BaseModel):
     question: str = Field(..., min_length=1)
     top_k: int = Field(default=10, ge=1, le=30)
     workspace_ids: Optional[List[str]] = None
-    kinds: Optional[List[str]] = None
 
 
 class KnowledgeRebuildRequest(BaseModel):
     force: bool = False
-    kinds: Optional[List[str]] = None
 
 
 @router.get("/status")
-def knowledge_status(kinds: Optional[List[str]] = Query(default=None)) -> Dict[str, Any]:
+def knowledge_status() -> Dict[str, Any]:
     try:
-        return get_global_status(task_store=_pipeline_runner.store, allowed_kinds=kinds)
+        return get_global_status(task_store=_pipeline_runner.store)
     except ValueError as err:
         raise HTTPException(status_code=400, detail=str(err)) from err
 
@@ -43,7 +41,6 @@ def knowledge_rebuild(req: KnowledgeRebuildRequest | None = None) -> Dict[str, A
         return start_global_rebuild(
             force=bool(req.force) if req else False,
             task_store=_pipeline_runner.store,
-            allowed_kinds=req.kinds if req else None,
         )
     except ValueError as err:
         raise HTTPException(status_code=400, detail=str(err)) from err
@@ -56,7 +53,6 @@ def knowledge_ask(req: KnowledgeAskRequest) -> Dict[str, Any]:
             question=req.question,
             top_k=req.top_k,
             workspace_ids=req.workspace_ids,
-            allowed_kinds=req.kinds,
             task_store=_pipeline_runner.store,
         )
     except RuntimeError as err:

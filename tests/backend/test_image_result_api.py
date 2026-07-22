@@ -73,3 +73,21 @@ def test_image_result_404_workspace_not_found(client: TestClient) -> None:
     resp = client.get("/workspaces/nonexistent/items/anything/image_result")
     assert resp.status_code == 404
     assert "workspace not found" in resp.json()["detail"]
+
+
+def test_image_compare_omits_legacy_prompts(client: TestClient) -> None:
+    """Legacy prompt artifacts must not be exposed by the retained image compare API."""
+    ws_id, item_id = _create_image_workspace(client)
+    rec = ws_module._store.get(ws_id)
+    assert rec is not None
+    rec.items[0].results = {
+        "description": "真实画面描述",
+        "tags": {"subject": ["山"]},
+        "prompts": {"mj": "legacy prompt"},
+    }
+    ws_module._store.update(ws_id, items=rec.items)
+
+    response = client.get(f"/workspaces/{ws_id}/items/{item_id}/image_compare")
+
+    assert response.status_code == 200
+    assert "prompts" not in response.json()["images"][0]

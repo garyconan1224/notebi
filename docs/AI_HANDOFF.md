@@ -1,18 +1,19 @@
 # AI Handoff
 
-## 当前执行指针（2026-07-20）
+## 当前执行指针（2026-07-22）
 
 - **当前任务**：将独立 NoteBi 仓库从多产品隐藏模式收敛为真正的单一 NoteBi，并物理删除复刻、AI 分镜、AI 导演和提示词生产能力。
 - **已确认计划**：[`docs/plans/notebi-single-product-cleanup-2026-07-20.md`](plans/notebi-single-product-cleanup-2026-07-20.md)。
-- **计划分支**：`codex/plan-notebi-cleanup`；稳定基线 `main` 指向 `c676a7f`。
+- **执行分支**：`codex/exec-notebi-cleanup`；以当前 `git log --oneline -5` 为提交事实来源。
 - **Git 整理**：原 `codex/feat-speaker-summary-completion` 已重命名为本地 `main`；已合并的 `codex/qa-notebi-bootstrap` 已删除；仓库无 remote，不 push。
 - **用户决策**：删除 `nibi/replicabi` 多产品模式，只保留 NoteBi；保留画面识别、关键帧、OCR、描述、标签、总结和笔记配图；删除生成提示词、提示词格式、Prompt 版本和复刻包。
 - **数据决策**：旧 `workspace.kind == "replica"` 数据永久删除，不进回收站、不转换、不备份。只读扫描显示当前本地为 29 个 note workspace、44 个 item、0 个 replica workspace、0 个 replica/storyboard task。
 - **删除范围**：复刻合集与任务分流、AI 分镜页面与 pipeline、AI 导演占位、MJ/SD/视频提示词生成、Prompt format API/设置、Prompt version、reproduce export、三产品构建脚本。
 - **保留范围**：视频/图片/音频/文字笔记、画面理解、OCR、关键帧、转写、字幕、说话人、总结版本、知识库、搜索、问 AI、正常笔记与音频导出。
 - **Windows 约束**：删除 `VITE_PRODUCT_MODE` 后，必须用固定 NoteBi build marker 替代动态模式标记；不能取消 portable preflight 对错误前端产物的拦截。
-- **当前状态**：Codex 只完成调查、Git 分支整理和执行计划，没有修改业务代码。
-- **下一步**：Claude Code 按计划 Phase 0-6 建独立执行分支、分阶段提交和验证；最终交给 Codex 在干净 worktree 审查。
+- **当前状态**：P1–P5 删除已落地；后续收口已拒绝 `create`/`storyboard` 任务和 `replica` 创建意图，移除公开的 kind 筛选与产品开关，并删除遗留提示词展示/复刻样式。旧 replica 只保留启动期永久清除识别。
+- **已验证**：本次相关后端回归 72 passed、前端 175 tests passed、前端生产 build 与 `compileall backend/app` 通过。完整后端套件在外部依赖等待处停止，未作为通过依据。
+- **下一步**：如需最终发布验收，补真实浏览器 smoke 与 Windows 实机启动；不要恢复多产品、复刻或提示词生产入口。
 - **强制停点**：实际代码、数据、接口、依赖或产品行为与计划不一致时，必须立即停下询问；不得扩大到音频、provider、模型或总结模板。
 
 ---

@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next'
 import { LangSwitcher } from '@/components/LangSwitcher'
 import { cn } from '@/lib/utils'
 import { useHealthPulse } from '@/hooks/useHealthPulse'
-import { productConfig } from '@/config/product'
+import { APP_NAME } from '@/config/product'
 
 /** SaveBar 状态类型（保留向后兼容，Step 2+ 逐步移入各 panel 内） */
 export interface SaveBarState {
@@ -73,13 +73,13 @@ export function SettingsShell() {
           >
             <ArrowLeft size={14} />
             <span style={{ fontFamily: 'var(--fd)' }} className="text-base font-semibold text-[var(--fg)]">
-              {productConfig.name}
+              {APP_NAME}
             </span>
           </Link>
           <span className="text-[var(--mut)] text-xs">/</span>
           <LangSwitcher />
         </div>
-        <div className="eyebrow">SETTINGS · LOCAL · {productConfig.name.toUpperCase()}</div>
+        <div className="eyebrow">SETTINGS · LOCAL · {APP_NAME.toUpperCase()}</div>
         <h1>设置</h1>
         <p>
           模型、API 密钥、下载路径、分析默认偏好。所有设置本地存储，不上传到服务器。

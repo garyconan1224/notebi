@@ -82,6 +82,21 @@ def test_list_workspaces_derived_fields_present(client: TestClient) -> None:
     assert ws["last_active_at"] == ws["updated_at"]
 
 
+def test_create_workspace_rejects_retired_replica_kind(client: TestClient) -> None:
+    """Public workspace creation must not silently normalize legacy replica input."""
+    response = client.post("/workspaces", json={"name": "旧复刻", "kind": "replica"})
+
+    assert response.status_code == 422
+
+
+def test_workspace_list_contract_has_no_kind_filter(client: TestClient) -> None:
+    """单产品 API 不再向调用方公开按 product kind 筛选的参数。"""
+    schema = client.get("/openapi.json").json()
+    for path in ("/workspaces", "/workspaces/library"):
+        parameters = schema["paths"][path]["get"].get("parameters", [])
+        assert "kinds" not in {parameter["name"] for parameter in parameters}
+
+
 def test_get_workspace_derived_fields_present(client: TestClient) -> None:
     """GET /workspaces/{id} 详情也含派生字段。"""
     resp = client.post("/workspaces", json={"name": "详情测试"})

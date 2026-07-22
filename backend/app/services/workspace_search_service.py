@@ -9,13 +9,13 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from backend.app.services.workspace_knowledge import (
     SourceMap,
     build_or_load_workspace_index,
 )
-from backend.app.services.workspace_store import WorkspaceStore, normalize_workspace_kinds
+from backend.app.services.workspace_store import WorkspaceStore
 from shared.knowledge_base import (
     LongKnowledge,
     ShortKnowledge,
@@ -225,7 +225,6 @@ def search_across_workspaces(
     query: str,
     top_k: int = 10,
     workspace_ids: Optional[List[str]] = None,
-    kinds: Optional[Iterable[str]] = None,
     api_key: Optional[str] = None,
     store: Optional[WorkspaceStore] = None,
     task_store: Any = None,
@@ -237,8 +236,6 @@ def search_across_workspaces(
     store = store or WorkspaceStore()
     settings = load_settings()
     rerank_model = get_reranker_model_for_rag(settings)
-    kind_filter = normalize_workspace_kinds(kinds)
-
     if workspace_ids:
         # 校验存在性，避免静默忽略
         missing = [wid for wid in workspace_ids if store.get(wid) is None]
@@ -246,11 +243,7 @@ def search_across_workspaces(
             raise KeyError(f"workspace(s) not found: {','.join(missing)}")
         target_ids = list(dict.fromkeys(workspace_ids))
     else:
-        target_ids = [r.workspace_id for r in store.list_all(kinds=kind_filter)]
-
-    if kind_filter is not None and target_ids:
-        allowed_ids = {r.workspace_id for r in store.list_all(kinds=kind_filter)}
-        target_ids = [wid for wid in target_ids if wid in allowed_ids]
+        target_ids = [r.workspace_id for r in store.list_all()]
 
     if not target_ids:
         return {"answer": "（暂无工作空间）", "sources": []}

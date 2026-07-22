@@ -7,7 +7,6 @@
 // 共用返回 { answer: string, sources: SearchSource[] }
 
 import { http } from './client'
-import type { WorkspaceKind } from '@/config/product'
 
 export interface SearchSource {
   workspace_id: string
@@ -28,7 +27,6 @@ export interface SearchResponse {
 export interface GlobalSearchOptions {
   topK?: number
   workspaceIds?: string[]
-  kinds?: WorkspaceKind[]
 }
 
 /** POST /search — 跨工作空间 */
@@ -40,8 +38,6 @@ export async function searchGlobal(
   if (opts.topK != null) body.top_k = opts.topK
   if (opts.workspaceIds && opts.workspaceIds.length > 0)
     body.workspace_ids = opts.workspaceIds
-  if (opts.kinds && opts.kinds.length > 0)
-    body.kinds = opts.kinds
   const res = await http.post<SearchResponse>('/search', body, { timeout: 60000 })
   return res.data
 }

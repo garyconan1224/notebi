@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import type { SniffResult } from '@/services/workspaces'
 import type { ItemType } from '@/types/workspace'
-import type { WorkspaceKind } from '@/config/product'
 
 export interface AddMaterialLaunchOptions {
   urlValue?: string
@@ -11,7 +10,6 @@ export interface AddMaterialLaunchOptions {
   localFileName?: string
   localFileType?: ItemType
   localWsId?: string
-  workspaceKind?: WorkspaceKind
   onAdded?: () => void
 }
 
@@ -29,7 +27,6 @@ const EMPTY_CONTEXT: AddMaterialLaunchOptions = {
   localFileName: undefined,
   localFileType: undefined,
   localWsId: undefined,
-  workspaceKind: undefined,
   onAdded: undefined,
 }
 

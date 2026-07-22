@@ -1,6 +1,5 @@
 // Library 聚合端点 —— GET /workspaces/library
 import { http } from './client'
-import type { WorkspaceKind } from '@/config/product'
 import type { ItemTags } from '@/types/workspace'
 
 export interface LibraryItem {
@@ -49,11 +48,9 @@ export interface LibraryResponse {
 
 export async function fetchLibrary(
   includeTrashed = false,
-  kinds?: WorkspaceKind[],
 ): Promise<LibraryResponse> {
   const params = new URLSearchParams()
   if (includeTrashed) params.set('include_trashed', 'true')
-  kinds?.forEach((kind) => params.append('kinds', kind))
   const res = await http.get<LibraryResponse>('/workspaces/library', {
     params: params.size ? params : undefined,
     timeout: 60000,  // 3-A：资料库列表是重接口，批量处理时磁盘 I/O 抢跑可能 >15s

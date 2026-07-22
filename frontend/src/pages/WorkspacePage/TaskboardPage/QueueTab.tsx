@@ -95,7 +95,7 @@ function rowState(tasks: TaskRecord[], item?: WorkspaceItem): QueueState {
 function rowProgress(tasks: TaskRecord[], state: QueueState): number {
   if (state === 'done' || state === 'partial') return 1
   const download = tasks.find((t) => t.task_type === 'download')
-  const main = tasks.find((t) => ['note', 'analyze', 'text', 'audio', 'image', 'create'].includes(t.task_type))
+  const main = tasks.find((t) => ['note', 'analyze', 'text', 'audio', 'image'].includes(t.task_type))
   if (download && main) {
     return normalizeProgress(download.progress) * 0.25 + normalizeProgress(main.progress) * 0.75
   }

@@ -2,7 +2,6 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { createBrowserRouter, Navigate, redirect } from 'react-router-dom'
 import Index from '@/pages/Index'
-import { isFeatureEnabled, productConfig, type WorkspaceKind } from '@/config/product'
 
 // 按路由做代码分割：每个页面组件通过动态 import 拆成独立 chunk
 const SettingPage = lazy(() => import('@/pages/SettingPage/index'))
@@ -51,16 +50,6 @@ const withSuspense = (node: ReactNode) => (
   <Suspense fallback={<RouteFallback />}>{node}</Suspense>
 )
 
-const fallbackLibraryPath = '/notes'
-
-function guardRoute(enabled: boolean, node: ReactNode, fallback = '/'): ReactNode {
-  return enabled ? node : <Navigate to={fallback} replace />
-}
-
-function guardKindRoute(kind: WorkspaceKind, node: ReactNode): ReactNode {
-  return guardRoute(productConfig.allowedKinds.includes(kind), node, fallbackLibraryPath)
-}
-
 // React Router v7 Data Router 定义；URL 与原 BrowserRouter + Routes + Route 完全一致。
 export const router = createBrowserRouter([
   {
@@ -76,8 +65,8 @@ export const router = createBrowserRouter([
       { path: 'favorites', element: withSuspense(<FavoritesPage />) },
       { path: 'search', element: withSuspense(<SearchPage />) },
       { path: 'library', element: withSuspense(<LibraryPage />) },
-      { path: 'notes', element: guardKindRoute('note', withSuspense(<LibraryPage kind="note" />)) },
-      { path: 'knowledge', element: guardRoute(isFeatureEnabled('showKnowledge'), withSuspense(<KnowledgePage />)) },
+      { path: 'notes', element: withSuspense(<LibraryPage />) },
+      { path: 'knowledge', element: withSuspense(<KnowledgePage />) },
       { path: 'workspaces/:id', element: withSuspense(<TaskboardPage />) },
       {
         path: 'workspaces/:workspaceId/items/:itemId/overview',
@@ -102,7 +91,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'workspaces/:workspaceId/items/:itemId/note',
-        element: guardKindRoute('note', withSuspense(<NoteShell />)),
+        element: withSuspense(<NoteShell />),
       },
       // 旧路由兼容（保留一个 release，loader redirect 到新路径）
       {
@@ -150,7 +139,6 @@ export const router = createBrowserRouter([
           { path: 'models', element: <Navigate to="/settings/providers-models" replace /> },
           { path: 'screenshot', element: <Navigate to="/settings/analysis-defaults" replace /> },
           { path: 'transcriber', element: <Navigate to="/settings/analysis-defaults" replace /> },
-          { path: 'prompt-formats', element: <Navigate to="/settings/analysis-defaults" replace /> },
           { path: '*', element: withSuspense(<NotFoundPage />) },
         ],
       },

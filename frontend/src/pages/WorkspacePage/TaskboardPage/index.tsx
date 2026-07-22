@@ -18,7 +18,6 @@ import { batchDeleteItems } from '@/services/library'
 import { AddMaterialModal } from '@/components/workspace/AddMaterialModal'
 import { usePipelineTasks } from '@/hooks/usePipelineTasks'
 import { withStatusToast } from '@/lib/statusToast'
-import { isWorkspaceKindAllowed } from '@/config/product'
 
 import type { WorkspaceItem, WorkspaceRecord } from '@/types/workspace'
 
@@ -74,10 +73,6 @@ export default function TaskboardPage() {
     getWorkspace(id)
       .then((data) => {
         if (!ac.signal.aborted) {
-          if (!isWorkspaceKindAllowed(data.kind)) {
-            navigate('/notes', { replace: true })
-            return
-          }
           setWorkspace(data)
           setLoading(false)
         }
@@ -95,7 +90,7 @@ export default function TaskboardPage() {
       .catch(() => {})
 
     return () => ac.abort()
-  }, [id, navigate])
+  }, [id])
 
   /** 「更多」菜单点击处理 */
   const handleMenuAction = (menuId: string) => {
@@ -359,7 +354,6 @@ export default function TaskboardPage() {
         workspaceIds={[workspace.workspace_id]}
         workspaceBackgrounds={{ [workspace.workspace_id]: workspace.background }}
         availableWorkspaces={[workspace]}
-        workspaceKind={workspace.kind}
         onAdded={refresh}
         onWorkspaceUpdated={setWorkspace}
       />

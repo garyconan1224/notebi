@@ -28,6 +28,11 @@ class TaskRunner:
         with self._lock:
             self._handlers[task_type] = handler
 
+    def supports(self, task_type: str) -> bool:
+        """Return whether a task type has a registered executable handler."""
+        with self._lock:
+            return task_type in self._handlers
+
     def append_log(self, task_id: str, message: str, *, level: str = "info") -> None:
         """代理到 store.append_log，供 handler 直接通过 runner 写日志。
 
@@ -135,7 +140,6 @@ class TaskRunner:
             "text": TaskStatus.FETCH.value,
             "image": TaskStatus.FRAMES.value,
             "audio": TaskStatus.ASR.value,
-            "create": TaskStatus.FRAMES.value,
             "summary": TaskStatus.SUM.value,
         }
         initial_status = _INITIAL_STATUS.get(record.task_type, TaskStatus.DOWNLOAD.value)

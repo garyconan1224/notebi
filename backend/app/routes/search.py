@@ -22,7 +22,6 @@ class GlobalSearchRequest(BaseModel):
     query: str = Field(..., min_length=1)
     top_k: int = Field(default=10, ge=1, le=30)
     workspace_ids: Optional[List[str]] = None
-    kinds: Optional[List[str]] = None
 
 
 @router.post("/search")
@@ -33,7 +32,6 @@ def global_search(req: GlobalSearchRequest) -> Dict[str, Any]:
             query=req.query,
             top_k=req.top_k,
             workspace_ids=req.workspace_ids,
-            kinds=req.kinds,
             task_store=_pipeline_runner.store,
         )
     except KeyError as err:

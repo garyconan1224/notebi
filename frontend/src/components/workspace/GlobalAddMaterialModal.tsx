@@ -1,11 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { toast } from 'sonner'
 import { useAddMaterialStore } from '@/store/addMaterialStore'
-import {
-  isWorkspaceKindAllowed,
-  productConfig,
-  type WorkspaceKind,
-} from '@/config/product'
 import type { WorkspaceRecord } from '@/types/workspace'
 import {
   createWorkspace,
@@ -40,7 +35,6 @@ export function GlobalAddMaterialModal() {
     localFileName,
     localFileType,
     localWsId,
-    workspaceKind,
     onAdded,
     openAddMaterial,
     closeAddMaterial,
@@ -55,12 +49,8 @@ export function GlobalAddMaterialModal() {
     () => Object.fromEntries(workspaces.map((workspace) => [workspace.workspace_id, workspace.background])),
     [workspaces],
   )
-  const forcedWorkspaceKind = workspaceKind ?? (
-    productConfig.allowedKinds.length === 1 ? productConfig.defaultKind : undefined
-  )
-
   const refreshWorkspaces = useCallback(() => {
-    listWorkspaces({ kinds: productConfig.allowedKinds }).then(setWorkspaces).catch(() => {
+    listWorkspaces().then(setWorkspaces).catch(() => {
       toast.error('加载合集列表失败，请检查后端是否已启动')
     })
   }, [])
@@ -72,17 +62,13 @@ export function GlobalAddMaterialModal() {
     refreshWorkspaces()
   }, [open, refreshWorkspaces])
 
-  const handleCreateWorkspace = useCallback(async (rawName: string, kind?: WorkspaceKind) => {
-    const nextKind = kind ?? forcedWorkspaceKind ?? productConfig.defaultKind
-    if (!isWorkspaceKindAllowed(nextKind)) {
-      throw new Error(`${productConfig.name} 不支持创建该类型合集`)
-    }
+  const handleCreateWorkspace = useCallback(async (rawName: string) => {
     const name = rawName.trim() || '新笔记合集'
-    const created = await createWorkspace({ name, kind: nextKind })
+    const created = await createWorkspace({ name })
     setWorkspaces((prev) => [...prev, created])
     toast.success(`合集「${name}」已创建`)
     return created
-  }, [forcedWorkspaceKind])
+  }, [])
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     if (nextOpen) return
@@ -121,7 +107,6 @@ export function GlobalAddMaterialModal() {
         localFileName: file.name,
         localFileType: item.type,
         localWsId: ws.workspace_id,
-        workspaceKind: forcedWorkspaceKind,
         onAdded,
       })
       toast.success('本地文件已上传', { description: file.name })
@@ -132,7 +117,7 @@ export function GlobalAddMaterialModal() {
       setUploadingLocal(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
-  }, [forcedWorkspaceKind, onAdded, openAddMaterial])
+  }, [onAdded, openAddMaterial])
 
   return (
     <>
@@ -157,7 +142,6 @@ export function GlobalAddMaterialModal() {
         localFileName={localFileName}
         localFileType={localFileType}
         localWsId={localWsId}
-        workspaceKind={forcedWorkspaceKind}
         onPickLocalFile={handlePickLocalFile}
         localUploadPending={uploadingLocal}
       />

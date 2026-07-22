@@ -5,7 +5,7 @@ import { useTaskStore } from '@/store/taskStore'
 import { usePipelineTasks } from '@/hooks/usePipelineTasks'
 import { isTaskTerminal, getStatusText } from '@/types/task'
 import type { TaskRecord } from '@/types/task'
-import { isWorkspaceKindAllowed, productConfig, type WorkspaceKind } from '@/config/product'
+import { APP_NAME } from '@/config/product'
 
 const STATE_PILL_CLASS: Record<string, string> = {
   done:      'status-pill status-done',
@@ -94,8 +94,8 @@ function taskToNoteCard(t: TaskRecord): NoteCard {
   const summary = descFromResult(result)
 
   // 来源标签
-  const rawSource = (result.source_name || result.platform || payload.platform || productConfig.name) as string
-  const src = rawSource.trim().toLowerCase() === 'nibi' ? productConfig.name : rawSource
+  const rawSource = (result.source_name || result.platform || payload.platform || APP_NAME) as string
+  const src = rawSource.trim().toLowerCase() === 'nibi' ? APP_NAME : rawSource
 
   // 封面
   const resultAudio = result.audio as Record<string, unknown> | undefined
@@ -135,10 +135,6 @@ function taskToNoteCard(t: TaskRecord): NoteCard {
   return { id: t.task_id, title, summary, src, type, state, thumb, progress, lastAction, metaLabels }
 }
 
-function taskWorkspaceKind(_t: TaskRecord): WorkspaceKind {
-  return 'note'
-}
-
 interface RecentTasksProps {
   tasks?: TaskRecord[]
 }
@@ -148,7 +144,7 @@ export function RecentTasks({ tasks: tasksProp }: RecentTasksProps) {
   const [failedThumbs, setFailedThumbs] = useState<Set<string>>(new Set())
   usePipelineTasks({ pollInterval: 5000 })
   const storeTasks = useTaskStore((s) => s.tasks)
-  const tasks = (tasksProp ?? storeTasks).filter((task) => isWorkspaceKindAllowed(taskWorkspaceKind(task)))
+  const tasks = tasksProp ?? storeTasks
   // 过滤无意义卡：标题落到 getStatusText（无 video_title 也无 url），且无封面、无摘要
   const meaningful = tasks.filter((t) => {
     const payload = (t.payload ?? {}) as Record<string, unknown>

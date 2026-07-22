@@ -1,32 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
-  isFeatureEnabled,
-  isWorkspaceKindAllowed,
-  productConfig,
+  APP_NAME,
   productStorageKey,
 } from '@/config/product'
 
 describe('product config', () => {
-  it('is fixed to NoteBi with note-only workspaces', () => {
-    expect(productConfig.name).toBe('NoteBi')
-    expect(productConfig.allowedKinds).toEqual(['note'])
-    expect(productConfig.defaultKind).toBe('note')
-    expect(productConfig.storagePrefix).toBe('notebi')
-  })
-
-  it('only exposes NoteBi note-facing features', () => {
-    expect(productConfig.showKnowledge).toBe(true)
-  })
-
-  it('only allows the note workspace kind', () => {
-    expect(isWorkspaceKindAllowed('note')).toBe(true)
-    expect(isWorkspaceKindAllowed('replica')).toBe(false)
-    expect(isWorkspaceKindAllowed('')).toBe(false)
-    expect(isWorkspaceKindAllowed(undefined)).toBe(false)
-  })
-
-  it('reports feature flags from the fixed NoteBi config', () => {
-    expect(isFeatureEnabled('showKnowledge')).toBe(true)
+  it('uses the fixed NoteBi identity without product feature flags', () => {
+    expect(APP_NAME).toBe('NoteBi')
   })
 
   it('prefixes local storage keys with the NoteBi prefix', () => {

@@ -6,7 +6,6 @@
 //   - 出错由 axios 抛，调用方用 try/catch 或 react-query 的 error 处理
 
 import { http } from './client'
-import type { WorkspaceKind } from '@/config/product'
 import type {
   ItemAddRequest,
   ItemNote,
@@ -24,12 +23,10 @@ const BASE = '/workspaces'
 export async function listWorkspaces(opts?: {
   trashedOnly?: boolean
   includeTrashed?: boolean
-  kinds?: WorkspaceKind[]
 }): Promise<WorkspaceRecord[]> {
   const params = new URLSearchParams()
   if (opts?.trashedOnly) params.set('trashed_only', 'true')
   if (opts?.includeTrashed) params.set('include_trashed', 'true')
-  opts?.kinds?.forEach((kind) => params.append('kinds', kind))
   const res = await http.get<WorkspaceRecord[]>(BASE, {
     params: params.size ? params : undefined,
   })
@@ -414,11 +411,6 @@ export interface ImageResult {
     format: string
     size_kb: number
   }
-  prompts: {
-    mj: string
-    sd: { positive: string; negative: string }
-    json: string
-  }
   tags: Record<string, string[]>
   associations?: Record<string, string>
 }
@@ -444,7 +436,6 @@ export interface ImageCompareItem {
   description: string
   ocr_text: string
   tags: Record<string, string[]>
-  prompts: Record<string, unknown>
   associations: Record<string, string>
   has_result: boolean
 }

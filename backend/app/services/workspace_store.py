@@ -17,7 +17,7 @@ import tempfile
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Set
+from typing import Dict, List, Optional
 
 from backend.app.models.workspace import (
     InlineFrame,
@@ -33,27 +33,6 @@ from backend.app.services.speaker_labels import apply_speaker_renames
 from shared.config import DATA_DIR
 
 WORKSPACE_DIR: Path = DATA_DIR / "workspaces"
-WORKSPACE_KINDS: Set[str] = {"note", "replica"}
-
-
-def normalize_workspace_kinds(kinds: Optional[Iterable[str]]) -> Optional[Set[str]]:
-    """Return a validated workspace kind filter.
-
-    ``None`` means no product-mode filter. An empty iterable is treated the
-    same way so callers can pass optional request fields directly.
-    """
-
-    if kinds is None:
-        return None
-    normalized = {str(kind).strip() for kind in kinds if str(kind).strip()}
-    if not normalized:
-        return None
-    invalid = normalized - WORKSPACE_KINDS
-    if invalid:
-        raise ValueError(f"invalid workspace kind(s): {', '.join(sorted(invalid))}")
-    return normalized
-
-
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -139,17 +118,14 @@ class WorkspaceStore:
         *,
         include_trashed: bool = False,
         trashed_only: bool = False,
-        kinds: Optional[Iterable[str]] = None,
     ) -> List[WorkspaceRecord]:
         """列出工作空间。
 
         默认仅返回非 trashed 的记录（主列表语义）。
         trashed_only=True：仅返回 trashed 的记录（垃圾桶视图）。
         include_trashed=True：返回全部（含 trashed），用于管理后台/调试。
-        kinds：按 workspace.kind 过滤；None 表示不过滤。
         trashed_only 优先于 include_trashed。
         """
-        kind_filter = normalize_workspace_kinds(kinds)
         if self._lock.acquire(timeout=0.2):
             try:
                 recs = list(self._records.values())
@@ -162,8 +138,6 @@ class WorkspaceStore:
             recs = [r for r in recs if r.trashed]
         elif not include_trashed:
             recs = [r for r in recs if not r.trashed]
-        if kind_filter is not None:
-            recs = [r for r in recs if r.kind in kind_filter]
         # 按 updated_at 倒序，最近更新在前
         return sorted(recs, key=lambda r: r.updated_at, reverse=True)
 

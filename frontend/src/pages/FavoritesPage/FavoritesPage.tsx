@@ -9,11 +9,9 @@ import {
   ITEM_TYPE_TEXT,
 } from '@/types/workspace'
 import { resolveItemRoute } from '@/lib/resolveItemRoute'
-import { productConfig, type WorkspaceKind } from '@/config/product'
 import './favorites.css'
 
 type TabKey = 'all' | ItemType
-type KindTabKey = 'all' | 'note'
 
 interface FavoriteEntry {
   workspace: WorkspaceRecord
@@ -26,11 +24,6 @@ const TAB_DEFS: { key: TabKey; label: string }[] = [
   { key: 'audio', label: ITEM_TYPE_TEXT.audio },
   { key: 'image', label: ITEM_TYPE_TEXT.image },
   { key: 'text', label: ITEM_TYPE_TEXT.text },
-]
-
-const KIND_TAB_DEFS: { key: KindTabKey; label: string }[] = [
-  { key: 'all', label: '全部收藏' },
-  { key: 'note', label: '笔记收藏' },
 ]
 
 const TYPE_LABEL: Record<string, string> = {
@@ -71,13 +64,11 @@ export default function FavoritesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<TabKey>('all')
-  const [kindTab, setKindTab] = useState<KindTabKey>('all')
-  const allowedKinds = productConfig.allowedKinds
 
   const reload = () => {
     setLoading(true)
     setError(null)
-    listWorkspaces({ kinds: allowedKinds })
+    listWorkspaces()
       .then((list) => setWorkspaces(list))
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setLoading(false))
@@ -88,36 +79,21 @@ export default function FavoritesPage() {
   }, [])
 
   const favorites = useMemo(() => collectFavorites(workspaces), [workspaces])
-  const visibleKindTabs = useMemo(
-    () => KIND_TAB_DEFS.filter((item) => (
-      item.key === 'all' || allowedKinds.includes(item.key as WorkspaceKind)
-    )),
-    [allowedKinds],
-  )
-  const kindCounts = useMemo(() => {
-    const acc: Record<KindTabKey, number> = { all: favorites.length, note: 0 }
-    for (const f of favorites) acc[f.workspace.kind] += 1
-    return acc
-  }, [favorites])
-  const scopedFavorites = useMemo(
-    () => (kindTab === 'all' ? favorites : favorites.filter((f) => f.workspace.kind === kindTab)),
-    [favorites, kindTab],
-  )
   const counts = useMemo(() => {
     const acc: Record<TabKey, number> = {
-      all: scopedFavorites.length,
+      all: favorites.length,
       video: 0,
       audio: 0,
       image: 0,
       text: 0,
     }
-    for (const f of scopedFavorites) acc[f.item.type] += 1
+    for (const f of favorites) acc[f.item.type] += 1
     return acc
-  }, [scopedFavorites])
+  }, [favorites])
 
   const filtered = useMemo(
-    () => (tab === 'all' ? scopedFavorites : scopedFavorites.filter((f) => f.item.type === tab)),
-    [scopedFavorites, tab],
+    () => (tab === 'all' ? favorites : favorites.filter((f) => f.item.type === tab)),
+    [favorites, tab],
   )
 
   return (
@@ -144,20 +120,6 @@ export default function FavoritesPage() {
       )}
 
       {/* Filter tabs */}
-      {allowedKinds.length > 1 && (
-        <div className="fav-kind-tabs">
-          {visibleKindTabs.map((t) => (
-            <button
-              key={t.key}
-              className={`fav-tab${kindTab === t.key ? ' fav-tab--active' : ''}`}
-              onClick={() => setKindTab(t.key)}
-            >
-              {t.label}
-              <span>{kindCounts[t.key]}</span>
-            </button>
-          ))}
-        </div>
-      )}
       <div className="fav-tabs">
         {TAB_DEFS.map((t) => (
           <button

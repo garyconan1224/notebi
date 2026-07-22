@@ -11,7 +11,6 @@ import { SortMenu } from './SortMenu'
 import { ViewToggle } from './ViewToggle'
 import { ItemCard } from './ItemCard'
 import { WorkspaceCard } from './WorkspaceCard'
-import { productConfig, type WorkspaceKind } from '@/config/product'
 import {
   STATE_ORDER,
   primaryStatusToState,
@@ -155,7 +154,7 @@ function sortLibraryEntries(entries: LibraryEntry[], sortBy: SortBy): LibraryEnt
   }
 }
 
-export default function LibraryPage({ kind }: { kind?: 'note' } = {}) {
+export default function LibraryPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const intentFilter = searchParams.get('intent') || ''
@@ -175,14 +174,6 @@ export default function LibraryPage({ kind }: { kind?: 'note' } = {}) {
   const sortBy = useLibraryStore((s) => s.sortBy)
   const viewMode = useLibraryStore((s) => s.viewMode)
   const cardColumns = useLibraryStore((s) => s.cardColumns)
-  const effectiveKind = kind ?? (
-    productConfig.allowedKinds.length === 1 ? productConfig.defaultKind : undefined
-  )
-  const requestKinds = useMemo<WorkspaceKind[]>(
-    () => (kind ? [kind] : productConfig.allowedKinds),
-    [kind],
-  )
-
   const selectionKey = (wsId: string, itemId: string) => `${wsId}:${itemId}`
 
   const toggleSelect = useCallback((itemId: string, wsId: string) => {
@@ -219,14 +210,14 @@ export default function LibraryPage({ kind }: { kind?: 'note' } = {}) {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetchLibrary(false, requestKinds)
+      const res = await fetchLibrary(false)
       setData(res)
     } catch {
       setError('加载资料库失败，请确认后端已启动')
     } finally {
       setLoading(false)
     }
-  }, [requestKinds])
+  }, [])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -243,15 +234,15 @@ export default function LibraryPage({ kind }: { kind?: 'note' } = {}) {
 
   const scopedItems = useMemo(() => {
     if (!data) return []
-    let items = kind ? data.items.filter((it) => it.workspace_kind === kind) : data.items
+    let items = data.items
     if (intentFilter) items = items.filter((it) => it.preflight?.intent === intentFilter)
     return items
-  }, [data, kind, intentFilter])
+  }, [data, intentFilter])
 
   const scopedWorkspaces = useMemo(() => {
     if (!data) return []
-    return kind ? data.workspaces.filter((ws) => ws.kind === kind) : data.workspaces
-  }, [data, kind])
+    return data.workspaces
+  }, [data])
 
   const itemsByWorkspace = useMemo(() => {
     const map = new Map<string, LibraryItem[]>()
@@ -470,11 +461,10 @@ export default function LibraryPage({ kind }: { kind?: 'note' } = {}) {
   }, [collectionTargetId, selectedItemRefs, collectionWorkspaces, load])
 
   const handleCreateCollection = useCallback(async () => {
-    if (!effectiveKind) return
     setCreatingWorkspace(true)
     try {
       const name = '新笔记合集'
-      await createWorkspace({ name, kind: effectiveKind })
+      await createWorkspace({ name })
       setSelectedFilters(['collection'])
       toast.success('已创建笔记合集')
       await load()
@@ -483,7 +473,7 @@ export default function LibraryPage({ kind }: { kind?: 'note' } = {}) {
     } finally {
       setCreatingWorkspace(false)
     }
-  }, [effectiveKind, load, setSelectedFilters])
+  }, [load, setSelectedFilters])
 
   const handleRenameWorkspace = useCallback(async (workspaceId: string, name: string) => {
     try {
@@ -529,10 +519,8 @@ export default function LibraryPage({ kind }: { kind?: 'note' } = {}) {
   const emptyTitle = '暂无笔记'
   const emptyDesc = '去工作台添加学习素材，或粘贴一个链接开始吧'
 
-  const pageTone = effectiveKind === 'note' ? 'note' : 'library'
-  const pageKicker = effectiveKind === 'note'
-    ? 'NOTE LIBRARY'
-    : 'MATERIAL LIBRARY'
+  const pageTone = 'note'
+  const pageKicker = 'NOTE LIBRARY'
 
   return (
     <div className={`lib-page lib-page--${pageTone}`}>
@@ -541,30 +529,24 @@ export default function LibraryPage({ kind }: { kind?: 'note' } = {}) {
         <div>
           <div className="lib-kicker">{pageKicker} · LOCAL</div>
           <h2>
-            {effectiveKind === 'note'
-              ? '所有做过的笔记，都在这里汇总。'
-              : '所有参考资料，一键检索引用。'}
+            所有做过的笔记，都在这里汇总。
           </h2>
           <p>
-            {effectiveKind === 'note'
-              ? '视频、音频、图片和文本都保留各自入口，只把最需要的操作放在第一层。'
-              : '导入 PDF、论文、网页和文档，AI 自动建立知识图谱并在笔记中关联引用。'}
+            视频、音频、图片和文本都保留各自入口，只把最需要的操作放在第一层。
           </p>
           <div className="lib-hero-actions">
             <button className="lib-cta lib-cta-primary" onClick={() => navigate('/')}>
               <Plus size={15} />
-              {effectiveKind === 'note' ? '导入内容' : '上传资料'}
+              导入内容
             </button>
-            {effectiveKind && (
-              <button
-                className="lib-cta lib-cta-secondary"
-                onClick={handleCreateCollection}
-                disabled={creatingWorkspace}
-              >
-                <FolderPlus size={15} />
-                {creatingWorkspace ? '创建中…' : '新建合集'}
-              </button>
-            )}
+            <button
+              className="lib-cta lib-cta-secondary"
+              onClick={handleCreateCollection}
+              disabled={creatingWorkspace}
+            >
+              <FolderPlus size={15} />
+              {creatingWorkspace ? '创建中…' : '新建合集'}
+            </button>
           </div>
         </div>
           <div className="lib-actions">
@@ -582,7 +564,7 @@ export default function LibraryPage({ kind }: { kind?: 'note' } = {}) {
                     <Trash2 size={13} />
                     删除 {selectedSet.size > 0 ? `(${selectedSet.size})` : ''}
                   </button>
-                  {kind && collectionWorkspaces.length > 0 && (
+                  {collectionWorkspaces.length > 0 && (
                     <div className="batch-collection-control">
                       <select
                         value={collectionTargetId}

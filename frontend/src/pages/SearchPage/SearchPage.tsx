@@ -9,7 +9,6 @@ import { searchGlobal, searchWorkspace, type SearchResponse } from '@/services/s
 import { ITEM_TYPE_TEXT, type WorkspaceRecord } from '@/types/workspace'
 import {
   getProductStorageItem,
-  productConfig,
   setProductStorageItem,
 } from '@/config/product'
 
@@ -55,7 +54,7 @@ export default function SearchPage() {
   const [history, setHistory] = useState<string[]>(loadHistory)
 
   useEffect(() => {
-    listWorkspaces({ kinds: productConfig.allowedKinds })
+    listWorkspaces()
       .then(setWorkspaces)
       .catch(err => {
         console.error(err)
@@ -79,7 +78,7 @@ export default function SearchPage() {
       try {
         const data =
           scope === '__all__'
-            ? await searchGlobal(trimmed, { topK: 10, kinds: productConfig.allowedKinds })
+            ? await searchGlobal(trimmed, { topK: 10 })
             : await searchWorkspace(scope, trimmed, 5)
         setResult(data)
       } catch (err) {

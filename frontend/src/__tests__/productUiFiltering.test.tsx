@@ -2,27 +2,6 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
-const { productConfigMock } = vi.hoisted(() => ({
-  productConfigMock: {
-    mode: 'notebi',
-    name: 'NoteBi',
-    allowedKinds: ['note'],
-    defaultKind: 'note',
-    storagePrefix: 'notebi',
-    showKnowledge: true,
-    showReplica: false,
-  },
-}))
-
-vi.mock('@/config/product', () => ({
-  productConfig: productConfigMock,
-  isFeatureEnabled: (feature: keyof typeof productConfigMock) => Boolean(productConfigMock[feature]),
-  isWorkspaceKindAllowed: (kind?: string | null) => productConfigMock.allowedKinds.includes(kind ?? ''),
-  productStorageKey: (key: string) => `${productConfigMock.storagePrefix}-${key}`,
-  getProductStorageItem: vi.fn(() => null),
-  setProductStorageItem: vi.fn(),
-}))
-
 vi.mock('@/hooks/useSystemStats', () => ({
   useSystemStats: () => ({ stats: null, online: true }),
 }))
@@ -74,8 +53,8 @@ vi.mock('@/store/providerStore', () => ({
 import { AppShell } from '@/layouts/AppShell'
 import { AddMaterialModal } from '@/components/workspace/AddMaterialModal'
 
-describe('product UI filtering in NoteBi mode', () => {
-  it('filters AppShell navigation by product config', () => {
+describe('NoteBi-only UI', () => {
+  it('renders only the fixed NoteBi navigation', () => {
     render(
       <MemoryRouter>
         <AppShell>
@@ -92,7 +71,7 @@ describe('product UI filtering in NoteBi mode', () => {
     expect(screen.queryByText('AI 导演')).toBeNull()
   })
 
-  it('hides replica action cards in AddMaterialModal', () => {
+  it('shows only the learning-note action in AddMaterialModal', () => {
     render(
       <MemoryRouter>
         <AddMaterialModal

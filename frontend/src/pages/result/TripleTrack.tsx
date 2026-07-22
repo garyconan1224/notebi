@@ -4,7 +4,7 @@ import type { VideoResultFrame, VideoResultTranscriptLine } from '@/services/wor
 
 /**
  * 三轨时间轴（v1.1 §5.3）：
- *   轨道 1 镜头缩略图 / 轨道 2 字幕文本 / 轨道 3 提示词区间
+ *   轨道 1 镜头缩略图 / 轨道 2 字幕文本 / 轨道 3 画面描述
  *
  * 受控组件：active 帧索引 + currentSec 由父组件传入，
  *   轨道内部只负责 auto-scroll 到 active，并把点击事件抛给父组件。
@@ -41,7 +41,7 @@ export function TripleTrack({
   onTranscriptClick,
 }: TripleTrackProps) {
   const stripRef = useRef<HTMLDivElement>(null)
-  const promptZoneRef = useRef<HTMLDivElement>(null)
+  const visualZoneRef = useRef<HTMLDivElement>(null)
   const transcriptRef = useRef<HTMLDivElement>(null)
 
   const trIdx = useMemo(() => activeTranscriptIdx(transcript, currentSec), [transcript, currentSec])
@@ -56,7 +56,7 @@ export function TripleTrack({
   }, [activeFrame])
 
   useEffect(() => {
-    const el = promptZoneRef.current
+    const el = visualZoneRef.current
     if (!el) return
     const child = el.children[activeFrame] as HTMLElement | undefined
     if (child) {
@@ -201,16 +201,16 @@ export function TripleTrack({
         </div>
       </div>
 
-      {/* ── 轨道 3 提示词区间 ── */}
+      {/* ── 轨道 3 画面描述 ── */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
-          <span className="eyebrow">轨道 3 · 提示词区间</span>
+          <span className="eyebrow">轨道 3 · 画面描述</span>
           <span className="mono" style={{ fontSize: 10, color: 'var(--ink-4)' }}>
             点击切换到对应帧
           </span>
         </div>
         <div
-          ref={promptZoneRef}
+          ref={visualZoneRef}
           style={{
             display: 'flex',
             gap: 5,

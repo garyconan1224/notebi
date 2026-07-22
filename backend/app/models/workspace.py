@@ -290,7 +290,8 @@ class WorkspaceRecord:
     favorites: List[str] = field(default_factory=list)  # item_id 列表，复刻清单
     created_at: str = field(default_factory=_now_iso)
     updated_at: str = field(default_factory=_now_iso)
-    kind: str = "note"  # "note" | "replica"，合集类型
+    # 运行期只创建 note；replica 仅用于启动期识别并清除历史数据。
+    kind: str = "note"
     source: str = "manual"  # "manual" | "inbox" | "bilibili_favorites" | "bilibili_multipart" | "bilibili_uploader"
     source_meta: Dict[str, Any] = field(default_factory=dict)  # 来源合集的元数据（B站收藏夹/分P/UP主）
     merged_notes: List[MergedNote] = field(default_factory=list)  # 合集级融合笔记
@@ -324,7 +325,7 @@ class WorkspaceRecord:
         if raw_status == "completed":
             raw_status = WorkspaceStatus.ANALYZED.value
         # 老数据可能仍含 project_id 字段；from_dict 静默忽略
-        # 老数据兼容：缺 kind 字段默认 "note"
+        # 仅在启动期清理时保留 legacy replica 原始标记；公开接口不再接受该类型。
         raw_kind = str(data.get("kind") or "note")
         if raw_kind not in ("note", "replica"):
             raw_kind = "note"

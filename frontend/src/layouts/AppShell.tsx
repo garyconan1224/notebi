@@ -22,9 +22,8 @@ import { GlobalAddMaterialModal } from '@/components/workspace/GlobalAddMaterial
 import ThemeSwitcher from '@/components/ThemeSwitcher'
 import { useAddMaterialStore } from '@/store/addMaterialStore'
 import {
+  APP_NAME,
   getProductStorageItem,
-  isFeatureEnabled,
-  productConfig,
   setProductStorageItem,
 } from '@/config/product'
 
@@ -40,8 +39,8 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'home',       path: '/',           icon: Home,         label: '首页' },
-  { id: 'notes',      path: '/notes',      icon: FileText,     label: '笔记', visible: productConfig.allowedKinds.includes('note') },
-  { id: 'knowledge',  path: '/knowledge',  icon: BookOpen,     label: '知识库', visible: isFeatureEnabled('showKnowledge') },
+  { id: 'notes',      path: '/notes',      icon: FileText,     label: '笔记' },
+  { id: 'knowledge',  path: '/knowledge',  icon: BookOpen,     label: '知识库' },
 ]
 
 const BOTTOM_ITEMS: NavItem[] = [
@@ -234,7 +233,7 @@ export function AppShell({ children }: AppShellProps) {
               className="mb-1 flex size-11 items-center justify-center rounded-[10px] transition-colors hover:opacity-80"
               style={{ background: 'var(--accl)', color: 'var(--acc)' }}
               onClick={() => navigate('/')}
-              title={productConfig.name}
+              title={APP_NAME}
               aria-label="返回工作台"
             >
               <Sparkles size={16} />
@@ -253,7 +252,7 @@ export function AppShell({ children }: AppShellProps) {
             <button
               className="flex items-center gap-2.5 transition-colors hover:opacity-80"
               onClick={() => navigate('/')}
-              title={productConfig.name}
+              title={APP_NAME}
               aria-label="返回工作台"
             >
               <span
@@ -263,7 +262,7 @@ export function AppShell({ children }: AppShellProps) {
                 <Sparkles size={16} />
               </span>
               <span className="text-sm font-semibold" style={{ fontFamily: 'var(--fd)', color: 'var(--fg)' }}>
-                {productConfig.name}
+                {APP_NAME}
               </span>
             </button>
             <button
@@ -287,11 +286,7 @@ export function AppShell({ children }: AppShellProps) {
             background: 'var(--accl)',
             color: 'var(--acc)',
           }}
-          onClick={() => openAddMaterial(
-            productConfig.allowedKinds.length === 1
-              ? { workspaceKind: productConfig.defaultKind }
-              : undefined,
-          )}
+          onClick={() => openAddMaterial()}
           title="新建内容"
           aria-label="新建内容"
         >

@@ -26,7 +26,6 @@ import {
 import { fetchLibrary } from '@/services/library'
 import type { SearchSource } from '@/services/search'
 import { cn } from '@/lib/utils'
-import { isWorkspaceKindAllowed, productConfig } from '@/config/product'
 
 type KnowledgeMessage = {
   id: string
@@ -84,11 +83,10 @@ export default function KnowledgePage() {
   // 加载可选的合集列表（note 类型）
   useEffect(() => {
     let cancelled = false
-    fetchLibrary(false, productConfig.allowedKinds)
+    fetchLibrary(false)
       .then((lib) => {
         if (cancelled) return
         const options: WorkspaceOption[] = (lib.items ?? [])
-          .filter((item) => isWorkspaceKindAllowed(item.workspace_kind))
           .map((item) => ({
             id: item.workspace_id,
             name: item.workspace_name || item.workspace_id,
@@ -121,7 +119,7 @@ export default function KnowledgePage() {
 
   const refreshStatus = useCallback(async () => {
     try {
-      const next = await getKnowledgeStatus(productConfig.allowedKinds)
+      const next = await getKnowledgeStatus()
       setStatus(next)
       return next
     } catch (err) {
@@ -166,7 +164,7 @@ export default function KnowledgePage() {
   const handleRebuild = async () => {
     setRebuilding(true)
     try {
-      const next = await rebuildKnowledge(true, productConfig.allowedKinds)
+      const next = await rebuildKnowledge(true)
       setStatus(next)
       toast.success('已开始刷新知识库索引')
     } catch (err) {
@@ -215,7 +213,6 @@ export default function KnowledgePage() {
         question,
         10,
         selectedWorkspaceIds.length > 0 ? selectedWorkspaceIds : undefined,
-        productConfig.allowedKinds,
       )
       const assistantMessage: KnowledgeMessage = {
         id: `a-${Date.now()}`,

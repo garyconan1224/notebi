@@ -92,12 +92,19 @@ def list_tasks(
 @router.post("/tasks")
 def create_task(req: TaskCreateRequest) -> Dict[str, Any]:
     try:
+        if not _runner.supports(req.task_type):
+            raise HTTPException(
+                status_code=400,
+                detail=f"unsupported task_type: {req.task_type}",
+            )
         payload = dict(req.payload or {})
         # 将 steps 注入 payload，供 handle_note_task 读取
         if req.task_type == "note":
             payload["steps"] = req.steps
         rec = _runner.create_task(req.project_id, req.task_type, payload)
         return {"status": "accepted", "task_id": rec.task_id}
+    except HTTPException:
+        raise
     except Exception as err:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=str(err)) from err
 

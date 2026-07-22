@@ -12,7 +12,6 @@ import {
 } from '@/services/workspaces'
 import type { SniffResult } from '@/services/workspaces'
 import { useAddMaterialStore } from '@/store/addMaterialStore'
-import { productConfig } from '@/config/product'
 
 interface ComposerProps {
   onTaskCreated?: () => void
@@ -29,7 +28,6 @@ export function Composer({ onTaskCreated }: ComposerProps) {
 
   const normalizedUrl = useMemo(() => normalizeMediaUrl(url), [url])
   const platform = detectPlatform(normalizedUrl || url)
-  const forcedWorkspaceKind = productConfig.allowedKinds.length === 1 ? productConfig.defaultKind : undefined
 
   const handleUrlChange = useCallback((value: string) => {
     setUrl(value)
@@ -58,7 +56,6 @@ export function Composer({ onTaskCreated }: ComposerProps) {
       urlValue: nextUrl,
       sourceText: url.trim(),
       sniffResult,
-      workspaceKind: forcedWorkspaceKind,
       onAdded: () => {
         setUrl('')
         setSniffResult(null)
@@ -88,7 +85,6 @@ export function Composer({ onTaskCreated }: ComposerProps) {
         localFileName: file.name,
         localFileType: item.type,
         localWsId: ws.workspace_id,
-        workspaceKind: forcedWorkspaceKind,
         onAdded: onTaskCreated,
       })
     } catch (err: unknown) {

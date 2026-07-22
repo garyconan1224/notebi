@@ -127,7 +127,7 @@ export interface PreflightSaveRequest {
 export interface StartItemResponse {
   workspace: WorkspaceRecord
   task_id: string
-  task_type: 'download' | 'analyze' | 'create' | 'note'
+  task_type: 'download' | 'analyze' | 'note'
 }
 
 /** R0.2: GET /…/note 返回的单条 summary 结构 */

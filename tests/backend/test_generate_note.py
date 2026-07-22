@@ -84,6 +84,22 @@ def test_xhs_image_text_creates_image_item(client):
     assert created_payload["item_id"] == items[0].item_id
 
 
+def test_generate_note_rejects_retired_replica_intent(client):
+    """The single-product API must reject replica instead of persisting it on a note task."""
+    c, store, _ = client
+    ws_id = _create_ws(store)
+
+    response = c.post(
+        f"/workspaces/{ws_id}/items/generate-note",
+        json={"url": "https://example.com/article", "intent": "replica"},
+    )
+
+    assert response.status_code == 422
+    workspace = store.get(ws_id)
+    assert workspace is not None
+    assert workspace.items == []
+
+
 # ── 2. 小红书视频 → 不误判为 image ────────────────────────────────
 
 def test_xhs_video_not_misclassified_as_image(client):

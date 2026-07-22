@@ -39,10 +39,6 @@ import {
 import { fetchLinkPreview } from '@/services/linkPreview'
 import { batchAddItemsToWorkspace, fetchLibrary, type LibraryItem } from '@/services/library'
 import { fetchTemplates, type TemplateCategory, type VideoTemplateItem } from '@/services/templates'
-import {
-  isWorkspaceKindAllowed,
-  type WorkspaceKind,
-} from '@/config/product'
 import type {
   AnalysisScope,
   ItemType,
@@ -70,7 +66,7 @@ interface AddMaterialModalProps {
   workspaceBackgrounds?: Record<string, WorkspaceBackground>
   availableWorkspaces?: WorkspaceRecord[]
   onWorkspaceIdsChange?: (workspaceIds: string[]) => void
-  onCreateWorkspace?: (name: string, kind?: 'note') => Promise<WorkspaceRecord>
+  onCreateWorkspace?: (name: string) => Promise<WorkspaceRecord>
   onWorkspaceUpdated?: (workspace: WorkspaceRecord) => void
   sniffResult?: SniffResult | null
   urlValue?: string
@@ -87,8 +83,6 @@ interface AddMaterialModalProps {
   /** 从全局弹窗选择并上传本地文件 */
   onPickLocalFile?: () => void
   localUploadPending?: boolean
-  /** 合集类型，从合集详情页传入时启用硬锁 */
-  workspaceKind?: 'note'
 }
 
 type NoteMediaKind = 'auto' | 'video' | 'image_text' | 'audio' | 'mixed'
@@ -295,7 +289,6 @@ export function AddMaterialModal({
   localWsId,
   onPickLocalFile,
   localUploadPending,
-  workspaceKind,
 }: AddMaterialModalProps) {
   const isLocalFile = !!localFile
   const navigate = useNavigate()
@@ -355,10 +348,6 @@ export function AddMaterialModal({
     () => new Map((availableWorkspaces ?? []).map((ws) => [ws.workspace_id, ws])),
     [availableWorkspaces],
   )
-  const selectedWorkspaces = useMemo(
-    () => workspaceIds.map((id) => workspaceLookup.get(id)).filter((ws): ws is WorkspaceRecord => Boolean(ws)),
-    [workspaceIds, workspaceLookup],
-  )
   const getWorkspaceLabel = useCallback((workspaceId: string, fallback = '当前合集') => {
     return workspaceNameOverrides[workspaceId] ?? workspaceLookup.get(workspaceId)?.name ?? fallback
   }, [workspaceLookup, workspaceNameOverrides])
@@ -367,15 +356,10 @@ export function AddMaterialModal({
     () => new Set(workspaceLookup.get(targetWorkspaceId)?.items.map((item) => item.item_id) ?? []),
     [targetWorkspaceId, workspaceLookup],
   )
-  const lockedWorkspaceKind = workspaceKind ?? selectedWorkspaces[0]?.kind
-  const targetWorkspaceKind: WorkspaceKind = lockedWorkspaceKind ?? 'note'
-  const canUseNote = isWorkspaceKindAllowed('note')
   const dialogDescription = '输入素材链接并生成笔记'
   const selectableWorkspaces = useMemo(
-    () => (availableWorkspaces ?? []).filter((ws) => (
-      ws.kind === targetWorkspaceKind && isWorkspaceKindAllowed(ws.kind)
-    )),
-    [availableWorkspaces, targetWorkspaceKind],
+    () => availableWorkspaces ?? [],
+    [availableWorkspaces],
   )
   const filteredWorkspaces = useMemo(() => {
     const q = workspaceQuery.trim().toLowerCase()
@@ -440,16 +424,6 @@ export function AddMaterialModal({
       .map((item) => ({ workspace_id: item.workspace_id, item_id: item.item_id })),
     [existingItems, existingSelectedIds],
   )
-
-  useEffect(() => {
-    if (workspaceKind && open) {
-      setSelectedAction(workspaceKind)
-      return
-    }
-    if (open && !isWorkspaceKindAllowed(selectedAction)) {
-      setSelectedAction(DEFAULT_ACTION)
-    }
-  }, [selectedAction, workspaceKind, open])
 
   // 首次打开弹窗时：拉最新 providers；有视觉模型则默认开配图
   useEffect(() => {
@@ -685,12 +659,10 @@ export function AddMaterialModal({
 
   const selectWorkspace = useCallback((workspaceId: string) => {
     if (!onWorkspaceIdsChange) return
-    const ws = workspaceLookup.get(workspaceId)
     const next = workspaceIds[0] === workspaceId ? [] : [workspaceId]
     onWorkspaceIdsChange(next)
-    if (!workspaceKind && ws && isWorkspaceKindAllowed(ws.kind)) setSelectedAction(ws.kind)
     setWorkspacePickerOpen(false)
-  }, [onWorkspaceIdsChange, workspaceIds, workspaceKind, workspaceLookup])
+  }, [onWorkspaceIdsChange, workspaceIds])
 
   const clearWorkspace = useCallback(() => {
     onWorkspaceIdsChange?.([])
@@ -703,15 +675,13 @@ export function AddMaterialModal({
     setError(null)
     try {
       if (onCreateWorkspace) {
-        const created = await onCreateWorkspace(workspaceQuery, targetWorkspaceKind)
+        const created = await onCreateWorkspace(workspaceQuery)
         onWorkspaceIdsChange?.([created.workspace_id])
-        if (!workspaceKind && isWorkspaceKindAllowed(created.kind)) setSelectedAction(created.kind)
       } else {
         // 降级：直接用 createWorkspace 创建（TaskboardPage 场景）
         const name = workspaceQuery.trim() || '新笔记合集'
-        const created = await createWorkspaceSvc({ name, kind: targetWorkspaceKind })
+        const created = await createWorkspaceSvc({ name })
         onWorkspaceIdsChange?.([created.workspace_id])
-        if (!workspaceKind && isWorkspaceKindAllowed(created.kind)) setSelectedAction(created.kind)
         toast.success(`合集「${name}」已创建`)
       }
       setWorkspaceQuery('')
@@ -723,7 +693,7 @@ export function AddMaterialModal({
     } finally {
       setCreatingWorkspace(false)
     }
-  }, [creatingWorkspace, onCreateWorkspace, onWorkspaceIdsChange, targetWorkspaceKind, workspaceKind, workspaceQuery])
+  }, [creatingWorkspace, onCreateWorkspace, onWorkspaceIdsChange, workspaceQuery])
 
   const handleSaveWorkspaceRename = useCallback(async () => {
     const workspaceId = renamingWorkspaceId
@@ -757,10 +727,9 @@ export function AddMaterialModal({
     setExistingLoading(true)
     setError(null)
     try {
-      const library = await fetchLibrary(false, [targetWorkspaceKind])
+      const library = await fetchLibrary(false)
       const candidates = library.items.filter((item) => (
-        item.workspace_kind === targetWorkspaceKind
-        && item.status === 'done'
+        item.status === 'done'
         && item.workspace_id !== targetWorkspaceId
         && !targetExistingItemIds.has(item.item_id)
       ))
@@ -773,7 +742,7 @@ export function AddMaterialModal({
     } finally {
       setExistingLoading(false)
     }
-  }, [targetExistingItemIds, targetWorkspaceId, targetWorkspaceKind])
+  }, [targetExistingItemIds, targetWorkspaceId])
 
   const toggleExistingItem = useCallback((itemKey: string) => {
     setExistingSelectedIds((prev) => {
@@ -869,7 +838,7 @@ export function AddMaterialModal({
       const effVisionModel = selectedVisionModel === '__default__' ? '' : selectedVisionModel
       const result = await importBatchSource({
         workspace_name: batchResult.title || '批量导入合集',
-        kind: targetWorkspaceKind,
+        kind: 'note',
         source_type: batchResult.source_type,
         source_url: batchResult.source_url,
         items: selectedBatchItems,
@@ -1516,23 +1485,16 @@ export function AddMaterialModal({
           {/* ③ 你要做什么 */}
           <div className="m-section">
             <div className="eyebrow" style={{ marginBottom: 10 }}>③ 你要做什么</div>
-            {workspaceKind && (
-              <div style={{ fontSize: 12, color: 'var(--mut)', marginBottom: 8 }}>
-                动作已锁定为「笔记」合集类型
-              </div>
-            )}
             <div className="note-type-grid" style={{ marginBottom: 14 }}>
-              {canUseNote && (
-                <button
-                  type="button"
-                  className="note-type-card"
-                  data-active={selectedAction === 'note'}
-                  onClick={() => setSelectedAction('note')}
-                >
-                  <div className="ntc-l"><FileText size={16} style={{ display: 'inline', verticalAlign: '-3px', marginRight: 4 }} /> 学习笔记</div>
-                  <div className="ntc-d">沉浸式阅读与总结提取</div>
-                </button>
-              )}
+              <button
+                type="button"
+                className="note-type-card"
+                data-active={selectedAction === 'note'}
+                onClick={() => setSelectedAction('note')}
+              >
+                <div className="ntc-l"><FileText size={16} style={{ display: 'inline', verticalAlign: '-3px', marginRight: 4 }} /> 学习笔记</div>
+                <div className="ntc-d">沉浸式阅读与总结提取</div>
+              </button>
             </div>
 
             {selectedAction === 'note' && (

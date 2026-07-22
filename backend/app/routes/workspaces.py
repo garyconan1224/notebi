@@ -31,7 +31,7 @@ import uuid
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import parse_qs, quote, urlparse
 
 import httpx
@@ -727,7 +727,7 @@ _EXTENSION_TYPE_MAP: Dict[str, str] = {
 class WorkspaceCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120, description="工作空间名称")
     background: Dict[str, Any] = Field(default_factory=dict)
-    kind: str = Field(default="note", description="合集类型：note")
+    kind: Literal["note"] = Field(default="note", description="合集类型：note")
     source: str = Field(default="manual", description="manual|inbox|...")
     source_meta: Dict[str, Any] = Field(default_factory=dict)
 
@@ -755,7 +755,10 @@ class GenerateNoteRequest(BaseModel):
     image_mode: str = Field(default="vision", description="提取模式: vision 或 ocr")
     frame_interval: int = Field(default=5, description="截帧间隔，多少秒截一帧")
     vision_model: str = Field(default="", description="视觉模型 ID（空=用系统默认）")
-    intent: str = Field(default="note", description="任务意图：note / learning / collect 等")
+    intent: Literal["note", "learning", "collect"] = Field(
+        default="note",
+        description="任务意图：note / learning / collect",
+    )
     note_media_kind: str = Field(
         default="auto",
         description="笔记子类型：auto / video / image_text / audio / text",
@@ -841,7 +844,7 @@ class AutoCreateRequest(BaseModel):
 
     hint_url: Optional[str] = Field(default=None, description="提示 URL，用于推导名称")
     hint_text: Optional[str] = Field(default=None, description="提示文本，用于推导名称")
-    kind: str = Field(default="note", description="合集类型：note")
+    kind: Literal["note"] = Field(default="note", description="合集类型：note")
 
 
 class SniffUrlRequest(BaseModel):
@@ -1873,21 +1876,16 @@ def probe_item_media(workspace_id: str, item_id: str) -> dict:
 def list_workspaces(
     trashed_only: bool = False,
     include_trashed: bool = False,
-    kinds: Optional[List[str]] = Query(default=None),
 ) -> List[Dict[str, Any]]:
     """列出工作空间。
 
     默认排除 trashed（软删除后的"垃圾桶"内容）。
     trashed_only=true：仅返回垃圾桶；include_trashed=true：返回全部。
     """
-    try:
-        recs = _store.list_all(
-            trashed_only=trashed_only,
-            include_trashed=include_trashed,
-            kinds=kinds,
-        )
-    except ValueError as err:
-        raise HTTPException(status_code=400, detail=str(err)) from err
+    recs = _store.list_all(
+        trashed_only=trashed_only,
+        include_trashed=include_trashed,
+    )
     # 隐藏收纳箱，不在合集列表展示
     recs = [r for r in recs if r.source != "inbox"]
     return [_enrich_workspace(r) for r in recs]
@@ -2103,17 +2101,12 @@ def _default_summary_template_for_item(item: "WorkspaceItem", results: dict) -> 
 @router.get("/library")
 def get_library(
     include_trashed: bool = False,
-    kinds: Optional[List[str]] = Query(default=None),
 ) -> Dict[str, Any]:
     """聚合端点：摊平所有 workspace items + workspace 摘要，供「资料库」页使用。"""
-    try:
-        recs = _store.list_all(
-            include_trashed=include_trashed,
-            trashed_only=False,
-            kinds=kinds,
-        )
-    except ValueError as err:
-        raise HTTPException(status_code=400, detail=str(err)) from err
+    recs = _store.list_all(
+        include_trashed=include_trashed,
+        trashed_only=False,
+    )
 
     items_out: List[Dict[str, Any]] = []
     workspaces_out: List[Dict[str, Any]] = []
@@ -3622,7 +3615,6 @@ def get_image_compare(
             "description": results.get("description", ""),
             "ocr_text": results.get("ocr_text", ""),
             "tags": results.get("tags", {}),
-            "prompts": results.get("prompts", {}),
             "associations": results.get("associations", {}),
             "has_result": has_real,
         })
