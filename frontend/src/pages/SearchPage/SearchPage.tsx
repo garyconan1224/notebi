@@ -142,10 +142,12 @@ export default function SearchPage() {
             </select>
             <div className="search-mode-group" aria-label="检索方式">
               <button className="search-mode-btn" data-active={mode === 'smart'}
+                type="button" aria-pressed={mode === 'smart'}
                 onClick={() => setMode('smart')}>
                 智能回答
               </button>
               <button className="search-mode-btn" data-active={mode === 'exact'}
+                type="button" aria-pressed={mode === 'exact'}
                 onClick={() => setMode('exact')}>
                 精确查找
               </button>

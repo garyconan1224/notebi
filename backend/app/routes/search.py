@@ -20,7 +20,7 @@ router = APIRouter(tags=["search"])
 
 class GlobalSearchRequest(BaseModel):
     query: str = Field(..., min_length=1)
-    mode: Literal["smart", "exact"] = "smart"
+    mode: Literal["smart", "exact", "hybrid"] = "smart"
     top_k: int = Field(default=10, ge=1, le=30)
     workspace_ids: Optional[List[str]] = None
     item_types: Optional[List[str]] = None

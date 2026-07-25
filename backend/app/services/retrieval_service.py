@@ -65,6 +65,29 @@ class RetrievalService:
             )
             result["status"] = self.status()
             return result
+        if mode == "hybrid":
+            semantic = self.search(
+                query=query,
+                mode="smart",
+                top_k=top_k,
+                workspace_ids=workspace_ids,
+                item_types=item_types,
+                tags=tags,
+            )
+            exact = self.exact_service.search(
+                query,
+                workspace_ids=workspace_ids,
+                item_types=item_types,
+                tags=tags,
+                top_k=top_k,
+            )
+            semantic["sources"] = self._rrf_sources(
+                semantic.get("sources", []),
+                exact.get("sources", []),
+                top_k,
+            )
+            semantic["mode"] = "hybrid"
+            return semantic
         if mode != "smart":
             raise ValueError(f"unsupported search mode: {mode}")
         result = workspace_search_service.search_across_workspaces(
@@ -89,6 +112,39 @@ class RetrievalService:
         result["mode"] = mode
         result["status"] = self.status()
         return result
+
+    @staticmethod
+    def _rrf_sources(
+        semantic: List[Dict[str, Any]],
+        exact: List[Dict[str, Any]],
+        limit: int,
+    ) -> List[Dict[str, Any]]:
+        """Fuse independent ranked lists with reciprocal-rank fusion."""
+
+        fused: Dict[tuple[Any, ...], Dict[str, Any]] = {}
+        scores: Dict[tuple[Any, ...], float] = {}
+        channels: Dict[tuple[Any, ...], set[str]] = {}
+        for channel, sources in (("semantic", semantic), ("exact", exact)):
+            for rank, source in enumerate(sources, start=1):
+                key = (
+                    source.get("content_id")
+                    or f"{source.get('workspace_id')}:{source.get('item_id')}",
+                    source.get("field"),
+                    source.get("segment_id"),
+                    source.get("start_ms"),
+                )
+                fused.setdefault(key, dict(source))
+                scores[key] = scores.get(key, 0.0) + 1.0 / (60 + rank)
+                channels.setdefault(key, set()).add(channel)
+        ranked = sorted(fused, key=lambda key: scores[key], reverse=True)[:limit]
+        return [
+            {
+                **fused[key],
+                "fusion_score": scores[key],
+                "retrieval_channels": sorted(channels[key]),
+            }
+            for key in ranked
+        ]
 
     def status(self) -> Dict[str, Any]:
         """Return readiness for the workspace caches used by search."""

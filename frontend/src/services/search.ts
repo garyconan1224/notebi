@@ -23,20 +23,22 @@ export interface SearchSource {
   start_ms: number | null
   end_ms: number | null
   score: number
+  fusion_score?: number
+  retrieval_channels?: ('semantic' | 'exact')[]
   jump_url: string
 }
 
 export interface SearchResponse {
   answer: string
   sources: SearchSource[]
-  mode?: 'smart' | 'exact'
+  mode?: 'smart' | 'exact' | 'hybrid'
   status?: import('./knowledge').KnowledgeStatus
 }
 
 export interface GlobalSearchOptions {
   topK?: number
   workspaceIds?: string[]
-  mode?: 'smart' | 'exact'
+  mode?: 'smart' | 'exact' | 'hybrid'
   itemTypes?: string[]
   tags?: string[]
 }
