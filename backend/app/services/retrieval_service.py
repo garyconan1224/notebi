@@ -76,6 +76,16 @@ class RetrievalService:
             store=self.store,
             task_store=self.task_store,
         )
+        identities = {
+            (record.workspace_id, item.item_id): item.content_id
+            for record in self.store.list_all(include_trashed=False)
+            for item in record.items
+        }
+        for source in result.get("sources", []):
+            source["content_id"] = identities.get(
+                (source.get("workspace_id"), source.get("item_id")),
+                "",
+            )
         result["mode"] = mode
         result["status"] = self.status()
         return result

@@ -31,6 +31,7 @@ class SearchIndexStore:
                 workspace_id TEXT NOT NULL,
                 workspace_name TEXT NOT NULL,
                 item_id TEXT NOT NULL,
+                content_id TEXT NOT NULL,
                 item_type TEXT NOT NULL,
                 item_title TEXT NOT NULL,
                 field TEXT NOT NULL,
@@ -44,6 +45,14 @@ class SearchIndexStore:
                 ON search_chunks(workspace_id, item_type, field);
             """
         )
+        columns = {
+            str(row["name"])
+            for row in connection.execute("PRAGMA table_info(search_chunks)")
+        }
+        if "content_id" not in columns:
+            connection.execute(
+                "ALTER TABLE search_chunks ADD COLUMN content_id TEXT NOT NULL DEFAULT ''"
+            )
         try:
             connection.execute(
                 """
@@ -77,11 +86,11 @@ class SearchIndexStore:
             connection.executemany(
                 """
                 INSERT INTO search_chunks (
-                    source_id, workspace_id, workspace_name, item_id,
+                    source_id, workspace_id, workspace_name, item_id, content_id,
                     item_type, item_title, field, segment_id, start_ms,
                     end_ms, content, tags
                 ) VALUES (
-                    :source_id, :workspace_id, :workspace_name, :item_id,
+                    :source_id, :workspace_id, :workspace_name, :item_id, :content_id,
                     :item_type, :item_title, :field, :segment_id, :start_ms,
                     :end_ms, :content, :tags
                 )
@@ -95,7 +104,7 @@ class SearchIndexStore:
             connection.executemany(
                 "INSERT INTO schema_meta(key, value) VALUES(?, ?)",
                 [
-                    ("schema_version", "1"),
+                    ("schema_version", "2"),
                     ("signature", signature),
                     ("fts5", "1" if fts5 else "0"),
                 ],

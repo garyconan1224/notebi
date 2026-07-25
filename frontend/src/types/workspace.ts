@@ -48,6 +48,10 @@ export interface ItemTags {
 
 export interface WorkspaceItem {
   item_id: string
+  content_id?: string
+  lineage_id?: string
+  origin_content_id?: string | null
+  legacy_item_id?: string
   type: ItemType
   source: ItemSource
   source_value: string

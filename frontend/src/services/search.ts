@@ -10,6 +10,7 @@ import { http } from './client'
 
 export interface SearchSource {
   source_id: string
+  content_id?: string
   workspace_id: string
   workspace_name: string
   item_id: string

@@ -4,6 +4,8 @@ import type { ItemTags } from '@/types/workspace'
 
 export interface LibraryItem {
   item_id: string
+  content_id?: string
+  lineage_id?: string
   workspace_id: string
   workspace_name: string
   workspace_kind: 'note'

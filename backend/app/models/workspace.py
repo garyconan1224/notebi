@@ -15,6 +15,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, FrozenSet, List, Optional
+import uuid
 
 
 def _now_iso() -> str:
@@ -153,6 +154,10 @@ class WorkspaceItem:
     type: str  # ItemType 字面量
     source: str  # "url" | "local"
     source_value: str  # URL 或本地路径
+    content_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    lineage_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    origin_content_id: Optional[str] = None
+    legacy_item_id: str = ""
     name: str = ""  # 显示名（默认从 source 推导）
     status: str = ItemStatus.PENDING.value
     preflight: PreflightConfig = field(default_factory=PreflightConfig)
@@ -199,6 +204,12 @@ class WorkspaceItem:
             type=str(data.get("type") or ItemType.VIDEO.value),
             source=str(data.get("source") or "local"),
             source_value=str(data.get("source_value") or ""),
+            content_id=str(data.get("content_id") or ""),
+            lineage_id=str(data.get("lineage_id") or ""),
+            origin_content_id=(
+                str(data["origin_content_id"]) if data.get("origin_content_id") else None
+            ),
+            legacy_item_id=str(data.get("legacy_item_id") or ""),
             name=str(data.get("name") or ""),
             status=str(data.get("status") or ItemStatus.PENDING.value),
             preflight=PreflightConfig.from_dict(data.get("preflight") or {}),
@@ -319,7 +330,20 @@ class WorkspaceRecord:
         items: List[WorkspaceItem] = []
         for it in items_raw:
             if isinstance(it, dict):
-                items.append(WorkspaceItem.from_dict(it))
+                item = WorkspaceItem.from_dict(it)
+                legacy_id = item.legacy_item_id or item.item_id
+                if not item.content_id:
+                    item.content_id = str(uuid.uuid5(
+                        uuid.NAMESPACE_URL,
+                        f"notebi:content:{data.get('workspace_id', '')}:{legacy_id}",
+                    ))
+                    item.legacy_item_id = legacy_id
+                if not item.lineage_id:
+                    item.lineage_id = str(uuid.uuid5(
+                        uuid.NAMESPACE_URL,
+                        f"notebi:lineage:{legacy_id}",
+                    ))
+                items.append(item)
         raw_status = str(data.get("status") or WorkspaceStatus.ACTIVE.value)
         # 老数据兼容：旧 "completed" 统一映射成 "analyzed"
         if raw_status == "completed":

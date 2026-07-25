@@ -40,6 +40,7 @@ class ExactSearchService:
                 "items": [
                     {
                         "item_id": item.item_id,
+                        "content_id": item.content_id,
                         "updated_at": item.updated_at,
                         "summaries": len(item.summaries),
                         "tags": item.tags,
@@ -78,6 +79,7 @@ class ExactSearchService:
             "workspace_id": record.workspace_id,
             "workspace_name": record.name,
             "item_id": item.item_id,
+            "content_id": item.content_id,
             "item_type": item.type,
             "item_title": item.name or item.source_value or item.item_id,
             "field": field,
@@ -184,6 +186,7 @@ class ExactSearchService:
                 {
                     **{key: row[key] for key in (
                         "source_id", "workspace_id", "workspace_name", "item_id",
+                        "content_id",
                         "item_type", "item_title", "field", "segment_id",
                         "start_ms", "end_ms",
                     )},

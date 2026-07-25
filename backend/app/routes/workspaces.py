@@ -85,7 +85,7 @@ from backend.app.services.speaker_labels import (
 from backend.app.services.summary_generator import generate_summary
 from backend.app.services.summary_templates import list_template_ids
 from backend.app.services.video_result_demo import build_demo_video_result
-from backend.app.services.workspace_search_service import search_one_workspace
+from backend.app.services.workspace_search_service import _jump_url, search_one_workspace
 from backend.app.services.workspace_store import WorkspaceStore
 from shared.config import DATA_DIR
 from shared.settings_store import load_settings
@@ -2151,6 +2151,8 @@ def get_library(
                     audio_nature = "speech"
             items_out.append({
                 "item_id": item.item_id,
+                "content_id": item.content_id,
+                "lineage_id": item.lineage_id,
                 "workspace_id": rec.workspace_id,
                 "workspace_name": rec.name,
                 "workspace_kind": rec.kind,
@@ -2226,15 +2228,14 @@ def batch_delete_items(req: BatchDeleteRequest) -> Dict[str, Any]:
 def batch_add_items_to_workspace(req: BatchAddToWorkspaceRequest) -> Dict[str, Any]:
     """把已有素材加入目标合集。
 
-    当前素材模型允许同一个 item 数据被多个 workspace 引用。这里复制 item 记录本身，
-    保留原结果与任务关联，不重复触发下载/分析。
+    创建独立内容副本，保留同源谱系和只读媒体引用，不重复触发下载/分析。
     """
     target_id = req.target_workspace_id.strip()
     target = _store.get(target_id)
     if target is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {target_id}")
 
-    existing_ids = {item.item_id for item in target.items}
+    existing_lineages = {item.lineage_id for item in target.items}
     added: List[str] = []
     skipped: List[str] = []
     failed: List[Dict[str, Any]] = []
@@ -2245,10 +2246,6 @@ def batch_add_items_to_workspace(req: BatchAddToWorkspaceRequest) -> Dict[str, A
         if not ws_id or not item_id:
             failed.append({**entry, "reason": "missing workspace_id or item_id"})
             continue
-        if item_id in existing_ids:
-            skipped.append(item_id)
-            continue
-
         source = _store.get(ws_id)
         if source is None:
             failed.append({"workspace_id": ws_id, "item_id": item_id, "reason": "source workspace not found"})
@@ -2261,13 +2258,28 @@ def batch_add_items_to_workspace(req: BatchAddToWorkspaceRequest) -> Dict[str, A
         if item is None:
             failed.append({"workspace_id": ws_id, "item_id": item_id, "reason": "item not found"})
             continue
+        if item.lineage_id in existing_lineages:
+            skipped.append(item_id)
+            continue
 
+        target_note_dir: Optional[Path] = None
         try:
             cloned = WorkspaceItem.from_dict(item.to_dict())
+            cloned.item_id = str(uuid.uuid4())
+            cloned.content_id = str(uuid.uuid4())
+            cloned.origin_content_id = item.content_id
+            cloned.legacy_item_id = item.legacy_item_id or item.item_id
+            cloned.related_task_ids = []
+            source_note_dir = note_dir(ws_id, item_id)
+            target_note_dir = note_dir(target_id, cloned.item_id)
+            if source_note_dir.exists():
+                shutil.copytree(source_note_dir, target_note_dir)
             _store.add_item(target_id, cloned)
-            existing_ids.add(item_id)
-            added.append(item_id)
+            existing_lineages.add(cloned.lineage_id)
+            added.append(cloned.item_id)
         except Exception as err:
+            if target_note_dir is not None:
+                shutil.rmtree(target_note_dir, ignore_errors=True)
             failed.append({"workspace_id": ws_id, "item_id": item_id, "reason": str(err)})
 
     return {
@@ -2277,6 +2289,37 @@ def batch_add_items_to_workspace(req: BatchAddToWorkspaceRequest) -> Dict[str, A
         "added_ids": added,
         "skipped_ids": skipped,
         "failures": failed,
+    }
+
+
+@router.get("/{workspace_id}/items/{item_id}/lineage")
+def list_item_lineage(workspace_id: str, item_id: str) -> Dict[str, Any]:
+    """列出其他合集中的同源独立副本，不自动合并或覆盖。"""
+
+    try:
+        current = _store.get_item(workspace_id, item_id)
+    except KeyError as err:
+        raise HTTPException(status_code=404, detail=str(err)) from err
+    copies = []
+    for workspace in _store.list_all(include_trashed=False):
+        for item in workspace.items:
+            if item.lineage_id != current.lineage_id or item.content_id == current.content_id:
+                continue
+            copies.append({
+                "workspace_id": workspace.workspace_id,
+                "workspace_name": workspace.name,
+                "item_id": item.item_id,
+                "content_id": item.content_id,
+                "lineage_id": item.lineage_id,
+                "name": item.name,
+                "type": item.type,
+                "updated_at": item.updated_at,
+                "jump_url": _jump_url(workspace.workspace_id, item.item_id, item.type),
+            })
+    return {
+        "content_id": current.content_id,
+        "lineage_id": current.lineage_id,
+        "copies": sorted(copies, key=lambda copy: copy["updated_at"], reverse=True),
     }
 
 
