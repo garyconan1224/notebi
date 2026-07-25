@@ -39,6 +39,29 @@ export interface WorkspaceFolder {
   name: string
 }
 
+export interface NoteVersion {
+  version_id: string
+  content_id: string
+  version_no: number
+  content_hash: string
+  source: 'BASELINE' | 'USER_EDIT' | 'RESTORE' | 'ADOPT_FROM_SIBLING'
+  created_at: string
+  preview: string
+  body_md?: string
+}
+
+export interface LineageCopy {
+  workspace_id: string
+  workspace_name: string
+  item_id: string
+  content_id: string
+  lineage_id: string
+  name: string
+  type: ItemType
+  updated_at: string
+  jump_url: string
+}
+
 export async function listFavoriteGroups(): Promise<FavoriteGroup[]> {
   const res = await http.get<FavoriteGroup[]>(`${BASE}/metadata/favorite-groups`)
   return res.data
@@ -1037,6 +1060,60 @@ export async function putItemNote(
 ): Promise<ItemNote> {
   const res = await http.put(`${BASE}/${workspaceId}/items/${itemId}/note`, { body })
   return res.data as ItemNote
+}
+
+export async function listNoteVersions(
+  workspaceId: string,
+  itemId: string,
+): Promise<NoteVersion[]> {
+  const res = await http.get<NoteVersion[]>(
+    `${BASE}/${workspaceId}/items/${itemId}/note/versions`,
+  )
+  return res.data
+}
+
+export async function getNoteVersion(
+  workspaceId: string,
+  itemId: string,
+  versionId: string,
+): Promise<NoteVersion> {
+  const res = await http.get<NoteVersion>(
+    `${BASE}/${workspaceId}/items/${itemId}/note/versions/${versionId}`,
+  )
+  return res.data
+}
+
+export async function restoreNoteVersion(
+  workspaceId: string,
+  itemId: string,
+  versionId: string,
+): Promise<ItemNote> {
+  const res = await http.post<ItemNote>(
+    `${BASE}/${workspaceId}/items/${itemId}/note/versions/${versionId}/restore`,
+  )
+  return res.data
+}
+
+export async function listItemLineage(
+  workspaceId: string,
+  itemId: string,
+): Promise<{ content_id: string; lineage_id: string; copies: LineageCopy[] }> {
+  const res = await http.get(
+    `${BASE}/${workspaceId}/items/${itemId}/lineage`,
+  )
+  return res.data as { content_id: string; lineage_id: string; copies: LineageCopy[] }
+}
+
+export async function adoptSiblingNote(
+  workspaceId: string,
+  itemId: string,
+  siblingContentId: string,
+): Promise<ItemNote> {
+  const res = await http.post<ItemNote>(
+    `${BASE}/${workspaceId}/items/${itemId}/note/adopt-sibling`,
+    { sibling_content_id: siblingContentId },
+  )
+  return res.data
 }
 
 /** R4.3: GET /workspaces/{id}/items/{itemId}/note/export?format=obsidian */

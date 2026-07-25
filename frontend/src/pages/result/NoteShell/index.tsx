@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Bold, BookOpenCheck, Brain, Camera, Check, ChevronDown, Code2, Download, ExternalLink, FileDown, FileText, FileType, Image, Italic, List, MessageCircle, Minus, Pause, Pencil, Play, Plus, Presentation, Sparkles, Strikethrough, Subtitles, Trash2, Type, Underline, X } from 'lucide-react'
+import { ArrowLeft, Bold, BookOpenCheck, Brain, Camera, Check, ChevronDown, Code2, Download, ExternalLink, FileDown, FileText, FileType, History, Image, Italic, List, MessageCircle, Minus, Pause, Pencil, Play, Plus, Presentation, Sparkles, Strikethrough, Subtitles, Trash2, Type, Underline, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -31,6 +31,7 @@ import MilkdownEditor from './MilkdownEditor'
 import LNVideoPanel, { type LNVideoPanelHandle } from '@/pages/results/LearningNotesPage/LNVideoPanel'
 import LNTranscriptPanel from '@/pages/results/LearningNotesPage/LNTranscriptPanel'
 import NoteAudioPanel, { type NoteAudioPanelHandle } from './NoteAudioPanel'
+import { NoteHistoryPanel } from './NoteHistoryPanel'
 import '@/pages/results/LearningNotesPage/learning-notes.css'
 import './note-shell.css'
 import { NewSummaryModal } from '@/components/NewSummaryModal'
@@ -455,6 +456,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [exportBusy, setExportBusy] = useState<NoteExportBusy | null>(null)
   const [immersiveOpen, setImmersiveOpen] = useState(false)
   const [sourceMdOpen, setSourceMdOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   // VN4.3 AI 工具下拉
   const [aiToolsOpen, setAiToolsOpen] = useState(false)
   const aiToolsDropRef = useRef<HTMLDivElement>(null)
@@ -1457,11 +1459,16 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const sourceMarker = sourceMarkerFromUrl(sourceUrl)
   const mediaDuration = isVideoNote ? effectiveVideoDuration : isAudioNote ? effectiveAudioDuration : 0
   const saveStatusNode = (
-    <span className={`nibi-note-save nibi-note-save--${saveStatus}`}>
-      {saveStatus === 'saving' && '保存中…'}
-      {saveStatus === 'saved' && `已保存 ${savedAt}`}
-      {saveStatus === 'failed' && '保存失败'}
-      {saveStatus === 'idle' && '自动保存'}
+    <span className="nibi-note-save-actions">
+      <span className={`nibi-note-save nibi-note-save--${saveStatus}`}>
+        {saveStatus === 'saving' && '保存中…'}
+        {saveStatus === 'saved' && `已保存 ${savedAt}`}
+        {saveStatus === 'failed' && '保存失败'}
+        {saveStatus === 'idle' && '自动保存'}
+      </span>
+      <button className="btn-ghost" onClick={() => setHistoryOpen(true)}>
+        <History size={13} />版本历史
+      </button>
     </span>
   )
   const noteMetaRows = [
@@ -2672,6 +2679,21 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         onClose={() => setSourceMdOpen(false)}
         onDownload={handleDownloadSourceMd}
         downloading={exportBusy === 'source_md'}
+      />
+      <NoteHistoryPanel
+        open={historyOpen}
+        workspaceId={workspaceId}
+        itemId={itemId}
+        onClose={() => setHistoryOpen(false)}
+        onRestored={(updated) => {
+          setNote(updated)
+          switchEditorBody(extractEditableBody(
+            updated.note_md,
+            String(updated.frontmatter?.type ?? ''),
+          ))
+          setSaveStatus('saved')
+          setSavedAt(formatTime(new Date()))
+        }}
       />
     </div>
   )

@@ -79,6 +79,7 @@ from backend.app.services.note_assembler import (
 )
 from backend.app.services.note_exporter import build_note_export_response
 from backend.app.services.metadata_store import MetadataStore
+from backend.app.services.note_version_store import NoteVersionStore
 from backend.app.services.speaker_labels import (
     SPEAKER_ROLE_OPTIONS,
     apply_speaker_map,
@@ -103,6 +104,7 @@ router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 _store = WorkspaceStore()
 _metadata = MetadataStore()
 _metadata.migrate_legacy(_store.list_all(include_trashed=True))
+_note_versions = NoteVersionStore()
 
 
 def _handle_summary_task(record: TaskRecord, runner: Any) -> Dict[str, Any]:
@@ -4310,6 +4312,9 @@ class NoteUpdateRequest(BaseModel):
     """R1.1: note.md 正文写入请求体。"""
 
     body: str = Field(..., description="正文 markdown（不含 frontmatter）")
+    version_source: Literal[
+        "USER_EDIT", "RESTORE", "ADOPT_FROM_SIBLING"
+    ] = "USER_EDIT"
 
 
 class TranslateRequest(BaseModel):
@@ -5150,6 +5155,14 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
     }
 
 
+def _extract_note_body(markdown: str) -> str:
+    if markdown.startswith("---\n"):
+        parts = markdown.split("---\n", 2)
+        if len(parts) >= 3:
+            return parts[2].lstrip("\n")
+    return markdown
+
+
 @router.put("/{workspace_id}/items/{item_id}/note")
 def update_item_note(workspace_id: str, item_id: str, req: NoteUpdateRequest) -> Dict[str, Any]:
     """R1.1: 写入 note.md 正文（保留 frontmatter 机器字段）。
@@ -5168,11 +5181,13 @@ def update_item_note(workspace_id: str, item_id: str, req: NoteUpdateRequest) ->
 
     nd = note_dir(workspace_id, item_id)
     note_path = nd / "note.md"
+    previous_body: Optional[str] = None
 
     # 读取或惰性初始化 frontmatter
     frontmatter: Dict[str, Any] = {}
     if note_path.exists():
         raw = note_path.read_text(encoding="utf-8")
+        previous_body = _extract_note_body(raw)
         if raw.startswith("---\n"):
             parts = raw.split("---\n", 2)
             if len(parts) >= 3:
@@ -5212,6 +5227,9 @@ def update_item_note(workspace_id: str, item_id: str, req: NoteUpdateRequest) ->
     note_content = f"---\n{fm_yaml}---\n\n{req.body}"
     nd.mkdir(parents=True, exist_ok=True)
     note_path.write_text(note_content, encoding="utf-8")
+    if previous_body is not None:
+        _note_versions.checkpoint(item.content_id, previous_body, "BASELINE")
+    _note_versions.checkpoint(item.content_id, req.body, req.version_source)
 
     # 读取 source.md
     source_md = ""
@@ -5321,6 +5339,73 @@ def update_item_note(workspace_id: str, item_id: str, req: NoteUpdateRequest) ->
         "transcript": transcript,
         "summary_hint": summary_hint,
     }
+
+
+@router.get("/{workspace_id}/items/{item_id}/note/versions")
+def list_note_versions(workspace_id: str, item_id: str) -> List[Dict[str, Any]]:
+    item = _store.get_item(workspace_id, item_id)
+    return [
+        {key: value for key, value in version.items() if key != "body_md"}
+        for version in _note_versions.list(item.content_id)
+    ]
+
+
+@router.get("/{workspace_id}/items/{item_id}/note/versions/{version_id}")
+def get_note_version(
+    workspace_id: str, item_id: str, version_id: str,
+) -> Dict[str, Any]:
+    item = _store.get_item(workspace_id, item_id)
+    try:
+        return _note_versions.get(item.content_id, version_id)
+    except KeyError as err:
+        raise HTTPException(status_code=404, detail=str(err)) from err
+
+
+@router.post("/{workspace_id}/items/{item_id}/note/versions/{version_id}/restore")
+def restore_note_version(
+    workspace_id: str, item_id: str, version_id: str,
+) -> Dict[str, Any]:
+    item = _store.get_item(workspace_id, item_id)
+    try:
+        version = _note_versions.get(item.content_id, version_id)
+    except KeyError as err:
+        raise HTTPException(status_code=404, detail=str(err)) from err
+    return update_item_note(
+        workspace_id,
+        item_id,
+        NoteUpdateRequest(body=version["body_md"], version_source="RESTORE"),
+    )
+
+
+class AdoptSiblingRequest(BaseModel):
+    sibling_content_id: str
+
+
+@router.post("/{workspace_id}/items/{item_id}/note/adopt-sibling")
+def adopt_sibling_note(
+    workspace_id: str, item_id: str, req: AdoptSiblingRequest,
+) -> Dict[str, Any]:
+    current = _store.get_item(workspace_id, item_id)
+    sibling_location = next(
+        (
+            (record.workspace_id, sibling.item_id)
+            for record in _store.list_all(include_trashed=False)
+            for sibling in record.items
+            if sibling.content_id == req.sibling_content_id
+            and sibling.lineage_id == current.lineage_id
+            and sibling.content_id != current.content_id
+        ),
+        None,
+    )
+    if sibling_location is None:
+        raise HTTPException(status_code=404, detail="sibling content not found")
+    sibling_note = get_item_note(*sibling_location)
+    body = _extract_note_body(str(sibling_note.get("note_md") or ""))
+    return update_item_note(
+        workspace_id,
+        item_id,
+        NoteUpdateRequest(body=body, version_source="ADOPT_FROM_SIBLING"),
+    )
 
 
 @router.get("/{workspace_id}/items/{item_id}/note/export")
