@@ -7,7 +7,7 @@ from backend.app.models.workspace import WorkspaceRecord, WorkspaceItem
 
 def test_workspace_renamed_when_auto_generated(tmp_path):
     """自动生成名（Bilibili · 0525-2001）应被替换为「平台 · 视频标题」。"""
-    store = WorkspaceStore()
+    store = WorkspaceStore(root=tmp_path / "workspaces")
     ws = WorkspaceRecord(
         workspace_id="ws-test-1",
         name="Bilibili · 0525-2001",
@@ -60,7 +60,7 @@ def test_workspace_renamed_when_auto_generated(tmp_path):
 
 def test_workspace_not_renamed_when_user_named(tmp_path):
     """用户自定义名不受影响。"""
-    store = WorkspaceStore()
+    store = WorkspaceStore(root=tmp_path / "workspaces")
     ws = WorkspaceRecord(
         workspace_id="ws-test-2",
         name="我的自定义空间",

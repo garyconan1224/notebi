@@ -76,7 +76,7 @@ class MetadataStore:
                 (DEFAULT_FAVORITE_GROUP_ID, "默认收藏", "默认收藏", 0, _now()),
             )
             connection.execute(
-                "INSERT OR REPLACE INTO schema_meta VALUES('schema_version','1')"
+                "INSERT OR IGNORE INTO schema_meta VALUES('schema_version','1')"
             )
 
     def _connect(self) -> sqlite3.Connection:

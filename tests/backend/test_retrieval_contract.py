@@ -4,6 +4,8 @@ from typing import Any
 import json
 from pathlib import Path
 
+import pytest
+
 from backend.app.routes.search import GlobalSearchRequest
 from backend.app.services import workspace_search_service as search_service
 from backend.app.services.workspace_store import WorkspaceStore
@@ -59,7 +61,25 @@ def test_legacy_source_contract_is_frozen() -> None:
     }.issubset(source)
     assert source["chunk_excerpt"] == "产品原文片段"
     assert source["jump_url"].startswith(
-        "/workspaces/ws_alpha/items/legacy-shared-item/video_result"
+        "/workspaces/ws_alpha/items/legacy-shared-item/video_detail"
+    )
+
+
+@pytest.mark.parametrize(
+    ("item_type", "suffix"),
+    [
+        ("video", "video_detail"),
+        ("image", "image_detail"),
+        ("audio", "note"),
+        ("text", "text_detail"),
+    ],
+)
+def test_source_jump_urls_use_canonical_routes(
+    item_type: str,
+    suffix: str,
+) -> None:
+    assert search_service._jump_url("ws", "item", item_type) == (
+        f"/workspaces/ws/items/item/{suffix}"
     )
 
 

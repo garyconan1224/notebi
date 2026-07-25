@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from backend.app.models.workspace import InlineFrame, PreflightConfig, WorkspaceItem
+from backend.app.services.workspace_store import WorkspaceStore
 
 
 # ── InlineFrame roundtrip ─────────────────────────────────────
@@ -150,13 +153,22 @@ class TestSuggestInlineFrames:
 
 class TestInlineFramesAPI:
     @pytest.fixture()
-    def client(self):
+    def client(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
         from fastapi.testclient import TestClient
-        from backend.app.routes.workspaces import router, _store
         from fastapi import FastAPI
+        from backend.app.routes import workspaces as ws_module
 
+        monkeypatch.setattr(
+            ws_module,
+            "_store",
+            WorkspaceStore(root=tmp_path / "workspaces"),
+        )
         app = FastAPI()
-        app.include_router(router)
+        app.include_router(ws_module.router)
         return TestClient(app)
 
     @pytest.fixture()

@@ -8,6 +8,16 @@ from backend.app.models.workspace import WorkspaceItem, WorkspaceRecord
 from backend.app.services.metadata_store import MetadataStore
 
 
+def test_reopening_store_does_not_rewrite_database(tmp_path: Path) -> None:
+    path = tmp_path / "metadata.sqlite3"
+    MetadataStore(path)
+    initial_bytes = path.read_bytes()
+
+    MetadataStore(path)
+
+    assert path.read_bytes() == initial_bytes
+
+
 def _record() -> WorkspaceRecord:
     item = WorkspaceItem(
         item_id="item-a",

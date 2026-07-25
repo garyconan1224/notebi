@@ -33,7 +33,10 @@ from backend.app.routes.performance_tier import router as performance_tier_route
 from backend.app.routes.templates import router as templates_router
 from backend.app.routes.templates import legacy_router as templates_legacy_router
 from backend.app.routes.transcript import router as transcript_router
-from backend.app.routes.workspaces import router as workspaces_router
+from backend.app.routes.workspaces import (
+    migrate_legacy_metadata as _migrate_legacy_metadata,
+    router as workspaces_router,
+)
 from backend.app.routes.chat import router as chat_router
 from backend.app.routes.link_preview import router as link_preview_router
 from backend.app.routes.knowledge import router as knowledge_router
@@ -110,6 +113,7 @@ async def lifespan(app: FastAPI):
     """FastAPI 生命周期钩子：启动时 seed 默认 provider 并清理旧复刻数据。"""
     _seed_siliconflow_provider()
     _purge_legacy_replica_data()
+    _migrate_legacy_metadata()
     yield
 
 

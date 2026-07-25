@@ -45,15 +45,15 @@ def _excerpt(text: str, limit: int = _EXCERPT_LIMIT) -> str:
 
 
 def _jump_url(workspace_id: str, item_id: str, item_type: str) -> str:
-    """SearchSource.jump_url：与前端路由 /workspaces/{ws}/items/{id}/<type>_result 对齐。"""
+    """返回不会经过兼容重定向、可保留证据定位参数的前端正式路由。"""
     type_seg = (item_type or "video").lower()
     suffix_map = {
-        "video": "video_result",
-        "image": "image_result",
-        "audio": "audio_result",
-        "text": "text_result",
+        "video": "video_detail",
+        "image": "image_detail",
+        "audio": "note",
+        "text": "text_detail",
     }
-    return f"/workspaces/{workspace_id}/items/{item_id}/{suffix_map.get(type_seg, 'video_result')}"
+    return f"/workspaces/{workspace_id}/items/{item_id}/{suffix_map.get(type_seg, 'video_detail')}"
 
 
 def _timestamp_to_ms(value: str) -> Optional[int]:

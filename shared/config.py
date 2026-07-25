@@ -19,8 +19,8 @@ load_dotenv_if_present()
 # NoteBi 项目根目录
 ROOT_DIR: Path = Path(__file__).resolve().parent.parent
 
-# 共享数据目录
-DATA_DIR: Path = ROOT_DIR / "data"
+# 共享数据目录；测试/离线工具可通过环境变量显式隔离，生产默认值不变。
+DATA_DIR: Path = Path(os.getenv("NOTEBI_DATA_DIR", str(ROOT_DIR / "data"))).resolve()
 VIDEOS_DIR: Path = DATA_DIR / "videos"        # 下载器输出 / 视频分析输入
 JSON_DATA_DIR: Path = DATA_DIR / "json_data"  # 视频分析 JSON 输出 / 导演台知识库
 PROJECTS_DIR: Path = ROOT_DIR / "projects"    # 导演台项目存档

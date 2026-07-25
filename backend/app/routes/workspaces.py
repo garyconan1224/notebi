@@ -103,8 +103,12 @@ router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 # 进程级单例 store（与 pipeline 路由的 _store 同模式）
 _store = WorkspaceStore()
 _metadata = MetadataStore()
-_metadata.migrate_legacy(_store.list_all(include_trashed=True))
 _note_versions = NoteVersionStore()
+
+
+def migrate_legacy_metadata() -> int:
+    """在应用启动期把兼容 JSON 元数据幂等同步到 SQLite。"""
+    return _metadata.migrate_legacy(_store.list_all(include_trashed=True))
 
 
 def _handle_summary_task(record: TaskRecord, runner: Any) -> Dict[str, Any]:
