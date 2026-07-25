@@ -19,6 +19,77 @@ import type {
 
 const BASE = '/workspaces'
 
+export interface FavoriteGroup {
+  group_id: string
+  name: string
+  item_count: number
+}
+
+export interface FavoriteGroupItem {
+  workspace_id: string
+  content_id: string
+  note: string
+  created_at: string
+}
+
+export interface WorkspaceFolder {
+  folder_id: string
+  workspace_id: string
+  parent_id?: string | null
+  name: string
+}
+
+export async function listFavoriteGroups(): Promise<FavoriteGroup[]> {
+  const res = await http.get<FavoriteGroup[]>(`${BASE}/metadata/favorite-groups`)
+  return res.data
+}
+
+export async function listFavoriteGroupItems(
+  groupId: string,
+): Promise<FavoriteGroupItem[]> {
+  const res = await http.get<FavoriteGroupItem[]>(
+    `${BASE}/metadata/favorite-groups/${groupId}/items`,
+  )
+  return res.data
+}
+
+export async function createFavoriteGroup(name: string): Promise<FavoriteGroup> {
+  const res = await http.post<FavoriteGroup>(
+    `${BASE}/metadata/favorite-groups`,
+    { name },
+  )
+  return res.data
+}
+
+export async function listWorkspaceFolders(
+  workspaceId: string,
+): Promise<WorkspaceFolder[]> {
+  const res = await http.get<WorkspaceFolder[]>(`${BASE}/${workspaceId}/folders`)
+  return res.data
+}
+
+export async function createWorkspaceFolder(
+  workspaceId: string,
+  name: string,
+  parentId?: string,
+): Promise<WorkspaceFolder> {
+  const res = await http.post<WorkspaceFolder>(`${BASE}/${workspaceId}/folders`, {
+    name,
+    parent_id: parentId,
+  })
+  return res.data
+}
+
+export async function moveItemToFolder(
+  workspaceId: string,
+  itemId: string,
+  folderId: string,
+): Promise<void> {
+  await http.put(`${BASE}/${workspaceId}/items/${itemId}/folder`, {
+    folder_id: folderId,
+  })
+}
+
 /** GET /workspaces — 列表（默认排除 trashed） */
 export async function listWorkspaces(opts?: {
   trashedOnly?: boolean

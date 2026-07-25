@@ -26,6 +26,7 @@ import json
 import logging
 import re
 import shutil
+import sqlite3
 import threading
 import uuid
 import zipfile
@@ -77,6 +78,7 @@ from backend.app.services.note_assembler import (
     note_dir,
 )
 from backend.app.services.note_exporter import build_note_export_response
+from backend.app.services.metadata_store import MetadataStore
 from backend.app.services.speaker_labels import (
     SPEAKER_ROLE_OPTIONS,
     apply_speaker_map,
@@ -99,6 +101,8 @@ router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
 # 进程级单例 store（与 pipeline 路由的 _store 同模式）
 _store = WorkspaceStore()
+_metadata = MetadataStore()
+_metadata.migrate_legacy(_store.list_all(include_trashed=True))
 
 
 def _handle_summary_task(record: TaskRecord, runner: Any) -> Dict[str, Any]:
@@ -2693,12 +2697,14 @@ def favorite_item(workspace_id: str, item_id: str) -> Dict[str, Any]:
     rec = _store.get(workspace_id)
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
-    if not any(it.item_id == item_id for it in rec.items):
-        raise HTTPException(status_code=404, detail=f"item not found: {item_id}")
-    if item_id in rec.favorites:
-        return rec.to_dict()
-    new_favs = list(rec.favorites) + [item_id]
-    rec = _store.update(workspace_id, favorites=new_favs)
+    item = _find_item(rec, item_id)
+    _metadata.set_favorite(workspace_id, item.content_id)
+    favorite_ids = _metadata.favorite_content_ids(workspace_id)
+    rec = _store.update(
+        workspace_id,
+        favorites=[candidate.item_id for candidate in rec.items
+                   if candidate.content_id in favorite_ids],
+    )
     return rec.to_dict()
 
 
@@ -2707,11 +2713,108 @@ def unfavorite_item(workspace_id: str, item_id: str) -> Dict[str, Any]:
     rec = _store.get(workspace_id)
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
-    if item_id not in rec.favorites:
-        return rec.to_dict()
-    new_favs = [fid for fid in rec.favorites if fid != item_id]
-    rec = _store.update(workspace_id, favorites=new_favs)
+    item = _find_item(rec, item_id)
+    _metadata.remove_favorite(workspace_id, item.content_id)
+    favorite_ids = _metadata.favorite_content_ids(workspace_id)
+    rec = _store.update(
+        workspace_id,
+        favorites=[candidate.item_id for candidate in rec.items
+                   if candidate.content_id in favorite_ids],
+    )
     return rec.to_dict()
+
+
+class MetadataNameRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    parent_id: Optional[str] = None
+
+
+class FolderMoveRequest(BaseModel):
+    folder_id: str
+
+
+@router.get("/metadata/favorite-groups")
+def list_favorite_groups() -> List[Dict[str, Any]]:
+    return _metadata.list_favorite_groups()
+
+
+@router.post("/metadata/favorite-groups")
+def create_favorite_group(req: MetadataNameRequest) -> Dict[str, Any]:
+    try:
+        return _metadata.create_favorite_group(req.name)
+    except (ValueError, sqlite3.IntegrityError) as err:
+        raise HTTPException(status_code=409, detail=str(err)) from err
+
+
+@router.get("/metadata/favorite-groups/{group_id}/items")
+def list_favorite_group_items(group_id: str) -> List[Dict[str, Any]]:
+    return _metadata.favorite_items(group_id)
+
+
+@router.delete("/metadata/favorite-groups/{group_id}")
+def delete_favorite_group(group_id: str) -> Dict[str, bool]:
+    try:
+        _metadata.delete_favorite_group(group_id)
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+    return {"deleted": True}
+
+
+@router.post("/{workspace_id}/favorites/{item_id}/groups/{group_id}")
+def add_favorite_to_group(
+    workspace_id: str, item_id: str, group_id: str,
+) -> Dict[str, Any]:
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    item = _find_item(rec, item_id)
+    try:
+        _metadata.set_favorite(workspace_id, item.content_id, group_id)
+    except sqlite3.IntegrityError as err:
+        raise HTTPException(status_code=404, detail="favorite group not found") from err
+    if item_id not in rec.favorites:
+        rec = _store.update(workspace_id, favorites=[*rec.favorites, item_id])
+    return rec.to_dict()
+
+
+@router.get("/{workspace_id}/folders")
+def list_workspace_folders(workspace_id: str) -> List[Dict[str, Any]]:
+    if _store.get(workspace_id) is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    return _metadata.list_folders(workspace_id)
+
+
+@router.post("/{workspace_id}/folders")
+def create_workspace_folder(
+    workspace_id: str, req: MetadataNameRequest,
+) -> Dict[str, Any]:
+    if _store.get(workspace_id) is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    try:
+        return _metadata.create_folder(workspace_id, req.name, req.parent_id)
+    except (ValueError, sqlite3.IntegrityError) as err:
+        raise HTTPException(status_code=409, detail=str(err)) from err
+
+
+@router.delete("/{workspace_id}/folders/{folder_id}")
+def delete_workspace_folder(workspace_id: str, folder_id: str) -> Dict[str, bool]:
+    _metadata.delete_folder(workspace_id, folder_id)
+    return {"deleted": True}
+
+
+@router.put("/{workspace_id}/items/{item_id}/folder")
+def move_item_to_folder(
+    workspace_id: str, item_id: str, req: FolderMoveRequest,
+) -> Dict[str, bool]:
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    item = _find_item(rec, item_id)
+    try:
+        _metadata.move_content(workspace_id, item.content_id, req.folder_id)
+    except ValueError as err:
+        raise HTTPException(status_code=409, detail=str(err)) from err
+    return {"moved": True}
 
 
 # ── Preflight 配置 + 触发分析 ───────────────────────────
@@ -4110,6 +4213,8 @@ def update_item_tags(
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
     _find_item(rec, item_id)
     _validate_tags(req.tags)
+    item = _find_item(rec, item_id)
+    _metadata.replace_tags(item.content_id, req.tags, "MANUAL")
     rec = _store.update_item(workspace_id, item_id, tags=req.tags)
     item = next(it for it in rec.items if it.item_id == item_id)
     return {"tags": item.tags}
@@ -4128,7 +4233,10 @@ def regenerate_item_tags(workspace_id: str, item_id: str) -> Dict[str, Any]:
         new_tags = generate_tags(item, rec, task_store=_pipeline_runner.store)
     except Exception as err:
         raise HTTPException(status_code=500, detail=str(err)) from err
-    rec = _store.update_item(workspace_id, item_id, tags=new_tags)
+    _metadata.replace_tags(item.content_id, new_tags, "AUTO")
+    manual_tags = _metadata.tags_for_content(item.content_id, "MANUAL")
+    merged_tags = {**new_tags, **manual_tags}
+    rec = _store.update_item(workspace_id, item_id, tags=merged_tags)
     item = next(it for it in rec.items if it.item_id == item_id)
     return {"tags": item.tags}
 

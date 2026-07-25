@@ -1,19 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Star, RefreshCw } from 'lucide-react'
-import { listWorkspaces } from '@/services/workspaces'
+import { RefreshCw, Star } from 'lucide-react'
+import {
+  createFavoriteGroup,
+  listFavoriteGroupItems,
+  listFavoriteGroups,
+  listWorkspaces,
+  type FavoriteGroup,
+} from '@/services/workspaces'
 import {
   type ItemType,
   type WorkspaceItem,
   type WorkspaceRecord,
   ITEM_TYPE_TEXT,
 } from '@/types/workspace'
-import { resolveItemRoute } from '@/lib/resolveItemRoute'
+import { FavoriteCard } from './FavoriteCard'
+import { FavoriteOrganizer } from './FavoriteOrganizer'
 import './favorites.css'
 
 type TabKey = 'all' | ItemType
 
-interface FavoriteEntry {
+export interface FavoriteEntry {
   workspace: WorkspaceRecord
   item: WorkspaceItem
 }
@@ -25,20 +31,6 @@ const TAB_DEFS: { key: TabKey; label: string }[] = [
   { key: 'image', label: ITEM_TYPE_TEXT.image },
   { key: 'text', label: ITEM_TYPE_TEXT.text },
 ]
-
-const TYPE_LABEL: Record<string, string> = {
-  video: 'VIDEO',
-  audio: 'AUDIO',
-  image: 'IMAGE',
-  text:  'TEXT',
-}
-
-const COVER_CLASS: Record<string, string> = {
-  video: 'cover-video',
-  audio: 'cover-audio',
-  image: 'cover-image',
-  text:  'cover-text',
-}
 
 function collectFavorites(workspaces: WorkspaceRecord[]): FavoriteEntry[] {
   const out: FavoriteEntry[] = []
@@ -55,21 +47,25 @@ function collectFavorites(workspaces: WorkspaceRecord[]): FavoriteEntry[] {
   return out
 }
 
-function resultRouteFor(entry: FavoriteEntry): string {
-  return resolveItemRoute(entry.workspace.workspace_id, entry.item)
-}
-
 export default function FavoritesPage() {
   const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<TabKey>('all')
+  const [groups, setGroups] = useState<FavoriteGroup[]>([])
+  const [groupId, setGroupId] = useState('__all__')
+  const [groupContentIds, setGroupContentIds] = useState<Set<string> | null>(null)
+  const [search, setSearch] = useState('')
+  const [newGroup, setNewGroup] = useState('')
 
   const reload = () => {
     setLoading(true)
     setError(null)
-    listWorkspaces()
-      .then((list) => setWorkspaces(list))
+    Promise.all([listWorkspaces(), listFavoriteGroups()])
+      .then(([list, favoriteGroups]) => {
+        setWorkspaces(list)
+        setGroups(favoriteGroups)
+      })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setLoading(false))
   }
@@ -77,6 +73,16 @@ export default function FavoritesPage() {
   useEffect(() => {
     reload()
   }, [])
+
+  useEffect(() => {
+    if (groupId === '__all__') {
+      setGroupContentIds(null)
+      return
+    }
+    void listFavoriteGroupItems(groupId)
+      .then(items => setGroupContentIds(new Set(items.map(item => item.content_id))))
+      .catch(err => setError(err instanceof Error ? err.message : String(err)))
+  }, [groupId])
 
   const favorites = useMemo(() => collectFavorites(workspaces), [workspaces])
   const counts = useMemo(() => {
@@ -91,10 +97,27 @@ export default function FavoritesPage() {
     return acc
   }, [favorites])
 
-  const filtered = useMemo(
-    () => (tab === 'all' ? favorites : favorites.filter((f) => f.item.type === tab)),
-    [favorites, tab],
-  )
+  const filtered = useMemo(() => {
+    const needle = search.trim().toLocaleLowerCase()
+    return favorites.filter(entry => (
+      (tab === 'all' || entry.item.type === tab)
+      && (!groupContentIds || groupContentIds.has(entry.item.content_id ?? ''))
+      && (!needle || `${entry.item.name} ${entry.workspace.name}`
+        .toLocaleLowerCase().includes(needle))
+    ))
+  }, [favorites, groupContentIds, search, tab])
+
+  const addGroup = async () => {
+    const name = newGroup.trim()
+    if (!name) return
+    try {
+      await createFavoriteGroup(name)
+      setNewGroup('')
+      setGroups(await listFavoriteGroups())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
 
   return (
     <div className="fav-page">
@@ -118,6 +141,12 @@ export default function FavoritesPage() {
           加载失败：{error}
         </div>
       )}
+
+      <FavoriteOrganizer
+        search={search} onSearch={setSearch}
+        groupId={groupId} onGroup={setGroupId} groups={groups}
+        newGroup={newGroup} onNewGroup={setNewGroup} onAddGroup={addGroup}
+      />
 
       {/* Filter tabs */}
       <div className="fav-tabs">
@@ -158,39 +187,5 @@ export default function FavoritesPage() {
         </div>
       )}
     </div>
-  )
-}
-
-function FavoriteCard({ entry }: { entry: FavoriteEntry }) {
-  const { workspace, item } = entry
-  const typeLabel = TYPE_LABEL[item.type] || 'ITEM'
-  const coverClass = COVER_CLASS[item.type] || 'cover-video'
-  const updatedLabel = new Date(item.updated_at).toLocaleString()
-  const kindLabel = '笔记收藏'
-
-  return (
-    <Link to={resultRouteFor(entry)} style={{ textDecoration: 'none' }}>
-      <article className="note-card" data-kind={item.type}>
-        <div className={`note-cover ${coverClass}`}>
-          <span className="media-chip">{typeLabel}</span>
-          <span className="status-pill status-done">{kindLabel}</span>
-        </div>
-        <div className="note-card-body">
-          <div className="note-title-row">
-            <span className="note-type-dot" />
-            <h3>{item.name || item.source_value}</h3>
-          </div>
-          <p className="note-summary">{workspace.name} · {kindLabel}</p>
-          <div className="note-meta-row">
-            <span>笔记</span>
-            <span>更新于 {updatedLabel}</span>
-          </div>
-          <div className="note-card-actions">
-            <span>收藏</span>
-            <button className="note-open">打开</button>
-          </div>
-        </div>
-      </article>
-    </Link>
   )
 }

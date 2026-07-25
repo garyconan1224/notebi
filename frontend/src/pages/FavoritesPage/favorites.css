@@ -9,6 +9,45 @@
   background: var(--bg);
 }
 
+.fav-organizer {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(150px, auto) minmax(240px, auto);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.fav-search,
+.fav-new-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fav-organizer input,
+.fav-organizer select,
+.fav-new-group button {
+  min-height: 36px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--rs);
+  background: var(--srf);
+  color: var(--fg);
+  font: inherit;
+}
+
+.fav-organizer input { width: 100%; padding: 0 10px; }
+.fav-organizer select { padding: 0 30px 0 10px; }
+.fav-new-group button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+@media (max-width: 760px) {
+  .fav-organizer { grid-template-columns: 1fr; }
+}
+
 /* Filter tabs — 与 note-filter 一致 */
 .fav-tabs {
   display: flex;
