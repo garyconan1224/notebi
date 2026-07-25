@@ -609,10 +609,10 @@
 .vm-text-scope .tx-compare-panel {
   border-radius: 8px !important;
   border-color: rgba(25, 20, 16, 0.08) !important;
-  background: rgba(255, 255, 255, 0.80) !important;
+  background: var(--ov-glass-80) !important;
 }
 
 .vm-text-scope .tx-right-header,
 .vm-text-scope .tx-actions {
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--ov-glass-72);
 }

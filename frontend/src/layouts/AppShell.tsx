@@ -71,7 +71,7 @@ function SidebarBtn({ icon: Icon, label, active, badge, placeholder, collapsed, 
         title={tooltip}
         onClick={placeholder ? () => toast('该功能即将上线') : onClick}
         className={cn(
-          'relative flex size-11 items-center justify-center rounded-[14px] transition-all duration-150',
+          'relative flex size-11 items-center justify-center rounded-xl transition-all duration-150',
           placeholder
             ? 'cursor-default text-muted-foreground/50'
             : active
@@ -92,7 +92,7 @@ function SidebarBtn({ icon: Icon, label, active, badge, placeholder, collapsed, 
       title={label}
       onClick={placeholder ? () => toast('该功能即将上线') : onClick}
       className={cn(
-        'relative flex w-full items-center gap-3 rounded-[12px] px-3 py-2 text-sm transition-all duration-150',
+        'relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-150',
         placeholder
           ? 'cursor-default text-muted-foreground/50'
           : active
@@ -106,10 +106,9 @@ function SidebarBtn({ icon: Icon, label, active, badge, placeholder, collapsed, 
         <span
           className={cn(
             'ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium leading-tight',
-            badge === 'Beta'
-              ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400'
-              : 'bg-muted text-muted-foreground',
+            badge !== 'Beta' && 'bg-muted text-muted-foreground',
           )}
+          style={badge === 'Beta' ? { background: 'var(--accl)', color: 'var(--acc)' } : undefined}
         >
           {badge}
         </span>
@@ -137,14 +136,14 @@ function SidebarStatus({
         <span
           className="size-2 rounded-full"
           style={{ background: online ? 'var(--accent-green)' : 'var(--accent-pink)' }}
-          title={`后端 ${BACKEND_ADDR} · ${online ? 'online' : 'offline'}`}
+          title={`后端 ${BACKEND_ADDR} · ${online ? '在线' : '离线'}`}
         />
       </div>
     )
   }
 
   return (
-    <div className="mt-2 rounded-[14px] border border-border bg-muted/35 p-2">
+    <div className="mt-2 rounded-xl border border-border bg-muted/35 p-2">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-[11px] font-medium text-muted-foreground">状态</span>
         <ThemeSwitcher />
@@ -155,7 +154,7 @@ function SidebarStatus({
           style={{ background: online ? 'var(--accent-green)' : 'var(--accent-pink)' }}
         />
         <span className="truncate">{BACKEND_ADDR}</span>
-        <span className="ml-auto">{online ? 'online' : 'offline'}</span>
+        <span className="ml-auto">{online ? '在线' : '离线'}</span>
       </div>
       {stats?.cpu && stats?.memory && (
         <div className="mt-1 text-[11px] text-muted-foreground">
@@ -230,7 +229,7 @@ export function AppShell({ children }: AppShellProps) {
         {collapsed ? (
           <>
             <button
-              className="mb-1 flex size-11 items-center justify-center rounded-[10px] transition-colors hover:opacity-80"
+              className="mb-1 flex size-11 items-center justify-center rounded-lg transition-colors hover:opacity-80"
               style={{ background: 'var(--accl)', color: 'var(--acc)' }}
               onClick={() => navigate('/')}
               title={APP_NAME}
@@ -239,7 +238,7 @@ export function AppShell({ children }: AppShellProps) {
               <Sparkles size={16} />
             </button>
             <button
-              className="mb-2 flex size-8 items-center justify-center rounded-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="mb-2 flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               onClick={toggleCollapsed}
               title="展开导航"
               aria-label="展开导航"
@@ -248,7 +247,7 @@ export function AppShell({ children }: AppShellProps) {
             </button>
           </>
         ) : (
-          <div className="mb-3 flex items-center gap-2.5 rounded-[14px] px-3 py-2">
+          <div className="mb-3 flex items-center gap-2.5 rounded-xl px-3 py-2">
             <button
               className="flex items-center gap-2.5 transition-colors hover:opacity-80"
               onClick={() => navigate('/')}
@@ -256,7 +255,7 @@ export function AppShell({ children }: AppShellProps) {
               aria-label="返回工作台"
             >
               <span
-                className="flex size-8 items-center justify-center rounded-[10px] shadow-sm"
+                className="flex size-8 items-center justify-center rounded-lg shadow-sm"
                 style={{ background: 'var(--accl)', color: 'var(--acc)' }}
               >
                 <Sparkles size={16} />
@@ -266,7 +265,7 @@ export function AppShell({ children }: AppShellProps) {
               </span>
             </button>
             <button
-              className="ml-auto flex size-8 items-center justify-center rounded-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="ml-auto flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               onClick={toggleCollapsed}
               title="折叠导航"
               aria-label="折叠导航"

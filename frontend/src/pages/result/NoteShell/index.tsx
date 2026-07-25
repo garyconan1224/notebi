@@ -14,6 +14,7 @@ import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as 
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Bold, BookOpenCheck, Brain, Camera, Check, ChevronDown, Code2, Download, ExternalLink, FileDown, FileText, FileType, Image, Italic, List, MessageCircle, Minus, Pause, Pencil, Play, Plus, Presentation, Sparkles, Strikethrough, Subtitles, Trash2, Type, Underline, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { Skeleton } from '@/components/ui/skeleton'
 
 import { downloadItemNoteExport, downloadTranscript, exportItemNoteObsidian, getItemNote, putItemNote, updateSpeakerMap, type ItemNoteExportFormat, type TranscriptExportMode } from '@/services/workspaces'
 import type { VideoResultTranscriptLine } from '@/services/workspaces'
@@ -1346,8 +1347,9 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   // ─── loading / error ───
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--mut)' }}>
-        加载中…
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 12, height: '100%', padding: 24 }} role="status" aria-label="加载中">
+        <Skeleton className="h-5 w-48" />
+        <Skeleton className="h-4 w-64" />
       </div>
     )
   }

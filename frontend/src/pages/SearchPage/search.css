@@ -18,7 +18,7 @@
     color-mix(in oklch, var(--color-accent) 8%, var(--color-surface)) 0%,
     var(--color-surface) 100%
   );
-  padding: 28px 24px 24px;
+  padding: 24px 28px;
 }
 
 .nibi-search-scope .search-hero-inner {
@@ -167,7 +167,7 @@
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   margin-left: auto;
 }

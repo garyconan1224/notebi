@@ -3,6 +3,7 @@ import { lazy, Suspense, type ReactNode } from 'react'
 import { createBrowserRouter, Navigate, redirect } from 'react-router-dom'
 import Index from '@/pages/Index'
 import RouteErrorPage from '@/components/RouteErrorPage'
+import { Skeleton } from '@/components/ui/skeleton'
 
 // 按路由做代码分割：每个页面组件通过动态 import 拆成独立 chunk
 const SettingPage = lazy(() => import('@/pages/SettingPage/index'))
@@ -40,10 +41,18 @@ const BatchProcessingPage = lazy(() => import('@/pages/result/BatchProcessingPag
 const LibraryPage = lazy(() => import('@/pages/LibraryPage/index'))
 const NoteShell = lazy(() => import('@/pages/result/NoteShell/index'))
 
-// 懒加载 fallback：保持极简，避免把额外依赖拉进主 chunk
+// 懒加载 fallback：骨架屏替代纯文本（Skeleton 仅依赖 cn，不增加主 chunk 负担）
 const RouteFallback = () => (
-  <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
-    Loading…
+  <div className="flex h-full w-full flex-col gap-3 p-8" role="status" aria-label="页面加载中">
+    <Skeleton className="h-7 w-56" />
+    <Skeleton className="h-4 w-full max-w-xl" />
+    <Skeleton className="h-4 w-4/5 max-w-lg" />
+    <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <Skeleton className="h-32 rounded-lg" />
+      <Skeleton className="h-32 rounded-lg" />
+      <Skeleton className="h-32 rounded-lg" />
+      <Skeleton className="h-32 rounded-lg" />
+    </div>
   </div>
 )
 

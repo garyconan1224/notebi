@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useTemplateStore } from '@/store/templateStore'
 import type { VideoTemplateItem, TemplateCategory } from '@/services/templates'
 import {
@@ -198,7 +199,11 @@ export default function VideoTemplatesPage() {
 
         <TabsContent value={category} className="flex-1 overflow-auto p-6 mt-0">
         {loading && (
-          <p className="text-sm text-muted-foreground text-center py-12">加载中…</p>
+          <div className="space-y-3 py-6" role="status" aria-label="加载中">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
         )}
         {error && (
           <p className="text-sm text-red-500 text-center py-12">{error}</p>

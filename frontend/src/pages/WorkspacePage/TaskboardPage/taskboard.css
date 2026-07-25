@@ -16,7 +16,7 @@
   justify-content: space-between;
   gap: 24px;
   margin-bottom: 20px;
-  padding: 20px 0 14px;
+  padding: 24px 0 14px;
   border-bottom: 1px solid var(--line);
 }
 .tb-head-l h1.display {
@@ -586,7 +586,7 @@
   color: var(--ink);
   font-family: var(--mono);
   font-size: 36px;
-  font-weight: 900;
+  font-weight: 700;
   line-height: 1;
 }
 
@@ -714,7 +714,7 @@
   overflow: hidden;
   color: var(--ink);
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -802,7 +802,7 @@
 .qp-log-head {
   color: var(--ink-2);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .qp-log-empty {

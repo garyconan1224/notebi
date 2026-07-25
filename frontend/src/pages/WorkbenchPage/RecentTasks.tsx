@@ -6,6 +6,7 @@ import { usePipelineTasks } from '@/hooks/usePipelineTasks'
 import { isTaskTerminal, getStatusText } from '@/types/task'
 import type { TaskRecord } from '@/types/task'
 import { APP_NAME } from '@/config/product'
+import { EmptyState } from '@/components/ui/empty-state'
 
 const STATE_PILL_CLASS: Record<string, string> = {
   done:      'status-pill status-done',
@@ -212,7 +213,7 @@ export function RecentTasks({ tasks: tasksProp }: RecentTasksProps) {
   if (cards.length === 0) {
     return (
       <section style={{ maxWidth: 1040, margin: '0 auto', padding: '24px 32px 80px' }}>
-        <div className="rt-empty">暂无任务 — 在上方粘贴链接开始解析</div>
+        <EmptyState title="暂无任务" description="在上方粘贴链接或拖入文件开始解析" />
       </section>
     )
   }
@@ -221,7 +222,7 @@ export function RecentTasks({ tasks: tasksProp }: RecentTasksProps) {
     <section style={{ maxWidth: 1040, margin: '0 auto', padding: '24px 32px 80px' }}>
       <div className="sec-h">
         <h2 className="sec-title">最近任务</h2>
-        <button className="sec-link">
+        <button className="sec-link" onClick={() => navigate('/notes')}>
           全部 · {totalCount} <ArrowRight size={13} />
         </button>
       </div>

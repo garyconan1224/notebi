@@ -7,6 +7,7 @@ import ModelManagementPage from './ModelManagementPage'
 import { http } from '@/services/client'
 import { useConfigStore } from '@/store/configStore'
 import { cn } from '@/lib/utils'
+import { Skeleton } from '@/components/ui/skeleton'
 
 /**
  * 模型与渠道设置页（合并视图）。
@@ -268,7 +269,12 @@ function DefaultModelsSection() {
   }
 
   if (loading) {
-    return <div className="py-4 text-sm text-muted-foreground">加载中…</div>
+    return (
+      <div className="space-y-3 py-4" role="status" aria-label="加载中">
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full" />
+      </div>
+    )
   }
 
   if (providers.length === 0) {

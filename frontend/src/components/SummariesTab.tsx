@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { toast } from 'sonner'
+import { Skeleton } from '@/components/ui/skeleton'
 
 const MAX_COMPARE = 3
 
@@ -345,7 +346,12 @@ export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummary
   /* ── 渲染 ────────────────────────────────────────────── */
 
   if (loading) {
-    return <div style={{ padding: 24, color: 'var(--ink-3)' }}>加载中…</div>
+    return (
+      <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }} role="status" aria-label="加载中">
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full" />
+      </div>
+    )
   }
 
   // ── 空态：居中引导 ────────────────────────────────────

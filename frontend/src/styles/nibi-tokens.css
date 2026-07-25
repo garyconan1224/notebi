@@ -73,6 +73,27 @@
   --shadow-lg:    0 10px 32px oklch(0% 0 0 / .14);
   --shadow-focus: 0 0 0 3px var(--color-accent-light);
 
+  /* ── Overlay 层（STEP 3）──
+     glass = 页面表面上的玻璃层，基于 surface 自动适配深色模式；
+     ov-XX = 永远在深色媒体（视频封面/播放器）之上的恒定白色叠层，不随主题翻转。 */
+  --ov-glass-54: color-mix(in oklch, var(--color-surface) 54%, transparent);
+  --ov-glass-58: color-mix(in oklch, var(--color-surface) 58%, transparent);
+  --ov-glass-72: color-mix(in oklch, var(--color-surface) 72%, transparent);
+  --ov-glass-76: color-mix(in oklch, var(--color-surface) 76%, transparent);
+  --ov-glass-80: color-mix(in oklch, var(--color-surface) 80%, transparent);
+  --ov-glass-82: color-mix(in oklch, var(--color-surface) 82%, transparent);
+  --ov-08: oklch(100% 0 0 / .08);
+  --ov-10: oklch(100% 0 0 / .10);
+  --ov-12: oklch(100% 0 0 / .12);
+  --ov-14: oklch(100% 0 0 / .14);
+  --ov-16: oklch(100% 0 0 / .16);
+  --ov-18: oklch(100% 0 0 / .18);
+  --ov-24: oklch(100% 0 0 / .24);
+  --ov-30: oklch(100% 0 0 / .30);
+  --ov-scrim:  oklch(0% 0 0 / .58);   /* 封面/时长深色遮罩 */
+  --ov-player: oklch(0% 0 0);          /* 播放器/全屏底色 */
+  --ov-ink:    oklch(100% 0 0);        /* 深色媒体之上的文字/图标 */
+
   /* ── 短名别名（日常使用） ── */
   --fd: var(--font-display);
   --fb: var(--font-body);

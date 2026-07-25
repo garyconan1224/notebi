@@ -21,9 +21,11 @@ export function Composer({ onTaskCreated }: ComposerProps) {
   const [url, setUrl] = useState('')
   const [sniffResult, setSniffResult] = useState<SniffResult | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [dragActive, setDragActive] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sniffTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const dragDepth = useRef(0)
   const openAddMaterial = useAddMaterialStore((state) => state.openAddMaterial)
 
   const normalizedUrl = useMemo(() => normalizeMediaUrl(url), [url])
@@ -68,10 +70,8 @@ export function Composer({ onTaskCreated }: ComposerProps) {
     fileInputRef.current?.click()
   }
 
-  // 单文件上传流程：选择文件 → 落入收纳箱 → upload → 打开预检配置 → 用户确认后 start
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  // 单文件上传流程：文件（选择或拖入）→ 落入收纳箱 → upload → 打开预检配置 → 用户确认后 start
+  const processFile = async (file: File) => {
     setUploading(true)
     try {
       const ws = await ensureInbox()
@@ -97,13 +97,49 @@ export function Composer({ onTaskCreated }: ComposerProps) {
     }
   }
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    await processFile(file)
+  }
+
+  // 拖放：整个输入区接受文件，与 Hero「拖入文件」文案对齐
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    if (!e.dataTransfer.types.includes('Files')) return
+    dragDepth.current += 1
+    setDragActive(true)
+  }
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    dragDepth.current = Math.max(0, dragDepth.current - 1)
+    if (dragDepth.current === 0) setDragActive(false)
+  }
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+  }
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragDepth.current = 0
+    setDragActive(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) void processFile(file)
+  }
+
   return (
     <div className="composer">
-      <div className="cp">
+      <div
+        className={dragActive ? 'cp cp--drag' : 'cp'}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
         {/* URL row — 设计稿 cp-row */}
         <div className="cp-row">
           {platform ? (
-            <div className="platform" style={{ background: platform.color, color: '#fff', width: 'auto', padding: '0 10px' }}>
+            <div className="platform platform--branded" style={{ background: platform.color, width: 'auto', padding: '0 10px' }}>
               {platform.name}
             </div>
           ) : (

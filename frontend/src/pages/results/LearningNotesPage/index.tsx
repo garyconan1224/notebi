@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Star, Download, ChevronDown } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 import { getWorkspace, getLnMarkdown, getItemResult, patchLnMarkdown, exportLnObsidian } from '@/services/workspaces'
 import type { VideoResultTranscriptLine } from '@/services/workspaces'
 import type { WorkspaceRecord, WorkspaceItem, TranscriptTranslations } from '@/types/workspace'
@@ -268,7 +269,10 @@ export default function LearningNotesPage() {
 
       {/* Loading / Error */}
       {pageState.kind === 'loading' && (
-        <div className="ln-status">加载中…</div>
+        <div className="ln-status" role="status" aria-label="加载中" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-4 w-56" />
+        </div>
       )}
       {pageState.kind === 'error' && (
         <div className="ln-status ln-error">{pageState.message}</div>

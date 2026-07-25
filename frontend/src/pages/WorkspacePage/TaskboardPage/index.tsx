@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { toast } from 'sonner'
+import { Skeleton } from '@/components/ui/skeleton'
 
 import {
   getWorkspace,
@@ -166,8 +167,16 @@ export default function TaskboardPage() {
 
   if (loading) {
     return (
-      <div className="tb-wrap" style={{ opacity: 0.5, textAlign: 'center', paddingTop: 120 }}>
-        加载中…
+      <div className="tb-wrap" role="status" aria-label="加载中">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '28px 0' }}>
+          <Skeleton className="h-7 w-64" />
+          <Skeleton className="h-4 w-40" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginTop: 12 }}>
+            <Skeleton className="h-28 rounded-lg" />
+            <Skeleton className="h-28 rounded-lg" />
+            <Skeleton className="h-28 rounded-lg" />
+          </div>
+        </div>
       </div>
     )
   }
