@@ -85,6 +85,19 @@ def test_exact_rebuild_is_idempotent_and_repairs_corruption(
     assert repaired["sources"]
 
 
+def test_exact_search_suggestions_are_local_and_prefix_filtered(
+    retrieval_store: WorkspaceStore,
+    tmp_path: Path,
+) -> None:
+    service = ExactSearchService(
+        store=retrieval_store,
+        database_path=tmp_path / "search.sqlite3",
+    )
+    service.rebuild()
+
+    assert "产品发布会" in service.suggest("产品")
+
+
 def test_retrieval_service_exact_mode_does_not_call_smart_search(
     retrieval_store: WorkspaceStore,
     tmp_path: Path,

@@ -11,6 +11,7 @@ import { SortMenu } from './SortMenu'
 import { ViewToggle } from './ViewToggle'
 import { ItemCard } from './ItemCard'
 import { WorkspaceCard } from './WorkspaceCard'
+import { BatchOrganizeControl } from './BatchOrganizeControl'
 import {
   STATE_ORDER,
   primaryStatusToState,
@@ -617,6 +618,7 @@ export default function LibraryPage() {
                       </button>
                     </div>
                   )}
+                  <BatchOrganizeControl items={selectedItemRefs} onDone={load} />
                 </>
               ) : (
                 <button className="btn btn-sm" onClick={enterSelectMode}>选择</button>

@@ -61,3 +61,24 @@ def test_folders_are_workspace_scoped_and_deletion_keeps_content(
 
     store.delete_folder("workspace-a", folder["folder_id"])
     assert store.list_folders("workspace-a") == []
+
+
+def test_favorite_export_import_is_idempotent_and_skips_missing_content(
+    tmp_path: Path,
+) -> None:
+    source = MetadataStore(tmp_path / "source.sqlite3")
+    record = _record()
+    source.migrate_legacy([record])
+    payload = source.export_favorites()
+    payload["items"].append({
+        "group_name": "默认收藏",
+        "workspace_id": "missing",
+        "content_id": "missing",
+    })
+    target = MetadataStore(tmp_path / "target.sqlite3")
+
+    first = target.import_favorites(payload, {record.items[0].content_id})
+    second = target.import_favorites(payload, {record.items[0].content_id})
+
+    assert first == {"imported": 1, "skipped": 1}
+    assert second == {"imported": 0, "skipped": 1}

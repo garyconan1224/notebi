@@ -15,6 +15,7 @@ import {
 } from '@/types/workspace'
 import { FavoriteCard } from './FavoriteCard'
 import { FavoriteOrganizer } from './FavoriteOrganizer'
+import { FavoriteTransferActions } from './FavoriteTransferActions'
 import './favorites.css'
 
 type TabKey = 'all' | ItemType
@@ -129,6 +130,10 @@ export default function FavoritesPage() {
           <p>在工作区里点击星标即可把素材收藏到这里。</p>
         </div>
         <div className="lib-actions">
+          <FavoriteTransferActions onImported={message => {
+            setError(message)
+            reload()
+          }} />
           <button className="btn btn-sm" onClick={reload} disabled={loading}>
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
             刷新

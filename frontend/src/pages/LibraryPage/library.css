@@ -176,6 +176,32 @@
   min-width: 0;
 }
 
+.batch-organize-control,
+.batch-organize-control label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.batch-organize-control input,
+.batch-organize-control select {
+  height: 30px;
+  max-width: 150px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--rs);
+  background: var(--srf);
+  color: var(--fg2);
+  padding: 0 9px;
+  font: 600 var(--xs) var(--fb);
+}
+
+.batch-organize-control input:focus,
+.batch-organize-control select:focus {
+  border-color: var(--acc);
+  outline: none;
+  box-shadow: var(--shf);
+}
+
 /* ── Button helpers ── */
 .btn-sm {
   display: inline-flex;

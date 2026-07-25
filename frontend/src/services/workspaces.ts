@@ -84,6 +84,23 @@ export async function createFavoriteGroup(name: string): Promise<FavoriteGroup> 
   return res.data
 }
 
+export async function exportFavoriteMetadata(): Promise<Record<string, unknown>> {
+  const res = await http.get<Record<string, unknown>>(
+    `${BASE}/metadata/favorites/export`,
+  )
+  return res.data
+}
+
+export async function importFavoriteMetadata(
+  payload: Record<string, unknown>,
+): Promise<{ imported: number; skipped: number }> {
+  const res = await http.post(
+    `${BASE}/metadata/favorites/import`,
+    { payload },
+  )
+  return res.data as { imported: number; skipped: number }
+}
+
 export async function listWorkspaceFolders(
   workspaceId: string,
 ): Promise<WorkspaceFolder[]> {

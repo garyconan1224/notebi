@@ -2200,6 +2200,12 @@ class BatchAddToWorkspaceRequest(BaseModel):
     items: list[dict]  # [{"workspace_id": "...", "item_id": "..."}, ...]
 
 
+class BatchOrganizeRequest(BaseModel):
+    items: list[dict]
+    tags: Optional[Dict[str, Any]] = None
+    folder_id: Optional[str] = None
+
+
 @router.post("/items/batch-delete")
 def batch_delete_items(req: BatchDeleteRequest) -> Dict[str, Any]:
     """批量删除素材。"""
@@ -2296,6 +2302,37 @@ def batch_add_items_to_workspace(req: BatchAddToWorkspaceRequest) -> Dict[str, A
         "skipped_ids": skipped,
         "failures": failed,
     }
+
+
+@router.post("/items/batch-organize")
+def batch_organize_items(req: BatchOrganizeRequest) -> Dict[str, Any]:
+    """Apply manual tags and/or a workspace folder to selected independent copies."""
+
+    if req.tags is None and req.folder_id is None:
+        raise HTTPException(status_code=400, detail="tags or folder_id is required")
+    if req.tags is not None:
+        _validate_tags(req.tags)
+    changed = 0
+    failures: List[Dict[str, Any]] = []
+    for reference in req.items:
+        workspace_id = str(reference.get("workspace_id") or "")
+        item_id = str(reference.get("item_id") or "")
+        try:
+            item = _store.get_item(workspace_id, item_id)
+            if req.folder_id is not None:
+                _metadata.move_content(workspace_id, item.content_id, req.folder_id)
+            if req.tags is not None:
+                _metadata.replace_tags(item.content_id, req.tags, "MANUAL")
+                automatic = _metadata.tags_for_content(item.content_id, "AUTO")
+                _store.update_item(
+                    workspace_id,
+                    item_id,
+                    tags={**automatic, **req.tags},
+                )
+            changed += 1
+        except (KeyError, ValueError) as error:
+            failures.append({**reference, "reason": str(error)})
+    return {"changed": changed, "failed": len(failures), "failures": failures}
 
 
 @router.get("/{workspace_id}/items/{item_id}/lineage")
@@ -2735,9 +2772,33 @@ class FolderMoveRequest(BaseModel):
     folder_id: str
 
 
+class FavoriteImportRequest(BaseModel):
+    payload: Dict[str, Any]
+
+
 @router.get("/metadata/favorite-groups")
 def list_favorite_groups() -> List[Dict[str, Any]]:
     return _metadata.list_favorite_groups()
+
+
+@router.get("/metadata/favorites/export")
+def export_favorite_metadata() -> Dict[str, Any]:
+    return _metadata.export_favorites()
+
+
+@router.post("/metadata/favorites/import")
+def import_favorite_metadata(req: FavoriteImportRequest) -> Dict[str, int]:
+    records = _store.list_all(include_trashed=True)
+    valid = {item.content_id for record in records for item in record.items}
+    result = _metadata.import_favorites(req.payload, valid)
+    for record in records:
+        favorite_ids = _metadata.favorite_content_ids(record.workspace_id)
+        snapshot = [
+            item.item_id for item in record.items if item.content_id in favorite_ids
+        ]
+        if snapshot != record.favorites:
+            _store.update(record.workspace_id, favorites=snapshot)
+    return result
 
 
 @router.post("/metadata/favorite-groups")

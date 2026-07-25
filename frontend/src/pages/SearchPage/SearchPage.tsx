@@ -8,6 +8,8 @@ import { searchGlobal, type SearchResponse } from '@/services/search'
 import { listWorkspaces } from '@/services/workspaces'
 import type { WorkspaceRecord } from '@/types/workspace'
 import { SearchResultView } from './SearchResultView'
+import { SearchEmptyState } from './SearchEmptyState'
+import { useSearchSuggestions } from './useSearchSuggestions'
 
 import './search.css'
 
@@ -38,6 +40,7 @@ export default function SearchPage() {
   const [history, setHistory] = useState(loadHistory)
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const suggestions = useSearchSuggestions(query)
 
   const loadInitial = useCallback(async () => {
     try {
@@ -113,8 +116,14 @@ export default function SearchPage() {
                   if (event.key === 'Enter' && !loading) void runSearch(query)
                 }}
                 placeholder="例如：哪些内容提到了离线搜索？"
+                list="nibi-search-suggestions"
                 disabled={loading}
               />
+              <datalist id="nibi-search-suggestions">
+                {suggestions.map(suggestion => (
+                  <option key={suggestion} value={suggestion} />
+                ))}
+              </datalist>
             </div>
             <button
               className="search-btn"
@@ -176,23 +185,8 @@ export default function SearchPage() {
             />
           )}
           {!loading && !result && (
-            <section className="search-empty">
-              <SearchIcon size={20} />
-              <div className="search-empty-title">从一个具体问题开始</div>
-              <div className="search-empty-desc">回答会附带原文来源，可直接跳回内容核验。</div>
-              {history.length > 0 && (
-                <div className="search-history-chips">
-                  {history.map(item => (
-                    <button key={item} onClick={() => {
-                      setQuery(item)
-                      void runSearch(item)
-                    }}>
-                      {item}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </section>
+            <SearchEmptyState history={history} onQuery={setQuery}
+              onSearch={item => void runSearch(item)} />
           )}
         </div>
       </main>

@@ -270,3 +270,55 @@ class MetadataStore:
                     (workspace_id,),
                 )
             }
+
+    def export_favorites(self) -> dict[str, Any]:
+        with self._connect() as db:
+            groups = [dict(row) for row in db.execute(
+                "SELECT group_id,name,sort_order FROM favorite_groups ORDER BY sort_order,created_at"
+            )]
+            items = [dict(row) for row in db.execute(
+                "SELECT i.group_id,g.name group_name,i.workspace_id,i.content_id,"
+                "i.note,i.created_at FROM favorite_items i "
+                "JOIN favorite_groups g USING(group_id) ORDER BY i.created_at"
+            )]
+        return {"schema_version": 1, "groups": groups, "items": items}
+
+    def import_favorites(
+        self, payload: dict[str, Any], valid_content_ids: set[str],
+    ) -> dict[str, int]:
+        imported = 0
+        skipped = 0
+        with self._connect() as db:
+            group_by_name = {
+                str(row["normalized_name"]): str(row["group_id"])
+                for row in db.execute(
+                    "SELECT group_id,normalized_name FROM favorite_groups"
+                )
+            }
+            for raw_group in payload.get("groups") or []:
+                name = " ".join(str(raw_group.get("name") or "").strip().split())
+                normalized = _normalized(name)
+                if not name or normalized in group_by_name:
+                    continue
+                group_id = str(uuid.uuid4())
+                db.execute(
+                    "INSERT INTO favorite_groups VALUES(?,?,?,?,?)",
+                    (group_id, name, normalized, int(raw_group.get("sort_order") or 0), _now()),
+                )
+                group_by_name[normalized] = group_id
+            for item in payload.get("items") or []:
+                content_id = str(item.get("content_id") or "")
+                workspace_id = str(item.get("workspace_id") or "")
+                group_name = _normalized(str(item.get("group_name") or "默认收藏"))
+                group_id = group_by_name.get(group_name, DEFAULT_FAVORITE_GROUP_ID)
+                if content_id not in valid_content_ids or not workspace_id:
+                    skipped += 1
+                    continue
+                before = db.total_changes
+                db.execute(
+                    "INSERT OR IGNORE INTO favorite_items VALUES(?,?,?,?,?)",
+                    (group_id, workspace_id, content_id,
+                     str(item.get("note") or ""), _now()),
+                )
+                imported += db.total_changes - before
+        return {"imported": imported, "skipped": skipped}

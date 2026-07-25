@@ -197,3 +197,9 @@ class ExactSearchService:
                 }
             )
         return {"answer": "", "sources": sources, "mode": "exact"}
+
+    def suggest(self, prefix: str, limit: int = 8) -> list[str]:
+        records = self.store.list_all(include_trashed=False)
+        if self.index.signature() != self._signature(records):
+            self.rebuild()
+        return self.index.suggest(prefix, limit)

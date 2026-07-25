@@ -90,3 +90,15 @@ export async function batchAddItemsToWorkspace(
   })
   return res.data
 }
+
+export async function batchOrganizeItems(
+  items: { workspace_id: string; item_id: string }[],
+  options: { tags?: Record<string, unknown>; folderId?: string },
+): Promise<{ changed: number; failed: number }> {
+  const res = await http.post('/workspaces/items/batch-organize', {
+    items,
+    tags: options.tags,
+    folder_id: options.folderId,
+  })
+  return res.data
+}

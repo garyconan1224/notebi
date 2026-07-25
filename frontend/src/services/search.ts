@@ -58,6 +58,15 @@ export async function searchGlobal(
   return res.data
 }
 
+export async function getSearchSuggestions(
+  query: string,
+): Promise<string[]> {
+  const res = await http.get<{ suggestions: string[] }>('/search/suggestions', {
+    params: { q: query, limit: 8 },
+  })
+  return res.data.suggestions
+}
+
 /** POST /workspaces/{wid}/search — 单工作空间 */
 export async function searchWorkspace(
   workspaceId: string,

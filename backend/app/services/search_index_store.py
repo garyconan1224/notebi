@@ -176,3 +176,16 @@ class SearchIndexStore:
                 )
                 values = [f"%{query}%", *params, limit]
             return [dict(row) for row in connection.execute(sql, values)]
+
+    def suggest(self, prefix: str, limit: int = 8) -> list[str]:
+        """Return local title/tag suggestions without model calls."""
+
+        needle = f"%{prefix.strip()}%"
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT content,COUNT(*) frequency FROM search_chunks "
+                "WHERE field IN ('title','tags') AND content LIKE ? "
+                "GROUP BY content ORDER BY frequency DESC,LENGTH(content),content LIMIT ?",
+                (needle, limit),
+            )
+            return [str(row["content"]).strip() for row in rows if str(row["content"]).strip()]
