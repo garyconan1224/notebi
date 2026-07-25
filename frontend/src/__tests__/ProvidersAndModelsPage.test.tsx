@@ -216,4 +216,21 @@ describe('ProvidersAndModelsPage 默认模型保存与读回（P1）', () => {
     })
     expect(configMocks.setConfig).toHaveBeenCalledWith({ textProviderId: '', textModelId: '' })
   })
+
+  it('清空默认模型但后端读回仍保留旧值时，不提示成功', async () => {
+    mockGet(makeProviders({ chat: 'gpt-4' }))
+    vi.mocked(http.put).mockResolvedValue({ data: {} })
+
+    render(<ProvidersAndModelsPage />)
+    fireEvent.click(await screen.findByText('更换'))
+    // 后端没有真正清空，读回仍为旧模型。
+    mockGet(makeProviders({ chat: 'gpt-4' }))
+    fireEvent.click(await screen.findByText('清除'))
+
+    await waitFor(() => {
+      expect(toastMocks.error).toHaveBeenCalled()
+    })
+    expect(toastMocks.success).not.toHaveBeenCalled()
+    expect(configMocks.setConfig).not.toHaveBeenCalled()
+  })
 })

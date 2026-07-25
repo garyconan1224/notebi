@@ -243,7 +243,7 @@ function DefaultModelsSection() {
       // 阶段 D + P1：PUT 成功后必须 GET 读回并核对目标值，读回失败或值不一致
       // 都不能提示成功。fetchProvidersData 读回失败会抛错，直接进入 catch。
       const data = await fetchProvidersData()
-      const readBack = data.providers.find((p) => p.id === providerId)?.defaultModels?.[role] ?? ''
+      const readBack = data.providers.find((p) => p.id === effectiveProviderId)?.defaultModels?.[role] ?? ''
       if (readBack !== (modelId || '')) {
         applyProvidersData(data)
         toast.error(`保存未生效：后端读回为「${readBack || '未设置'}」，与目标「${modelId || '未设置'}」不一致`)
