@@ -2203,11 +2203,22 @@ def batch_delete_items(req: BatchDeleteRequest) -> Dict[str, Any]:
         if not ws_id or not item_id:
             failed.append({**entry, "reason": "missing workspace_id or item_id"})
             continue
+        # 1-B 对齐：删 item 前先取出 related_task_ids，删除后同步清理 task_store，
+        # 否则批量删除会留下孤儿任务（单个删除已处理，批量删除此前遗漏）。
+        ws = _store.get(ws_id)
+        item = next((it for it in ws.items if it.item_id == item_id), None) if ws else None
+        related_tids = list(item.related_task_ids) if item else []
         try:
             _store.remove_item(ws_id, item_id)
             removed.append(item_id)
         except KeyError as err:
             failed.append({"workspace_id": ws_id, "item_id": item_id, "reason": str(err)})
+            continue
+        for tid in related_tids:
+            try:
+                _pipeline_runner.store.delete(tid)
+            except Exception:
+                pass  # 单个删除失败不阻塞主流程
     return {"removed": len(removed), "failed": len(failed), "removed_ids": removed, "failures": failed}
 
 
@@ -4651,6 +4662,25 @@ async def create_summary(
         )
     except Exception as err:
         raise HTTPException(status_code=500, detail=f"创建总结任务失败: {err}") from err
+
+    # 阶段 C1：把 summary task_id 关联到 item.related_task_ids，删除 item 时才能一并清理。
+    # 去重追加，不覆盖原任务 ID；关联失败则清理刚创建的任务，避免孤儿任务。
+    if task.task_id not in item.related_task_ids:
+        try:
+            _store.update_item(
+                workspace_id,
+                item_id,
+                related_task_ids=[*item.related_task_ids, task.task_id],
+            )
+        except Exception as err:
+            try:
+                _pipeline_runner.store.delete(task.task_id)
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=500, detail=f"关联总结任务失败: {err}",
+            ) from err
+
     return {
         "status": "accepted",
         "task_id": task.task_id,

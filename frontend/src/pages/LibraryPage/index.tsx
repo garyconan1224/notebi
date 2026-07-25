@@ -364,8 +364,10 @@ export default function LibraryPage() {
     if (!ok) return
     try {
       await deleteItem(item.workspace_id, item.item_id)
-      // 1-C：即时移除该 workspace 关联的任务，不等轮询
-      useTaskStore.getState().removeByProject(item.workspace_id)
+      // 阶段 C2：只精确移除该 item 的 related_task_ids，不清掉同合集其它素材的任务。
+      // related_task_ids 缺失时不兜底 removeByProject——后端已删任务，下一轮轮询会同步掉。
+      const tids = item.related_task_ids ?? []
+      if (tids.length > 0) useTaskStore.getState().removeTasks(tids)
       toast.success(`已删除「${label}」`)
       load()
     } catch {
@@ -405,19 +407,47 @@ export default function LibraryPage() {
           items.push({ workspace_id: ws, item_id: rest.join(':') })
         }
       })
+      let removedCount = 0
+      let failedCount = 0
+      const removedItemIds = new Set<string>()
+      const fulfilledWorkspaceIds = new Set<string>()
       if (items.length > 0) {
-        await batchDeleteItems(items)
+        const result = await batchDeleteItems(items)
+        removedCount += result.removed
+        failedCount += result.failed
+        result.removed_ids.forEach((id) => removedItemIds.add(id))
       }
       if (wsIds.length > 0) {
-        await Promise.all(wsIds.map((id) => deleteWorkspace(id)))
+        // 合集逐个删除，用 allSettled 汇总，避免单个失败吞掉整体结果
+        const settled = await Promise.allSettled(wsIds.map((id) => deleteWorkspace(id)))
+        settled.forEach((r, i) => {
+          if (r.status === 'fulfilled') {
+            removedCount += 1
+            fulfilledWorkspaceIds.add(wsIds[i])
+          } else {
+            failedCount += 1
+          }
+        })
       }
-      // 1-C：批量删除后即时清理 taskStore
-      const affectedProjectIds = new Set([
-        ...wsIds,
-        ...items.map((it) => it.workspace_id),
-      ])
-      affectedProjectIds.forEach((pid) => useTaskStore.getState().removeByProject(pid))
-      toast.success(`已删除 ${selectedSet.size} 项`)
+      // P1 修复：
+      // - 删除单个 item：只根据 removed_ids 精确移除关联任务，失败项任务保留，
+      //   避免失败素材的任务被错误隐藏、刷新后又重新出现。
+      // - 软删除整个合集：只对实际删除成功的合集用 removeByProject
+      //   （后端 list_tasks 已过滤 trashed workspace）；删除失败的合集任务必须保留。
+      const store = useTaskStore.getState()
+      const itemTaskIds = items
+        .filter((it) => removedItemIds.has(it.item_id))
+        .flatMap((it) => {
+          const found = itemsByWorkspace.get(it.workspace_id)?.find((x) => x.item_id === it.item_id)
+          return found?.related_task_ids ?? []
+        })
+      if (itemTaskIds.length > 0) store.removeTasks(itemTaskIds)
+      fulfilledWorkspaceIds.forEach((pid) => store.removeByProject(pid))
+      if (failedCount > 0) {
+        toast.warning(`已删除 ${removedCount} 项，${failedCount} 项删除失败`)
+      } else {
+        toast.success(`已删除 ${removedCount} 项`)
+      }
       setSelectedSet(new Set())
       load()
     } catch {
@@ -425,7 +455,7 @@ export default function LibraryPage() {
     } finally {
       setDeleting(false)
     }
-  }, [selectedSet, load])
+  }, [selectedSet, load, itemsByWorkspace])
 
   const handleBatchAddToCollection = useCallback(async () => {
     if (!collectionTargetId) {

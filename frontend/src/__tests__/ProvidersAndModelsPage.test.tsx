@@ -1,0 +1,219 @@
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import ProvidersAndModelsPage from '@/pages/SettingPage/ProvidersAndModelsPage'
+import { http } from '@/services/client'
+
+// Mock http
+vi.mock('@/services/client', () => ({
+  http: {
+    get: vi.fn(),
+    put: vi.fn(),
+  },
+}))
+
+// Mock configStore
+const configMocks = vi.hoisted(() => ({ setConfig: vi.fn() }))
+vi.mock('@/store/configStore', () => ({
+  useConfigStore: vi.fn(() => ({
+    textProviderId: '',
+    textModelId: '',
+    visionProviderId: '',
+    visionModelId: '',
+    embeddingProviderId: '',
+    embeddingModelId: '',
+    rerankProviderId: '',
+    rerankModelId: '',
+    setConfig: configMocks.setConfig,
+  })),
+}))
+
+// Mock i18n
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, fallback?: string) => fallback || key,
+  }),
+}))
+
+// Mock sonner
+const toastMocks = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  warning: vi.fn(),
+  info: vi.fn(),
+  loading: vi.fn(),
+}))
+vi.mock('sonner', () => ({ toast: toastMocks }))
+
+// 供应商 / 模型管理子页打桩：它们内部也有「设置」字样，会干扰默认模型卡片按钮定位
+vi.mock('@/pages/SettingPage/ProvidersManagementPage', () => ({ default: () => null }))
+vi.mock('@/pages/SettingPage/ModelManagementPage', () => ({ default: () => null }))
+
+const MOCK_MODELS = {
+  data: {
+    models: [
+      { id: 'gpt-4', name: 'GPT-4' },
+      { id: 'gpt-4-vision', name: 'GPT-4 Vision' },
+      { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' },
+    ],
+  },
+}
+
+/** 构造 /providers 响应，可覆盖各 role 的 default_models 与全局默认 provider */
+const makeProviders = (
+  defaultModels: Record<string, string> = { chat: 'gpt-4', vision: 'gpt-4-vision' },
+  defaultProviderForChat = 'openai',
+) => ({
+  data: [
+    {
+      id: 'openai',
+      name: 'OpenAI',
+      kind: 'openai',
+      enabled: true,
+      capabilities: ['chat', 'vision'],
+      default_models: defaultModels,
+    },
+  ],
+  default_provider_for_chat: defaultProviderForChat,
+  default_provider_for_vision: 'openai',
+})
+
+/** 让 http.get 按 URL 返回 /providers 与 /providers/openai/models */
+const mockGet = (providersPayload: unknown) => {
+  vi.mocked(http.get).mockImplementation(async (url: string) => {
+    if (url === '/providers') return { data: providersPayload }
+    if (url === '/providers/openai/models') return { data: MOCK_MODELS }
+    return { data: {} }
+  })
+}
+
+describe('ProvidersAndModelsPage 默认模型显示（阶段 D）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('GET /providers 返回 snake_case default_models 和 default_provider_for_chat 时，chat 卡片显示真实 provider/model', async () => {
+    mockGet(makeProviders())
+
+    render(<ProvidersAndModelsPage />)
+
+    await waitFor(() => {
+      // chat 卡片应显示 OpenAI / gpt-4（负向前瞻排除 gpt-4-vision 的干扰）
+      expect(screen.getByText(/OpenAI \/ gpt-4(?!-)/)).toBeTruthy()
+    })
+  })
+
+  it('vision 卡片也应显示已配置的默认模型', async () => {
+    mockGet(makeProviders())
+
+    render(<ProvidersAndModelsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/OpenAI \/ gpt-4-vision/)).toBeTruthy()
+    })
+  })
+
+  it('provider 不存在或 model 已从列表消失时，显示可理解的异常状态，不把有效配置误判为未设置', async () => {
+    mockGet(makeProviders({ chat: 'deprecated-model' }, 'openai'))
+
+    render(<ProvidersAndModelsPage />)
+
+    await waitFor(() => {
+      // 应显示 provider 名 + 模型 ID（即使模型不在列表中）
+      const text = screen.getByText(/OpenAI \/ deprecated-model/)
+      expect(text).toBeTruthy()
+    })
+  })
+})
+
+describe('ProvidersAndModelsPage 默认模型保存与读回（P1）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('PUT 成功且 GET 读回值与目标一致时，才提示成功并同步 configStore', async () => {
+    // 初始 chat 为空；保存后读回为 gpt-4
+    mockGet(makeProviders({}))
+    vi.mocked(http.put).mockResolvedValue({ data: {} })
+
+    render(<ProvidersAndModelsPage />)
+    // 等待加载完成；初始各 role 均未设置 → 多个「设置」按钮，取第一个（chat 卡片）
+    fireEvent.click((await screen.findAllByText('设置'))[0])
+
+    // 选择供应商
+    const providerSelect = await screen.findByRole('combobox')
+    fireEvent.change(providerSelect, { target: { value: 'openai' } })
+    // 选择模型 gpt-4
+    fireEvent.click(await screen.findByText('gpt-4'))
+    // 读回将返回 chat=gpt-4
+    mockGet(makeProviders({ chat: 'gpt-4' }))
+    fireEvent.click(screen.getByText('确认'))
+
+    await waitFor(() => {
+      expect(toastMocks.success).toHaveBeenCalled()
+    })
+    expect(http.put).toHaveBeenCalledWith('/providers/openai', {
+      default_models: { chat: 'gpt-4' },
+    })
+    expect(configMocks.setConfig).toHaveBeenCalledWith({ textProviderId: 'openai', textModelId: 'gpt-4' })
+    expect(toastMocks.error).not.toHaveBeenCalled()
+  })
+
+  it('PUT 成功但 GET 读回失败（抛错）时，不提示成功，提示保存失败', async () => {
+    mockGet(makeProviders({}))
+    vi.mocked(http.put).mockResolvedValue({ data: {} })
+
+    render(<ProvidersAndModelsPage />)
+    fireEvent.click((await screen.findAllByText('设置'))[0])
+    fireEvent.change(await screen.findByRole('combobox'), { target: { value: 'openai' } })
+    fireEvent.click(await screen.findByText('gpt-4'))
+    // 保存后的读回 GET 失败
+    vi.mocked(http.get).mockRejectedValue(new Error('network down'))
+    fireEvent.click(screen.getByText('确认'))
+
+    await waitFor(() => {
+      expect(toastMocks.error).toHaveBeenCalled()
+    })
+    expect(toastMocks.success).not.toHaveBeenCalled()
+    expect(configMocks.setConfig).not.toHaveBeenCalled()
+  })
+
+  it('PUT 成功但 GET 读回值与目标不一致时，不提示成功，提示保存未生效', async () => {
+    mockGet(makeProviders({}))
+    vi.mocked(http.put).mockResolvedValue({ data: {} })
+
+    render(<ProvidersAndModelsPage />)
+    fireEvent.click((await screen.findAllByText('设置'))[0])
+    fireEvent.change(await screen.findByRole('combobox'), { target: { value: 'openai' } })
+    fireEvent.click(await screen.findByText('gpt-4'))
+    // 读回返回的是另一个模型（后端未真正保存目标值）
+    mockGet(makeProviders({ chat: 'gpt-3.5-turbo' }))
+    fireEvent.click(screen.getByText('确认'))
+
+    await waitFor(() => {
+      expect(toastMocks.error).toHaveBeenCalled()
+    })
+    expect(toastMocks.success).not.toHaveBeenCalled()
+    expect(configMocks.setConfig).not.toHaveBeenCalled()
+  })
+
+  it('清空默认模型：PUT 空值且读回为空时，提示已清除并清空 configStore', async () => {
+    // 初始 chat=gpt-4（卡片显示「更换」）
+    mockGet(makeProviders({ chat: 'gpt-4' }))
+    vi.mocked(http.put).mockResolvedValue({ data: {} })
+
+    render(<ProvidersAndModelsPage />)
+    // chat 卡片已有模型 → 按钮为「更换」
+    fireEvent.click(await screen.findByText('更换'))
+    // 读回将返回 chat 已清空
+    mockGet(makeProviders({}))
+    fireEvent.click(await screen.findByText('清除'))
+
+    await waitFor(() => {
+      expect(toastMocks.success).toHaveBeenCalled()
+    })
+    expect(http.put).toHaveBeenCalledWith('/providers/openai', {
+      default_models: { chat: '' },
+    })
+    expect(configMocks.setConfig).toHaveBeenCalledWith({ textProviderId: '', textModelId: '' })
+  })
+})

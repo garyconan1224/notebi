@@ -117,29 +117,92 @@ interface ModelChoice {
 function DefaultModelsSection() {
   const configStore = useConfigStore()
   const [providers, setProviders] = useState<ProviderOption[]>([])
+  const [defaultProviderFor, setDefaultProviderFor] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
 
-  // 合并 configStore (localStorage) 与后端 provider.default_models + default_provider 信息。
-  // 后端 /providers 返回的 default_provider_for_* 是权威源；provider.default_models 次之；
-  // configStore 是最后 fallback。
+  // 拉取并解析 /providers 的权威数据。纯读取：只返回解析结果、不做 setState，
+  // 网络或解析失败时向上抛出，供「保存后读回校验」严格使用。
+  const fetchProvidersData = async (): Promise<{
+    providers: ProviderOption[]
+    defaultProviderFor: Record<string, string>
+  }> => {
+    const res = await http.get('/providers')
+    const payload = res.data
+    const list: any[] = Array.isArray(payload) ? payload : (payload?.data ?? [])
+    const result: ProviderOption[] = []
+    for (const p of list) {
+      const models: string[] = []
+      const modelNames: Record<string, string> = {}
+      try {
+        const mRes = await http.get(`/providers/${p.id}/models`)
+        const mList: any[] = mRes.data.data?.models ?? mRes.data?.models ?? []
+        for (const m of mList) {
+          models.push(m.id)
+          modelNames[m.id] = m.name ?? m.id
+        }
+      } catch { /* 模型加载失败静默 */ }
+      result.push({
+        id: p.id,
+        name: p.name,
+        kind: p.kind,
+        enabled: p.enabled,
+        capabilities: p.capabilities,
+        models,
+        modelNames,
+        defaultModels: p.default_models ?? {},
+      })
+    }
+    // 兼容两种结构：平铺（payload.default_provider_for_*）或嵌套（payload.data.default_provider_for_*）
+    const dpf = (role: string) =>
+      (payload as any)?.[`default_provider_for_${role}`] ??
+      (payload as any)?.data?.[`default_provider_for_${role}`] ??
+      ''
+    return {
+      providers: result,
+      defaultProviderFor: {
+        chat: dpf('chat'),
+        vision: dpf('vision'),
+        embedding: dpf('embedding'),
+        rerank: dpf('rerank'),
+      },
+    }
+  }
+
+  // 把解析结果写入本地状态
+  const applyProvidersData = (data: {
+    providers: ProviderOption[]
+    defaultProviderFor: Record<string, string>
+  }) => {
+    setProviders(data.providers)
+    setDefaultProviderFor(data.defaultProviderFor)
+  }
+
+  // 阶段 D：初始加载 / 刷新。读回失败时静默（页面保持可用），不阻断渲染。
+  const loadProviders = async () => {
+    try {
+      applyProvidersData(await fetchProvidersData())
+    } catch { /* 静默 */ }
+  }
+
+  // 合并 defaultProviderFor（后端权威）+ provider.defaultModels + configStore fallback
   const defaults: Record<string, ModelChoice> = useMemo(() => {
     const roleKeys = ['chat', 'vision', 'embedding', 'rerank'] as const
     const merged: Record<string, ModelChoice> = {}
 
     for (const role of roleKeys) {
       // 1) 后端返回的 default_provider_for_<role> 是全局默认 provider id
-      const defaultPid = (providers as any)._defaultProviderFor?.[role]
+      const defaultPid = defaultProviderFor[role]
       if (defaultPid) {
-        // 从该 provider 的 default_models 里找对应 role 的 model
-        const p = (providers as any)._providersRaw?.find((rp: any) => rp.id === defaultPid)
+        // 从该 provider 的 defaultModels 里找对应 role 的 model
+        const p = providers.find((rp) => rp.id === defaultPid)
         if (p) {
-          merged[role] = { providerId: defaultPid, modelId: p.default_models?.[role] ?? '' }
+          merged[role] = { providerId: defaultPid, modelId: p.defaultModels?.[role] ?? '' }
           continue
         }
       }
-      // 2) 遍历 providers 的 default_models 找第一个有该 role 的
-      for (const p of (providers as any)._providersRaw ?? []) {
-        const dm = p.default_models ?? p.defaultModels ?? {}
+      // 2) 遍历 providers 的 defaultModels 找第一个有该 role 的
+      for (const p of providers) {
+        const dm = p.defaultModels ?? {}
         if (dm[role]) {
           merged[role] = { providerId: p.id, modelId: dm[role] }
           break
@@ -155,56 +218,10 @@ function DefaultModelsSection() {
       }
     }
     return merged
-  }, [providers, configStore])
+  }, [providers, defaultProviderFor, configStore])
 
   useEffect(() => {
-    let cancelled = false
-    async function load() {
-      try {
-        const res = await http.get('/providers')
-        const payload = res.data
-        // /providers now returns { data: [...], default_provider_for_chat: "...", ... }
-        const list: any[] = Array.isArray(payload) ? payload : (payload?.data ?? [])
-        const result: ProviderOption[] = []
-        for (const p of list) {
-          const models: string[] = []
-          const modelNames: Record<string, string> = {}
-          try {
-            const mRes = await http.get(`/providers/${p.id}/models`)
-            const mList: any[] = mRes.data.data?.models ?? mRes.data?.models ?? []
-            for (const m of mList) {
-              models.push(m.id)
-              modelNames[m.id] = m.name ?? m.id
-            }
-          } catch { /* 模型加载失败静默 */ }
-          result.push({
-            id: p.id,
-            name: p.name,
-            kind: p.kind,
-            enabled: p.enabled,
-            capabilities: p.capabilities,
-            models,
-            modelNames,
-            defaultModels: p.default_models ?? {},
-          })
-        }
-        // Attach server-side defaults + raw provider list for the `defaults` memo
-        const enhanced: any = Object.assign([...result], {
-          _defaultProviderFor: {
-            chat: (payload as any).default_provider_for_chat ?? '',
-            vision: (payload as any).default_provider_for_vision ?? '',
-            embedding: (payload as any).default_provider_for_embedding ?? '',
-            rerank: (payload as any).default_provider_for_rerank ?? '',
-          },
-          _providersRaw: result,
-        })
-        if (!cancelled) setProviders(enhanced)
-      } catch { /* 静默 */ } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    load()
-    return () => { cancelled = true }
+    loadProviders().finally(() => setLoading(false))
   }, [])
 
   const handleSaveDefault = async (
@@ -223,7 +240,18 @@ function DefaultModelsSection() {
       await http.put(`/providers/${effectiveProviderId}`, {
         default_models: { [role]: modelId || '' },
       })
-      // 同步更新 configStore
+      // 阶段 D + P1：PUT 成功后必须 GET 读回并核对目标值，读回失败或值不一致
+      // 都不能提示成功。fetchProvidersData 读回失败会抛错，直接进入 catch。
+      const data = await fetchProvidersData()
+      const readBack = data.providers.find((p) => p.id === providerId)?.defaultModels?.[role] ?? ''
+      if (readBack !== (modelId || '')) {
+        applyProvidersData(data)
+        toast.error(`保存未生效：后端读回为「${readBack || '未设置'}」，与目标「${modelId || '未设置'}」不一致`)
+        return
+      }
+      // 读回一致：以后端权威数据刷新界面
+      applyProvidersData(data)
+      // 同步更新 configStore（不让 localStorage 覆盖后端权威读回）
       const storeKey = role === 'chat' ? 'text' : role
       const providerKey = `${storeKey}ProviderId` as keyof typeof configStore
       const modelKey = `${storeKey}ModelId` as keyof typeof configStore
@@ -235,7 +263,7 @@ function DefaultModelsSection() {
       )
     } catch (err) {
       const msg = err instanceof Error ? err.message : '保存失败'
-      toast.error(msg)
+      toast.error(`保存失败：${msg}`)
     }
   }
 

@@ -37,6 +37,12 @@ const COVER_CLASS: Record<string, string> = {
   text:  'cover-text',
 }
 
+/** 阶段 C3：首页只展示顶层素材任务。
+ * `summary` 是笔记内部的生成总结子任务（后端 create_summary 用 task_type="summary" 创建），
+ * 不应成为一张独立素材卡；其 result.summary 是完整 ItemSummary 对象，渲染会崩溃。
+ * 排除集合只列已确认的内部子任务类型，不猜测。 */
+const HIDDEN_TASK_TYPES = new Set(['summary'])
+
 function titleFromFilename(filename: unknown): string {
   const raw = typeof filename === 'string' ? filename.trim() : ''
   if (!raw) return ''
@@ -51,9 +57,15 @@ function audioThumbFromResult(result: Record<string, unknown>, audio?: Record<st
   return `/static/workspaces/${projectId}/audio/${titleFromFilename(filename)}.jpg`
 }
 
-/** 从 result 里取摘要文本，5种来源逐级 fallback */
+/** 从 result 里取摘要文本，逐级 fallback。
+ * 阶段 C3：只接受字符串值，候选不是字符串就跳过——不得用 `as string` 欺骗类型系统，
+ * 否则后端返回完整 ItemSummary 对象时会把对象交给 React 触发整页崩溃。
+ * 不回退到 video_title：那是卡片标题，重复进摘要行会让同一文本出现两次。 */
 function descFromResult(result: Record<string, unknown>): string {
-  return (result.note_summary || result.summary || result.description || result.video_title || '') as string
+  for (const value of [result.note_summary, result.summary, result.description]) {
+    if (typeof value === 'string' && value.trim()) return value
+  }
+  return ''
 }
 
 interface NoteCard {
@@ -147,6 +159,7 @@ export function RecentTasks({ tasks: tasksProp }: RecentTasksProps) {
   const tasks = tasksProp ?? storeTasks
   // 过滤无意义卡：标题落到 getStatusText（无 video_title 也无 url），且无封面、无摘要
   const meaningful = tasks.filter((t) => {
+    if (HIDDEN_TASK_TYPES.has(t.task_type)) return false
     const payload = (t.payload ?? {}) as Record<string, unknown>
     const result = (t.result ?? {}) as Record<string, unknown>
     const hasTitle = !!(result.video_title || payload.video_title || payload.url)

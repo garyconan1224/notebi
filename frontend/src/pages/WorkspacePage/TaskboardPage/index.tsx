@@ -20,6 +20,7 @@ import { usePipelineTasks } from '@/hooks/usePipelineTasks'
 import { withStatusToast } from '@/lib/statusToast'
 
 import type { WorkspaceItem, WorkspaceRecord } from '@/types/workspace'
+import { useTaskStore } from '@/store/taskStore'
 
 import { ChatTab } from './ChatTab'
 import { ExportTab } from './ExportTab'
@@ -113,6 +114,10 @@ export default function TaskboardPage() {
     try {
       const updated = await removeWorkspaceItem(workspace.workspace_id, item.item_id)
       setWorkspace(updated)
+      // 阶段 C2：精确移除该 item 的任务，不影响同合集其它素材
+      if (item.related_task_ids.length > 0) {
+        useTaskStore.getState().removeTasks(item.related_task_ids)
+      }
       toast.success(`已删除「${label}」`)
     } catch {
       toast.error('删除失败，请重试')
@@ -123,8 +128,23 @@ export default function TaskboardPage() {
     if (!workspace || itemIds.length === 0) return
     if (!window.confirm(`确定删除选中的 ${itemIds.length} 项？此操作不可撤销。`)) return
     try {
-      await batchDeleteItems(itemIds.map((itemId) => ({ workspace_id: workspace.workspace_id, item_id: itemId })))
-      toast.success(`已删除 ${itemIds.length} 项`)
+      const result = await batchDeleteItems(itemIds.map((itemId) => ({ workspace_id: workspace.workspace_id, item_id: itemId })))
+
+      // P1 修复：只根据 removed_ids 精确移除任务，避免失败项任务被错误隐藏
+      const removedSet = new Set(result.removed_ids)
+      const taskIds = workspace.items
+        .filter((it) => removedSet.has(it.item_id))
+        .flatMap((it) => it.related_task_ids)
+      if (taskIds.length > 0) {
+        useTaskStore.getState().removeTasks(taskIds)
+      }
+
+      // 显示部分成功/失败结果
+      if (result.failed > 0) {
+        toast.warning(`已删除 ${result.removed} 项，${result.failed} 项删除失败`)
+      } else {
+        toast.success(`已删除 ${result.removed} 项`)
+      }
       refresh()
     } catch {
       toast.error('批量删除失败，请重试')

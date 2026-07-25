@@ -42,6 +42,7 @@ import {
   WORKSPACE_STATUS_TEXT,
   type WorkspaceRecord,
 } from '@/types/workspace'
+import { useTaskStore } from '@/store/taskStore'
 
 /**
  * 工作空间列表页（设计文档 2.3「任务列表页」）。
@@ -131,6 +132,9 @@ export default function WorkspaceList() {
     setDeleting(true)
     try {
       await deleteWorkspace(deleteTarget.workspace_id)
+      // 阶段 C2：软删除整个合集后即时清空其任务，与其它删除入口保持一致。
+      // 后端 list_tasks 已过滤 trashed workspace，轮询不会重新加入。
+      useTaskStore.getState().removeByProject(deleteTarget.workspace_id)
       setDeleteTarget(null)
       await refresh()
     } catch (err: unknown) {

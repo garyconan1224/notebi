@@ -2,6 +2,7 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { createBrowserRouter, Navigate, redirect } from 'react-router-dom'
 import Index from '@/pages/Index'
+import RouteErrorPage from '@/components/RouteErrorPage'
 
 // 按路由做代码分割：每个页面组件通过动态 import 拆成独立 chunk
 const SettingPage = lazy(() => import('@/pages/SettingPage/index'))
@@ -55,6 +56,7 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: <Index />,
+    errorElement: <RouteErrorPage />,
     children: [
       { index: true, element: withSuspense(<WorkbenchPage />) },
       { path: 'new', element: <Navigate to="/" replace /> },

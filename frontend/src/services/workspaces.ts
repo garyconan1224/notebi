@@ -849,20 +849,29 @@ export async function downloadSubtitles(
 
 export type TranscriptExportMode = 'article' | 'speaker_grouped'
 
+/** 把标题转成安全文件名片段（去掉路径/非法字符）。 */
+function safeTitleForFilename(title: string): string {
+  return title.replace(/[/\\:*?"<>|]/g, '_').trim().slice(0, 80)
+}
+
 /** GET /workspaces/{id}/items/{itemId}/transcript — 下载无时间轴文章或说话人归组文章 */
 export async function downloadTranscript(
   workspaceId: string,
   itemId: string,
   mode: TranscriptExportMode,
+  title?: string,
 ): Promise<void> {
   const res = await http.get(`${BASE}/${workspaceId}/items/${itemId}/transcript`, {
     params: { mode },
     responseType: 'blob',
   })
   const disposition = res.headers['content-disposition'] as string | undefined
-  let filename = mode === 'speaker_grouped'
-    ? '转写文本（无时间轴·区分说话人）.txt'
-    : '转写文本（无时间轴）.txt'
+  const suffix = mode === 'speaker_grouped'
+    ? '转写文本（无时间轴·区分说话人）'
+    : '转写文本（无时间轴）'
+  // fallback 文件名必须带标题，否则用户本地无法区分多篇笔记；后端 header 为权威源。
+  const safeTitle = title ? safeTitleForFilename(title) : ''
+  let filename = safeTitle ? `${safeTitle}-${suffix}.txt` : `${suffix}.txt`
   if (disposition) {
     const match = disposition.match(/filename\*=(?:UTF-8''|")?([^";]+)/i)
     if (match) filename = decodeURIComponent(match[1])

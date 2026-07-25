@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import zipfile
 from pathlib import Path
 
@@ -261,6 +262,62 @@ def test_export_transcript_rejects_unknown_mode(client: TestClient) -> None:
 
     assert resp.status_code == 400
     assert "article/speaker_grouped" in resp.json()["detail"]
+
+
+def _decode_content_disposition_filename(disposition: str) -> str:
+    """从 Content-Disposition 的 filename*=UTF-8''<quoted> 解出真实文件名。"""
+    from urllib.parse import unquote
+
+    match = re.search(r"filename\*=UTF-8''([^;]+)", disposition)
+    assert match, f"未找到 filename* 字段: {disposition}"
+    return unquote(match.group(1))
+
+
+@pytest.mark.parametrize(
+    ("mode", "suffix"),
+    [
+        ("article", "转写文本（无时间轴）"),
+        ("speaker_grouped", "转写文本（无时间轴·区分说话人）"),
+    ],
+)
+def test_transcript_download_filename_contains_title_and_suffix(
+    client: TestClient, mode: str, suffix: str,
+) -> None:
+    """两种转写模式的下载文件名都必须包含笔记标题与对应模式后缀。
+
+    契约：菜单标签不带标题，但下载文件名必须带标题，否则用户本地无法区分多篇笔记。
+    """
+    ws_id, item_id = _create_workspace_with_item(client, "audio")
+    # 使用带中文、空格和不安全字符的标题
+    title = "我的 播客/第 一 期"
+    ws_module._store.update_item(
+        ws_id,
+        item_id,
+        name=title,
+        results={
+            "transcript_segments": [
+                {"start": 0.0, "end": 1.0, "text": "开场。", "speaker": "SPEAKER_00"},
+            ],
+            "speaker_map": {"SPEAKER_00": "主持人"},
+        },
+        status="done",
+    )
+
+    resp = client.get(f"/workspaces/{ws_id}/items/{item_id}/transcript?mode={mode}")
+
+    assert resp.status_code == 200
+    filename = _decode_content_disposition_filename(resp.headers["content-disposition"])
+    # 标题经过安全处理（/ 与 \ 被替换），但核心可读部分必须保留
+    assert "我的" in filename
+    assert "播客" in filename
+    assert "第" in filename
+    # 不安全字符被清理
+    assert "/" not in filename
+    # 模式后缀必须存在
+    assert suffix in filename
+    assert filename.endswith(".txt")
+    # 不能退回无标题通用名
+    assert filename != f"{suffix}.txt"
 
 
 def test_export_404_workspace_not_found(client: TestClient) -> None:

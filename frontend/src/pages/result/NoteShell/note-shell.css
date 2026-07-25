@@ -755,6 +755,103 @@
   opacity: 0.55;
 }
 
+.nibi-note-export-group-label {
+  padding: 6px 10px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--mut, #7c7464);
+}
+
+.nibi-note-export-group-label:not(:first-child) {
+  margin-top: 4px;
+  border-top: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
+  padding-top: 8px;
+}
+
+.nibi-note-ai-menu {
+  position: absolute;
+  right: 0;
+  top: 38px;
+  z-index: 120;
+  width: 268px;
+  padding: 8px;
+  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
+  border-radius: 12px;
+  background: var(--bg, #fff);
+  box-shadow: var(--shadow-md);
+  display: grid;
+  gap: 2px;
+}
+
+.nibi-note-ai-action {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.nibi-note-ai-action svg {
+  margin-top: 1px;
+  color: var(--mut, #7c7464);
+  justify-self: center;
+}
+
+.nibi-note-ai-action:hover {
+  background: var(--bgalt, #f7f3ec);
+}
+
+.nibi-note-ai-action-title {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--fg, #191410);
+}
+
+.nibi-note-ai-action-desc {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--mut, #7c7464);
+}
+
+.nibi-note-ai-quick {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nibi-note-ai-quick-label {
+  width: 100%;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mut, #7c7464);
+}
+
+.nibi-note-ai-quick-chip {
+  padding: 3px 10px;
+  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg2, #3d3929);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.nibi-note-ai-quick-chip:hover {
+  background: var(--bgalt, #f7f3ec);
+  color: var(--fg, #191410);
+}
+
 .nibi-note-version-menu {
   position: absolute;
   right: 0;

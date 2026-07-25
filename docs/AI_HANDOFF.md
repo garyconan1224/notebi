@@ -1,5 +1,24 @@
 # AI Handoff
 
+## 当前执行指针（2026-07-25）
+
+- **当前任务**：修复结果页导出菜单 / AI 工具 / 删除任务同步 / 默认模型读回（6 组问题）。
+- **已确认计划**：[`docs/plans/result-export-ai-delete-default-model-fixes-2026-07-25.md`](plans/result-export-ai-delete-default-model-fixes-2026-07-25.md)。
+- **执行分支**：`codex/exec-notebi-cleanup`；以 `git log --oneline -5` 为提交事实来源。
+- **已完成（阶段 A–F + Codex 复审 P1）**：
+  - 导出菜单：转写项不显示笔记标题（下载文件名仍带标题）、「当前正文.md」改「Markdown」、菜单外点击/Esc/焦点/互斥、「原始素材」并入导出菜单（阶段 B）。
+  - 删除任务同步（阶段 C）：后端 `batch_delete_items` 按 item 清理 `related_task_ids`；前端 `RecentTasks` 隐藏 `summary` 子任务并做类型安全 `descFromResult` 防首页崩溃；LibraryPage / WorkspaceList / TaskboardPage 各删除入口精确 `removeTasks`。
+  - 默认模型读回（阶段 D + P1）：`ProvidersAndModelsPage` 拆出 `fetchProvidersData`（纯读取、失败抛错）与 `applyProvidersData`；`handleSaveDefault` 严格校验——PUT 成功 + GET 读回成功 + 读回值与目标一致，三者都满足才提示成功并同步 configStore，否则提示「保存失败 / 保存未生效」。
+  - 路由错误页（阶段 E）：`RouteErrorPage` 接入 router `errorElement`。
+  - Codex 复审 P1 修复：LibraryPage 批量删除合集只清理 `fulfilledWorkspaceIds`（删除失败的合集任务保留）；新增 Taskboard / Library 部分失败回归测试与默认模型保存/读回失败/读回不一致/清空持久化测试。
+- **P2 决策（用户已确认）**：窄屏（375px）适配本轮**不做**，记录为后续 UI 任务——该问题涉及整个侧栏/AppShell，不只是导出菜单，继续修会扩大本轮范围。
+- **已验证**：前端 34 文件 / 211 tests passed、生产 build 通过；后端 409 passed；F3 默认模型真实浏览器端到端（保存 → 后端持久化 → 刷新读回 → 清空恢复）通过，测试期改动的 chat 默认模型已恢复为「未设置」。
+- **下一步**：提交本轮改动（排除 5 个用户文件，见下）；如需可补 F1/F2/F4 浏览器复验。
+- **强制停点**：实际代码、数据、接口、依赖或产品行为与计划不一致时立即停下询问；不得为过测而改产品语义、删旧功能、扩文件范围或改数据库结构。
+- **保留不动的 5 个用户文件**：`.workbuddy/memory/2026-07-21.md`、`.workbuddy/memory/MEMORY.md`、`.workbuddy/memory/2026-07-23.md`、`docs/plans/knowledge-favorites-search-research-2026-07-23.md`、`overview.md`。
+
+---
+
 ## 当前执行指针（2026-07-22）
 
 - **当前任务**：将独立 NoteBi 仓库从多产品隐藏模式收敛为真正的单一 NoteBi，并物理删除复刻、AI 分镜、AI 导演和提示词生产能力。
