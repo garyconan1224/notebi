@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from typing import Any
-
-import pytest
+import json
+from pathlib import Path
 
 from backend.app.routes.search import GlobalSearchRequest
 from backend.app.services import workspace_search_service as search_service
 from backend.app.services.workspace_store import WorkspaceStore
+from shared.knowledge_base import build_video_chunks_from_file
 
 
 def test_retrieval_fixture_covers_identity_and_content_variants(
@@ -46,7 +47,7 @@ def test_legacy_source_contract_is_frozen() -> None:
         "",
     )
 
-    assert set(source) == {
+    assert {
         "workspace_id",
         "workspace_name",
         "item_id",
@@ -55,17 +56,13 @@ def test_legacy_source_contract_is_frozen() -> None:
         "chunk_excerpt",
         "score",
         "jump_url",
-    }
+    }.issubset(source)
     assert source["chunk_excerpt"] == "产品原文片段"
-    assert source["jump_url"] == (
+    assert source["jump_url"].startswith(
         "/workspaces/ws_alpha/items/legacy-shared-item/video_result"
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="P1 will add mode and future filter fields to the unified request",
-)
 def test_target_smart_request_contract() -> None:
     request = GlobalSearchRequest(
         query="离线搜索",
@@ -79,10 +76,6 @@ def test_target_smart_request_contract() -> None:
     assert request.tags == ["产品"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="P1 will normalize source identity, evidence field, and time range",
-)
 def test_target_smart_source_contract() -> None:
     source: dict[str, Any] = search_service._build_source(
         {
@@ -110,3 +103,26 @@ def test_target_smart_source_contract() -> None:
     assert source["segment_id"]
     assert source["start_ms"] == 10_000
     assert source["end_ms"] == 18_500
+
+
+def test_transcript_segments_become_positioned_chunks(tmp_path: Path) -> None:
+    path = tmp_path / "item.json"
+    path.write_text(
+        json.dumps(
+            {
+                "title": "访谈",
+                "transcript_segments": [
+                    {"start": 10.0, "end": 18.5, "text": "可定位原文"}
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    chunks = build_video_chunks_from_file(path)
+    transcript = next(chunk for chunk in chunks if chunk.field == "transcript")
+    assert transcript.segment_id == "transcript-0"
+    assert transcript.start_ms == 10_000
+    assert transcript.end_ms == 18_500
+    assert transcript.skeleton_text == "可定位原文"

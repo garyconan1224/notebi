@@ -1,0 +1,177 @@
+"""Authoritative orchestration for smart and exact retrieval."""
+
+from __future__ import annotations
+
+import threading
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+from backend.app.services import workspace_knowledge
+from backend.app.services import workspace_search_service
+from backend.app.services.workspace_store import WorkspaceStore
+from shared.runtime_llm_config import get_embedding_model_for_rag
+from shared.settings_store import load_settings
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+class RetrievalService:
+    """Coordinate cache lifecycle, filters, retrieval, and compatibility."""
+
+    _lock = threading.Lock()
+    _rebuild: Dict[str, Any] = {
+        "running": False,
+        "started_at": None,
+        "finished_at": None,
+        "error": None,
+    }
+
+    def __init__(
+        self,
+        *,
+        store: Optional[WorkspaceStore] = None,
+        task_store: Any = None,
+    ) -> None:
+        self.store = store or workspace_search_service.WorkspaceStore()
+        self.task_store = task_store
+
+    def search(
+        self,
+        *,
+        query: str,
+        mode: str = "smart",
+        top_k: int = 10,
+        workspace_ids: Optional[List[str]] = None,
+        item_types: Optional[List[str]] = None,
+        tags: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Search using one public contract."""
+
+        if mode != "smart":
+            raise ValueError(f"unsupported search mode: {mode}")
+        result = workspace_search_service.search_across_workspaces(
+            query=query,
+            top_k=top_k,
+            workspace_ids=workspace_ids,
+            item_types=item_types,
+            tags=tags,
+            store=self.store,
+            task_store=self.task_store,
+        )
+        result["mode"] = mode
+        result["status"] = self.status()
+        return result
+
+    def status(self) -> Dict[str, Any]:
+        """Return readiness for the workspace caches used by search."""
+
+        settings = load_settings()
+        model = get_embedding_model_for_rag(settings)
+        records = self.store.list_all(include_trashed=False)
+        indexable = [
+            record
+            for record in records
+            if any(
+                workspace_knowledge._item_has_data(item, self.task_store)
+                for item in record.items
+            )
+        ]
+        ready_ids = [
+            record.workspace_id
+            for record in indexable
+            if workspace_knowledge._load_from_cache(
+                record.workspace_id,
+                workspace_knowledge._items_hash(record),
+                model,
+            )
+            is not None
+        ]
+        with self._lock:
+            rebuild = dict(self._rebuild)
+        return {
+            "ready": bool(indexable) and len(ready_ids) == len(indexable),
+            "running": bool(rebuild["running"]),
+            "workspace_count": len(records),
+            "indexable_workspace_count": len(indexable),
+            "indexed_workspace_count": len(ready_ids),
+            "item_count": sum(
+                workspace_knowledge._item_has_data(item, self.task_store)
+                for record in indexable
+                for item in record.items
+            ),
+            "indexed_item_count": sum(
+                sum(
+                    workspace_knowledge._item_has_data(item, self.task_store)
+                    for item in record.items
+                )
+                for record in indexable
+                if record.workspace_id in ready_ids
+            ),
+            "stale_workspace_ids": [
+                record.workspace_id
+                for record in indexable
+                if record.workspace_id not in ready_ids
+            ],
+            "last_indexed_at": rebuild["finished_at"],
+            "embedding_model": model,
+            "rebuild": rebuild,
+        }
+
+    def start_rebuild(self, *, force: bool = False) -> Dict[str, Any]:
+        """Warm all workspace caches in a background thread."""
+
+        with self._lock:
+            if self._rebuild["running"]:
+                already_running = True
+            else:
+                already_running = False
+                self._rebuild.update(
+                    running=True,
+                    started_at=_now_iso(),
+                    finished_at=None,
+                    error=None,
+                )
+        if already_running:
+            return self.status()
+
+        def run() -> None:
+            try:
+                settings = load_settings()
+                model = get_embedding_model_for_rag(settings)
+                api_key = str(settings.openai_api_key or "").strip()
+                records = self.store.list_all(include_trashed=False)
+                for record in records:
+                    if not any(
+                        workspace_knowledge._item_has_data(item, self.task_store)
+                        for item in record.items
+                    ):
+                        continue
+                    if force:
+                        workspace_knowledge.invalidate_workspace_index(
+                            record.workspace_id
+                        )
+                    workspace_knowledge.build_or_load_workspace_index(
+                        record.workspace_id,
+                        api_key,
+                        embedding_model=model,
+                        store=self.store,
+                        task_store=self.task_store,
+                    )
+                with self._lock:
+                    self._rebuild.update(
+                        running=False,
+                        finished_at=_now_iso(),
+                        error=None,
+                    )
+            except Exception as error:  # noqa: BLE001
+                with self._lock:
+                    self._rebuild.update(
+                        running=False,
+                        finished_at=_now_iso(),
+                        error=str(error),
+                    )
+
+        threading.Thread(target=run, daemon=True).start()
+        return self.status()

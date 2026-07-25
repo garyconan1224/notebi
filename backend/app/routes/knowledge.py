@@ -8,11 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.app.routes.pipeline import _runner as _pipeline_runner
-from backend.app.services.global_knowledge import (
-    ask_global,
-    get_global_status,
-    start_global_rebuild,
-)
+from backend.app.services.retrieval_service import RetrievalService
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
@@ -30,7 +26,7 @@ class KnowledgeRebuildRequest(BaseModel):
 @router.get("/status")
 def knowledge_status() -> Dict[str, Any]:
     try:
-        return get_global_status(task_store=_pipeline_runner.store)
+        return RetrievalService(task_store=_pipeline_runner.store).status()
     except ValueError as err:
         raise HTTPException(status_code=400, detail=str(err)) from err
 
@@ -38,9 +34,8 @@ def knowledge_status() -> Dict[str, Any]:
 @router.post("/rebuild")
 def knowledge_rebuild(req: KnowledgeRebuildRequest | None = None) -> Dict[str, Any]:
     try:
-        return start_global_rebuild(
-            force=bool(req.force) if req else False,
-            task_store=_pipeline_runner.store,
+        return RetrievalService(task_store=_pipeline_runner.store).start_rebuild(
+            force=bool(req.force) if req else False
         )
     except ValueError as err:
         raise HTTPException(status_code=400, detail=str(err)) from err
@@ -49,11 +44,11 @@ def knowledge_rebuild(req: KnowledgeRebuildRequest | None = None) -> Dict[str, A
 @router.post("/ask")
 def knowledge_ask(req: KnowledgeAskRequest) -> Dict[str, Any]:
     try:
-        return ask_global(
-            question=req.question,
+        return RetrievalService(task_store=_pipeline_runner.store).search(
+            query=req.question,
+            mode="smart",
             top_k=req.top_k,
             workspace_ids=req.workspace_ids,
-            task_store=_pipeline_runner.store,
         )
     except RuntimeError as err:
         raise HTTPException(status_code=409, detail=str(err)) from err

@@ -20,6 +20,7 @@ from shared.knowledge_base import (
     LongKnowledge,
     ShortKnowledge,
     VideoChunk,
+    retrieve_candidates_with_sources,
     retrieve_with_sources,
 )
 from shared.sf_client import SiliconFlowError, rerank_documents
@@ -53,6 +54,29 @@ def _jump_url(workspace_id: str, item_id: str, item_type: str) -> str:
         "text": "text_result",
     }
     return f"/workspaces/{workspace_id}/items/{item_id}/{suffix_map.get(type_seg, 'video_result')}"
+
+
+def _timestamp_to_ms(value: str) -> Optional[int]:
+    parts = value.strip().split(":")
+    if not parts or len(parts) > 3:
+        return None
+    try:
+        seconds = float(parts[-1])
+        minutes = int(parts[-2]) if len(parts) >= 2 else 0
+        hours = int(parts[-3]) if len(parts) == 3 else 0
+    except ValueError:
+        return None
+    return round((hours * 3600 + minutes * 60 + seconds) * 1000)
+
+
+def _time_range_ms(value: Any) -> tuple[Optional[int], Optional[int]]:
+    if not isinstance(value, str) or not value.strip():
+        return None, None
+    normalized = value.replace("~", "-")
+    start_text, separator, end_text = normalized.partition("-")
+    start_ms = _timestamp_to_ms(start_text)
+    end_ms = _timestamp_to_ms(end_text) if separator else None
+    return start_ms, end_ms
 
 
 def _resolve_api_key(api_key: Optional[str]) -> str:
@@ -89,19 +113,34 @@ def _build_source(
 ) -> Dict[str, Any]:
     info = source_map.get(str(raw.get("source_file") or "")) or {}
     wid = info.get("workspace_id") or workspace_id_fallback
+    item_id = str(info.get("item_id") or "")
+    item_type = str(info.get("item_type") or "video")
+    excerpt = _excerpt(str(raw.get("skeleton_text") or ""))
+    parsed_start, parsed_end = _time_range_ms(raw.get("time_range"))
+    start_ms = raw.get("start_ms")
+    end_ms = raw.get("end_ms")
+    start_ms = int(start_ms) if isinstance(start_ms, (int, float)) else parsed_start
+    end_ms = int(end_ms) if isinstance(end_ms, (int, float)) else parsed_end
+    field = str(raw.get("field") or ("transcript" if start_ms is not None else "content"))
+    segment_id = str(raw.get("segment_id") or f"segment-{raw.get('chunk_index', 0)}")
+    jump_url = _jump_url(wid, item_id, item_type)
+    if start_ms is not None:
+        jump_url = f"{jump_url}?start_ms={start_ms}&field={field}"
     return {
+        "source_id": f"{wid}:{item_id}",
         "workspace_id": wid,
         "workspace_name": info.get("workspace_name") or workspace_name_fallback,
-        "item_id": info.get("item_id") or "",
-        "item_type": info.get("item_type") or "video",
+        "item_id": item_id,
+        "item_type": item_type,
         "item_title": info.get("item_title") or raw.get("title") or "",
-        "chunk_excerpt": _excerpt(str(raw.get("skeleton_text") or "")),
+        "excerpt": excerpt,
+        "chunk_excerpt": excerpt,
+        "field": field,
+        "segment_id": segment_id,
+        "start_ms": start_ms,
+        "end_ms": end_ms,
         "score": float(raw.get("score") or 0.0),
-        "jump_url": _jump_url(
-            wid,
-            info.get("item_id") or "",
-            info.get("item_type") or "video",
-        ),
+        "jump_url": jump_url,
     }
 
 
@@ -216,7 +255,14 @@ def _retrieve_one(
             workspace_id,
             rec.name,
         )
-    raws = list(retrieve_with_sources(api_key, knowledge, query))[:per_ws_top_k]
+    raws = list(
+        retrieve_candidates_with_sources(
+            api_key,
+            knowledge,
+            query,
+            top_k=per_ws_top_k,
+        )
+    )
     return raws, list(knowledge.chunks), source_map, workspace_id, rec.name
 
 
@@ -225,6 +271,8 @@ def search_across_workspaces(
     query: str,
     top_k: int = 10,
     workspace_ids: Optional[List[str]] = None,
+    item_types: Optional[List[str]] = None,
+    tags: Optional[List[str]] = None,
     api_key: Optional[str] = None,
     store: Optional[WorkspaceStore] = None,
     task_store: Any = None,
@@ -270,6 +318,12 @@ def search_across_workspaces(
             except Exception:
                 continue
             for r in raws:
+                info = smap.get(str(r.get("source_file") or "")) or {}
+                if item_types and info.get("item_type") not in set(item_types):
+                    continue
+                source_tags = set(info.get("tags") or [])
+                if tags and not set(tags).issubset(source_tags):
+                    continue
                 pool_raws.append((r, smap, wid, wname))
 
     if not pool_raws:

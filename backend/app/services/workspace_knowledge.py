@@ -124,6 +124,14 @@ def collect_workspace_json_paths(
             "item_id": it.item_id,
             "item_type": it.type,
             "item_title": title,
+            "tags": sorted(
+                {
+                    str(tag)
+                    for values in it.tags.values()
+                    for tag in (values if isinstance(values, list) else [values])
+                    if str(tag).strip()
+                }
+            ),
         }
     return paths, source_map, rec
 
