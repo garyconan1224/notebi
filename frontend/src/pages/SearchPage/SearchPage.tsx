@@ -31,6 +31,7 @@ function saveHistory(query: string): string[] {
 export default function SearchPage() {
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState('__all__')
+  const [mode, setMode] = useState<'smart' | 'exact'>('smart')
   const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([])
   const [status, setStatus] = useState<KnowledgeStatus | null>(null)
   const [result, setResult] = useState<SearchResponse | null>(null)
@@ -40,10 +41,7 @@ export default function SearchPage() {
 
   const loadInitial = useCallback(async () => {
     try {
-      const [records, currentStatus] = await Promise.all([
-        listWorkspaces(),
-        getKnowledgeStatus(),
-      ])
+      const [records, currentStatus] = await Promise.all([listWorkspaces(), getKnowledgeStatus()])
       setWorkspaces(records)
       setStatus(currentStatus)
     } catch (error) {
@@ -66,7 +64,7 @@ export default function SearchPage() {
     setHistory(saveHistory(trimmed))
     try {
       const response = await searchGlobal(trimmed, {
-        mode: 'smart',
+        mode,
         topK: 10,
         workspaceIds: scope === '__all__' ? undefined : [scope],
       })
@@ -77,7 +75,7 @@ export default function SearchPage() {
     } finally {
       setLoading(false)
     }
-  }, [scope])
+  }, [mode, scope])
 
   const refreshIndex = async () => {
     setRefreshing(true)
@@ -94,8 +92,7 @@ export default function SearchPage() {
 
   const updateWorkspace = (record: WorkspaceRecord) => {
     setWorkspaces(previous => previous.map(item => (
-      item.workspace_id === record.workspace_id ? record : item
-    )))
+      item.workspace_id === record.workspace_id ? record : item)))
   }
 
   return (
@@ -104,9 +101,7 @@ export default function SearchPage() {
         <div className="search-hero-inner">
           <span className="search-kicker">Smart Search · Evidence First</span>
           <h1 className="search-title">智能检索</h1>
-          <p className="search-subtitle">
-            先给出答案，再把每条结论落回可跳转的原文证据。
-          </p>
+          <p className="search-subtitle">先给出答案，再把每条结论落回可跳转的原文证据。</p>
           <div className="search-input-row">
             <div className="search-input-wrap">
               <SearchIcon size={16} />
@@ -128,7 +123,7 @@ export default function SearchPage() {
               disabled={loading || !query.trim()}
             >
               {loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-              {loading ? '检索中' : '智能回答'}
+              {loading ? '检索中' : mode === 'smart' ? '智能回答' : '精确查找'}
             </button>
           </div>
           <div className="search-options">
@@ -146,9 +141,13 @@ export default function SearchPage() {
               ))}
             </select>
             <div className="search-mode-group" aria-label="检索方式">
-              <button className="search-mode-btn" data-active="true">智能回答</button>
-              <button className="search-mode-btn" disabled title="将在精确查找阶段启用">
-                精确查找 · 即将支持
+              <button className="search-mode-btn" data-active={mode === 'smart'}
+                onClick={() => setMode('smart')}>
+                智能回答
+              </button>
+              <button className="search-mode-btn" data-active={mode === 'exact'}
+                onClick={() => setMode('exact')}>
+                精确查找
               </button>
             </div>
             <button

@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from backend.app.services import workspace_knowledge
 from backend.app.services import workspace_search_service
+from backend.app.services.exact_search_service import ExactSearchService
 from backend.app.services.workspace_store import WorkspaceStore
 from shared.runtime_llm_config import get_embedding_model_for_rag
 from shared.settings_store import load_settings
@@ -33,9 +34,14 @@ class RetrievalService:
         *,
         store: Optional[WorkspaceStore] = None,
         task_store: Any = None,
+        exact_service: Optional[ExactSearchService] = None,
     ) -> None:
         self.store = store or workspace_search_service.WorkspaceStore()
         self.task_store = task_store
+        self.exact_service = exact_service or ExactSearchService(
+            store=self.store,
+            task_store=task_store,
+        )
 
     def search(
         self,
@@ -49,6 +55,16 @@ class RetrievalService:
     ) -> Dict[str, Any]:
         """Search using one public contract."""
 
+        if mode == "exact":
+            result = self.exact_service.search(
+                query,
+                workspace_ids=workspace_ids,
+                item_types=item_types,
+                tags=tags,
+                top_k=top_k,
+            )
+            result["status"] = self.status()
+            return result
         if mode != "smart":
             raise ValueError(f"unsupported search mode: {mode}")
         result = workspace_search_service.search_across_workspaces(

@@ -59,10 +59,11 @@ export function SearchResultView({ result, workspaces, onWorkspaceChange }: Prop
 
   return (
     <>
-      <section className="search-answer" aria-label="智能回答">
-        <div className="search-answer-label">智能回答</div>
-        <div className="search-answer-body">{result.answer || '（模型未返回内容）'}</div>
-        {result.sources.length > 0 && (
+      {result.mode !== 'exact' && (
+        <section className="search-answer" aria-label="智能回答">
+          <div className="search-answer-label">智能回答</div>
+          <div className="search-answer-body">{result.answer || '（模型未返回内容）'}</div>
+          {result.sources.length > 0 && (
           <div className="search-citations" aria-label="回答引用">
             {result.sources.map((source, index) => (
               <button
@@ -75,12 +76,13 @@ export function SearchResultView({ result, workspaces, onWorkspaceChange }: Prop
               </button>
             ))}
           </div>
-        )}
-      </section>
+          )}
+        </section>
+      )}
 
       <section aria-label="原文来源">
         <div className="search-sources-heading">
-          原文来源（{result.sources.length}）
+          {result.mode === 'exact' ? '原文结果' : '原文来源'}（{result.sources.length}）
         </div>
         <ul className="search-source-list">
           {result.sources.map((source, index) => {
