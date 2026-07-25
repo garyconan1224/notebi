@@ -35,7 +35,6 @@ const ResultsOverview = lazy(() => import('@/pages/result/ResultsOverview/index'
 const FavoritesPage = lazy(() => import('@/pages/FavoritesPage/FavoritesPage'))
 const SearchPage = lazy(() => import('@/pages/SearchPage/SearchPage'))
 const WorkbenchPage = lazy(() => import('@/pages/WorkbenchPage/index'))
-const KnowledgePage = lazy(() => import('@/pages/KnowledgePage/index'))
 const ProcessingPage = lazy(() => import('@/pages/result/ProcessingPage/index'))
 const BatchProcessingPage = lazy(() => import('@/pages/result/BatchProcessingPage/index'))
 const LibraryPage = lazy(() => import('@/pages/LibraryPage/index'))
@@ -77,7 +76,7 @@ export const router = createBrowserRouter([
       { path: 'search', element: withSuspense(<SearchPage />) },
       { path: 'library', element: withSuspense(<LibraryPage />) },
       { path: 'notes', element: withSuspense(<LibraryPage />) },
-      { path: 'knowledge', element: withSuspense(<KnowledgePage />) },
+      { path: 'knowledge', element: <Navigate to="/search" replace /> },
       { path: 'workspaces/:id', element: withSuspense(<TaskboardPage />) },
       {
         path: 'workspaces/:workspaceId/items/:itemId/overview',

@@ -154,6 +154,78 @@
   cursor: not-allowed;
 }
 
+.nibi-search-scope .search-index-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--r);
+  background: var(--srf);
+  color: var(--fg2);
+  font-family: var(--fm);
+  font-size: var(--xs);
+}
+
+.nibi-search-scope .search-index-status:hover:not(:disabled) {
+  border-color: var(--bdrs);
+  color: var(--fg);
+}
+
+.nibi-search-scope .search-source-list > li {
+  scroll-margin: 24px;
+  transition: box-shadow 160ms, border-color 160ms;
+}
+
+.nibi-search-scope .search-source-list > li.is-highlighted {
+  border-color: var(--acc);
+  box-shadow: var(--shf);
+}
+
+.nibi-search-scope .search-source-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.nibi-search-scope .search-source-actions button,
+.nibi-search-scope .search-source-actions a,
+.nibi-search-scope .search-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  border-radius: var(--rs);
+  background: transparent;
+  color: var(--mut);
+}
+
+.nibi-search-scope .search-source-actions button,
+.nibi-search-scope .search-source-actions a {
+  padding: 6px;
+}
+
+.nibi-search-scope .search-source-actions [data-active='true'] {
+  color: var(--wrn);
+}
+
+.nibi-search-scope .search-source-context {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: var(--r);
+  background: var(--bgalt);
+  color: var(--fg2);
+  font-size: var(--sm);
+}
+
+.nibi-search-scope .search-expand-btn {
+  margin-top: 6px;
+  padding: 4px 0;
+  font-size: var(--xs);
+}
+
 /* AI RAG badge */
 .nibi-search-scope .search-rag-badge {
   display: inline-flex;

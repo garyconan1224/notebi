@@ -1,0 +1,119 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import SearchPage from '@/pages/SearchPage/SearchPage'
+import type { WorkspaceRecord } from '@/types/workspace'
+import * as knowledge from '@/services/knowledge'
+import * as search from '@/services/search'
+import * as workspaces from '@/services/workspaces'
+
+vi.mock('@/services/knowledge')
+vi.mock('@/services/search')
+vi.mock('@/services/workspaces')
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
+}))
+
+const workspace: WorkspaceRecord = {
+  workspace_id: 'ws-1',
+  name: '产品研究',
+  status: 'active',
+  trashed: false,
+  background: {
+    content_type: '',
+    participants: [],
+    topic: '',
+    glossary: [],
+    purpose: '',
+  },
+  items: [],
+  favorites: [],
+  created_at: '2026-07-25T00:00:00Z',
+  updated_at: '2026-07-25T00:00:00Z',
+  kind: 'note',
+  source: 'manual',
+}
+
+const status: knowledge.KnowledgeStatus = {
+  ready: true,
+  running: false,
+  workspace_count: 1,
+  indexable_workspace_count: 1,
+  indexed_workspace_count: 1,
+  item_count: 1,
+  indexed_item_count: 1,
+  stale_workspace_ids: [],
+  last_indexed_at: '2026-07-25T00:00:00Z',
+  embedding_model: 'offline',
+  rebuild: {
+    running: false,
+    started_at: null,
+    finished_at: null,
+    error: null,
+    processed_workspaces: 1,
+    total_workspaces: 1,
+  },
+}
+
+describe('SearchPage', () => {
+  beforeEach(() => {
+    vi.mocked(workspaces.listWorkspaces).mockResolvedValue([workspace])
+    vi.mocked(knowledge.getKnowledgeStatus).mockResolvedValue(status)
+    vi.mocked(search.searchGlobal).mockResolvedValue({
+      answer: '离线搜索见来源 [1]',
+      sources: [{
+        source_id: 'ws-1:item-1',
+        workspace_id: 'ws-1',
+        workspace_name: '产品研究',
+        item_id: 'item-1',
+        item_type: 'video',
+        item_title: '发布会',
+        chunk_excerpt: '支持离线搜索',
+        excerpt: '支持离线搜索',
+        field: 'transcript',
+        segment_id: 'transcript-0',
+        start_ms: 10_000,
+        end_ms: 18_000,
+        score: 0.9,
+        jump_url: '/workspaces/ws-1/items/item-1/video_detail?start_ms=10000',
+      }],
+      mode: 'smart',
+      status,
+    })
+    Element.prototype.scrollIntoView = vi.fn()
+  })
+
+  it('shows smart answer and navigable evidence', async () => {
+    render(<MemoryRouter><SearchPage /></MemoryRouter>)
+    await screen.findByText('索引已就绪')
+    fireEvent.change(screen.getByPlaceholderText(/哪些内容提到了/), {
+      target: { value: '离线搜索' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '执行智能检索' }))
+
+    expect(await screen.findByText('离线搜索见来源 [1]')).toBeTruthy()
+    expect(screen.getByText('支持离线搜索')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '查看来源 1' }))
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
+  })
+
+  it('updates favorite state from a source card', async () => {
+    vi.mocked(workspaces.favoriteItem).mockResolvedValue({
+      ...workspace,
+      favorites: ['item-1'],
+    })
+    render(<MemoryRouter><SearchPage /></MemoryRouter>)
+    await screen.findByText('索引已就绪')
+    fireEvent.change(screen.getByPlaceholderText(/哪些内容提到了/), {
+      target: { value: '离线搜索' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '执行智能检索' }))
+    await screen.findByText('支持离线搜索')
+    fireEvent.click(screen.getByRole('button', { name: '收藏来源' }))
+
+    await waitFor(() => {
+      expect(workspaces.favoriteItem).toHaveBeenCalledWith('ws-1', 'item-1')
+    })
+  })
+})

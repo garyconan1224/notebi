@@ -65,7 +65,8 @@ describe('NoteBi-only UI', () => {
 
     expect(screen.getByText('NoteBi')).toBeTruthy()
     expect(screen.getByText('笔记')).toBeTruthy()
-    expect(screen.getByText('知识库')).toBeTruthy()
+    expect(screen.getByText('智能检索')).toBeTruthy()
+    expect(screen.queryByText('知识库')).toBeNull()
     expect(screen.queryByText('复刻')).toBeNull()
     expect(screen.queryByText('分镜')).toBeNull()
     expect(screen.queryByText('AI 导演')).toBeNull()
