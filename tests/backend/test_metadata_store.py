@@ -92,3 +92,46 @@ def test_favorite_export_import_is_idempotent_and_skips_missing_content(
 
     assert first == {"imported": 1, "skipped": 1}
     assert second == {"imported": 0, "skipped": 1}
+
+
+# ── R3-A: all_favorite_items 测试 ──────────────────────────────
+
+
+def test_all_favorite_items_returns_cross_group_entries(tmp_path: Path) -> None:
+    """all_favorite_items 返回所有分组下的收藏，含 group_ids 聚合。"""
+    store = MetadataStore(tmp_path / "metadata.sqlite3")
+    store.set_favorite("ws_a", "content_1")
+    group = store.create_favorite_group("稍后阅读")
+    store.set_favorite("ws_a", "content_1", group["group_id"])
+    store.set_favorite("ws_b", "content_2")
+
+    items = store.all_favorite_items()
+    # content_1 出现在两个 group 中，应聚合为一条
+    by_key = {(i["workspace_id"], i["content_id"]): i for i in items}
+    assert len(by_key) == 2
+    entry = by_key[("ws_a", "content_1")]
+    assert set(entry["group_ids"]) == {"default", group["group_id"]}
+    assert entry["favorited_at"]  # ISO string
+
+
+def test_all_favorite_items_group_filter(tmp_path: Path) -> None:
+    """group_id 过滤只返回该分组下的收藏。"""
+    store = MetadataStore(tmp_path / "metadata.sqlite3")
+    store.set_favorite("ws_a", "content_1")
+    group = store.create_favorite_group("精选")
+    store.set_favorite("ws_b", "content_2", group["group_id"])
+
+    filtered = store.all_favorite_items(group_id=group["group_id"])
+    assert len(filtered) == 1
+    assert filtered[0]["content_id"] == "content_2"
+
+
+def test_all_favorite_items_ordered_by_favorited_at_desc(tmp_path: Path) -> None:
+    """结果按 favorited_at 倒序。"""
+    store = MetadataStore(tmp_path / "metadata.sqlite3")
+    store.set_favorite("ws_a", "old_content")
+    store.set_favorite("ws_a", "new_content")
+
+    items = store.all_favorite_items()
+    assert items[0]["content_id"] == "new_content"
+    assert items[1]["content_id"] == "old_content"

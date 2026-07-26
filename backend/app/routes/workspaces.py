@@ -2790,6 +2790,53 @@ def export_favorite_metadata() -> Dict[str, Any]:
     return _metadata.export_favorites()
 
 
+@router.get("/metadata/favorites/resolved")
+def resolved_favorites(
+    group_id: Optional[str] = Query(default=None),
+) -> List[Dict[str, Any]]:
+    """R3-A：已解析收藏数据源。
+
+    解析所有未软删除 workspace（含 __inbox__）中的收藏，
+    按 (workspace_id, content_id) 解析，跳过丢失/已删除内容。
+    """
+    raw_items = _metadata.all_favorite_items(group_id=group_id)
+    # 构建 workspace 索引（含 inbox，排除 trashed）
+    all_recs = _store.list_all(include_trashed=True)
+    ws_index: Dict[str, WorkspaceRecord] = {
+        r.workspace_id: r for r in all_recs if not r.trashed
+    }
+    resolved: List[Dict[str, Any]] = []
+    for entry in raw_items:
+        ws_id = entry["workspace_id"]
+        content_id = entry["content_id"]
+        rec = ws_index.get(ws_id)
+        if rec is None:
+            continue  # workspace 不存在或已软删除
+        # 按 content_id 查找 item
+        item = next(
+            (it for it in rec.items if it.content_id == content_id), None
+        )
+        if item is None:
+            continue  # item 已丢失
+        # 构建 jump_url
+        if item.type in ("audio", "note"):
+            jump_url = f"/workspaces/{ws_id}/items/{item.item_id}/note"
+        else:
+            jump_url = f"/workspaces/{ws_id}/items/{item.item_id}/result"
+        resolved.append({
+            "workspace_id": ws_id,
+            "workspace_name": rec.name,
+            "item_id": item.item_id,
+            "content_id": content_id,
+            "item_name": item.name or item.source_value,
+            "item_type": item.type,
+            "group_ids": entry["group_ids"],
+            "favorited_at": entry["favorited_at"],
+            "jump_url": jump_url,
+        })
+    return resolved
+
+
 @router.post("/metadata/favorites/import")
 def import_favorite_metadata(req: FavoriteImportRequest) -> Dict[str, int]:
     records = _store.list_all(include_trashed=True)

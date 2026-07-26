@@ -283,6 +283,43 @@ class MetadataStore:
             )]
         return {"schema_version": 1, "groups": groups, "items": items}
 
+    def all_favorite_items(
+        self, group_id: Optional[str] = None,
+    ) -> list[dict[str, Any]]:
+        """返回所有收藏条目，按 (workspace_id, content_id) 聚合 group_ids。
+
+        结果按 favorited_at 倒序。可选 group_id 过滤。
+        """
+        with self._connect() as db:
+            if group_id:
+                rows = db.execute(
+                    "SELECT workspace_id, content_id, note, created_at, group_id "
+                    "FROM favorite_items WHERE group_id=? ORDER BY created_at DESC",
+                    (group_id,),
+                ).fetchall()
+            else:
+                rows = db.execute(
+                    "SELECT workspace_id, content_id, note, created_at, group_id "
+                    "FROM favorite_items ORDER BY created_at DESC",
+                ).fetchall()
+
+        # 按 (workspace_id, content_id) 聚合
+        aggregated: dict[tuple[str, str], dict[str, Any]] = {}
+        for row in rows:
+            key = (str(row["workspace_id"]), str(row["content_id"]))
+            if key not in aggregated:
+                aggregated[key] = {
+                    "workspace_id": key[0],
+                    "content_id": key[1],
+                    "note": str(row["note"]),
+                    "favorited_at": str(row["created_at"]),
+                    "group_ids": [],
+                }
+            aggregated[key]["group_ids"].append(str(row["group_id"]))
+
+        # 按 favorited_at 倒序（第一次出现的时间即最新，因为 SQL 已 DESC）
+        return list(aggregated.values())
+
     def import_favorites(
         self, payload: dict[str, Any], valid_content_ids: set[str],
     ) -> dict[str, int]:
