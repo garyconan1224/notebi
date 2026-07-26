@@ -125,6 +125,157 @@
   border-color: var(--color-accent);
 }
 
+/* ─── Scope Picker (popover) ─── */
+.nibi-search-scope .scope-picker {
+  position: relative;
+}
+
+.nibi-search-scope .scope-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 120ms;
+}
+
+.nibi-search-scope .scope-picker-trigger:hover,
+.nibi-search-scope .scope-picker-trigger:focus {
+  border-color: var(--color-accent);
+}
+
+.nibi-search-scope .scope-picker-label {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nibi-search-scope .scope-picker-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  width: 260px;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: var(--color-surface);
+  box-shadow: 0 8px 24px color-mix(in oklch, var(--color-fg) 12%, transparent);
+  overflow: hidden;
+}
+
+.nibi-search-scope .scope-picker-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-muted);
+}
+
+.nibi-search-scope .scope-picker-search input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--color-fg);
+  font-size: var(--text-xs);
+  outline: none;
+}
+
+.nibi-search-scope .scope-picker-search input::placeholder {
+  color: var(--color-muted);
+}
+
+.nibi-search-scope .scope-picker-actions {
+  display: flex;
+  gap: 4px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.nibi-search-scope .scope-picker-action-btn {
+  padding: 3px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 100ms, color 100ms;
+}
+
+.nibi-search-scope .scope-picker-action-btn:hover {
+  background: var(--color-bg-alt);
+  color: var(--color-fg);
+}
+
+.nibi-search-scope .scope-picker-action-btn[data-active='true'] {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.nibi-search-scope .scope-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.nibi-search-scope .scope-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 12px;
+  border: none;
+  background: transparent;
+  color: var(--color-fg);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  text-align: left;
+  transition: background 100ms;
+}
+
+.nibi-search-scope .scope-picker-item:hover {
+  background: var(--color-bg-alt);
+}
+
+.nibi-search-scope .scope-picker-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--color-accent);
+}
+
+.nibi-search-scope .scope-picker-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nibi-search-scope .scope-picker-empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+}
+
 /* 语义/关键词模式 toggle */
 .nibi-search-scope .search-mode-group {
   display: flex;

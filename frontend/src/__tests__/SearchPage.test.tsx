@@ -35,14 +35,20 @@ const workspace: WorkspaceRecord = {
   source: 'manual',
 }
 
+const workspace2: WorkspaceRecord = {
+  ...workspace,
+  workspace_id: 'ws-2',
+  name: '技术文档',
+}
+
 const status: knowledge.KnowledgeStatus = {
   ready: true,
   running: false,
-  workspace_count: 1,
-  indexable_workspace_count: 1,
-  indexed_workspace_count: 1,
-  item_count: 1,
-  indexed_item_count: 1,
+  workspace_count: 2,
+  indexable_workspace_count: 2,
+  indexed_workspace_count: 2,
+  item_count: 2,
+  indexed_item_count: 2,
   stale_workspace_ids: [],
   last_indexed_at: '2026-07-25T00:00:00Z',
   embedding_model: 'offline',
@@ -51,14 +57,14 @@ const status: knowledge.KnowledgeStatus = {
     started_at: null,
     finished_at: null,
     error: null,
-    processed_workspaces: 1,
-    total_workspaces: 1,
+    processed_workspaces: 2,
+    total_workspaces: 2,
   },
 }
 
 describe('SearchPage', () => {
   beforeEach(() => {
-    vi.mocked(workspaces.listWorkspaces).mockResolvedValue([workspace])
+    vi.mocked(workspaces.listWorkspaces).mockResolvedValue([workspace, workspace2])
     vi.mocked(knowledge.getKnowledgeStatus).mockResolvedValue(status)
     vi.mocked(search.searchGlobal).mockResolvedValue({
       answer: '离线搜索见来源 [1]',
@@ -82,6 +88,16 @@ describe('SearchPage', () => {
       status,
     })
     Element.prototype.scrollIntoView = vi.fn()
+    localStorage.clear()
+  })
+
+  it('shows knowledge base title and mode labels', async () => {
+    render(<MemoryRouter><SearchPage /></MemoryRouter>)
+    expect(await screen.findByText('知识库')).toBeTruthy()
+    expect(screen.getAllByText('问知识库').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('查找原文').length).toBeGreaterThanOrEqual(1)
+    expect(screen.queryByText('智能检索')).toBeNull()
+    expect(screen.queryByText('智能回答')).toBeNull()
   })
 
   it('shows smart answer and navigable evidence', async () => {
@@ -90,12 +106,54 @@ describe('SearchPage', () => {
     fireEvent.change(screen.getByPlaceholderText(/哪些内容提到了/), {
       target: { value: '离线搜索' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '执行智能检索' }))
+    fireEvent.click(screen.getByRole('button', { name: '执行知识库检索' }))
 
     expect(await screen.findByText('离线搜索见来源 [1]')).toBeTruthy()
     expect(screen.getByText('支持离线搜索')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '查看来源 1' }))
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
+  })
+
+  it('passes all scope (no workspaceIds) by default', async () => {
+    render(<MemoryRouter><SearchPage /></MemoryRouter>)
+    await screen.findByText('索引已就绪')
+    fireEvent.change(screen.getByPlaceholderText(/哪些内容提到了/), {
+      target: { value: '测试' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '执行知识库检索' }))
+    await waitFor(() => {
+      expect(search.searchGlobal).toHaveBeenCalledWith('测试', expect.objectContaining({
+        workspaceIds: undefined,
+      }))
+    })
+  })
+
+  it('passes selected workspaceIds when scope is selected', async () => {
+    render(<MemoryRouter><SearchPage /></MemoryRouter>)
+    await screen.findByText('索引已就绪')
+
+    // Open scope picker and select one workspace
+    fireEvent.click(screen.getByRole('button', { name: '知识库范围' }))
+    // Click on '产品研究' option
+    const options = screen.getAllByRole('option')
+    fireEvent.click(options[0]) // ws-1
+
+    fireEvent.change(screen.getByPlaceholderText(/哪些内容提到了/), {
+      target: { value: '测试多选' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '执行知识库检索' }))
+    await waitFor(() => {
+      expect(search.searchGlobal).toHaveBeenCalledWith('测试多选', expect.objectContaining({
+        workspaceIds: ['ws-1'],
+      }))
+    })
+  })
+
+  it('scope picker shows summary text', async () => {
+    render(<MemoryRouter><SearchPage /></MemoryRouter>)
+    await screen.findByText('索引已就绪')
+    // Default is "全部合集"
+    expect(screen.getByText('全部合集')).toBeTruthy()
   })
 
   it('updates favorite state from a source card', async () => {
@@ -108,7 +166,7 @@ describe('SearchPage', () => {
     fireEvent.change(screen.getByPlaceholderText(/哪些内容提到了/), {
       target: { value: '离线搜索' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '执行智能检索' }))
+    fireEvent.click(screen.getByRole('button', { name: '执行知识库检索' }))
     await screen.findByText('支持离线搜索')
     fireEvent.click(screen.getByRole('button', { name: '收藏来源' }))
 

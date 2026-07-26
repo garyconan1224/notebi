@@ -22,7 +22,7 @@ vi.mock('@/components/ui/skeleton', () => ({
 
 // We need to import the router AFTER mocks are set up
 // Instead, test the route config directly by re-creating the relevant routes
-import { Navigate, redirect, Outlet } from 'react-router-dom'
+import { redirect, Outlet } from 'react-router-dom'
 
 function makeTestRoutes() {
   // Mirror the production router's knowledge/search routes

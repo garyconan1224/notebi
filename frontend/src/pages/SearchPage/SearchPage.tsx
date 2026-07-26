@@ -10,6 +10,12 @@ import type { WorkspaceRecord } from '@/types/workspace'
 import { SearchResultView } from './SearchResultView'
 import { SearchEmptyState } from './SearchEmptyState'
 import { useSearchSuggestions } from './useSearchSuggestions'
+import {
+  KnowledgeScopePicker,
+  loadPersistedScope,
+  persistScope,
+  type KnowledgeScope,
+} from './KnowledgeScopePicker'
 
 import './search.css'
 
@@ -32,7 +38,7 @@ function saveHistory(query: string): string[] {
 
 export default function SearchPage() {
   const [query, setQuery] = useState('')
-  const [scope, setScope] = useState('__all__')
+  const [scope, setScope] = useState<KnowledgeScope>({ type: 'all', workspaceIds: [] })
   const [mode, setMode] = useState<'smart' | 'exact'>('smart')
   const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([])
   const [status, setStatus] = useState<KnowledgeStatus | null>(null)
@@ -47,8 +53,10 @@ export default function SearchPage() {
       const [records, currentStatus] = await Promise.all([listWorkspaces(), getKnowledgeStatus()])
       setWorkspaces(records)
       setStatus(currentStatus)
+      // 从 localStorage 恢复范围，过滤已不存在的 ID
+      setScope(loadPersistedScope(records))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '加载智能检索状态失败')
+      toast.error(error instanceof Error ? error.message : '加载知识库状态失败')
     }
   }, [])
 
@@ -56,10 +64,19 @@ export default function SearchPage() {
     void loadInitial()
   }, [loadInitial])
 
+  const handleScopeChange = useCallback((next: KnowledgeScope) => {
+    setScope(next)
+    persistScope(next)
+  }, [])
+
   const runSearch = useCallback(async (value: string) => {
     const trimmed = value.trim()
     if (!trimmed) {
       toast.warning('请输入要查找的问题')
+      return
+    }
+    if (scope.type === 'selected' && scope.workspaceIds.length === 0) {
+      toast.warning('请至少选择一个合集')
       return
     }
     setLoading(true)
@@ -69,12 +86,12 @@ export default function SearchPage() {
       const response = await searchGlobal(trimmed, {
         mode,
         topK: 10,
-        workspaceIds: scope === '__all__' ? undefined : [scope],
+        workspaceIds: scope.type === 'all' ? undefined : [...new Set(scope.workspaceIds)],
       })
       setResult(response)
       if (response.status) setStatus(response.status)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '智能检索失败')
+      toast.error(error instanceof Error ? error.message : '知识库检索失败')
     } finally {
       setLoading(false)
     }
@@ -102,8 +119,8 @@ export default function SearchPage() {
     <div className="nibi-search-scope">
       <header className="search-hero">
         <div className="search-hero-inner">
-          <span className="search-kicker">Smart Search · Evidence First</span>
-          <h1 className="search-title">智能检索</h1>
+          <span className="search-kicker">Knowledge Base · Evidence First</span>
+          <h1 className="search-title">知识库</h1>
           <p className="search-subtitle">先给出答案，再把每条结论落回可跳转的原文证据。</p>
           <div className="search-input-row">
             <div className="search-input-wrap">
@@ -127,38 +144,30 @@ export default function SearchPage() {
             </div>
             <button
               className="search-btn"
-              aria-label="执行智能检索"
+              aria-label="执行知识库检索"
               onClick={() => void runSearch(query)}
               disabled={loading || !query.trim()}
             >
               {loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-              {loading ? '检索中' : mode === 'smart' ? '智能回答' : '精确查找'}
+              {loading ? '检索中' : mode === 'smart' ? '问知识库' : '查找原文'}
             </button>
           </div>
           <div className="search-options">
-            <select
-              className="search-scope-select"
-              value={scope}
-              onChange={event => setScope(event.target.value)}
-              aria-label="检索合集范围"
-            >
-              <option value="__all__">全部合集</option>
-              {workspaces.map(workspace => (
-                <option key={workspace.workspace_id} value={workspace.workspace_id}>
-                  {workspace.name}
-                </option>
-              ))}
-            </select>
+            <KnowledgeScopePicker
+              workspaces={workspaces}
+              scope={scope}
+              onChange={handleScopeChange}
+            />
             <div className="search-mode-group" aria-label="检索方式">
               <button className="search-mode-btn" data-active={mode === 'smart'}
                 type="button" aria-pressed={mode === 'smart'}
                 onClick={() => setMode('smart')}>
-                智能回答
+                问知识库
               </button>
               <button className="search-mode-btn" data-active={mode === 'exact'}
                 type="button" aria-pressed={mode === 'exact'}
                 onClick={() => setMode('exact')}>
-                精确查找
+                查找原文
               </button>
             </div>
             <button
