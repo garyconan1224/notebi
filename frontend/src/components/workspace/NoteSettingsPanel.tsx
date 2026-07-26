@@ -1,4 +1,4 @@
-import { ChevronDown, Settings2, Wand2 } from 'lucide-react'
+import { Settings2, Wand2 } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -58,9 +58,6 @@ export interface NoteSettingsPanelProps {
   frameInterval: number
   onFrameIntervalChange: (value: number) => void
   videoDuration: number
-  advancedOpen: boolean
-  onAdvancedOpenChange: (updater: (prev: boolean) => boolean) => void
-  advancedSummary: string
   userNotes: string
   onUserNotesChange: (value: string) => void
 }
@@ -92,9 +89,6 @@ export function NoteSettingsPanel({
   frameInterval,
   onFrameIntervalChange,
   videoDuration,
-  advancedOpen,
-  onAdvancedOpenChange,
-  advancedSummary,
   userNotes,
   onUserNotesChange,
 }: NoteSettingsPanelProps) {
@@ -296,37 +290,15 @@ export function NoteSettingsPanel({
           </div>
         )}
         <div style={{ marginTop: showFrameAnalysisSettings ? 12 : 14 }}>
-          <button
-            type="button"
-            className="accordion-trigger"
-            onClick={() => onAdvancedOpenChange(v => !v)}
-          >
-            <Settings2 size={14} />
-            <span>高级设置</span>
-            <span className="kw" style={{ fontSize: 11 }}>{advancedSummary}</span>
-            <ChevronDown
-              size={14}
-              style={{
-                marginLeft: 'auto',
-                transition: 'transform 0.2s',
-                transform: advancedOpen ? 'rotate(180deg)' : undefined,
-                color: 'var(--mut)',
-              }}
+          <div className="gen-field">
+            <span className="gen-field-label">补充说明</span>
+            <Textarea
+              value={userNotes}
+              onChange={(e) => onUserNotesChange(e.target.value)}
+              placeholder="可选：输入额外要求或上下文，会在生成时附加给模型"
+              style={{ fontSize: 13, minHeight: 60 }}
             />
-          </button>
-          {advancedOpen && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14 }}>
-              <div className="gen-field">
-                <span className="gen-field-label">补充说明</span>
-                <Textarea
-                  value={userNotes}
-                  onChange={(e) => onUserNotesChange(e.target.value)}
-                  placeholder="可选：输入额外要求或上下文，会在生成时附加给模型"
-                  style={{ fontSize: 13, minHeight: 60 }}
-                />
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       </>
     </div>

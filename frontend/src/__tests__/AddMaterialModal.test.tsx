@@ -460,7 +460,7 @@ describe('AddMaterialModal', () => {
     expect(screen.queryByText('视觉模型')).toBeNull()
     expect(screen.queryByText('取画面')).toBeNull()
     expect(screen.getByText('区分说话人')).toBeTruthy()
-    expect(screen.queryByPlaceholderText(/可选：输入额外要求/)).toBeNull()
+    expect(screen.getByPlaceholderText(/可选：输入额外要求/)).toBeTruthy()
     expect(screen.queryByText('AI视频')).toBeNull()
     expect(screen.queryByText('分镜脚本')).toBeNull()
     expect(screen.queryByText('二创改写')).toBeNull()
@@ -473,7 +473,7 @@ describe('AddMaterialModal', () => {
     expect(screen.getByRole('combobox', { name: '预计说话人数' })).toBeTruthy()
     expect(screen.getByText('自动判断')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: /高级设置/ }))
+    // R5-C: 补充说明常驻，无需展开高级设置
     expect(screen.getByPlaceholderText(/可选：输入额外要求/)).toBeTruthy()
   })
 
@@ -550,5 +550,55 @@ describe('AddMaterialModal', () => {
       expect(screen.getByText('文章标题')).toBeTruthy()
       expect(screen.getByText('已识别网页')).toBeTruthy()
     })
+  })
+
+  it('R5-C: 双栏结构——左栏来源+合集，右栏笔记设置', () => {
+    render(
+      <AddMaterialModal
+        open
+        onOpenChange={vi.fn()}
+        workspaceIds={['ws-1']}
+      />,
+    )
+    const cols = document.body.querySelector('.m-body-cols')
+    expect(cols).toBeTruthy()
+    const left = cols!.querySelector('.m-col-left')
+    const right = cols!.querySelector('.m-col-right')
+    expect(left).toBeTruthy()
+    expect(right).toBeTruthy()
+    // 左栏包含素材源和合集归属
+    expect(left!.textContent).toContain('① 素材源')
+    expect(left!.textContent).toContain('② 合集归属')
+    // 右栏包含笔记设置
+    expect(right!.textContent).toContain('③ 笔记设置')
+  })
+
+  it('R5-C: 补充说明常驻，无高级设置折叠器', () => {
+    render(
+      <AddMaterialModal
+        open
+        onOpenChange={vi.fn()}
+        workspaceIds={['ws-1']}
+      />,
+    )
+    // 补充说明 textarea 始终可见
+    expect(screen.getByPlaceholderText(/可选：输入额外要求或上下文/)).toBeTruthy()
+    // 高级设置折叠器已删除
+    expect(screen.queryByText('高级设置')).toBeNull()
+  })
+
+  it('R5-C: 页脚固定显示状态摘要和开始生成', () => {
+    render(
+      <AddMaterialModal
+        open
+        onOpenChange={vi.fn()}
+        workspaceIds={['ws-1']}
+      />,
+    )
+    expect(screen.getByText('开始生成')).toBeTruthy()
+    // 页脚状态摘要包含“笔记”
+    const footer = document.body.querySelector('.m-foot')
+    expect(footer).toBeTruthy()
+    expect(footer!.textContent).toContain('笔记')
   })
 })

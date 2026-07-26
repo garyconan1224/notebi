@@ -265,7 +265,6 @@ export function AddMaterialModal({
   const [renamingWorkspaceId, setRenamingWorkspaceId] = useState<string | null>(null)
   const [workspaceNameDraft, setWorkspaceNameDraft] = useState('')
   const [workspaceNameOverrides, setWorkspaceNameOverrides] = useState<Record<string, string>>({})
-  const [advancedOpen, setAdvancedOpen] = useState(false) // 「高级设置」折叠
   const [existingPanelOpen, setExistingPanelOpen] = useState(false)
   const [existingLoading, setExistingLoading] = useState(false)
   const [existingAdding, setExistingAdding] = useState(false)
@@ -439,15 +438,8 @@ export function AddMaterialModal({
     selectedNoteType === 'video' || selectedNoteType === 'mixed' || (selectedNoteType === 'auto' && autoResolvedNoteType === 'video')
   const showAudioNoteSettings =
     selectedNoteType === 'audio' || (selectedNoteType === 'auto' && autoResolvedNoteType === 'audio')
-  const showImageTextNoteSettings =
-    selectedNoteType === 'image_text' || selectedNoteType === 'mixed' || (selectedNoteType === 'auto' && autoResolvedNoteType === 'image_text')
   const showFrameAnalysisSettings = showVideoNoteSettings
   const showSpeakerSettings = showVideoNoteSettings || showAudioNoteSettings
-  const advancedSummaryParts = [
-    ...(showImageTextNoteSettings ? ['图文理解'] : []),
-    '补充说明',
-  ]
-  const advancedSummary = advancedSummaryParts.join(' · ')
 
   const speakerAwareMedia = (showAudioNoteSettings || showVideoNoteSettings) && diarizeOn
   const selectedSpeakerCount = speakerCount === 'auto' ? undefined : Number(speakerCount)
@@ -498,7 +490,6 @@ export function AddMaterialModal({
     setCaptureMode('auto')
     setFrameInterval(5)
     setSelectedVisionModel('')
-    setAdvancedOpen(false)
     setWorkspaceQuery('')
     setWorkspacePickerOpen(false)
     setError(null)
@@ -948,7 +939,9 @@ export function AddMaterialModal({
         <div className="m-body">
           {error && <div className="modal-error">{error}</div>}
 
-          <MaterialSourcePanel
+          <div className="m-body-cols">
+            <div className="m-col-left">
+              <MaterialSourcePanel
             isLocalFile={isLocalFile}
             localCover={localCover}
             localFileType={localFileType}
@@ -1031,9 +1024,11 @@ export function AddMaterialModal({
             onCreateWorkspace={handleCreateWorkspace}
             onWorkspaceIdsChange={onWorkspaceIdsChange}
             hasOnCreateWorkspace={!!onCreateWorkspace}
-          />
+              />
+            </div>
 
-          <NoteSettingsPanel
+            <div className="m-col-right">
+              <NoteSettingsPanel
             selectedNoteType={selectedNoteType}
             onSelectedNoteTypeChange={setSelectedNoteType}
             noteTypeCards={NOTE_TYPE_CARDS}
@@ -1060,12 +1055,11 @@ export function AddMaterialModal({
             frameInterval={frameInterval}
             onFrameIntervalChange={setFrameInterval}
             videoDuration={videoDuration}
-            advancedOpen={advancedOpen}
-            onAdvancedOpenChange={setAdvancedOpen}
-            advancedSummary={advancedSummary}
             userNotes={userNotes}
             onUserNotesChange={setUserNotes}
-          />
+              />
+            </div>
+          </div>
         </div>
 
         <div className="m-foot">
