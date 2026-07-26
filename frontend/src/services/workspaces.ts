@@ -32,6 +32,18 @@ export interface FavoriteGroupItem {
   created_at: string
 }
 
+export interface ResolvedFavorite {
+  workspace_id: string
+  workspace_name: string
+  item_id: string
+  content_id: string
+  item_name: string
+  item_type: string
+  group_ids: string[]
+  favorited_at: string
+  jump_url: string
+}
+
 export interface WorkspaceFolder {
   folder_id: string
   workspace_id: string
@@ -80,6 +92,17 @@ export async function createFavoriteGroup(name: string): Promise<FavoriteGroup> 
   const res = await http.post<FavoriteGroup>(
     `${BASE}/metadata/favorite-groups`,
     { name },
+  )
+  return res.data
+}
+
+export async function listResolvedFavorites(
+  opts?: { group_id?: string },
+): Promise<ResolvedFavorite[]> {
+  const params = opts?.group_id ? { group_id: opts.group_id } : undefined
+  const res = await http.get<ResolvedFavorite[]>(
+    `${BASE}/metadata/favorites/resolved`,
+    { params },
   )
   return res.data
 }

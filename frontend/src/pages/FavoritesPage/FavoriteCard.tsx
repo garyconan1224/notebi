@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
+import { Star } from 'lucide-react'
 
-import { resolveItemRoute } from '@/lib/resolveItemRoute'
-import type { FavoriteEntry } from './FavoritesPage'
+import type { ResolvedFavorite } from '@/services/workspaces'
 
 const TYPE_LABEL: Record<string, string> = {
   video: 'VIDEO',
@@ -17,26 +17,38 @@ const COVER_CLASS: Record<string, string> = {
   text: 'cover-text',
 }
 
-export function FavoriteCard({ entry }: { entry: FavoriteEntry }) {
-  const { workspace, item } = entry
-  const kindLabel = '笔记收藏'
+interface Props {
+  entry: ResolvedFavorite
+  onUnfavorite: (entry: ResolvedFavorite) => void
+}
+
+export function FavoriteCard({ entry, onUnfavorite }: Props) {
   return (
-    <Link to={resolveItemRoute(workspace.workspace_id, item)}
-      style={{ textDecoration: 'none' }}>
-      <article className="note-card" data-kind={item.type}>
-        <div className={`note-cover ${COVER_CLASS[item.type] || 'cover-video'}`}>
-          <span className="media-chip">{TYPE_LABEL[item.type] || 'ITEM'}</span>
-          <span className="status-pill status-done">{kindLabel}</span>
+    <Link to={entry.jump_url} style={{ textDecoration: 'none' }}>
+      <article className="note-card" data-kind={entry.item_type}>
+        <div className={`note-cover ${COVER_CLASS[entry.item_type] || 'cover-video'}`}>
+          <span className="media-chip">{TYPE_LABEL[entry.item_type] || 'ITEM'}</span>
+          <button
+            className="fav-unfav-btn"
+            title="取消收藏"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onUnfavorite(entry)
+            }}
+          >
+            <Star size={14} fill="currentColor" />
+          </button>
         </div>
         <div className="note-card-body">
           <div className="note-title-row">
             <span className="note-type-dot" />
-            <h3>{item.name || item.source_value}</h3>
+            <h3>{entry.item_name}</h3>
           </div>
-          <p className="note-summary">{workspace.name} · {kindLabel}</p>
+          <p className="note-summary">{entry.workspace_name}</p>
           <div className="note-meta-row">
-            <span>笔记</span>
-            <span>更新于 {new Date(item.updated_at).toLocaleString()}</span>
+            <span>收藏</span>
+            <span>收藏于 {new Date(entry.favorited_at).toLocaleString()}</span>
           </div>
           <div className="note-card-actions">
             <span>收藏</span>
