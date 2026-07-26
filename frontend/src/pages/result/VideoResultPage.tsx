@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ArrowLeft, Check, CheckSquare, Copy, Download, FileText, ImageIcon, Maximize2, MinusSquare, Pause, Pencil, Play, Square, Star, X } from 'lucide-react'
 
@@ -142,6 +142,35 @@ export default function VideoResultPage() {
     [transcript],
   )
   const totalSec = result?.tracks_meta.total_sec ?? 0
+
+  // R2-C: 知识库深链接 — 读取 start_ms 并只消费一次
+  const [searchParams] = useSearchParams()
+  const deepLinkConsumed = useRef(false)
+  const [autoPlayBlocked, setAutoPlayBlocked] = useState(false)
+
+  useEffect(() => {
+    if (deepLinkConsumed.current) return
+    if (fetchState.kind !== 'ready') return
+    const startMs = searchParams.get('start_ms')
+    if (!startMs) return
+    const sec = parseInt(startMs, 10) / 1000
+    if (isNaN(sec) || sec < 0) return
+    deepLinkConsumed.current = true
+    // Wait for video element to be available
+    const trySeek = (attempts = 0) => {
+      const v = videoRef.current
+      if (v) {
+        v.currentTime = sec
+        setCurrentSec(sec)
+        v.play().catch(() => {
+          setAutoPlayBlocked(true)
+        })
+      } else if (attempts < 10) {
+        requestAnimationFrame(() => trySeek(attempts + 1))
+      }
+    }
+    requestAnimationFrame(() => trySeek())
+  }, [fetchState.kind, searchParams])
 
   // 加载 inline_frames + 推荐
   useEffect(() => {
@@ -785,6 +814,11 @@ export default function VideoResultPage() {
                 <div className="vd-play-btn-mini">
                   {playing ? <Pause size={14} /> : <Play size={14} />}
                 </div>
+                {autoPlayBlocked && !playing && (
+                  <div className="vd-autoplay-hint" onClick={() => { togglePlay(); setAutoPlayBlocked(false) }}>
+                    点击播放
+                  </div>
+                )}
                 <div className="vd-progress-mini">
                   <div className="vd-progress-mini-fill" style={{ width: `${progress * 100}%` }} />
                 </div>
