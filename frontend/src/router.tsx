@@ -73,10 +73,16 @@ export const router = createBrowserRouter([
         element: withSuspense(<WorkspaceList />),
       },
       { path: 'favorites', element: withSuspense(<FavoritesPage />) },
-      { path: 'search', element: withSuspense(<SearchPage />) },
+      { path: 'knowledge', element: withSuspense(<SearchPage />) },
+      {
+        path: 'search',
+        loader: ({ request }) => {
+          const url = new URL(request.url)
+          return redirect(`/knowledge${url.search}`)
+        },
+      },
       { path: 'library', element: withSuspense(<LibraryPage />) },
       { path: 'notes', element: withSuspense(<LibraryPage />) },
-      { path: 'knowledge', element: <Navigate to="/search" replace /> },
       { path: 'workspaces/:id', element: withSuspense(<TaskboardPage />) },
       {
         path: 'workspaces/:workspaceId/items/:itemId/overview',

@@ -43,7 +43,7 @@ const NAV_ITEMS: NavItem[] = [
 
 const BOTTOM_ITEMS: NavItem[] = [
   { id: 'favorites',   path: '/favorites',   icon: Star,       label: '收藏夹' },
-  { id: 'search',      path: '/search',      icon: Search,     label: '智能检索' },
+  { id: 'knowledge',   path: '/knowledge',   icon: Search,     label: '知识库' },
   { id: 'settings',    path: '/settings',    icon: Settings,   label: '设置' },
 ]
 
