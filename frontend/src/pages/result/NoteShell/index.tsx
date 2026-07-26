@@ -11,7 +11,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Bold, BookOpenCheck, Brain, Camera, Check, ChevronDown, Code2, Download, ExternalLink, FileDown, FileText, FileType, History, Image, Italic, List, MessageCircle, Minus, Pause, Pencil, Play, Plus, Presentation, Sparkles, Strikethrough, Subtitles, Trash2, Type, Underline, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -911,6 +911,33 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     audioRef.current?.seekTo(sec)
     mediaCompanionRef.current?.seekTo(sec)
   }, [])
+
+  // R2-D: 知识库深链接 — 读取 start_ms 并只消费一次
+  const [searchParams] = useSearchParams()
+  const deepLinkConsumed = useRef(false)
+
+  useEffect(() => {
+    if (deepLinkConsumed.current) return
+    if (loading || !note) return
+    const startMs = searchParams.get('start_ms')
+    if (!startMs) return
+    const sec = parseInt(startMs, 10) / 1000
+    if (isNaN(sec) || sec < 0) return
+    deepLinkConsumed.current = true
+    // Delay to allow media panels to mount
+    const timer = setTimeout(() => {
+      handleSeek(sec)
+      // Try play
+      const audio = audioRef.current
+      const video = videoRef.current
+      if (audio?.togglePlay) {
+        audio.togglePlay()
+      } else if (video?.togglePlay) {
+        video.togglePlay()
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [loading, note, searchParams, handleSeek])
 
   const transcriptLines = useMemo<VideoResultTranscriptLine[]>(() => (
     Array.isArray(note?.transcript) ? note.transcript as VideoResultTranscriptLine[] : []
