@@ -112,14 +112,14 @@ export default function FavoritesPage() {
 
   return (
     <div className="fav-page">
-      {/* Hero */}
-      <div className="lib-page-header">
-        <div>
+      {/* Hero：独立头部，不依赖 lib-page-header */}
+      <div className="fav-header">
+        <div className="fav-header-text">
           <div className="lib-kicker">FAVORITES · LOCAL</div>
           <h2>收藏夹</h2>
           <p>在工作区里点击星标即可把素材收藏到这里。</p>
         </div>
-        <div className="lib-actions">
+        <div className="fav-header-actions">
           <FavoriteTransferActions onImported={message => {
             setError(message)
             reload()

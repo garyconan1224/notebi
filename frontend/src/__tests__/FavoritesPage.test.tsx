@@ -157,4 +157,15 @@ describe('FavoritesPage (R3-B resolved)', () => {
       expect(screen.getByText('普通音频')).toBeTruthy()
     })
   })
+
+  it('R4-B: 头部使用独立 class 不依赖 lib-page-header', async () => {
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText('收藏夹')).toBeTruthy()
+    })
+    // 收藏夹头部不应使用 lib-page-header
+    const favHeader = document.querySelector('.fav-header')
+    expect(favHeader).toBeTruthy()
+    expect(favHeader!.textContent).toContain('收藏夹')
+  })
 })
