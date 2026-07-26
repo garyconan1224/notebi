@@ -146,7 +146,7 @@
 
 .nibi-search-scope .search-mode-btn[data-active='true'] {
   background: var(--color-accent);
-  color: var(--color-fg-on-accent);
+  color: var(--accfg);
 }
 
 .nibi-search-scope .search-mode-btn:disabled {
@@ -259,7 +259,7 @@
   border: none;
   border-radius: var(--radius-base);
   background: var(--color-accent);
-  color: var(--color-fg-on-accent);
+  color: var(--accfg);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;

@@ -93,7 +93,6 @@ export function WorkspaceCard({
   )
   const previewSlots = useMemo(() => getPreviewSlots(items), [items])
 
-  const progressPct = workspace.items_count === 0 ? 12 : Math.min(100, 28 + workspace.items_count * 24)
   const typeMix = Object.entries(workspace.items_count_by_type ?? {})
     .filter(([, count]) => count > 0)
     .map(([type, count]) => `${TYPE_NAME[type] ?? type} ${count}`)
@@ -249,10 +248,6 @@ export function WorkspaceCard({
           <span>合集</span>
           <span>{workspace.items_count} 项内容</span>
           <span>更新 {formatRelative(workspace.updated_at)}</span>
-        </div>
-
-        <div className="note-progress-mini">
-          <span style={{ width: `${progressPct}%` }} />
         </div>
 
         <div className="note-card-actions">

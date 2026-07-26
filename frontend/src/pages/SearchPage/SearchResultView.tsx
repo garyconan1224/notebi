@@ -1,17 +1,22 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Bookmark, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
+import { Bookmark, ChevronDown, ChevronUp, ExternalLink, File, FileText, Film, Image, Mic } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { favoriteItem, unfavoriteItem } from '@/services/workspaces'
 import type { SearchResponse } from '@/services/search'
 import { ITEM_TYPE_TEXT, type WorkspaceRecord } from '@/types/workspace'
 
-const TYPE_ICON: Record<string, string> = {
-  video: '🎬',
-  image: '🖼️',
-  audio: '🎙️',
-  text: '📝',
+const TYPE_ICON = {
+  video: Film,
+  image: Image,
+  audio: Mic,
+  text: FileText,
+} as const
+
+function TypeIcon({ type }: { type: string }) {
+  const Icon = TYPE_ICON[type as keyof typeof TYPE_ICON] ?? File
+  return <Icon size={18} strokeWidth={1.7} />
 }
 
 interface Props {
@@ -95,7 +100,7 @@ export function SearchResultView({ result, workspaces, onWorkspaceChange }: Prop
                 className={activeSource === source.source_id ? 'is-highlighted' : ''}
               >
                 <article className="search-source-item">
-                  <div className="search-source-cover">{TYPE_ICON[source.item_type] ?? '📄'}</div>
+                  <div className="search-source-cover"><TypeIcon type={source.item_type} /></div>
                   <div className="search-source-info">
                     <div className="search-source-title">
                       <span>[{index + 1}] {source.item_title || '（无标题）'}</span>

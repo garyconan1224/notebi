@@ -1430,7 +1430,7 @@ body.nibi-sidebar-compact .note-grid:not([class*="note-grid--cols-"]) { --nibi-c
   pointer-events: none;
 }
 .note-card:hover {
-  transform: translateY(-4px) scale(1.02);
+  transform: translateY(-2px);
   box-shadow: 0 12px 28px oklch(0% 0 0 / .12);
   border-color: var(--bdrs);
 }

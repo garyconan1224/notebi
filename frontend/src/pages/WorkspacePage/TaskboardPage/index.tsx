@@ -255,9 +255,9 @@ export default function TaskboardPage() {
 
       {/* ── 融合笔记置顶展示 ── */}
       {mergedNotes.length > 0 && (
-        <div style={{ margin: '16px 0', border: '1px solid var(--line)', borderRadius: 10, padding: 16, background: 'var(--bg-card)' }}>
+        <div style={{ margin: '16px 0', border: '1px solid var(--line)', borderRadius: 10, padding: 16, background: 'var(--srf)' }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-1)', marginBottom: 12 }}>
-            ✨ 融合笔记（{mergedNotes.length}）
+            融合笔记（{mergedNotes.length}）
           </div>
           {mergedNotes.map((mn) => (
             <details key={mn.merged_id} style={{ marginBottom: 8 }}>

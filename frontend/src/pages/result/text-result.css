@@ -343,7 +343,7 @@
   font-size: 9px;
   color: var(--ink-4);
   text-transform: uppercase;
-  letter-spacing: normal;
+  letter-spacing: 0.06em;
   margin-bottom: 4px;
 }
 

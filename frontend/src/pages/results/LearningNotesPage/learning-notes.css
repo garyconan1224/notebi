@@ -58,7 +58,7 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   background: var(--accent-2);
-  color: #fff;
+  color: var(--accfg);
 }
 
 .vm-ln-scope .ln-nav .ln-save-status {
@@ -961,13 +961,13 @@
 }
 
 .vm-ln-scope .ln-tr-status--error {
-  color: #b42318;
-  background: #fff1ef;
+  color: var(--err);
+  background: var(--errl);
 }
 
 .vm-ln-scope .ln-tr-status--warning {
-  color: #98630c;
-  background: #fff7e6;
+  color: var(--wrn);
+  background: var(--wrnl);
 }
 
 .vm-ln-scope .ln-tr-head-tools {
@@ -1310,17 +1310,17 @@
   padding: 10px 16px;
   border-radius: 9999px;
   border: none;
-  background: var(--color-violet-600, #7c3aed);
-  color: #fff;
+  background: var(--acc);
+  color: var(--accfg);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+  box-shadow: 0 4px 12px oklch(0% 0 0 / 0.18);
   transition: transform 0.15s, box-shadow 0.15s;
 }
 .ln-chat-fab:hover {
   transform: scale(1.05);
-  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.4);
+  box-shadow: 0 6px 16px oklch(0% 0 0 / 0.24);
 }
 
 /* 悬浮面板：fixed 右下角（外框样式；内部 UI 由 NoteChatDrawer.css 提供） */

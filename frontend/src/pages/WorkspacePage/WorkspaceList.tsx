@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Trash2, FolderOpen } from 'lucide-react'
+import { Plus, Trash2, FolderOpen, NotebookPen } from 'lucide-react'
 
 import { TagFilterBar } from '@/components/workspace/TagFilterBar'
 import { useTagFilter } from './useTagFilter'
@@ -182,7 +182,7 @@ export default function WorkspaceList() {
               size="sm"
               onClick={() => setKindFilter(k)}
             >
-              {k === 'all' ? '全部' : '📝 笔记'}
+              {k === 'all' ? '全部' : <><NotebookPen className="size-3.5" /> 笔记</>}
             </Button>
           ))}
         </div>
@@ -261,7 +261,7 @@ export default function WorkspaceList() {
                 variant="default"
                 size="sm"
               >
-                📝 笔记
+                <NotebookPen className="size-3.5" /> 笔记
               </Button>
             </div>
           </div>
@@ -325,8 +325,8 @@ function WorkspaceCard({ workspace, onOpen, onDelete }: WorkspaceCardProps) {
       <CardHeader className="flex-row items-start justify-between space-y-0">
         <div className="flex items-center gap-2">
           <CardTitle className="line-clamp-2 text-base">{workspace.name}</CardTitle>
-          <Badge variant="secondary" className="bg-blue-100 text-blue-700">
-            📝 笔记
+          <Badge variant="secondary" className="bg-primary/10 text-primary">
+            <NotebookPen className="size-3" /> 笔记
           </Badge>
         </div>
         <button

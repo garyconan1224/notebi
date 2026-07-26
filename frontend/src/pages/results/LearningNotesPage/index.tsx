@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Star, Download, ChevronDown } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
+import { toast } from 'sonner'
 import { getWorkspace, getLnMarkdown, getItemResult, patchLnMarkdown, exportLnObsidian } from '@/services/workspaces'
 import type { VideoResultTranscriptLine } from '@/services/workspaces'
 import type { WorkspaceRecord, WorkspaceItem, TranscriptTranslations } from '@/types/workspace'
@@ -95,7 +96,7 @@ export default function LearningNotesPage() {
       URL.revokeObjectURL(url)
     } catch (err) {
       console.error('Obsidian 导出失败:', err)
-      alert('Obsidian 包导出失败，请重试')
+      toast.error('Obsidian 包导出失败，请重试')
     }
     setExportMenuOpen(false)
   }, [pageState, safeExportName])
