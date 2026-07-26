@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -12,6 +13,39 @@ from backend.app.services.exact_search_service import ExactSearchService
 from backend.app.services.workspace_store import WorkspaceStore
 from shared.runtime_llm_config import get_embedding_model_for_rag
 from shared.settings_store import load_settings
+
+
+_CITATION_RE = re.compile(r"\[(\d+)\]")
+
+
+def _extract_citations(
+    answer: str, sources: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """Extract valid [n] citations from answer, map to source_id.
+
+    Rules:
+    - Only 1-based indices within range of sources are valid.
+    - Duplicates are removed (first occurrence wins).
+    - Out-of-range indices are silently discarded.
+    - Returns [] when no valid citations found.
+    """
+    if not answer or not sources:
+        return []
+    seen: set[int] = set()
+    citations: List[Dict[str, Any]] = []
+    for match in _CITATION_RE.finditer(answer):
+        num = int(match.group(1))
+        if num < 1 or num > len(sources):
+            continue
+        if num in seen:
+            continue
+        seen.add(num)
+        source = sources[num - 1]
+        citations.append({
+            "number": num,
+            "source_id": source.get("source_id", ""),
+        })
+    return citations
 
 
 def _now_iso() -> str:
@@ -63,6 +97,7 @@ class RetrievalService:
                 tags=tags,
                 top_k=top_k,
             )
+            result["citations"] = []
             result["status"] = self.status()
             return result
         if mode == "hybrid":
@@ -87,6 +122,10 @@ class RetrievalService:
                 top_k,
             )
             semantic["mode"] = "hybrid"
+            # Re-extract citations against fused sources
+            semantic["citations"] = _extract_citations(
+                semantic.get("answer", ""), semantic.get("sources", [])
+            )
             return semantic
         if mode != "smart":
             raise ValueError(f"unsupported search mode: {mode}")
@@ -110,6 +149,9 @@ class RetrievalService:
                 "",
             )
         result["mode"] = mode
+        result["citations"] = _extract_citations(
+            result.get("answer", ""), result.get("sources", [])
+        )
         result["status"] = self.status()
         return result
 

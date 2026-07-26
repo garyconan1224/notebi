@@ -13,6 +13,7 @@ from backend.app.models.workspace import WorkspaceItem, WorkspaceRecord
 from backend.app.routes import search as search_route
 from backend.app.services import workspace_knowledge as wk
 from backend.app.services import workspace_search_service as wss
+from backend.app.services.retrieval_service import RetrievalService, _extract_citations
 from backend.app.services.workspace_store import WorkspaceStore
 from shared import knowledge_base as kb
 
@@ -108,3 +109,63 @@ def test_global_search_unknown_workspace_id_returns_404(client: TestClient) -> N
     )
     assert resp.status_code == 404
     assert "ws_missing" in resp.json()["detail"]
+
+
+# ─── R2-A：引用映射契约测试 ───
+
+
+class TestExtractCitations:
+    """Unit tests for _extract_citations."""
+
+    def test_subset_citations(self) -> None:
+        sources = [
+            {"source_id": "a"},
+            {"source_id": "b"},
+            {"source_id": "c"},
+        ]
+        result = _extract_citations("见 [1] 和 [3]", sources)
+        assert result == [
+            {"number": 1, "source_id": "a"},
+            {"number": 3, "source_id": "c"},
+        ]
+
+    def test_duplicate_citations_deduped(self) -> None:
+        sources = [{"source_id": "x"}, {"source_id": "y"}]
+        result = _extract_citations("[1] 再次 [1] 和 [2]", sources)
+        assert result == [
+            {"number": 1, "source_id": "x"},
+            {"number": 2, "source_id": "y"},
+        ]
+
+    def test_out_of_range_discarded(self) -> None:
+        sources = [{"source_id": "only"}]
+        result = _extract_citations("[1] 和 [5] 和 [0]", sources)
+        assert result == [{"number": 1, "source_id": "only"}]
+
+    def test_no_citations_returns_empty(self) -> None:
+        sources = [{"source_id": "a"}]
+        assert _extract_citations("没有引用标记", sources) == []
+
+    def test_empty_answer_returns_empty(self) -> None:
+        assert _extract_citations("", [{"source_id": "a"}]) == []
+
+    def test_empty_sources_returns_empty(self) -> None:
+        assert _extract_citations("有 [1]", []) == []
+
+
+def test_global_search_response_includes_citations(client: TestClient) -> None:
+    """Smart mode response must include citations field."""
+    resp = client.post("/search", json={"query": "产品", "top_k": 5})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "citations" in data
+    assert isinstance(data["citations"], list)
+
+
+def test_exact_search_response_has_empty_citations(client: TestClient) -> None:
+    """Exact mode must return citations=[] (no AI answer)."""
+    resp = client.post("/search", json={"query": "产品", "mode": "exact"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["citations"] == []
+    assert data["answer"] == ""
