@@ -146,8 +146,8 @@ export default function WorkspaceList() {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 p-6">
-      {/* 顶部：标题 + 新建 */}
-      <header className="flex items-center justify-between">
+      {/* 顶部：标题 + 新建（R4-C: 窄屏上下堆叠） */}
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">合集</h1>
           <p className="mt-1 text-sm text-muted-foreground">

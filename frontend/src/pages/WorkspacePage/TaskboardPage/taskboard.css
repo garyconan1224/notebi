@@ -24,6 +24,10 @@
   margin: 0;
   line-height: 1.04;
 }
+/* R4-C: 防止左侧内容溢出 */
+.tb-head-l {
+  min-width: 0;
+}
 .tb-head-back {
   display: inline-flex;
   align-items: center;
@@ -866,6 +870,13 @@
 
   .qp-log {
     padding-left: 14px;
+  }
+}
+
+/* R4-C: 中等宽度头部换行 */
+@media (max-width: 900px) {
+  .tb-head {
+    flex-wrap: wrap;
   }
 }
 
