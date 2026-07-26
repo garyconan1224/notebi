@@ -28,9 +28,15 @@ export interface SearchSource {
   jump_url: string
 }
 
+export interface SearchCitation {
+  number: number
+  source_id: string
+}
+
 export interface SearchResponse {
   answer: string
   sources: SearchSource[]
+  citations?: SearchCitation[]
   mode?: 'smart' | 'exact' | 'hybrid'
   status?: import('./knowledge').KnowledgeStatus
 }

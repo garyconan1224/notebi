@@ -84,6 +84,7 @@ describe('SearchPage', () => {
         score: 0.9,
         jump_url: '/workspaces/ws-1/items/item-1/video_detail?start_ms=10000',
       }],
+      citations: [{ number: 1, source_id: 'ws-1:item-1' }],
       mode: 'smart',
       status,
     })
