@@ -52,9 +52,13 @@ describe('R2-D: NoteShell knowledge deep link', () => {
       </MemoryRouter>,
     )
 
-    await waitFor(() => {
-      expect(getItemNote).toHaveBeenCalledWith('ws-1', 'item-1')
-    })
+    // R2-D：NoteShell 通过 lazy 动态导入，并行负载下可能超过默认 1s，放宽到 5s
+    await waitFor(
+      () => {
+        expect(getItemNote).toHaveBeenCalledWith('ws-1', 'item-1')
+      },
+      { timeout: 5000 },
+    )
   })
 
   it('loads note without deep link params normally', async () => {
@@ -66,9 +70,12 @@ describe('R2-D: NoteShell knowledge deep link', () => {
       </MemoryRouter>,
     )
 
-    await waitFor(() => {
-      expect(getItemNote).toHaveBeenCalledWith('ws-1', 'item-1')
-    })
+    await waitFor(
+      () => {
+        expect(getItemNote).toHaveBeenCalledWith('ws-1', 'item-1')
+      },
+      { timeout: 5000 },
+    )
   })
 })
 

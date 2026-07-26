@@ -65,14 +65,15 @@ describe('NoteBi-only UI', () => {
 
     expect(screen.getByText('NoteBi')).toBeTruthy()
     expect(screen.getByText('笔记')).toBeTruthy()
-    expect(screen.getByText('智能检索')).toBeTruthy()
-    expect(screen.queryByText('知识库')).toBeNull()
+    // R1：智能检索已升级为正式入口“知识库”
+    expect(screen.getByText('知识库')).toBeTruthy()
+    expect(screen.queryByText('智能检索')).toBeNull()
     expect(screen.queryByText('复刻')).toBeNull()
     expect(screen.queryByText('分镜')).toBeNull()
     expect(screen.queryByText('AI 导演')).toBeNull()
   })
 
-  it('shows only the learning-note action in AddMaterialModal', () => {
+  it('renders the note-only AddMaterialModal without the learning-note action card', () => {
     render(
       <MemoryRouter>
         <AddMaterialModal
@@ -83,7 +84,8 @@ describe('NoteBi-only UI', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('学习笔记')).toBeTruthy()
+    // R5-A：删除“学习笔记”action 卡，固定为笔记流程
+    expect(screen.queryByText('学习笔记')).toBeNull()
     expect(screen.queryByText('逐帧复刻')).toBeNull()
     expect(screen.getByText('输入素材链接并生成笔记')).toBeTruthy()
   })
