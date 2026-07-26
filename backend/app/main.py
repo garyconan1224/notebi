@@ -41,6 +41,10 @@ from backend.app.routes.chat import router as chat_router
 from backend.app.routes.link_preview import router as link_preview_router
 from backend.app.routes.knowledge import router as knowledge_router
 from backend.app.services.replica_purge import purge_legacy_replica_workspaces
+from backend.app.services.runtime_log_buffer import (
+    install as install_runtime_log_handler,
+    uninstall as uninstall_runtime_log_handler,
+)
 from shared.settings_store import ProviderProfile, load_settings, save_settings
 
 logger = logging.getLogger(__name__)
@@ -110,11 +114,14 @@ def _purge_legacy_replica_data() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """FastAPI 生命周期钩子：启动时 seed 默认 provider 并清理旧复刻数据。"""
+    """FastAPI 生命周期钩子：启动时 seed 默认 provider、清理旧复刻数据并挂载运行日志 handler。"""
     _seed_siliconflow_provider()
     _purge_legacy_replica_data()
     _migrate_legacy_metadata()
+    # R6-A：挂载脱敏运行日志 handler（幂等，热重载/测试不重复安装），shutdown 移除
+    install_runtime_log_handler()
     yield
+    uninstall_runtime_log_handler()
 
 
 def _build_cors_origins() -> list[str]:

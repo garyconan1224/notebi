@@ -8,10 +8,12 @@ from __future__ import annotations
 本路由仅做只读观测，不涉及任何写操作；所有指标均来自 psutil。
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 import psutil
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
+
+from backend.app.services.runtime_log_buffer import get_default_buffer
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -71,5 +73,28 @@ def get_system_stats() -> Dict[str, Any]:
         "memory": _collect_memory(),
         "disk": _collect_disk(),
         "timestamp": time.time(),
+    }
+
+
+@router.get("/logs")
+def get_runtime_logs(
+    after_id: int = Query(0, ge=0, description="只返回 ID 大于该值的条目"),
+    level: Optional[str] = Query(None, description="按日志级别过滤（INFO/ERROR 等）"),
+    category: Optional[str] = Query(None, description="按来源 logger 名过滤"),
+    limit: int = Query(200, ge=1, le=1000, description="单次返回上限"),
+) -> Dict[str, Any]:
+    """返回脱敏后的运行日志（只读，增量轮询）。
+
+    响应字段：
+        entries:   [{ id, timestamp, level, category, message }, ...]
+        latest_id: 服务端当前最大日志 ID，前端下一轮作为 after_id 传入
+
+    日志在进入缓冲前已脱敏（密钥 / 绝对路径）；本端点不提供任何写 / 删除能力。
+    """
+    buffer = get_default_buffer()
+    entries = buffer.query(after_id=after_id, level=level, category=category, limit=limit)
+    return {
+        "entries": [entry.to_dict() for entry in entries],
+        "latest_id": buffer.latest_id,
     }
 
