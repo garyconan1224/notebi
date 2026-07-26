@@ -123,8 +123,7 @@ describe('AddMaterialModal', () => {
     )
 
     expect(screen.getByText('② 合集归属')).toBeTruthy()
-    expect(screen.getByText('③ 你要做什么')).toBeTruthy()
-    expect(screen.getByText('④ 笔记设置')).toBeTruthy()
+    expect(screen.getByText('③ 笔记设置')).toBeTruthy()
     expect(screen.getByText('test video')).toBeTruthy()
     expect(screen.getByText('已识别视频')).toBeTruthy()
     expect(screen.getByRole('button', { name: /开始生成/ })).toBeTruthy()
@@ -239,7 +238,6 @@ describe('AddMaterialModal', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /学习笔记/ }))
     fireEvent.click(screen.getByRole('button', { name: /图文笔记/ }))
     fireEvent.click(screen.getByRole('button', { name: /开始生成/ }))
 

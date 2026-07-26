@@ -86,10 +86,8 @@ interface AddMaterialModalProps {
 }
 
 type NoteMediaKind = 'auto' | 'video' | 'image_text' | 'audio' | 'mixed'
-type ActionType = 'note' | 'ai_video' | 'rewrite'
 type SourceMode = 'auto' | 'single' | 'batch'
 type SpeakerCountChoice = 'auto' | '2' | '3' | '4' | '5'
-const DEFAULT_ACTION: ActionType = 'note'
 
 const NOTE_TYPE_CARDS: { value: NoteMediaKind; label: string; desc: string }[] = [
   { value: 'auto', label: '自动识别', desc: '由系统判断笔记类型' },
@@ -296,7 +294,6 @@ export function AddMaterialModal({
   const [internalUrl, setInternalUrl] = useState('')
   const [internalSniff, setInternalSniff] = useState<SniffResult | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [selectedAction, setSelectedAction] = useState<ActionType>(DEFAULT_ACTION)
   const [selectedNoteType, setSelectedNoteType] = useState<NoteMediaKind>('auto')
   const [embedFrames, setEmbedFrames] = useState(false) // R4.7: 默认关，检测到视觉模型后自动开
   const [selectedVisionModel, setSelectedVisionModel] = useState('') // 空=用系统默认
@@ -496,13 +493,13 @@ export function AddMaterialModal({
             ? 'image_text'
             : 'auto'
   const showVideoNoteSettings =
-    selectedAction === 'note' && (selectedNoteType === 'video' || selectedNoteType === 'mixed' || (selectedNoteType === 'auto' && autoResolvedNoteType === 'video'))
+    selectedNoteType === 'video' || selectedNoteType === 'mixed' || (selectedNoteType === 'auto' && autoResolvedNoteType === 'video')
   const showAudioNoteSettings =
-    selectedAction === 'note' && (selectedNoteType === 'audio' || (selectedNoteType === 'auto' && autoResolvedNoteType === 'audio'))
+    selectedNoteType === 'audio' || (selectedNoteType === 'auto' && autoResolvedNoteType === 'audio')
   const showImageTextNoteSettings =
-    selectedAction === 'note' && (selectedNoteType === 'image_text' || selectedNoteType === 'mixed' || (selectedNoteType === 'auto' && autoResolvedNoteType === 'image_text'))
+    selectedNoteType === 'image_text' || selectedNoteType === 'mixed' || (selectedNoteType === 'auto' && autoResolvedNoteType === 'image_text')
   const showFrameAnalysisSettings = showVideoNoteSettings
-  const showSpeakerSettings = selectedAction === 'note' && (showVideoNoteSettings || showAudioNoteSettings)
+  const showSpeakerSettings = showVideoNoteSettings || showAudioNoteSettings
   const advancedSummaryParts = [
     ...(showImageTextNoteSettings ? ['图文理解'] : []),
     '补充说明',
@@ -554,7 +551,6 @@ export function AddMaterialModal({
     setUserNotes('')
     setNoteStyle('standard')
     setSourceMode('auto')
-    setSelectedAction(DEFAULT_ACTION)
     setSelectedNoteType('auto')
     setCaptureMode('auto')
     setFrameInterval(5)
@@ -1482,28 +1478,10 @@ export function AddMaterialModal({
             </div>
           </div>
 
-          {/* ③ 你要做什么 */}
+          {/* ③ 笔记设置 */}
           <div className="m-section">
-            <div className="eyebrow" style={{ marginBottom: 10 }}>③ 你要做什么</div>
-            <div className="note-type-grid" style={{ marginBottom: 14 }}>
-              <button
-                type="button"
-                className="note-type-card"
-                data-active={selectedAction === 'note'}
-                onClick={() => setSelectedAction('note')}
-              >
-                <div className="ntc-l"><FileText size={16} style={{ display: 'inline', verticalAlign: '-3px', marginRight: 4 }} /> 学习笔记</div>
-                <div className="ntc-d">沉浸式阅读与总结提取</div>
-              </button>
-            </div>
-
-            {selectedAction === 'note' && (
-              <>
-                <div className="eyebrow" style={{ marginBottom: 10 }}>
-                  ④ 笔记设置
-                </div>
-                {selectedAction === 'note' && (
-                  <>
+            <div className="eyebrow" style={{ marginBottom: 10 }}>③ 笔记设置</div>
+            <>
                     <div className="note-type-grid">
                       {NOTE_TYPE_CARDS.map(card => {
                         const active = selectedNoteType === card.value
@@ -1595,8 +1573,6 @@ export function AddMaterialModal({
                         )}
                       </div>
                     )}
-                  </>
-                )}
                 {showFrameAnalysisSettings && (
                   <div className="capture-panel" data-enabled={embedFrames}>
                     <div className="capture-head">
@@ -1699,7 +1675,7 @@ export function AddMaterialModal({
                     ) : null}
                   </div>
                 )}
-                <div style={{ marginTop: showFrameAnalysisSettings ? 12 : selectedAction === 'note' ? 14 : 0 }}>
+                <div style={{ marginTop: showFrameAnalysisSettings ? 12 : 14 }}>
                   <button
                     type="button"
                     className="accordion-trigger"
@@ -1732,8 +1708,7 @@ export function AddMaterialModal({
                     </div>
                   )}
                 </div>
-              </>
-            )}
+            </>
           </div>
         </div>
 
@@ -1741,7 +1716,7 @@ export function AddMaterialModal({
           <span className="mono modal-foot-status">
             <span className="chip-dot" style={{ marginRight: 6 }} />
             笔记
-            {selectedAction === 'note' && selectedNoteType !== 'auto'
+            {selectedNoteType !== 'auto'
               ? ` · ${NOTE_TYPE_CARDS.find(c => c.value === selectedNoteType)?.label ?? ''}`
               : ''}
           </span>
