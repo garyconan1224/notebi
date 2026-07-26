@@ -11,7 +11,6 @@ import { SortMenu } from './SortMenu'
 import { ViewToggle } from './ViewToggle'
 import { ItemCard } from './ItemCard'
 import { WorkspaceCard } from './WorkspaceCard'
-import { BatchOrganizeControl } from './BatchOrganizeControl'
 import {
   STATE_ORDER,
   primaryStatusToState,
@@ -555,7 +554,7 @@ export default function LibraryPage() {
 
   return (
     <div className={`lib-page lib-page--${pageTone}`}>
-      {/* ── Hero ── */}
+      {/* ── Hero：只保留标题、说明、导入内容、新建合集 ── */}
       <div className="lib-page-header">
         <div>
           <div className="lib-kicker">{pageKicker} · LOCAL</div>
@@ -580,72 +579,67 @@ export default function LibraryPage() {
             </button>
           </div>
         </div>
-          <div className="lib-actions">
-          {hasVisibleEntries && (
-            <>
-              {selectMode ? (
-                <>
-                  <button className="btn btn-sm" onClick={selectAll}>全选</button>
-                  <button className="btn btn-sm" onClick={clearSelection}>取消</button>
-                  <button
-                    className={`btn btn-sm${selectedSet.size > 0 ? ' btn-danger' : ''}`}
-                    disabled={deleting || selectedSet.size === 0}
-                    onClick={handleBatchDelete}
-                  >
-                    <Trash2 size={13} />
-                    删除 {selectedSet.size > 0 ? `(${selectedSet.size})` : ''}
-                  </button>
-                  {collectionWorkspaces.length > 0 && (
-                    <div className="batch-collection-control">
-                      <select
-                        value={collectionTargetId}
-                        onChange={(event) => setCollectionTargetId(event.target.value)}
-                        title="选择目标合集"
-                      >
-                        {collectionWorkspaces.map((ws) => (
-                          <option key={ws.workspace_id} value={ws.workspace_id}>
-                            {ws.name}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        className={`btn btn-sm${selectedItemRefs.length > 0 ? ' btn-secondary' : ''}`}
-                        disabled={addingToCollection || selectedItemRefs.length === 0 || !collectionTargetId}
-                        onClick={handleBatchAddToCollection}
-                      >
-                        <FolderInput size={13} />
-                        {addingToCollection ? '加入中…' : `加入合集${selectedItemRefs.length > 0 ? ` (${selectedItemRefs.length})` : ''}`}
-                      </button>
-                    </div>
-                  )}
-                  <BatchOrganizeControl items={selectedItemRefs} onDone={load} />
-                </>
-              ) : (
-                <button className="btn btn-sm" onClick={enterSelectMode}>选择</button>
-              )}
-            </>
-          )}
-          <SortMenu />
-          <ViewToggle />
-        </div>
       </div>
 
-      {/* ── Toolbar ── */}
-      <div className="lib-toolbar">
-        <FilterChips counts={chipCounts} />
-        <div className="lib-search">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-          </svg>
-          <input
-            type="text"
-            placeholder="搜索标题、来源、摘要..."
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
+      {/* ── 工具栏 / 批量栏 ── */}
+      {selectMode ? (
+        <div className="lib-toolbar lib-toolbar--batch">
+          <span className="batch-count">已选 {selectedItemRefs.length} 项</span>
+          <button className="btn btn-sm" onClick={selectAll}>全选</button>
+          <button className="btn btn-sm" onClick={clearSelection}>取消</button>
+          {collectionWorkspaces.length > 0 && (
+            <div className="batch-collection-control">
+              <select
+                value={collectionTargetId}
+                onChange={(event) => setCollectionTargetId(event.target.value)}
+                title="选择目标合集"
+              >
+                {collectionWorkspaces.map((ws) => (
+                  <option key={ws.workspace_id} value={ws.workspace_id}>
+                    {ws.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                className={`btn btn-sm${selectedItemRefs.length > 0 ? ' btn-secondary' : ''}`}
+                disabled={addingToCollection || selectedItemRefs.length === 0 || !collectionTargetId}
+                onClick={handleBatchAddToCollection}
+              >
+                <FolderInput size={13} />
+                {addingToCollection ? '加入中…' : '加入合集'}
+              </button>
+            </div>
+          )}
+          <button
+            className={`btn btn-sm${selectedSet.size > 0 ? ' btn-danger' : ''}`}
+            disabled={deleting || selectedSet.size === 0}
+            onClick={handleBatchDelete}
+          >
+            <Trash2 size={13} />
+            删除{selectedSet.size > 0 ? ` (${selectedSet.size})` : ''}
+          </button>
         </div>
-        <ViewToggle />
-      </div>
+      ) : (
+        <div className="lib-toolbar">
+          <FilterChips counts={chipCounts} />
+          <div className="lib-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+            </svg>
+            <input
+              type="text"
+              placeholder="搜索标题、来源、摘要..."
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </div>
+          <SortMenu />
+          {hasVisibleEntries && (
+            <button className="btn btn-sm" onClick={enterSelectMode}>选择</button>
+          )}
+          <ViewToggle />
+        </div>
+      )}
 
       {/* ── 内容区 ── */}
       {loading && (
