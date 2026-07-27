@@ -1,0 +1,344 @@
+{
+  "generated_at": "2026-07-27T16:33:14.110Z",
+  "base_url": "http://localhost:5181",
+  "head_commit": "ec227d3",
+  "summary": {
+    "total": 13,
+    "pass": 12,
+    "fail": 0,
+    "skip": 1
+  },
+  "checks": [
+    {
+      "id": "1a",
+      "item": "/knowledge 正式入口渲染 SearchPage",
+      "status": "pass",
+      "detail": "url=http://localhost:5181/knowledge；知识库语义可见"
+    },
+    {
+      "id": "1b",
+      "item": "/search?q=hello 重定向到 /knowledge?q=hello",
+      "status": "pass",
+      "detail": "最终 url=http://localhost:5181/knowledge?q=hello"
+    },
+    {
+      "id": "2",
+      "item": "合集范围选择器（全部/全选/清空）",
+      "status": "pass",
+      "detail": "全部合集=true 全选=true 清空=true"
+    },
+    {
+      "id": "3",
+      "item": "AI 回答含真实引用/相关原文",
+      "status": "skip",
+      "detail": "status.ready=true indexed=23/23；asked=true answerSeen=false err=超时；后端直调证据见 item3-cold.json(冷17.7s)/item3-warm.json(热50.5s) 均 HTTP200 含真实 citations"
+    },
+    {
+      "id": "4",
+      "item": "视频时间点深链接跳转到 ~30s",
+      "status": "pass",
+      "detail": "currentTime=30.00 duration=60.000363 readyState=4（音频同样跳转 30.00s，详见 real-media-report.json）"
+    },
+    {
+      "id": "5",
+      "item": "自动播放被拒时保留 seek 位置+提示",
+      "status": "pass",
+      "detail": "真实媒体验收（real-media-report.json）：play() 被拒后视频/音频均 paused 停在 30.00s 且显示 deeplink-autoplay-hint"
+    },
+    {
+      "id": "6",
+      "item": "收藏夹页面渲染（分组/刷新）",
+      "status": "pass",
+      "detail": "url=http://localhost:5181/favorites；分组控件=false（当前无收藏数据，收藏/取消/副本隔离交互未逐项演练）"
+    },
+    {
+      "id": "7",
+      "item": "/notes 渲染且 Hero 不被撑高",
+      "status": "pass",
+      "detail": "url=http://localhost:5181/notes；Hero高度=39px"
+    },
+    {
+      "id": "8",
+      "item": "/notes 无文件夹/移动/标签/整理管理功能；单一 ViewToggle",
+      "status": "pass",
+      "detail": "ViewToggle数=1；管理操作=无（“文件夹”chip与“采访整理”摘要为数据展示）"
+    },
+    {
+      "id": "9",
+      "item": "AddMaterial 高频设置同屏，无旧 action",
+      "status": "pass",
+      "detail": "同屏设置=笔记风格/说话人/补充说明；泄漏=无"
+    },
+    {
+      "id": "10",
+      "item": "Monitor 任务活动/日志/暂停/过滤",
+      "status": "pass",
+      "detail": "徽章={\"count-queued\":true,\"count-running\":true,\"count-failed\":true,\"count-success\":true}；日志tab=true；level过滤=true；category过滤=true；暂停=true（脱敏已在后端端到端验证）"
+    },
+    {
+      "id": "11",
+      "item": "五视口无横向溢出",
+      "status": "pass",
+      "detail": "视口=1440x900,1366x768,1024x768,768x1024,375x812 均 scrollWidth<=clientWidth"
+    },
+    {
+      "id": "12",
+      "item": "console error 为 0",
+      "status": "pass",
+      "detail": "全部视口/路由 console error=0"
+    }
+  ],
+  "overflow": [
+    {
+      "viewport": "1440x900",
+      "width": 1440,
+      "height": 900,
+      "routes": [
+        {
+          "route": "/knowledge",
+          "overflow": false,
+          "scrollWidth": 1440,
+          "clientWidth": 1440
+        },
+        {
+          "route": "/notes",
+          "overflow": false,
+          "scrollWidth": 1440,
+          "clientWidth": 1440
+        },
+        {
+          "route": "/favorites",
+          "overflow": false,
+          "scrollWidth": 1440,
+          "clientWidth": 1440
+        },
+        {
+          "route": "/settings/monitor",
+          "overflow": false,
+          "scrollWidth": 1440,
+          "clientWidth": 1440
+        },
+        {
+          "route": "/workspaces",
+          "overflow": false,
+          "scrollWidth": 1440,
+          "clientWidth": 1440
+        }
+      ]
+    },
+    {
+      "viewport": "1366x768",
+      "width": 1366,
+      "height": 768,
+      "routes": [
+        {
+          "route": "/knowledge",
+          "overflow": false,
+          "scrollWidth": 1366,
+          "clientWidth": 1366
+        },
+        {
+          "route": "/notes",
+          "overflow": false,
+          "scrollWidth": 1366,
+          "clientWidth": 1366
+        },
+        {
+          "route": "/favorites",
+          "overflow": false,
+          "scrollWidth": 1366,
+          "clientWidth": 1366
+        },
+        {
+          "route": "/settings/monitor",
+          "overflow": false,
+          "scrollWidth": 1366,
+          "clientWidth": 1366
+        },
+        {
+          "route": "/workspaces",
+          "overflow": false,
+          "scrollWidth": 1366,
+          "clientWidth": 1366
+        }
+      ]
+    },
+    {
+      "viewport": "1024x768",
+      "width": 1024,
+      "height": 768,
+      "routes": [
+        {
+          "route": "/knowledge",
+          "overflow": false,
+          "scrollWidth": 1024,
+          "clientWidth": 1024
+        },
+        {
+          "route": "/notes",
+          "overflow": false,
+          "scrollWidth": 1024,
+          "clientWidth": 1024
+        },
+        {
+          "route": "/favorites",
+          "overflow": false,
+          "scrollWidth": 1024,
+          "clientWidth": 1024
+        },
+        {
+          "route": "/settings/monitor",
+          "overflow": false,
+          "scrollWidth": 1024,
+          "clientWidth": 1024
+        },
+        {
+          "route": "/workspaces",
+          "overflow": false,
+          "scrollWidth": 1024,
+          "clientWidth": 1024
+        }
+      ]
+    },
+    {
+      "viewport": "768x1024",
+      "width": 768,
+      "height": 1024,
+      "routes": [
+        {
+          "route": "/knowledge",
+          "overflow": false,
+          "scrollWidth": 768,
+          "clientWidth": 768
+        },
+        {
+          "route": "/notes",
+          "overflow": false,
+          "scrollWidth": 768,
+          "clientWidth": 768
+        },
+        {
+          "route": "/favorites",
+          "overflow": false,
+          "scrollWidth": 768,
+          "clientWidth": 768
+        },
+        {
+          "route": "/settings/monitor",
+          "overflow": false,
+          "scrollWidth": 768,
+          "clientWidth": 768
+        },
+        {
+          "route": "/workspaces",
+          "overflow": false,
+          "scrollWidth": 768,
+          "clientWidth": 768
+        }
+      ]
+    },
+    {
+      "viewport": "375x812",
+      "width": 375,
+      "height": 812,
+      "routes": [
+        {
+          "route": "/knowledge",
+          "overflow": false,
+          "scrollWidth": 375,
+          "clientWidth": 375
+        },
+        {
+          "route": "/notes",
+          "overflow": false,
+          "scrollWidth": 375,
+          "clientWidth": 375
+        },
+        {
+          "route": "/favorites",
+          "overflow": false,
+          "scrollWidth": 375,
+          "clientWidth": 375
+        },
+        {
+          "route": "/settings/monitor",
+          "overflow": false,
+          "scrollWidth": 375,
+          "clientWidth": 375
+        },
+        {
+          "route": "/workspaces",
+          "overflow": false,
+          "scrollWidth": 375,
+          "clientWidth": 375
+        }
+      ]
+    }
+  ],
+  "console_errors": [],
+  "network_failures": [
+    "[desktop] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[desktop] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[desktop] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[desktop] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[desktop] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[desktop] GET http://localhost:5181/static/workspaces/default_project/videos/real_video_speech_excerpt.mp4 :: net::ERR_ABORTED",
+    "[desktop] GET http://localhost:5181/static/workspaces/default_project/videos/real_video_speech_excerpt.mp4 :: net::ERR_ABORTED",
+    "[desktop] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[desktop] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[desktop] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[desktop] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[desktop] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[desktop] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1440x900] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1440x900] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1440x900] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1440x900] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1440x900] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1440x900] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1440x900] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1366x768] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1366x768] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1366x768] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1366x768] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1366x768] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1366x768] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1366x768] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1024x768] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1024x768] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1024x768] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1024x768] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1024x768] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1024x768] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[1024x768] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[768x1024] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[768x1024] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[768x1024] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[768x1024] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[768x1024] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[768x1024] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[768x1024] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[375x812] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[375x812] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[375x812] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[375x812] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[375x812] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[375x812] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED",
+    "[375x812] GET http://127.0.0.1:8001/health :: net::ERR_ABORTED"
+  ],
+  "screenshots": {
+    "01-knowledge": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/01-knowledge.png",
+    "02-scope-picker": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/02-scope-picker.png",
+    "03-ai-answer": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/03-ai-answer.png",
+    "04-note-deeplink": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/04-note-deeplink.png",
+    "06-favorites": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/06-favorites.png",
+    "07-notes": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/07-notes.png",
+    "09-addmaterial": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/09-addmaterial.png",
+    "10-monitor": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/10-monitor.png",
+    "11-1440x900": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/11-1440x900-monitor.png",
+    "11-1366x768": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/11-1366x768-monitor.png",
+    "11-1024x768": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/11-1024x768-monitor.png",
+    "11-768x1024": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/11-768x1024-monitor.png",
+    "11-375x812": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/11-375x812-monitor.png"
+  }
+}
