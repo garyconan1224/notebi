@@ -141,10 +141,46 @@ class PerformanceConfig:
         return "high"
 
 
+# ── NetworkConfig 网络配置 ────────────────────────────────────────────────────
+
+RoutingMode = Literal["smart", "direct", "proxy"]
+_ALLOWED_ROUTING_MODES: tuple[str, ...] = ("smart", "direct", "proxy")
+
+
+@dataclass(frozen=True)
+class NetworkConfig:
+    """网络配置：智能路由、全局代理。
+
+    routing_mode:
+    - smart: 国内直连，海外走代理
+    - direct: 全部直连
+    - proxy: 全部走代理
+    """
+
+    routing_mode: RoutingMode = "smart"
+    global_proxy: str = ""
+
+    @classmethod
+    def from_dict(cls, data: Any) -> "NetworkConfig":
+        if not isinstance(data, dict):
+            return cls()
+        raw_mode = str(data.get("routing_mode") or "smart").strip()
+        mode: RoutingMode = raw_mode if raw_mode in _ALLOWED_ROUTING_MODES else "smart"  # type: ignore[assignment]
+        return cls(
+            routing_mode=mode,
+            global_proxy=str(data.get("global_proxy") or ""),
+        )
+
+
 # ── DownloadConfig 数值字段 clamp 边界（与前端 configStore 约束一致）──────────
 _CONCURRENCY_MIN, _CONCURRENCY_MAX = 1, 8
 _RETRY_MIN, _RETRY_MAX = 0, 10
 _SOCKET_TIMEOUT_MIN, _SOCKET_TIMEOUT_MAX = 5, 300
+
+ProxyMode = Literal["inherit", "direct", "proxy"]
+CookieMode = Literal["none", "browser", "file"]
+_ALLOWED_PROXY_MODES: tuple[str, ...] = ("inherit", "direct", "proxy")
+_ALLOWED_COOKIE_MODES: tuple[str, ...] = ("none", "browser", "file")
 
 
 def _clamp_int(value: Any, default: int, lo: int, hi: int) -> int:
@@ -159,50 +195,48 @@ def _clamp_int(value: Any, default: int, lo: int, hi: int) -> int:
     return n
 
 
-def _normalize_cookie_base_dirs(raw: Any) -> tuple[str, ...]:
-    if not isinstance(raw, (list, tuple)):
-        return ()
-    out: list[str] = []
-    for item in raw:
-        s = str(item or "").strip()
-        if s and s not in out:
-            out.append(s)
-    return tuple(out)
-
-
 @dataclass(frozen=True)
 class DownloadConfig:
     """下载器偏好（跨端生效，落 AppSettings）。
 
     字段与前端 configStore 下载相关字段对齐：
     - 路径/命名：output_dir / filename_template；
-    - 网络与凭据：http_proxy / po_token / visitor_data / cookie_base_dirs；
+    - 代理策略：proxy_mode（inherit/direct/proxy）；
+    - Cookie：cookie_mode（none/browser/file）、cookie_browser、cookie_profile、cookie_file_path；
     - 高级：concurrency_limit / retry_count / socket_timeout（均含 clamp）。
+
+    已废弃字段（兼容读取但不序列化）：po_token、visitor_data、cookie_base_dirs、http_proxy。
     """
 
     output_dir: str = ""
-    filename_template: str = "%(title)s-%(id)s.%(ext)s"
-    http_proxy: str = ""
-    po_token: str = ""
-    visitor_data: str = ""
-    cookie_base_dirs: tuple[str, ...] = ()
+    filename_template: str = "%(title)s.%(ext)s"
+    proxy_mode: ProxyMode = "inherit"
+    cookie_mode: CookieMode = "browser"
+    cookie_browser: str = "chrome"
+    cookie_profile: str = ""
+    cookie_file_path: str = ""
     concurrency_limit: int = 2
-    retry_count: int = 3
+    retry_count: int = 2
     socket_timeout: int = 30
 
     @classmethod
     def from_dict(cls, data: Any) -> "DownloadConfig":
         if not isinstance(data, dict):
             return cls()
+        raw_proxy_mode = str(data.get("proxy_mode") or "inherit").strip()
+        proxy_mode: ProxyMode = raw_proxy_mode if raw_proxy_mode in _ALLOWED_PROXY_MODES else "inherit"  # type: ignore[assignment]
+        raw_cookie_mode = str(data.get("cookie_mode") or "browser").strip()
+        cookie_mode: CookieMode = raw_cookie_mode if raw_cookie_mode in _ALLOWED_COOKIE_MODES else "browser"  # type: ignore[assignment]
         return cls(
             output_dir=str(data.get("output_dir") or ""),
-            filename_template=str(data.get("filename_template") or "%(title)s-%(id)s.%(ext)s"),
-            http_proxy=str(data.get("http_proxy") or ""),
-            po_token=str(data.get("po_token") or ""),
-            visitor_data=str(data.get("visitor_data") or ""),
-            cookie_base_dirs=_normalize_cookie_base_dirs(data.get("cookie_base_dirs")),
+            filename_template=str(data.get("filename_template") or "%(title)s.%(ext)s"),
+            proxy_mode=proxy_mode,
+            cookie_mode=cookie_mode,
+            cookie_browser=str(data.get("cookie_browser") or "chrome"),
+            cookie_profile=str(data.get("cookie_profile") or ""),
+            cookie_file_path=str(data.get("cookie_file_path") or ""),
             concurrency_limit=_clamp_int(data.get("concurrency_limit"), 2, _CONCURRENCY_MIN, _CONCURRENCY_MAX),
-            retry_count=_clamp_int(data.get("retry_count"), 3, _RETRY_MIN, _RETRY_MAX),
+            retry_count=_clamp_int(data.get("retry_count"), 2, _RETRY_MIN, _RETRY_MAX),
             socket_timeout=_clamp_int(data.get("socket_timeout"), 30, _SOCKET_TIMEOUT_MIN, _SOCKET_TIMEOUT_MAX),
         )
 
@@ -276,6 +310,7 @@ class AppSettings:
     default_provider_for_embedding: str = ""
     default_provider_for_rerank: str = ""
     transcriber: TranscriberConfig = field(default_factory=TranscriberConfig)
+    network: NetworkConfig = field(default_factory=NetworkConfig)
     download: DownloadConfig = field(default_factory=DownloadConfig)
     performance: PerformanceConfig = field(default_factory=PerformanceConfig)
     tavily_api_key: str = ""
@@ -301,6 +336,7 @@ class AppSettings:
             default_provider_for_embedding=str(data.get("default_provider_for_embedding") or defaults.get("embedding") or ""),
             default_provider_for_rerank=str(data.get("default_provider_for_rerank") or defaults.get("rerank") or ""),
             transcriber=TranscriberConfig.from_dict(data.get("transcriber")),
+            network=NetworkConfig.from_dict(data.get("network")),
             download=DownloadConfig.from_dict(data.get("download")),
             performance=PerformanceConfig.from_dict(data.get("performance")),
             tavily_api_key=str(data.get("tavily_api_key") or ""),
@@ -403,3 +439,44 @@ def _default_provider_ids_from_profiles(providers: tuple[ProviderProfile, ...]) 
                 result[cap] = p.id
                 break
     return result
+
+
+# ── SettingsStore：可隔离测试的设置存储 ──────────────────────────────────────
+
+# 序列化时排除的废弃字段
+_DEPRECATED_DOWNLOAD_FIELDS = frozenset({"po_token", "visitor_data", "cookie_base_dirs", "http_proxy"})
+
+
+class SettingsStore:
+    """可指定路径的设置存储，用于测试隔离。
+
+    生产代码继续使用模块级 load_settings / save_settings。
+    """
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+
+    def load(self) -> AppSettings:
+        if not self._path.is_file():
+            return AppSettings()
+        try:
+            raw = self._path.read_text(encoding="utf-8")
+            data = json.loads(raw)
+        except Exception:
+            return AppSettings()
+        if not isinstance(data, dict):
+            return AppSettings()
+        return AppSettings.from_dict(data)
+
+    def save(self, settings: AppSettings) -> None:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        payload = asdict(settings)
+        payload["providers"] = [asdict(p) for p in settings.providers]
+        # 移除废弃字段，不序列化到 JSON
+        if "download" in payload and isinstance(payload["download"], dict):
+            for key in _DEPRECATED_DOWNLOAD_FIELDS:
+                payload["download"].pop(key, None)
+        self._path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )

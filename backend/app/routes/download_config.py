@@ -2,14 +2,18 @@ from __future__ import annotations
 
 """Downloader(yt-dlp) 配置端点。
 
-冻结契约见 docs/DESIGN_NOTES_SETTINGS.md §3.1(阶段 3 新增)与 §4.3:
+S1 冻结契约：
 - GET  /download_config 回显当前 AppSettings.download
-- POST /download_config 字段级 patch(None 沿用/非 None 覆盖);数值字段后端 clamp,
-  cookie_base_dirs 接受 list[str],持久化为 tuple[str, ...]。
+- PATCH /download_config 字段级 patch(None 沿用/非 None 覆盖)
+- POST /download_config/test-cookie 测试 Cookie 可读性
+- POST /download_config/import-cookie 导入 cookies.txt
+- DELETE /download_config/cookie 删除导入的 Cookie 文件
+
+已移除：po_token、visitor_data、cookie_base_dirs、http_proxy。
 """
 
 from dataclasses import asdict, replace
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
@@ -24,32 +28,30 @@ router = APIRouter(tags=["download"])
 
 
 class DownloadConfigUpdateRequest(BaseModel):
-    """POST /download_config 请求体。
+    """PATCH /download_config 请求体。
 
     全部字段可选:
     - 为 ``None``(未传)→ 保留旧值;
-    - 非 ``None`` → 覆盖为新值(含空串/空数组,用于显式清空)。
+    - 非 ``None`` → 覆盖为新值(含空串,用于显式清空)。
 
-    数值字段使用 Pydantic ``ge/le`` 做入参校验;超界直接 422,避免静默截断。
+    数值字段使用 Pydantic ``ge/le`` 做入参校验;超界直接 422。
     """
 
     output_dir: Optional[str] = None
     filename_template: Optional[str] = None
-    http_proxy: Optional[str] = None
-    po_token: Optional[str] = None
-    visitor_data: Optional[str] = None
-    cookie_base_dirs: Optional[List[str]] = None
+    proxy_mode: Optional[str] = None
+    cookie_mode: Optional[str] = None
+    cookie_browser: Optional[str] = None
+    cookie_profile: Optional[str] = None
+    cookie_file_path: Optional[str] = None
     concurrency_limit: Optional[int] = Field(default=None, ge=1, le=8)
     retry_count: Optional[int] = Field(default=None, ge=0, le=10)
     socket_timeout: Optional[int] = Field(default=None, ge=5, le=300)
 
 
 def _serialize(cfg: DownloadConfig) -> Dict[str, Any]:
-    """``asdict`` 把 tuple 保留为 tuple;JSON 序列化自动转 list,前端拿到的是数组。"""
-    payload = asdict(cfg)
-    # 显式转 list,避免 FastAPI 某些中间件对 tuple 的兼容性差异
-    payload["cookie_base_dirs"] = list(cfg.cookie_base_dirs)
-    return payload
+    """asdict 把 tuple 保留为 tuple；JSON 序列化自动转 list。"""
+    return asdict(cfg)
 
 
 @router.get("/download_config")
@@ -59,37 +61,36 @@ def get_download_config() -> Dict[str, Any]:
     return _serialize(settings.download)
 
 
-@router.post("/download_config")
+@router.patch("/download_config")
 def update_download_config(req: DownloadConfigUpdateRequest) -> Dict[str, Any]:
     """写入下载器配置并回显。
 
     语义:
     - 字段为 ``None`` → 保留旧值;
-    - 字段为具体值 → 覆盖(空串/空数组视为显式清空);
-    - ``cookie_base_dirs`` 规范化:去空白项 + 去重 + 保序 + 存 tuple。
+    - 字段为具体值 → 覆盖(空串视为显式清空)。
     """
     settings = load_settings()
     current = settings.download
 
-    # cookie_base_dirs 规范化:list 入参 → 去空白/去重/保序,写入为 tuple
-    next_cookie_dirs: tuple[str, ...] = current.cookie_base_dirs
-    if req.cookie_base_dirs is not None:
-        seen: list[str] = []
-        for item in req.cookie_base_dirs:
-            s = str(item or "").strip()
-            if s and s not in seen:
-                seen.append(s)
-        next_cookie_dirs = tuple(seen)
+    # 枚举字段校验
+    proxy_mode = current.proxy_mode
+    if req.proxy_mode is not None:
+        proxy_mode = req.proxy_mode if req.proxy_mode in ("inherit", "direct", "proxy") else "inherit"  # type: ignore[assignment]
+
+    cookie_mode = current.cookie_mode
+    if req.cookie_mode is not None:
+        cookie_mode = req.cookie_mode if req.cookie_mode in ("none", "browser", "file") else "browser"  # type: ignore[assignment]
 
     new_cfg = DownloadConfig(
         output_dir=req.output_dir if req.output_dir is not None else current.output_dir,
         filename_template=(
             req.filename_template if req.filename_template is not None else current.filename_template
         ),
-        http_proxy=req.http_proxy if req.http_proxy is not None else current.http_proxy,
-        po_token=req.po_token if req.po_token is not None else current.po_token,
-        visitor_data=req.visitor_data if req.visitor_data is not None else current.visitor_data,
-        cookie_base_dirs=next_cookie_dirs,
+        proxy_mode=proxy_mode,
+        cookie_mode=cookie_mode,
+        cookie_browser=req.cookie_browser if req.cookie_browser is not None else current.cookie_browser,
+        cookie_profile=req.cookie_profile if req.cookie_profile is not None else current.cookie_profile,
+        cookie_file_path=req.cookie_file_path if req.cookie_file_path is not None else current.cookie_file_path,
         concurrency_limit=(
             req.concurrency_limit if req.concurrency_limit is not None else current.concurrency_limit
         ),
@@ -101,4 +102,11 @@ def update_download_config(req: DownloadConfigUpdateRequest) -> Dict[str, Any]:
 
     save_settings(replace(settings, download=new_cfg))
     return _serialize(new_cfg)
+
+
+# 兼容旧 POST 方法（重定向到 PATCH 逻辑）
+@router.post("/download_config")
+def update_download_config_post(req: DownloadConfigUpdateRequest) -> Dict[str, Any]:
+    """兼容旧 POST 方法。"""
+    return update_download_config(req)
 
