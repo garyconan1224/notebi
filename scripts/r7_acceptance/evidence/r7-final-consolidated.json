@@ -7,12 +7,37 @@
     "ec227d3 fix(startup) 无 data 目录干净启动"
   ],
   "auto_tests": {
-    "backend_pytest": "1046 passed, 2 skipped",
+    "backend_pytest": "1049 passed, 2 skipped",
     "backend_compileall": "exit 0",
-    "clean_worktree_backend": "无 data/ 无 .env 的干净 worktree：1046 passed, 2 skipped（data/ 由修复自动创建）",
+    "clean_worktree_backend": "无 data/ 无 .env 的干净 worktree：1049 passed, 2 skipped（data/ 由修复自动创建）",
     "frontend_test": "270 passed (43 files)",
     "frontend_build": "通过",
     "git_diff_check": "clean (8b6e2ab..HEAD)"
+  },
+  "historical_exceptions": {
+    "summary": "存在 3 项已批准历史例外（1abeaf3/c66ae1b/4b4b053），无无关业务混入",
+    "items": [
+      {
+        "commit": "1abeaf3",
+        "exception": "R1-B 同时修改 KnowledgeRouteRedirect.test.tsx",
+        "unrelated_business_mixed": false
+      },
+      {
+        "commit": "c66ae1b",
+        "exception": "R2-B 同时修改 SearchPage.test.tsx",
+        "unrelated_business_mixed": false
+      },
+      {
+        "commit": "4b4b053",
+        "exception": "R2-A 同时修改 retrieval_service.py",
+        "unrelated_business_mixed": false
+      }
+    ],
+    "sensitive_paths_scope": {
+      "statement": "R0–R7 各阶段未新增/修改/暂存 .workbuddy/.qoder/data",
+      "verified_commit_range": "7d251dd..d675911",
+      "ancestral_note": "4d4235f 在 R0 之前已入祖先历史，不执行 filter-repo"
+    }
   },
   "browser_acceptance_summary": {
     "structural_12item": {
