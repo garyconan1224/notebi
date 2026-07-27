@@ -15,7 +15,7 @@ S1 冻结契约：
 from dataclasses import asdict, replace
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, File, UploadFile
 from pydantic import BaseModel, Field
 
 from shared.settings_store import (
@@ -109,4 +109,87 @@ def update_download_config(req: DownloadConfigUpdateRequest) -> Dict[str, Any]:
 def update_download_config_post(req: DownloadConfigUpdateRequest) -> Dict[str, Any]:
     """兼容旧 POST 方法。"""
     return update_download_config(req)
+
+
+# ── Cookie 管理端点 ────────────────────────────────────────────────────────────
+
+
+@router.post("/download_config/test-cookie")
+def test_cookie() -> Dict[str, Any]:
+    """测试当前 Cookie 配置可读性。
+
+    只返回模式、浏览器、是否可读和提示，不返回 Cookie 内容。
+    """
+    from backend.app.services.cookie_config import test_browser_cookie, test_file_cookie
+
+    settings = load_settings()
+    cfg = settings.download
+
+    if cfg.cookie_mode == "browser":
+        return test_browser_cookie(cfg.cookie_browser, cfg.cookie_profile)
+    elif cfg.cookie_mode == "file":
+        return test_file_cookie()
+    else:
+        return {"mode": "none", "readable": True, "message": "Cookie 已禁用"}
+
+
+@router.post("/download_config/import-cookie")
+async def import_cookie(file: UploadFile = File(...)) -> Dict[str, Any]:
+    """导入 Netscape 格式 cookies.txt。
+
+    文件保存到应用私有目录并 chmod 0600。
+    """
+    from backend.app.services.cookie_config import import_cookie_file
+
+    content = await file.read()
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        return {"success": False, "stored_path": "", "error": "文件必须是 UTF-8 编码"}
+
+    result = import_cookie_file(text)
+    if result["success"]:
+        # 导入成功后切换模式为 file
+        settings = load_settings()
+        new_cfg = DownloadConfig(
+            output_dir=settings.download.output_dir,
+            filename_template=settings.download.filename_template,
+            proxy_mode=settings.download.proxy_mode,
+            cookie_mode="file",
+            cookie_browser=settings.download.cookie_browser,
+            cookie_profile=settings.download.cookie_profile,
+            cookie_file_path=result["stored_path"],
+            concurrency_limit=settings.download.concurrency_limit,
+            retry_count=settings.download.retry_count,
+            socket_timeout=settings.download.socket_timeout,
+        )
+        save_settings(replace(settings, download=new_cfg))
+
+    return result
+
+
+@router.delete("/download_config/cookie")
+def delete_cookie() -> Dict[str, Any]:
+    """删除导入的 Cookie 文件并切回浏览器模式。"""
+    from backend.app.services.cookie_config import delete_imported_cookie
+
+    result = delete_imported_cookie()
+    if result["success"]:
+        # 切回浏览器模式
+        settings = load_settings()
+        new_cfg = DownloadConfig(
+            output_dir=settings.download.output_dir,
+            filename_template=settings.download.filename_template,
+            proxy_mode=settings.download.proxy_mode,
+            cookie_mode="browser",
+            cookie_browser=settings.download.cookie_browser,
+            cookie_profile=settings.download.cookie_profile,
+            cookie_file_path="",
+            concurrency_limit=settings.download.concurrency_limit,
+            retry_count=settings.download.retry_count,
+            socket_timeout=settings.download.socket_timeout,
+        )
+        save_settings(replace(settings, download=new_cfg))
+
+    return result
 
