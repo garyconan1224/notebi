@@ -147,6 +147,9 @@ def _build_cors_origins() -> list[str]:
 app = FastAPI(title="NoteBi API", version=_APP_VERSION, lifespan=lifespan)
 
 # 静态文件挂载：/static → data/ 目录（关键帧图片、项目资源等）
+# 干净 checkout 可能没有 data/（被 .gitignore 排除）；StaticFiles 默认 check_dir=True
+# 会在目录缺失时于导入期抛错。挂载前确保目录存在，使无 data/ 的全新检出也能启动与测试。
+(_ROOT_DIR / "data").mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(_ROOT_DIR / "data")), name="static")
 
 # 允许前端开发服务器跨域访问；origin 列表由根 .env 中 VITE_PORT/CORS_ALLOW_ORIGINS 决定
