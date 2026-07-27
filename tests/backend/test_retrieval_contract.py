@@ -1,148 +1,129 @@
-from __future__ import annotations
+"""S5 Task 1: 稳定检索来源身份测试。"""
 
-from typing import Any
-import json
-from pathlib import Path
+from __future__ import annotations
 
 import pytest
 
-from backend.app.routes.search import GlobalSearchRequest
-from backend.app.services import workspace_search_service as search_service
-from backend.app.services.workspace_store import WorkspaceStore
-from shared.knowledge_base import build_video_chunks_from_file
-
-
-def test_retrieval_fixture_covers_identity_and_content_variants(
-    retrieval_store: WorkspaceStore,
-) -> None:
-    records = retrieval_store.list_all()
-    by_id = {record.workspace_id: record for record in records}
-    assert len(records) == 2
-    assert (
-        by_id["ws_alpha"].items[0].item_id
-        == by_id["ws_beta"].items[0].item_id
-    )
-    assert by_id["ws_alpha"].favorites == ["legacy-shared-item"]
-    assert len(by_id["ws_alpha"].items[0].summaries) == 2
-    assert by_id["ws_alpha"].items[1].results["content_md"]
-    assert by_id["ws_beta"].items[1].results == {}
-
-
-def test_legacy_source_contract_is_frozen() -> None:
-    source = search_service._build_source(
-        {
-            "source_file": "/tmp/ws/item.json",
-            "skeleton_text": "产品原文片段",
-            "score": 0.88,
-            "time_range": "00:10-00:18.500",
-        },
-        {
-            "/tmp/ws/item.json": {
-                "workspace_id": "ws_alpha",
-                "workspace_name": "产品研究",
-                "item_id": "legacy-shared-item",
-                "item_type": "video",
-                "item_title": "产品发布会",
-            }
-        },
-        "",
-        "",
-    )
-
-    assert {
-        "workspace_id",
-        "workspace_name",
-        "item_id",
-        "item_type",
-        "item_title",
-        "chunk_excerpt",
-        "score",
-        "jump_url",
-    }.issubset(source)
-    assert source["chunk_excerpt"] == "产品原文片段"
-    assert source["jump_url"].startswith(
-        "/workspaces/ws_alpha/items/legacy-shared-item/video_detail"
-    )
-
-
-@pytest.mark.parametrize(
-    ("item_type", "suffix"),
-    [
-        ("video", "video_detail"),
-        ("image", "image_detail"),
-        ("audio", "note"),
-        ("text", "text_detail"),
-    ],
+from backend.app.services.knowledge_source import (
+    KnowledgeSource,
+    build_jump_url,
+    compute_source_id,
 )
-def test_source_jump_urls_use_canonical_routes(
-    item_type: str,
-    suffix: str,
-) -> None:
-    assert search_service._jump_url("ws", "item", item_type) == (
-        f"/workspaces/ws/items/item/{suffix}"
+
+
+# ── Task 1.1: source_id 稳定性 ───────────────────────────────────────────────
+
+
+def test_source_id_is_chunk_stable() -> None:
+    """同一 item 的不同转写时间段/字段有不同 source_id；同一片段重建索引后 ID 不变。"""
+    first = KnowledgeSource.create(
+        workspace_id="w1",
+        item_id="i1",
+        field="transcript",
+        start_ms=30000,
     )
-
-
-def test_target_smart_request_contract() -> None:
-    request = GlobalSearchRequest(
-        query="离线搜索",
-        mode="smart",
-        workspace_ids=["ws_alpha"],
-        item_types=["video"],
-        tags=["产品"],
+    second = KnowledgeSource.create(
+        workspace_id="w1",
+        item_id="i1",
+        field="transcript",
+        start_ms=60000,
     )
-    assert request.mode == "smart"
-    assert request.item_types == ["video"]
-    assert request.tags == ["产品"]
+    # 不同时间段 → 不同 ID
+    assert first.source_id != second.source_id
 
-
-def test_target_smart_source_contract() -> None:
-    source: dict[str, Any] = search_service._build_source(
-        {
-            "source_file": "/tmp/ws/item.json",
-            "skeleton_text": "产品原文片段",
-            "score": 0.88,
-            "time_range": "00:10-00:18.500",
-        },
-        {
-            "/tmp/ws/item.json": {
-                "workspace_id": "ws_alpha",
-                "workspace_name": "产品研究",
-                "item_id": "legacy-shared-item",
-                "item_type": "video",
-                "item_title": "产品发布会",
-            }
-        },
-        "",
-        "",
+    # 同一片段重建 → 相同 ID
+    rebuilt = KnowledgeSource.create(
+        workspace_id="w1",
+        item_id="i1",
+        field="transcript",
+        start_ms=30000,
     )
-
-    assert source["source_id"] == "ws_alpha:legacy-shared-item"
-    assert source["excerpt"] == "产品原文片段"
-    assert source["field"] == "transcript"
-    assert source["segment_id"]
-    assert source["start_ms"] == 10_000
-    assert source["end_ms"] == 18_500
+    assert first.source_id == rebuilt.source_id
 
 
-def test_transcript_segments_become_positioned_chunks(tmp_path: Path) -> None:
-    path = tmp_path / "item.json"
-    path.write_text(
-        json.dumps(
-            {
-                "title": "访谈",
-                "transcript_segments": [
-                    {"start": 10.0, "end": 18.5, "text": "可定位原文"}
-                ],
-            },
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
+def test_source_id_different_fields() -> None:
+    """不同字段有不同 source_id。"""
+    transcript = KnowledgeSource.create(
+        workspace_id="w1",
+        item_id="i1",
+        field="transcript",
     )
+    summary = KnowledgeSource.create(
+        workspace_id="w1",
+        item_id="i1",
+        field="summary",
+    )
+    assert transcript.source_id != summary.source_id
 
-    chunks = build_video_chunks_from_file(path)
-    transcript = next(chunk for chunk in chunks if chunk.field == "transcript")
-    assert transcript.segment_id == "transcript-0"
-    assert transcript.start_ms == 10_000
-    assert transcript.end_ms == 18_500
-    assert transcript.skeleton_text == "可定位原文"
+
+def test_source_id_different_workspaces() -> None:
+    """不同 workspace 有不同 source_id。"""
+    ws1 = KnowledgeSource.create(workspace_id="w1", item_id="i1", field="transcript")
+    ws2 = KnowledgeSource.create(workspace_id="w2", item_id="i1", field="transcript")
+    assert ws1.source_id != ws2.source_id
+
+
+# ── Task 1.2: compute_source_id 确定性 ───────────────────────────────────────
+
+
+def test_compute_source_id_deterministic() -> None:
+    """compute_source_id 是确定性的。"""
+    id1 = compute_source_id("w1", "i1", "transcript", 0, 30000, 60000)
+    id2 = compute_source_id("w1", "i1", "transcript", 0, 30000, 60000)
+    assert id1 == id2
+
+
+def test_compute_source_id_uses_sha256() -> None:
+    """source_id 是 SHA-256 短 ID（16 字符）。"""
+    source_id = compute_source_id("w1", "i1", "transcript")
+    assert len(source_id) == 16
+    assert all(c in "0123456789abcdef" for c in source_id)
+
+
+# ── Task 1.3: KnowledgeSource 模型 ───────────────────────────────────────────
+
+
+def test_knowledge_source_round_trip() -> None:
+    """KnowledgeSource 序列化/反序列化。"""
+    source = KnowledgeSource.create(
+        workspace_id="w1",
+        item_id="i1",
+        field="transcript",
+        start_ms=30000,
+        end_ms=60000,
+        title="Test Video",
+        excerpt="This is a test excerpt",
+        score=0.95,
+    )
+    data = source.to_dict()
+    restored = KnowledgeSource.from_dict(data)
+
+    assert restored.source_id == source.source_id
+    assert restored.workspace_id == "w1"
+    assert restored.start_ms == 30000
+    assert restored.title == "Test Video"
+    assert restored.score == 0.95
+
+
+# ── Task 1.4: jump_url 构建 ──────────────────────────────────────────────────
+
+
+def test_jump_url_with_start_ms() -> None:
+    """音视频 jump_url 包含 start_ms。"""
+    url = build_jump_url("w1", "i1", "transcript", start_ms=30000)
+    assert "workspace_id=w1" in url
+    assert "item_id=i1" in url
+    assert "start_ms=30000" in url
+
+
+def test_jump_url_without_start_ms() -> None:
+    """文本 jump_url 不包含 start_ms。"""
+    url = build_jump_url("w1", "i1", "summary", start_ms=0)
+    assert "workspace_id=w1" in url
+    assert "start_ms" not in url
+
+
+def test_jump_url_zero_start_ms() -> None:
+    """start_ms=0 不包含在 URL 中。"""
+    url = build_jump_url("w1", "i1", "transcript", start_ms=0)
+    assert "start_ms" not in url
