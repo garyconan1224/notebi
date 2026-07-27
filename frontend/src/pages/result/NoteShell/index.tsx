@@ -912,9 +912,10 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     mediaCompanionRef.current?.seekTo(sec)
   }, [])
 
-  // R2-D: 知识库深链接 — 读取 start_ms 并只消费一次
+  // R2-D: 知识库深链接 — 读取 start_ms，等播放器 handle 就绪后只消费一次
   const [searchParams] = useSearchParams()
   const deepLinkConsumed = useRef(false)
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false)
 
   useEffect(() => {
     if (deepLinkConsumed.current) return
@@ -922,22 +923,29 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     const startMs = searchParams.get('start_ms')
     if (!startMs) return
     const sec = parseInt(startMs, 10) / 1000
-    if (isNaN(sec) || sec < 0) return
+    if (!Number.isFinite(sec) || sec < 0) return
+
+    // 依据笔记类型选择对应播放器 handle；尚未挂载则不消费，等下次渲染再试。
+    const noteType = String(((note.frontmatter ?? {}) as Record<string, unknown>).type ?? '')
+    const handle =
+      noteType === 'audio'
+        ? audioRef.current
+        : noteType === 'video'
+          ? videoRef.current
+          : (audioRef.current ?? videoRef.current)
+    if (!handle) return
+
+    // handle 已挂载 → 消费参数。seekTo 内部会等 metadata，duration 无效时不钳制到 0。
     deepLinkConsumed.current = true
-    // Delay to allow media panels to mount
-    const timer = setTimeout(() => {
-      handleSeek(sec)
-      // Try play
-      const audio = audioRef.current
-      const video = videoRef.current
-      if (audio?.togglePlay) {
-        audio.togglePlay()
-      } else if (video?.togglePlay) {
-        video.togglePlay()
-      }
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [loading, note, searchParams, handleSeek])
+    setAutoplayBlocked(false)
+    handleSeek(sec)
+
+    // 暴露可等待的 play()；自动播放被拒绝时保留目标时间并显示“点击播放”提示。
+    const playPromise = handle.play ? handle.play() : null
+    if (playPromise && typeof playPromise.catch === 'function') {
+      playPromise.catch(() => setAutoplayBlocked(true))
+    }
+  }, [loading, note, searchParams, handleSeek, audioDuration, videoDuration])
 
   const transcriptLines = useMemo<VideoResultTranscriptLine[]>(() => (
     Array.isArray(note?.transcript) ? note.transcript as VideoResultTranscriptLine[] : []
@@ -1537,6 +1545,34 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
 
   return (
     <div className={`nibi-note-shell nibi-note-shell--${itemType}`}>
+      {/* R2-D: 自动播放被拒绝时保留目标时间并提示点击播放 */}
+      {autoplayBlocked && (
+        <button
+          type="button"
+          data-testid="deeplink-autoplay-hint"
+          onClick={() => {
+            const handle = audioRef.current ?? videoRef.current
+            const p = handle?.play ? handle.play() : null
+            if (p && typeof p.catch === 'function') p.catch(() => {})
+            setAutoplayBlocked(false)
+          }}
+          style={{
+            display: 'block',
+            width: '100%',
+            padding: '8px 16px',
+            border: 'none',
+            borderBottom: '1px solid var(--bdr)',
+            background: 'var(--acc-soft, #eef6ff)',
+            color: 'var(--acc, #2563eb)',
+            fontSize: 13,
+            fontWeight: 500,
+            textAlign: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          自动播放被阻止，已停在目标时间，点击播放
+        </button>
+      )}
       {/* ════════ 顶栏：.note-bar（设计稿 .note-bar 对齐） ════════ */}
       <div className="nibi-note-bar">
         <button className="nibi-note-bar-back" onClick={() => navigate(-1)} title="返回任务中心">
