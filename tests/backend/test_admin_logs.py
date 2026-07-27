@@ -1,9 +1,10 @@
-"""R6-A — 脱敏运行日志缓冲与只读 API 测试。
+"""R6-A + S2 — 脱敏运行日志与只读 API 测试。
 
-覆盖点（作业书 R6-A）：
+覆盖点：
 - 上限：deque(maxlen) 满后丢弃最旧；
 - after_id：增量查询只返回更新的条目；
-- 过滤：level / category / limit；
+- before_id：向前分页；
+- 过滤：level / category / task_id / batch_id / workspace_id / limit；
 - 重复 handler：install 幂等，uninstall 移除；
 - 脱敏：密钥（Bearer/api_key/token/secret）与绝对路径；
 - 422：非法 after_id / limit 参数；
@@ -13,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
@@ -20,6 +22,7 @@ from fastapi.testclient import TestClient
 
 from backend.app.routes import admin as admin_module
 from backend.app.services import runtime_log_buffer as rlb
+from backend.app.services.runtime_log_store import RuntimeLogStore
 
 
 @pytest.fixture()
@@ -28,11 +31,16 @@ def buffer() -> rlb.RuntimeLogBuffer:
 
 
 @pytest.fixture()
-def client(buffer: rlb.RuntimeLogBuffer):
+def store(tmp_path: Path) -> RuntimeLogStore:
+    return RuntimeLogStore(tmp_path, max_bytes=1024 * 1024)
+
+
+@pytest.fixture()
+def client(store: RuntimeLogStore):
     app = FastAPI()
     app.include_router(admin_module.router)
     with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(admin_module, "get_default_buffer", lambda: buffer)
+        mp.setattr(admin_module, "get_default_store", lambda: store)
         with TestClient(app) as c:
             yield c
 
@@ -172,10 +180,10 @@ def test_sanitize_absolute_path_keeps_filename() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# 只读 API
+# 只读 API（使用新 RuntimeLogStore）
 # --------------------------------------------------------------------------- #
-def test_get_logs_returns_entries(client: TestClient, buffer: rlb.RuntimeLogBuffer) -> None:
-    buffer.append("INFO", "app", "hello")
+def test_get_logs_returns_entries(client: TestClient, store: RuntimeLogStore) -> None:
+    store.append(level="INFO", category="app", message="hello")
     resp = client.get("/admin/logs")
     assert resp.status_code == 200
     data = resp.json()
@@ -185,18 +193,18 @@ def test_get_logs_returns_entries(client: TestClient, buffer: rlb.RuntimeLogBuff
     assert data["entries"][0]["category"] == "app"
 
 
-def test_get_logs_after_id(client: TestClient, buffer: rlb.RuntimeLogBuffer) -> None:
+def test_get_logs_after_id(client: TestClient, store: RuntimeLogStore) -> None:
     for i in range(5):
-        buffer.append("INFO", "app", f"m{i}")
+        store.append(level="INFO", category="app", message=f"m{i}")
     resp = client.get("/admin/logs", params={"after_id": 3})
     assert resp.status_code == 200
     ids = [e["id"] for e in resp.json()["entries"]]
     assert ids == [4, 5]
 
 
-def test_get_logs_level_filter(client: TestClient, buffer: rlb.RuntimeLogBuffer) -> None:
-    buffer.append("INFO", "app", "i")
-    buffer.append("ERROR", "app", "e")
+def test_get_logs_level_filter(client: TestClient, store: RuntimeLogStore) -> None:
+    store.append(level="INFO", category="app", message="i")
+    store.append(level="ERROR", category="app", message="e")
     resp = client.get("/admin/logs", params={"level": "ERROR"})
     assert [e["message"] for e in resp.json()["entries"]] == ["e"]
 
@@ -213,3 +221,20 @@ def test_get_logs_invalid_after_id_returns_422(client: TestClient) -> None:
 def test_logs_endpoint_is_read_only(client: TestClient) -> None:
     assert client.post("/admin/logs").status_code == 405
     assert client.delete("/admin/logs").status_code == 405
+
+
+def test_get_logs_before_id(client: TestClient, store: RuntimeLogStore) -> None:
+    """向前分页。"""
+    for i in range(10):
+        store.append(level="INFO", category="app", message=f"m{i}")
+    resp = client.get("/admin/logs", params={"before_id": 6})
+    assert resp.status_code == 200
+    ids = [e["id"] for e in resp.json()["entries"]]
+    assert all(i < 6 for i in ids)
+
+
+def test_get_logs_after_and_before_422(client: TestClient, store: RuntimeLogStore) -> None:
+    """after_id 和 before_id 不能同时使用。"""
+    store.append(level="INFO", category="app", message="test")
+    resp = client.get("/admin/logs", params={"after_id": 1, "before_id": 5})
+    assert resp.status_code == 422
