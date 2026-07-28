@@ -36,9 +36,11 @@ const FavoritesPage = lazy(() => import('@/pages/FavoritesPage/FavoritesPage'))
 const SearchPage = lazy(() => import('@/pages/SearchPage/SearchPage'))
 const WorkbenchPage = lazy(() => import('@/pages/WorkbenchPage/index'))
 const ProcessingPage = lazy(() => import('@/pages/result/ProcessingPage/index'))
-const BatchProcessingPage = lazy(() => import('@/pages/result/BatchProcessingPage/index'))
 const LibraryPage = lazy(() => import('@/pages/LibraryPage/index'))
 const NoteShell = lazy(() => import('@/pages/result/NoteShell/index'))
+const TaskCenterPage = lazy(() => import('@/pages/TaskCenterPage/index'))
+const BatchCreatePage = lazy(() => import('@/pages/TaskCenterPage/BatchCreatePage'))
+const BatchDetailPage = lazy(() => import('@/pages/TaskCenterPage/BatchDetailPage'))
 
 // 懒加载 fallback：骨架屏替代纯文本（Skeleton 仅依赖 cn，不增加主 chunk 负担）
 const RouteFallback = () => (
@@ -83,6 +85,9 @@ export const router = createBrowserRouter([
       },
       { path: 'library', element: withSuspense(<LibraryPage />) },
       { path: 'notes', element: withSuspense(<LibraryPage />) },
+      { path: 'tasks', element: withSuspense(<TaskCenterPage />) },
+      { path: 'tasks/new', element: withSuspense(<BatchCreatePage />) },
+      { path: 'tasks/batches/:batchId', element: withSuspense(<BatchDetailPage />) },
       { path: 'workspaces/:id', element: withSuspense(<TaskboardPage />) },
       {
         path: 'workspaces/:workspaceId/items/:itemId/overview',
@@ -128,7 +133,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'processing/batch/:workspaceId',
-        element: withSuspense(<BatchProcessingPage />),
+        loader: () => redirect('/tasks'),
       },
       {
         path: 'processing/:taskId',

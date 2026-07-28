@@ -10,6 +10,7 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
+  ListChecks,
   type LucideIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -39,6 +40,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { id: 'home',       path: '/',           icon: Home,         label: '首页' },
   { id: 'notes',      path: '/notes',      icon: FileText,     label: '笔记' },
+  { id: 'tasks',      path: '/tasks',      icon: ListChecks,   label: '任务中心' },
 ]
 
 const BOTTOM_ITEMS: NavItem[] = [

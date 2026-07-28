@@ -26,6 +26,9 @@ export interface TaskLogEntry {
 export interface TaskRecord {
   task_id: string
   project_id: string
+  batch_id?: string
+  batch_item_id?: string
+  attempt_no?: number
   task_type: string                    // download|analyze|note|text|image|audio
   payload: Record<string, unknown>
   status: string                       // TaskStatus 值

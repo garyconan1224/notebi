@@ -32,3 +32,13 @@ export async function createPipelineTask(request: TaskCreateRequest): Promise<Ta
   const response = await http.post<TaskCreateResponse>(PIPELINE_TASKS_URL, request)
   return response.data
 }
+
+export async function listPipelineTasks(
+  params: Record<string, string | number | boolean> = {},
+): Promise<TaskRecord[]> {
+  const response = await http.get<TaskRecord[] | { data: TaskRecord[] }>(
+    PIPELINE_TASKS_URL,
+    { params },
+  )
+  return Array.isArray(response.data) ? response.data : response.data.data
+}

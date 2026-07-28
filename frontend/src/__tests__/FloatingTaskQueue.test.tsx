@@ -4,10 +4,20 @@ import { FloatingTaskQueue } from '@/components/FloatingTaskQueue'
 import { useTaskStore } from '@/store/taskStore'
 import type { TaskRecord } from '@/types/task'
 
-const { cancelMock, deleteMock, navigateMock, retryMock, routeState } = vi.hoisted(() => ({
+const {
+  cancelBatchMock,
+  cancelMock,
+  deleteMock,
+  navigateMock,
+  pauseBatchMock,
+  retryMock,
+  routeState,
+} = vi.hoisted(() => ({
+  cancelBatchMock: vi.fn(),
   cancelMock: vi.fn(),
   deleteMock: vi.fn(),
   navigateMock: vi.fn(),
+  pauseBatchMock: vi.fn(),
   retryMock: vi.fn(),
   routeState: { pathname: '/' },
 }))
@@ -25,6 +35,11 @@ vi.mock('@/services/pipeline', () => ({
   cancelPipelineTask: cancelMock,
   deletePipelineTask: deleteMock,
   retryPipelineTask: retryMock,
+}))
+
+vi.mock('@/services/taskBatches', () => ({
+  cancelTaskBatch: cancelBatchMock,
+  pauseTaskBatch: pauseBatchMock,
 }))
 
 vi.mock('sonner', () => ({
@@ -56,10 +71,14 @@ describe('FloatingTaskQueue v2', () => {
     routeState.pathname = '/'
     navigateMock.mockReset()
     cancelMock.mockReset()
+    cancelBatchMock.mockReset()
     deleteMock.mockReset()
+    pauseBatchMock.mockReset()
     retryMock.mockReset()
     cancelMock.mockResolvedValue({})
+    cancelBatchMock.mockResolvedValue({})
     deleteMock.mockResolvedValue({})
+    pauseBatchMock.mockResolvedValue({})
     retryMock.mockResolvedValue(makeTask({ task_id: 'task-retry', status: 'PENDING' }))
     useTaskStore.setState({
       tasks: [],
@@ -173,7 +192,7 @@ describe('FloatingTaskQueue v2', () => {
     expect(screen.getByTitle('后端重启，任务中断')).toBeTruthy()
   })
 
-  it('查看全部优先跳转到当前合集的批量处理页', () => {
+  it('查看全部统一跳转到任务中心', () => {
     useTaskStore.setState({
       tasks: [makeTask({ status: 'DOWNLOAD' })],
     })
@@ -182,37 +201,53 @@ describe('FloatingTaskQueue v2', () => {
     fireEvent.click(screen.getByRole('button', { name: /任务/ }))
     fireEvent.click(screen.getByRole('button', { name: '查看全部' }))
 
-    expect(navigateMock).toHaveBeenCalledWith('/processing/batch/workspace-1')
+    expect(navigateMock).toHaveBeenCalledWith('/tasks')
   })
 
-  it('查看全部没有有效合集时回退到 /workspaces', () => {
-    useTaskStore.setState({
-      tasks: [makeTask({ project_id: 'default_project', status: 'DOWNLOAD' })],
-    })
-
-    render(<FloatingTaskQueue />)
-    fireEvent.click(screen.getByRole('button', { name: /任务/ }))
-    fireEvent.click(screen.getByRole('button', { name: '查看全部' }))
-
-    expect(navigateMock).toHaveBeenCalledWith('/workspaces')
-  })
-
-  it('进行中任务支持单项取消和批量暂停', async () => {
+  it('批次任务跳转批次详情，单项取消会取消整个批次', async () => {
     useTaskStore.setState({
       tasks: [
-        makeTask({ task_id: 'task-a', status: 'DOWNLOAD', payload: { title: 'Download task' } }),
-        makeTask({ task_id: 'task-b', status: 'ASR', payload: { title: 'Transcribe task' } }),
+        makeTask({
+          task_id: 'task-a',
+          batch_id: 'batch-1',
+          status: 'DOWNLOAD',
+          payload: { title: 'Download task' },
+        }),
       ],
     })
 
     render(<FloatingTaskQueue />)
     fireEvent.click(screen.getByRole('button', { name: /任务/ }))
+    fireEvent.click(screen.getByText('Download task'))
+    expect(navigateMock).toHaveBeenCalledWith('/tasks/batches/batch-1')
+
+    navigateMock.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: /任务/ }))
     fireEvent.click(screen.getByRole('button', { name: '取消任务 Download task' }))
-    fireEvent.click(screen.getByRole('button', { name: '暂停全部' }))
 
     await waitFor(() => {
-      expect(cancelMock).toHaveBeenCalledWith('task-a')
-      expect(cancelMock).toHaveBeenCalledWith('task-b')
+      expect(cancelBatchMock).toHaveBeenCalledWith('batch-1')
+      expect(cancelMock).not.toHaveBeenCalled()
+    })
+  })
+
+  it('暂停批次只暂停唯一批次，不把独立任务当取消处理', async () => {
+    useTaskStore.setState({
+      tasks: [
+        makeTask({ task_id: 'task-a', batch_id: 'batch-1', status: 'DOWNLOAD' }),
+        makeTask({ task_id: 'task-b', batch_id: 'batch-1', status: 'ASR' }),
+        makeTask({ task_id: 'task-c', status: 'SUM', payload: { title: 'Standalone' } }),
+      ],
+    })
+
+    render(<FloatingTaskQueue />)
+    fireEvent.click(screen.getByRole('button', { name: /任务/ }))
+    fireEvent.click(screen.getByRole('button', { name: '暂停批次' }))
+
+    await waitFor(() => {
+      expect(pauseBatchMock).toHaveBeenCalledTimes(1)
+      expect(pauseBatchMock).toHaveBeenCalledWith('batch-1')
+      expect(cancelMock).not.toHaveBeenCalled()
     })
   })
 
