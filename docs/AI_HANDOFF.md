@@ -3,7 +3,7 @@
 ## 当前执行指针（2026-07-28）
 
 - **当前任务**：完成批准的 NoteBi S1–S6 方案并做最终验收；基线为 `codex/design-knowledge-tasks-settings` 的 `49364c8`。
-- **当前工作分支**：`codex/complete-approved-plan`，最终 HEAD 为 `2c5f6df`；主工作树 `/Users/conan/Desktop/notebi` 未修改。
+- **当前工作分支**：`codex/complete-approved-plan`，最终 HEAD 为 `8546289`（验收证据提交为 `2c5f6df`）；主工作树 `/Users/conan/Desktop/notebi` 未修改。
 - **验收结论**：**通过**。业务修复、全量测试、真实浏览器/媒体/知识库证据均已完成；S6 提交只增加验收脚本、证据和文档，保存条遮挡修复已单独提交 `9d8d557`。
 - **全量验证**：后端 `1218 passed, 2 skipped, 5 warnings`；前端 `53 files / 292 tests passed`；`pnpm build` 通过（2985 modules，存在 NoteShell >500KB 的既有 chunk 警告）；`compileall backend shared scripts` 与 `git diff --check` 通过。
 - **设置与日志**：网络、下载均完成保存 → GET 读回 → 刷新一致；响应不再序列化 `po_token`、`visitor_data`、`cookie_base_dirs`；`/admin/logs` 返回 `entries/latest_id/oldest_id/has_more_older`，`after_id` 与 `before_id` 互斥，标准日志默认加载最新并支持暂停/过滤/导出脱敏。
