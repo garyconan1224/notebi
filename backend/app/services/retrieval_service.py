@@ -19,6 +19,22 @@ _CITATION_RE = re.compile(r"\[(\d+)\]")
 _SOURCE_CITATION_RE = re.compile(r"\[source:([A-Za-z0-9._:-]+)\]")
 
 
+def _record_indexable_content_count(record: Any, task_store: Any) -> int:
+    item_count = sum(
+        workspace_knowledge._item_has_data(item, task_store)
+        for item in record.items
+    )
+    merged_count = sum(
+        bool(
+            not note.deleted_at
+            and note.current_version_id
+            and note.content_md.strip()
+        )
+        for note in record.merged_notes
+    )
+    return item_count + merged_count
+
+
 def _extract_citations(
     answer: str,
     sources: List[Dict[str, Any]],
@@ -228,10 +244,7 @@ class RetrievalService:
         indexable = [
             record
             for record in records
-            if any(
-                workspace_knowledge._item_has_data(item, self.task_store)
-                for item in record.items
-            )
+            if _record_indexable_content_count(record, self.task_store)
         ]
         ready_ids = [
             record.workspace_id
@@ -252,15 +265,11 @@ class RetrievalService:
             "indexable_workspace_count": len(indexable),
             "indexed_workspace_count": len(ready_ids),
             "item_count": sum(
-                workspace_knowledge._item_has_data(item, self.task_store)
+                _record_indexable_content_count(record, self.task_store)
                 for record in indexable
-                for item in record.items
             ),
             "indexed_item_count": sum(
-                sum(
-                    workspace_knowledge._item_has_data(item, self.task_store)
-                    for item in record.items
-                )
+                _record_indexable_content_count(record, self.task_store)
                 for record in indexable
                 if record.workspace_id in ready_ids
             ),

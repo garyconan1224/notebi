@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.app.routes.pipeline import _runner as _pipeline_runner
+from backend.app.routes.workspaces import _store as _workspace_store
 from backend.app.models.knowledge_conversation import (
     KnowledgeMessage,
     KnowledgeSourceSnapshot,
@@ -18,14 +19,12 @@ from backend.app.services.knowledge_conversation_store import (
 )
 from backend.app.services.knowledge_message_service import KnowledgeMessageService
 from backend.app.services.retrieval_service import RetrievalService
-from backend.app.services.workspace_store import WorkspaceStore
 from shared.config import DATA_DIR
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 _conversation_store = KnowledgeConversationStore(
     DATA_DIR / ".local" / "knowledge_conversations"
 )
-_workspace_store = WorkspaceStore()
 
 
 class KnowledgeAskRequest(BaseModel):

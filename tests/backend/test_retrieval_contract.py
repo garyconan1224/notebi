@@ -10,6 +10,8 @@ from backend.app.services.knowledge_source import (
     compute_source_id,
 )
 from backend.app.services.retrieval_service import _extract_citations
+from backend.app.services.retrieval_service import _record_indexable_content_count
+from backend.app.models.workspace import MergedNote, WorkspaceRecord
 from backend.app.services.workspace_search_service import _build_source
 
 
@@ -178,6 +180,18 @@ def test_workspace_source_builder_uses_chunk_identity() -> None:
     assert first["jump_url"].endswith(
         "?start_ms=30000&field=transcript&segment=segment-1"
     )
+
+
+def test_active_merged_note_counts_as_indexable_content() -> None:
+    record = WorkspaceRecord(
+        workspace_id="w1",
+        name="仅融合笔记",
+        merged_notes=[
+            MergedNote(title="综合结论", content_md="可以检索的融合内容")
+        ],
+    )
+
+    assert _record_indexable_content_count(record, task_store=None) == 1
 
 
 def test_unknown_source_citations_are_rejected() -> None:

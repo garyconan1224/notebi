@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.app.routes import knowledge as routes
+from backend.app.routes import workspaces as workspace_routes
 from backend.app.models.knowledge_conversation import KnowledgeMessage
 from backend.app.services.knowledge_conversation_store import (
     KnowledgeConversationStore,
@@ -16,6 +17,10 @@ from backend.app.services.knowledge_conversation_store import (
 class _WorkspaceStore:
     def get(self, workspace_id: str):
         return object() if workspace_id in {"w1", "w2"} else None
+
+
+def test_knowledge_uses_live_workspace_route_store() -> None:
+    assert routes._workspace_store is workspace_routes._store
 
 
 def _client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
