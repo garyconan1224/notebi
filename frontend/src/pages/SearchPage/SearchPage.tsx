@@ -292,6 +292,13 @@ export default function SearchPage() {
             item => item.conversation_id !== refreshed.conversation_id,
           ),
         ])
+        const persistedTurn = refreshed.messages.some(message => (
+          message.role === 'user' && message.query_text === question
+        ))
+        if (persistedTurn) {
+          setPendingQuestion('')
+          setStreamText('')
+        }
       } catch {
         // The completed streamed answer is already visible; refresh can retry later.
       }

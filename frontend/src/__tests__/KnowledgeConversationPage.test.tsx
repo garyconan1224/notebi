@@ -144,6 +144,59 @@ describe('Knowledge conversation workspace', () => {
     expect(screen.getByText('找到 1 个来源')).toBeTruthy()
   })
 
+  it('removes the optimistic question after persisted messages refresh', async () => {
+    const refreshed = {
+      ...conversation,
+      messages: [
+        {
+          message_id: 'u1',
+          role: 'user' as const,
+          status: 'complete' as const,
+          content: '如何离线搜索？',
+          scope_snapshot: ['w1'],
+          query_text: '如何离线搜索？',
+          answer_version: 1,
+          citations: [],
+          sources: [],
+          evidence_status: {},
+          error: '',
+          timings_ms: {},
+          created_at: '2026-07-25T00:00:01Z',
+        },
+        {
+          message_id: 'a1',
+          role: 'assistant' as const,
+          status: 'complete' as const,
+          content: '答案',
+          scope_snapshot: ['w1'],
+          query_text: '如何离线搜索？',
+          answer_version: 1,
+          citations: [],
+          sources: [],
+          evidence_status: { sufficient: true },
+          error: '',
+          timings_ms: {},
+          created_at: '2026-07-25T00:00:02Z',
+        },
+      ],
+    }
+    vi.mocked(knowledge.getKnowledgeConversation)
+      .mockResolvedValueOnce(conversation)
+      .mockResolvedValueOnce(refreshed)
+
+    render(<MemoryRouter><SearchPage /></MemoryRouter>)
+    await screen.findByText('离线搜索')
+    fireEvent.change(screen.getByRole('textbox', { name: '知识库提问' }), {
+      target: { value: '如何离线搜索？' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '发送问题' }))
+
+    await waitFor(() => {
+      expect(knowledge.getKnowledgeConversation).toHaveBeenCalledTimes(2)
+      expect(screen.getAllByText('如何离线搜索？')).toHaveLength(1)
+    })
+  })
+
   it('exact mode searches originals without creating an assistant message', async () => {
     render(<MemoryRouter><SearchPage /></MemoryRouter>)
     await screen.findByText('离线搜索')
