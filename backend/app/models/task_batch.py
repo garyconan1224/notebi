@@ -50,6 +50,7 @@ class BatchItem:
     source_title: str = ""
     action: str = "process"  # process / skip / copy
     task_id: str = ""  # 关联的任务 ID
+    task_ids: List[str] = field(default_factory=list)  # 同一逻辑项的全部 attempt
     status: str = "pending"  # pending / running / completed / failed / cancelled / skipped
     attempt_no: int = 1
     error: str = ""
@@ -59,12 +60,17 @@ class BatchItem:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "BatchItem":
+        current_task_id = str(data.get("task_id") or "")
+        task_ids = [str(task_id) for task_id in data.get("task_ids") or [] if task_id]
+        if current_task_id and current_task_id not in task_ids:
+            task_ids.append(current_task_id)
         return cls(
             batch_item_id=str(data.get("batch_item_id") or ""),
             source_url=str(data.get("source_url") or ""),
             source_title=str(data.get("source_title") or ""),
             action=str(data.get("action") or "process"),
-            task_id=str(data.get("task_id") or ""),
+            task_id=current_task_id,
+            task_ids=task_ids,
             status=str(data.get("status") or "pending"),
             attempt_no=int(data.get("attempt_no") or 1),
             error=str(data.get("error") or ""),

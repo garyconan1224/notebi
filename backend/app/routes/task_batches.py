@@ -20,10 +20,30 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from backend.app.models.task_batch import BatchItem, BatchStatus, TaskBatch
+from backend.app.models.task_batch import BatchItem
+from backend.app.services.task_batch_service import TaskBatchService
 from backend.app.services.task_batch_store import get_default_batch_store
+from shared.settings_store import load_settings
 
 router = APIRouter(prefix="/pipeline/batches", tags=["batches"])
+_services: Dict[int, TaskBatchService] = {}
+
+
+def get_batch_service() -> TaskBatchService:
+    """返回与当前批次 store 绑定的生命周期服务。"""
+    store = get_default_batch_store()
+    key = id(store)
+    service = _services.get(key)
+    if service is None:
+        from backend.app.routes.pipeline import _runner
+
+        service = TaskBatchService(
+            batch_store=store,
+            runner=_runner,
+            concurrency_limit=lambda: load_settings().download.concurrency_limit,
+        )
+        _services[key] = service
+    return service
 
 
 # ── 请求/响应模型 ─────────────────────────────────────────────────────────────
@@ -105,7 +125,6 @@ def create_batch(req: BatchCreateRequest) -> Dict[str, Any]:
             if batch.settings_snapshot.get("idempotency_key") == req.idempotency_key:
                 return batch.to_dict()
 
-    batch_id = str(uuid.uuid4())
     items = [
         BatchItem(
             batch_item_id=item.get("batch_item_id", str(uuid.uuid4())[:8]),
@@ -115,16 +134,12 @@ def create_batch(req: BatchCreateRequest) -> Dict[str, Any]:
         for item in req.items
     ]
 
-    batch = TaskBatch(
-        batch_id=batch_id,
+    batch = get_batch_service().create_batch(
         name=req.name,
         target_workspace_id=req.workspace_id,
         items=items,
         settings_snapshot={**req.settings, "idempotency_key": req.idempotency_key},
-        total_count=len(items),
     )
-    batch.update_status()
-    store.save(batch)
 
     return batch.to_dict()
 
@@ -158,81 +173,45 @@ def get_batch(batch_id: str) -> Dict[str, Any]:
 @router.post("/{batch_id}/pause")
 def pause_batch(batch_id: str) -> Dict[str, Any]:
     """暂停批次。"""
-    store = get_default_batch_store()
-    batch = store.get(batch_id)
-    if not batch:
-        raise HTTPException(status_code=404, detail="批次不存在")
-    if batch.status in ("completed", "failed", "cancelled", "partial_cancelled"):
-        raise HTTPException(status_code=409, detail="批次已终态，无法暂停")
-
-    batch.pause_requested = True
-    batch.update_status()
-    store.save(batch)
-    return batch.to_dict()
+    try:
+        return get_batch_service().pause(batch_id).to_dict()
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="批次不存在") from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.post("/{batch_id}/resume")
 def resume_batch(batch_id: str) -> Dict[str, Any]:
     """恢复批次。"""
-    store = get_default_batch_store()
-    batch = store.get(batch_id)
-    if not batch:
-        raise HTTPException(status_code=404, detail="批次不存在")
-    if batch.status != "paused":
-        raise HTTPException(status_code=409, detail="批次未暂停")
-
-    batch.pause_requested = False
-    batch.update_status()
-    store.save(batch)
-    return batch.to_dict()
+    try:
+        return get_batch_service().resume(batch_id).to_dict()
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="批次不存在") from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.post("/{batch_id}/cancel")
 def cancel_batch(batch_id: str) -> Dict[str, Any]:
     """取消批次。"""
-    store = get_default_batch_store()
-    batch = store.get(batch_id)
-    if not batch:
-        raise HTTPException(status_code=404, detail="批次不存在")
-    if batch.status in ("completed", "failed", "cancelled", "partial_cancelled"):
-        raise HTTPException(status_code=409, detail="批次已终态，无法取消")
-
-    batch.cancel_requested = True
-    # 取消等待中的项
-    for item in batch.items:
-        if item.status == "pending":
-            item.status = "cancelled"
-    batch.update_status()
-    store.save(batch)
-    return batch.to_dict()
+    try:
+        return get_batch_service().cancel(batch_id).to_dict()
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="批次不存在") from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.post("/{batch_id}/retry-failed")
 def retry_failed(batch_id: str) -> Dict[str, Any]:
     """重试失败项。"""
-    store = get_default_batch_store()
-    batch = store.get(batch_id)
-    if not batch:
-        raise HTTPException(status_code=404, detail="批次不存在")
-    if batch.status not in ("partial", "failed", "partial_cancelled"):
-        raise HTTPException(status_code=409, detail="无失败项可重试")
-
-    failed_items = [item for item in batch.items if item.status == "failed"]
-    if not failed_items:
-        raise HTTPException(status_code=409, detail="无失败项")
-
-    # 重置失败项状态
-    for item in failed_items:
-        item.status = "pending"
-        item.attempt_no += 1
-        item.error = ""
-
-    batch.cancel_requested = False
-    batch.pause_requested = False
-    batch.completed_at = ""
-    batch.update_status()
-    store.save(batch)
-    return batch.to_dict()
+    try:
+        return get_batch_service().retry_failed(batch_id).to_dict()
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="批次不存在") from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.delete("/{batch_id}")

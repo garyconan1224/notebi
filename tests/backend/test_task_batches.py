@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 import pytest
@@ -11,17 +12,36 @@ from fastapi.testclient import TestClient
 @pytest.fixture()
 def client(tmp_path: Path, monkeypatch):
     """创建隔离的测试客户端。"""
+    from backend.app.services.task_batch_service import TaskBatchService
     from backend.app.services.task_batch_store import TaskBatchStore
+    from backend.app.services.task_runner import TaskRunner
+    from backend.app.services.task_store import TaskStore
 
-    store = TaskBatchStore(tmp_path)
+    store = TaskBatchStore(tmp_path / "batch-data")
+    task_store = TaskStore(tmp_path / "backend_tasks.json")
+    runner = TaskRunner(task_store, max_workers=1)
+    release = threading.Event()
+    runner.register("note", lambda _record, _runner: (release.wait(timeout=2), {})[1])
+    service = TaskBatchService(
+        batch_store=store,
+        runner=runner,
+        concurrency_limit=lambda: 1,
+    )
     monkeypatch.setattr(
         "backend.app.routes.task_batches.get_default_batch_store",
         lambda: store,
     )
+    monkeypatch.setattr(
+        "backend.app.routes.task_batches.get_batch_service",
+        lambda: service,
+    )
 
     from backend.app.main import app
 
-    return TestClient(app)
+    with TestClient(app) as test_client:
+        yield test_client
+    release.set()
+    runner._executor.shutdown(wait=True)
 
 
 # ── 预览 ─────────────────────────────────────────────────────────────────────
@@ -58,7 +78,7 @@ def test_create_batch(client: TestClient) -> None:
     assert resp.status_code == 200
     data = resp.json()
     assert data["name"] == "test batch"
-    assert data["status"] == "queued"
+    assert data["status"] in {"queued", "running"}
     assert len(data["items"]) == 2
 
 
@@ -126,7 +146,7 @@ def test_pause_and_resume(client: TestClient) -> None:
     # 恢复
     resume_resp = client.post(f"/pipeline/batches/{batch_id}/resume")
     assert resume_resp.status_code == 200
-    assert resume_resp.json()["status"] == "queued"
+    assert resume_resp.json()["status"] in {"queued", "running"}
 
 
 def test_pause_is_not_cancel(client: TestClient) -> None:
@@ -139,8 +159,9 @@ def test_pause_is_not_cancel(client: TestClient) -> None:
 
     client.post(f"/pipeline/batches/{batch_id}/pause")
     resp = client.get(f"/pipeline/batches/{batch_id}")
-    # 暂停后项不应被取消
-    assert resp.json()["items"][0]["status"] == "pending"
+    # 暂停只阻止后续调度；已经启动的项允许完成当前阶段，但绝不能被当作取消。
+    assert resp.json()["items"][0]["status"] in {"pending", "running"}
+    assert resp.json()["items"][0]["status"] != "cancelled"
 
 
 # ── 取消 ─────────────────────────────────────────────────────────────────────

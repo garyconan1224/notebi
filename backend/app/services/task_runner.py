@@ -13,6 +13,7 @@ from backend.app.services.task_store import TaskStore
 TaskHandler = Callable[[TaskRecord, "TaskRunner"], Dict[str, Any]]
 SuccessCallback = Callable[[TaskRecord, "TaskRunner"], None]
 PartialCallback = Callable[[TaskRecord, "TaskRunner"], None]
+CompletionCallback = Callable[[TaskRecord, "TaskRunner"], None]
 
 
 class TaskRunner:
@@ -22,6 +23,7 @@ class TaskRunner:
         self._handlers: Dict[str, TaskHandler] = {}
         self._success_callbacks: Dict[str, List[SuccessCallback]] = {}
         self._partial_callbacks: Dict[str, List[PartialCallback]] = {}
+        self._completion_callbacks: List[CompletionCallback] = []
         self._lock = threading.Lock()
 
     def register(self, task_type: str, handler: TaskHandler) -> None:
@@ -50,6 +52,12 @@ class TaskRunner:
         """注册核心产物可用、但后续阶段未完成时的回调。"""
         with self._lock:
             self._partial_callbacks.setdefault(task_type, []).append(callback)
+
+    def register_completion_callback(self, callback: CompletionCallback) -> None:
+        """注册真实执行结束回调，成功、失败和取消都会触发。"""
+        with self._lock:
+            if callback not in self._completion_callbacks:
+                self._completion_callbacks.append(callback)
 
     @staticmethod
     def _normalize_url_for_dedup(raw: str) -> str:
@@ -102,7 +110,17 @@ class TaskRunner:
                 return rec.task_id
         return None
 
-    def create_task(self, project_id: str, task_type: str, payload: Dict[str, Any], *, retry_of: str = "") -> TaskRecord:
+    def create_task(
+        self,
+        project_id: str,
+        task_type: str,
+        payload: Dict[str, Any],
+        *,
+        retry_of: str = "",
+        batch_id: str = "",
+        batch_item_id: str = "",
+        attempt_no: int = 1,
+    ) -> TaskRecord:
         # 防止同 URL 的重复下载任务
         if not retry_of:
             dup_tid = self._has_active_duplicate(project_id, task_type, payload)
@@ -116,6 +134,9 @@ class TaskRunner:
             task_type=task_type,
             payload=payload,
             retry_of=retry_of,
+            batch_id=batch_id,
+            batch_item_id=batch_item_id,
+            attempt_no=attempt_no,
         )
         self.store.create(rec)
         self.store.append_log(rec.task_id, "Task accepted")
@@ -123,8 +144,30 @@ class TaskRunner:
         return rec
 
     def _run(self, task_id: str) -> None:
+        try:
+            self._execute(task_id)
+        finally:
+            current = self.store.get(task_id)
+            if current and current.status in TERMINAL_STATUS_VALUES:
+                with self._lock:
+                    callbacks = list(self._completion_callbacks)
+                for callback in callbacks:
+                    try:
+                        callback(current, self)
+                    except Exception as callback_error:  # noqa: BLE001
+                        self.store.append_log(
+                            task_id,
+                            f"Completion callback error: {callback_error}",
+                            level="error",
+                        )
+
+    def _execute(self, task_id: str) -> None:
         record = self.store.get(task_id)
         if record is None:
+            return
+        if record.cancel_requested:
+            if record.status not in TERMINAL_STATUS_VALUES:
+                self.store.update(task_id, status=TaskStatus.CANCELLED.value)
             return
         handler = self._handlers.get(record.task_type)
         if handler is None:
