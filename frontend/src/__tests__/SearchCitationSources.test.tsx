@@ -156,4 +156,29 @@ describe('SearchResultView citations', () => {
     expect(screen.queryByText(/0\.9/)).toBeNull()
     expect(screen.queryByText(/0\.7/)).toBeNull()
   })
+
+  it('shows the approved insufficient-evidence state while keeping snippets', () => {
+    render(
+      <MemoryRouter>
+        <SearchResultView
+          result={{
+            ...baseResult,
+            answer: '',
+            answer_status: 'insufficient_evidence',
+            evidence_status: {
+              sufficient: false,
+              threshold: 0.2,
+              best_score: 0.1,
+            },
+            citations: [],
+          }}
+          workspaces={[ws]}
+          onWorkspaceChange={vi.fn()}
+        />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText('现有合集中没有足够证据')).toBeTruthy()
+    expect(screen.getByText(/相关原文（3）/)).toBeTruthy()
+  })
 })

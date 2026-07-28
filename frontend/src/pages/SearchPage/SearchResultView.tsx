@@ -51,6 +51,7 @@ export function SearchResultView({ result, workspaces, onWorkspaceChange }: Prop
         related.push({ source, index })
       }
     })
+    cited.sort((left, right) => left.number - right.number)
     return { citedSources: cited, relatedSources: related }
   }, [result.sources, citations])
 
@@ -150,7 +151,11 @@ export function SearchResultView({ result, workspaces, onWorkspaceChange }: Prop
       {result.mode !== 'exact' && (
         <section className="search-answer" aria-label="知识库回答">
           <div className="search-answer-label">知识库回答</div>
-          <div className="search-answer-body">{result.answer || '（模型未返回内容）'}</div>
+          <div className="search-answer-body">
+            {result.answer_status === 'insufficient_evidence'
+              ? '现有合集中没有足够证据'
+              : result.answer || '（模型未返回内容）'}
+          </div>
           {citations.length > 0 ? (
             <div className="search-citations" aria-label="回答引用">
               {citations.map(citation => (
@@ -187,7 +192,7 @@ export function SearchResultView({ result, workspaces, onWorkspaceChange }: Prop
       )}
 
       {/* 相关原文（默认折叠） */}
-      {relatedSources.length > 0 && (
+      {result.mode !== 'exact' && relatedSources.length > 0 && (
         <section aria-label="相关原文">
           <button
             className="search-related-toggle"
