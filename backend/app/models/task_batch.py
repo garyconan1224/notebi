@@ -48,6 +48,10 @@ class BatchItem:
     batch_item_id: str
     source_url: str = ""
     source_title: str = ""
+    external_id: str = ""
+    lineage_id: str = ""
+    existing_workspace_id: str = ""
+    existing_item_id: str = ""
     action: str = "process"  # process / skip / copy
     task_id: str = ""  # 关联的任务 ID
     task_ids: List[str] = field(default_factory=list)  # 同一逻辑项的全部 attempt
@@ -68,6 +72,10 @@ class BatchItem:
             batch_item_id=str(data.get("batch_item_id") or ""),
             source_url=str(data.get("source_url") or ""),
             source_title=str(data.get("source_title") or ""),
+            external_id=str(data.get("external_id") or ""),
+            lineage_id=str(data.get("lineage_id") or ""),
+            existing_workspace_id=str(data.get("existing_workspace_id") or ""),
+            existing_item_id=str(data.get("existing_item_id") or ""),
             action=str(data.get("action") or "process"),
             task_id=current_task_id,
             task_ids=task_ids,

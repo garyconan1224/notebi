@@ -56,6 +56,10 @@ class TaskBatchStore:
         self,
         status: Optional[str] = None,
         workspace_id: Optional[str] = None,
+        source_type: Optional[str] = None,
+        keyword: Optional[str] = None,
+        created_from: Optional[str] = None,
+        created_to: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
     ) -> List[TaskBatch]:
@@ -68,6 +72,21 @@ class TaskBatchStore:
             batches = [b for b in batches if b.status == status]
         if workspace_id:
             batches = [b for b in batches if b.target_workspace_id == workspace_id]
+        if source_type:
+            batches = [b for b in batches if b.source_type == source_type]
+        if keyword:
+            needle = keyword.casefold()
+            batches = [
+                b
+                for b in batches
+                if needle in b.name.casefold()
+                or needle in b.batch_id.casefold()
+                or needle in b.target_workspace_id.casefold()
+            ]
+        if created_from:
+            batches = [b for b in batches if b.created_at >= created_from]
+        if created_to:
+            batches = [b for b in batches if b.created_at <= created_to]
 
         # 按创建时间倒序
         batches.sort(key=lambda b: b.created_at, reverse=True)
@@ -91,10 +110,29 @@ class TaskBatchStore:
                 pass
             return True
 
-    def count(self) -> int:
-        """批次总数。"""
-        with self._lock:
-            return len(self._cache)
+    def count(
+        self,
+        *,
+        status: Optional[str] = None,
+        workspace_id: Optional[str] = None,
+        source_type: Optional[str] = None,
+        keyword: Optional[str] = None,
+        created_from: Optional[str] = None,
+        created_to: Optional[str] = None,
+    ) -> int:
+        """Return the count after applying the same filters as ``list``."""
+        return len(
+            self.list(
+                status=status,
+                workspace_id=workspace_id,
+                source_type=source_type,
+                keyword=keyword,
+                created_from=created_from,
+                created_to=created_to,
+                limit=max(1, len(self._cache) or 1),
+                offset=0,
+            )
+        )
 
 
 # 默认单例

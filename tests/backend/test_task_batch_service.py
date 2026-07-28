@@ -8,7 +8,7 @@ from typing import Callable
 
 import pytest
 
-from backend.app.models.task_batch import BatchItem
+from backend.app.models.task_batch import BatchItem, TaskBatch
 from backend.app.services.task_batch_service import TaskBatchService
 from backend.app.services.task_batch_store import TaskBatchStore
 from backend.app.services.task_runner import TaskRunner
@@ -168,3 +168,115 @@ def test_scheduler_gives_next_slot_to_another_batch(batch_system) -> None:
     releases["b1"].set()
     _wait_until(lambda: started == ["a1", "b1", "a2"])
     releases["a2"].set()
+
+
+def test_copy_item_uses_copy_callback_without_creating_pipeline_task(tmp_path: Path) -> None:
+    task_store = TaskStore(tmp_path / "tasks.json")
+    batch_store = TaskBatchStore(tmp_path / "batches")
+    runner = TaskRunner(task_store, max_workers=1)
+    copied: list[tuple[str, str, str]] = []
+    service = TaskBatchService(
+        batch_store=batch_store,
+        runner=runner,
+        concurrency_limit=lambda: 1,
+        copy_item=lambda source_workspace_id, source_item_id, target_workspace_id: copied.append(
+            (source_workspace_id, source_item_id, target_workspace_id)
+        ),
+    )
+
+    batch = service.create_batch(
+        name="copy",
+        target_workspace_id="target",
+        items=[
+            BatchItem(
+                batch_item_id="copy-1",
+                source_url="https://example.com/1",
+                action="copy",
+                existing_workspace_id="source",
+                existing_item_id="item-1",
+            )
+        ],
+        settings_snapshot={},
+    )
+
+    assert copied == [("source", "item-1", "target")]
+    assert batch.items[0].status == "completed"
+    assert task_store.list_all() == []
+    runner._executor.shutdown(wait=True)
+
+
+def test_retry_rejects_nonterminal_batch(batch_system) -> None:
+    service, _batch_store, _task_store, _releases, started = batch_system
+    batch = service.create_batch(
+        name="still running",
+        target_workspace_id="ws-1",
+        items=[BatchItem(batch_item_id="i1", source_url="https://example.com/1")],
+        settings_snapshot={},
+    )
+    _wait_until(lambda: started == ["i1"])
+
+    with pytest.raises(ValueError, match="terminal"):
+        service.retry_failed(batch.batch_id)
+
+
+def test_restart_marks_orphaned_running_attempt_failed(tmp_path: Path) -> None:
+    task_store = TaskStore(tmp_path / "tasks.json")
+    batch_store = TaskBatchStore(tmp_path / "batches")
+    persisted = TaskBatch(
+        batch_id="b-restart",
+        name="restart",
+        target_workspace_id="ws",
+        items=[
+            BatchItem(
+                batch_item_id="i1",
+                source_url="https://example.com/1",
+                task_id="missing-task",
+                task_ids=["missing-task"],
+                status="running",
+            )
+        ],
+        status="running",
+    )
+    batch_store.save(persisted)
+    runner = TaskRunner(task_store, max_workers=1)
+    runner.register("note", lambda _record, _runner: {})
+
+    TaskBatchService(
+        batch_store=batch_store,
+        runner=runner,
+        concurrency_limit=lambda: 1,
+    )
+
+    recovered = batch_store.get("b-restart")
+    assert recovered is not None
+    assert recovered.items[0].status == "failed"
+    assert "重启" in recovered.items[0].error
+    assert recovered.status == "failed"
+    runner._executor.shutdown(wait=True)
+
+
+def test_retry_carries_forward_verified_workspace_item(batch_system) -> None:
+    service, batch_store, task_store, releases, started = batch_system
+    batch = service.create_batch(
+        name="resume",
+        target_workspace_id="ws-1",
+        items=[BatchItem(batch_item_id="i1", source_url="https://example.com/1")],
+        settings_snapshot={"fail_first": True},
+    )
+    _wait_until(lambda: started == ["i1"])
+    first = task_store.list_all()[0]
+    task_store.update(
+        first.task_id,
+        result={"item_id": "workspace-item-1", "video_path": "/tmp/media.mp4"},
+    )
+    releases["i1"].set()
+    _wait_until(lambda: batch_store.get(batch.batch_id).status == "failed")
+
+    releases["i1"] = threading.Event()
+    service.retry_failed(batch.batch_id)
+    _wait_until(lambda: len(task_store.list_all()) == 2)
+    retry = max(task_store.list_all(), key=lambda record: record.attempt_no)
+    assert retry.payload["item_id"] == "workspace-item-1"
+    assert retry.payload["video_path"] == "/tmp/media.mp4"
+    assert retry.payload["_resume_from_task_id"] == first.task_id
+    releases["i1"].set()

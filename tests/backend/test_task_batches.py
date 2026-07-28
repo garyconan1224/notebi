@@ -16,6 +16,8 @@ def client(tmp_path: Path, monkeypatch):
     from backend.app.services.task_batch_store import TaskBatchStore
     from backend.app.services.task_runner import TaskRunner
     from backend.app.services.task_store import TaskStore
+    from backend.app.services.workspace_store import WorkspaceStore
+    from backend.app.models.workspace import WorkspaceRecord
 
     store = TaskBatchStore(tmp_path / "batch-data")
     task_store = TaskStore(tmp_path / "backend_tasks.json")
@@ -27,6 +29,11 @@ def client(tmp_path: Path, monkeypatch):
         runner=runner,
         concurrency_limit=lambda: 1,
     )
+    workspace_store = WorkspaceStore(tmp_path / "workspaces")
+    for workspace_id in ("ws-1", "ws-a", "ws-b", "target-ws"):
+        workspace_store.create(
+            WorkspaceRecord(workspace_id=workspace_id, name=workspace_id)
+        )
     monkeypatch.setattr(
         "backend.app.routes.task_batches.get_default_batch_store",
         lambda: store,
@@ -34,6 +41,10 @@ def client(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(
         "backend.app.routes.task_batches.get_batch_service",
         lambda: service,
+    )
+    monkeypatch.setattr(
+        "backend.app.routes.task_batches.get_workspace_store",
+        lambda: workspace_store,
     )
 
     from backend.app.main import app
@@ -59,6 +70,98 @@ def test_preview_returns_items(client: TestClient) -> None:
     assert len(data["items"]) == 2
 
 
+def test_preview_ids_are_stable_and_input_duplicates_are_collapsed(client: TestClient) -> None:
+    payload = {
+        "source_type": "urls",
+        "urls": [
+            "https://example.com/video/?utm_source=share",
+            "https://example.com/video",
+        ],
+    }
+    first = client.post("/pipeline/batches/preview", json=payload).json()
+    second = client.post("/pipeline/batches/preview", json=payload).json()
+    assert first == second
+    assert first["total"] == 1
+
+
+@pytest.mark.parametrize(
+    "source_type",
+    [
+        "urls",
+        "local_files",
+        "bilibili_collection",
+        "bilibili_favorites",
+        "bilibili_uploader",
+        "bilibili_parts",
+        "youtube_playlist",
+    ],
+)
+def test_preview_accepts_all_approved_source_types(
+    client: TestClient,
+    monkeypatch,
+    source_type: str,
+) -> None:
+    monkeypatch.setattr(
+        "backend.app.routes.task_batches.resolve_batch_sources",
+        lambda **_kwargs: [
+            {
+                "source_url": f"https://example.com/{source_type}",
+                "source_title": source_type,
+                "external_id": f"id-{source_type}",
+            }
+        ],
+    )
+    response = client.post(
+        "/pipeline/batches/preview",
+        json={
+            "source_type": source_type,
+            "urls": ["https://example.com/source"],
+            "local_files": ["/tmp/example.mp4"] if source_type == "local_files" else [],
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["items"][0]["source_title"] == source_type
+
+
+def test_preview_marks_existing_item_and_offers_copy(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    from backend.app.models.workspace import WorkspaceItem, WorkspaceRecord
+    from backend.app.routes import task_batches
+
+    store = task_batches.get_workspace_store()
+    store.create(
+        WorkspaceRecord(
+            workspace_id="source-ws",
+            name="source",
+            items=[
+                WorkspaceItem(
+                    item_id="existing-item",
+                    type="video",
+                    source="url",
+                    source_value="https://example.com/video",
+                    lineage_id="lineage-1",
+                )
+            ],
+        )
+    )
+    response = client.post(
+        "/pipeline/batches/preview",
+        json={
+            "source_type": "urls",
+            "urls": ["https://example.com/video?utm_source=share"],
+            "workspace_id": "target-ws",
+        },
+    )
+    row = response.json()["items"][0]
+    assert row["status"] == "exists_elsewhere"
+    assert row["existing_workspace_id"] == "source-ws"
+    assert row["existing_item_id"] == "existing-item"
+    assert row["suggested_action"] == "copy"
+    assert set(row["allowed_actions"]) == {"skip", "copy", "process"}
+
+
 # ── 创建 ─────────────────────────────────────────────────────────────────────
 
 
@@ -80,6 +183,12 @@ def test_create_batch(client: TestClient) -> None:
     assert data["name"] == "test batch"
     assert data["status"] in {"queued", "running"}
     assert len(data["items"]) == 2
+    assert data["settings_snapshot"]["task_type"] == "note"
+    assert data["settings_snapshot"]["note_style"] == "standard"
+    assert data["settings_snapshot"]["note_type"] == "auto"
+    assert data["settings_snapshot"]["diarize"] is False
+    assert data["settings_snapshot"]["frame_analysis"] is True
+    assert data["target_workspace_id"]
 
 
 def test_create_batch_idempotent(client: TestClient) -> None:
@@ -106,6 +215,34 @@ def test_list_batches(client: TestClient) -> None:
     assert resp.status_code == 200
     data = resp.json()
     assert data["total"] == 2
+
+
+def test_list_filters_apply_to_rows_and_total(client: TestClient) -> None:
+    client.post(
+        "/pipeline/batches",
+        json={
+            "name": "Bilibili Course",
+            "source_type": "bilibili_collection",
+            "workspace_id": "ws-a",
+            "items": [],
+        },
+    )
+    client.post(
+        "/pipeline/batches",
+        json={
+            "name": "YouTube Playlist",
+            "source_type": "youtube_playlist",
+            "workspace_id": "ws-b",
+            "items": [],
+        },
+    )
+    response = client.get(
+        "/pipeline/batches",
+        params={"source": "youtube_playlist", "workspace_id": "ws-b", "keyword": "playlist"},
+    )
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+    assert response.json()["batches"][0]["name"] == "YouTube Playlist"
 
 
 # ── 详情 ─────────────────────────────────────────────────────────────────────
