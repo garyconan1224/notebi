@@ -85,7 +85,7 @@ def _extract_citations(
         if not source_id or source_id in seen_ids:
             continue
         seen_ids.add(source_id)
-        citations.append({"number": len(citations) + 1, "source_id": source_id})
+        citations.append({"number": num, "source_id": source_id})
     return (citations, warnings) if include_warnings else citations
 
 
