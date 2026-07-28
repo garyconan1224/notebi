@@ -64,6 +64,9 @@ export function NoteHistoryPanel(props: Props) {
   }
 
   const adopt = async (copy: LineageCopy) => {
+    if (!window.confirm('只更新当前合集中的副本，其他合集版本不会改变。确认采用？')) {
+      return
+    }
     setBusy(copy.content_id)
     try {
       props.onRestored(await adoptSiblingNote(
@@ -109,7 +112,11 @@ export function NoteHistoryPanel(props: Props) {
           {copies.length === 0 && <p className="note-history-empty">没有其他同源副本。</p>}
           {copies.map(copy => (
             <article key={copy.content_id}>
-              <div><strong>{copy.name || '未命名内容'}</strong><span>{copy.workspace_name}</span></div>
+              <div>
+                <strong>{copy.name || '未命名内容'}</strong>
+                <span>{copy.workspace_name} · {new Date(copy.updated_at).toLocaleString()}</span>
+                {copy.summary_preview && <p>{copy.summary_preview}</p>}
+              </div>
               <Link to={copy.jump_url}><ExternalLink size={13} />打开</Link>
               <button onClick={() => void adopt(copy)} disabled={busy === copy.content_id}>
                 采用

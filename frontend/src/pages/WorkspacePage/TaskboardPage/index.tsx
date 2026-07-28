@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -30,6 +30,8 @@ import { MaterialsTab } from './MaterialsTab'
 import { BackgroundEditor } from './BackgroundEditor'
 import { TaskboardHead } from './TaskboardHead'
 import { MergeModal } from './MergeModal'
+import { MergedNotesTab } from './MergedNotesTab'
+import { BatchesTab } from './BatchesTab'
 import type { TabId } from './types'
 import './taskboard.css'
 
@@ -40,6 +42,7 @@ import './taskboard.css'
 export default function TaskboardPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [workspace, setWorkspace] = useState<WorkspaceRecord | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -54,6 +57,10 @@ export default function TaskboardPage() {
   const [mergeOpen, setMergeOpen] = useState(false)
   const [mergeLoading, setMergeLoading] = useState(false)
   const [mergedNotes, setMergedNotes] = useState<MergedNote[]>([])
+  const requestedTab = searchParams.get('tab')
+  const activeTab = requestedTab === 'merged' || requestedTab === 'batches'
+    ? requestedTab
+    : 'content'
 
 
   const abortRef = useRef<AbortController | null>(null)
@@ -106,6 +113,11 @@ export default function TaskboardPage() {
   const refresh = () => {
     if (!workspace) return
     getWorkspace(workspace.workspace_id).then(setWorkspace).catch(() => {})
+  }
+
+  const refreshMergedNotes = async () => {
+    if (!id) return
+    setMergedNotes(await listMergedNotes(id))
   }
 
   const handleDeleteItem = async (item: WorkspaceItem) => {
@@ -209,6 +221,8 @@ export default function TaskboardPage() {
           }
           setMergeOpen(true)
         }}
+        onBatch={() => navigate(`/tasks/new?workspace_id=${encodeURIComponent(workspace.workspace_id)}`)}
+        onAsk={() => navigate(`/knowledge?workspace_ids=${encodeURIComponent(workspace.workspace_id)}&new=1`)}
         onShareMarkdown={async () => {
           if (workspace.items.length === 0) {
             toast.info('合集为空，暂无可复制的笔记')
@@ -253,59 +267,44 @@ export default function TaskboardPage() {
         onMenuAction={handleMenuAction}
       />
 
-      {/* ── 融合笔记置顶展示 ── */}
-      {mergedNotes.length > 0 && (
-        <div style={{ margin: '16px 0', border: '1px solid var(--line)', borderRadius: 10, padding: 16, background: 'var(--srf)' }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-1)', marginBottom: 12 }}>
-            融合笔记（{mergedNotes.length}）
-          </div>
-          {mergedNotes.map((mn) => (
-            <details key={mn.merged_id} style={{ marginBottom: 8 }}>
-              <summary style={{ cursor: 'pointer', fontSize: 13, color: 'var(--ink-2)', padding: '6px 0' }}>
-                {mn.title}
-                <span style={{ fontSize: 11, color: 'var(--ink-4)', marginLeft: 12 }}>
-                  {mn.item_ids.length} 素材 · {new Date(mn.created_at).toLocaleString('zh-CN')}
-                </span>
-              </summary>
-              <div
-                className="tb-merged-content"
-                style={{
-                  whiteSpace: 'pre-wrap',
-                  lineHeight: 1.8,
-                  fontSize: 13,
-                  color: 'var(--ink-1)',
-                  padding: '12px 0',
-                  borderTop: '1px solid var(--line)',
-                  marginTop: 8,
-                }}
-              >
-                {mn.content_md}
-              </div>
-              <button
-                className="btn btn-sm"
-                style={{ marginTop: 8 }}
-                onClick={async () => {
-                  await navigator.clipboard.writeText(mn.content_md)
-                  toast.success('已复制到剪贴板')
-                }}
-              >
-                复制内容
-              </button>
-            </details>
-          ))}
-        </div>
-      )}
+      <nav className="my-4 flex gap-2" aria-label="合集主分区">
+        {([
+          ['content', '内容'],
+          ['merged', '融合笔记'],
+          ['batches', '批次'],
+        ] as const).map(([tab, label]) => (
+          <button
+            key={tab}
+            type="button"
+            className="btn"
+            aria-pressed={activeTab === tab}
+            onClick={() => setSearchParams(tab === 'content' ? {} : { tab })}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
 
-      {/* 素材网格 — 默认主体 */}
       <div className="tb-body">
-        <MaterialsTab
-          items={workspace.items}
-          workspaceId={workspace.workspace_id}
-          onAddMaterial={() => setAddOpen(true)}
-          onToggleFavorite={handleToggleFavorite}
-          onDelete={handleDeleteItem}
-          onDeleteSelected={handleDeleteSelectedItems}
-        />
+        {activeTab === 'content' && (
+          <MaterialsTab
+            items={workspace.items}
+            workspaceId={workspace.workspace_id}
+            onAddMaterial={() => setAddOpen(true)}
+            onToggleFavorite={handleToggleFavorite}
+            onDelete={handleDeleteItem}
+            onDeleteSelected={handleDeleteSelectedItems}
+          />
+        )}
+        {activeTab === 'merged' && (
+          <MergedNotesTab
+            workspaceId={workspace.workspace_id}
+            notes={mergedNotes}
+            items={workspace.items}
+            onRefresh={refreshMergedNotes}
+          />
+        )}
+        {activeTab === 'batches' && <BatchesTab workspaceId={workspace.workspace_id} />}
       </div>
 
       {/* ── Modal：导出 ── */}

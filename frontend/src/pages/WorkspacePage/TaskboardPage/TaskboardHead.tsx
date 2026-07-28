@@ -36,6 +36,8 @@ interface TaskboardHeadProps {
   onAddMaterial?: () => void
   onExport?: () => void
   onMerge?: () => void
+  onBatch?: () => void
+  onAsk?: () => void
   onShareMarkdown?: () => void
   onShareHtml?: () => void
   onMenuAction?: (id: string) => void
@@ -101,6 +103,8 @@ export function TaskboardHead({
   onAddMaterial,
   onExport,
   onMerge,
+  onBatch,
+  onAsk,
   onShareMarkdown,
   onShareHtml,
   onMenuAction,
@@ -180,9 +184,13 @@ export function TaskboardHead({
             <Sparkles size={14} />
             融合
           </button>
-          <button className="btn" onClick={() => onMenuAction?.('chat')}>
+          <button className="btn" onClick={onBatch}>
+            <Layers size={14} />
+            批量任务
+          </button>
+          <button className="btn" onClick={onAsk}>
             <MessageCircle size={14} />
-            AI 对话
+            问这个合集
           </button>
           {/* 分享下拉 */}
           <div className="tb-head-more-wrap" ref={shareRef}>

@@ -71,6 +71,7 @@ export interface LineageCopy {
   name: string
   type: ItemType
   updated_at: string
+  summary_preview: string
   jump_url: string
 }
 
@@ -210,8 +211,22 @@ export async function updateWorkspace(
 }
 
 /** DELETE /workspaces/{id} — 软删除（标记 trashed=True） */
-export async function deleteWorkspace(workspaceId: string): Promise<void> {
-  await http.delete(`${BASE}/${workspaceId}`)
+export interface DeleteWorkspaceResult {
+  trashed: boolean
+  workspace_id: string
+  moved_to_inbox: number
+  already_elsewhere: number
+  trashed_count: number
+}
+
+export async function deleteWorkspace(
+  workspaceId: string,
+  contentPolicy: 'keep' | 'trash' = 'keep',
+): Promise<DeleteWorkspaceResult> {
+  const response = await http.delete<DeleteWorkspaceResult>(`${BASE}/${workspaceId}`, {
+    params: { content_policy: contentPolicy },
+  })
+  return response.data
 }
 
 /** POST /workspaces/{id}/restore — 从垃圾桶恢复 */
@@ -895,6 +910,25 @@ export interface MergedNote {
   item_ids: string[]
   content_md: string
   created_at: string
+  current_version_id: string
+  versions: MergedNoteVersion[]
+  updated_at: string
+  deleted_at: string
+}
+
+export interface MergedNoteVersion {
+  version_id: string
+  content_md: string
+  item_ids: string[]
+  source_snapshot: Array<{
+    item_id: string
+    content_id: string
+    lineage_id: string
+    title: string
+    summary_hash: string
+  }>
+  created_at: string
+  created_by: 'ai' | 'user' | 'restore'
 }
 
 /** POST /workspaces/{id}/merge — 融合选中素材笔记 */
@@ -911,6 +945,47 @@ export async function mergeNotes(
 export async function listMergedNotes(workspaceId: string): Promise<MergedNote[]> {
   const res = await http.get(`${BASE}/${workspaceId}/merged-notes`)
   return res.data as MergedNote[]
+}
+
+export async function createMergedNote(
+  workspaceId: string,
+  payload: { title: string; content_md: string; item_ids: string[] },
+): Promise<MergedNote> {
+  const response = await http.post<MergedNote>(`${BASE}/${workspaceId}/merged-notes`, payload)
+  return response.data
+}
+
+export async function updateMergedNote(
+  workspaceId: string,
+  mergedId: string,
+  payload: { title?: string; content_md?: string; item_ids?: string[] },
+): Promise<MergedNote> {
+  const response = await http.patch<MergedNote>(
+    `${BASE}/${workspaceId}/merged-notes/${mergedId}`,
+    payload,
+  )
+  return response.data
+}
+
+export async function listMergedNoteVersions(
+  workspaceId: string,
+  mergedId: string,
+): Promise<MergedNoteVersion[]> {
+  const response = await http.get<MergedNoteVersion[]>(
+    `${BASE}/${workspaceId}/merged-notes/${mergedId}/versions`,
+  )
+  return response.data
+}
+
+export async function restoreMergedNoteVersion(
+  workspaceId: string,
+  mergedId: string,
+  versionId: string,
+): Promise<MergedNote> {
+  const response = await http.post<MergedNote>(
+    `${BASE}/${workspaceId}/merged-notes/${mergedId}/versions/${versionId}/restore`,
+  )
+  return response.data
 }
 
 /** DELETE /workspaces/{id}/merged-notes/{mergedId} — 删除融合笔记 */

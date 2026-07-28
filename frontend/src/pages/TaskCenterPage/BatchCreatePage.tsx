@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { createTaskBatch, previewTaskBatch } from '@/services/taskBatches'
 import type { BatchPreviewItem } from '@/types/taskBatch'
 
 export default function BatchCreatePage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [sourceType, setSourceType] = useState('urls')
   const [sourceText, setSourceText] = useState('')
-  const [workspaceId, setWorkspaceId] = useState('')
+  const [workspaceId, setWorkspaceId] = useState(searchParams.get('workspace_id') || '')
   const [batchName, setBatchName] = useState('新批量笔记')
   const [noteStyle, setNoteStyle] = useState('standard')
   const [recognitionType, setRecognitionType] = useState('auto')

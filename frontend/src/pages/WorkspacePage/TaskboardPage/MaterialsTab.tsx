@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Plus, CheckSquare, Play, Download, X, ArrowLeftRight, Trash2 } from 'lucide-react'
+import { Plus, CheckSquare, Play, Download, X, ArrowLeftRight, Trash2, Copy } from 'lucide-react'
 import { FileVideo, FileAudio, FileImage, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTaskStore } from '@/store/taskStore'
 import { isTaskTerminal } from '@/types/task'
 import type { WorkspaceItem } from '@/types/workspace'
-import { startItemPipeline, batchExportItems } from '@/services/workspaces'
+import { startItemPipeline, batchExportItems, listWorkspaces } from '@/services/workspaces'
+import { batchAddItemsToWorkspace } from '@/services/library'
+import type { WorkspaceRecord } from '@/types/workspace'
 import { MaterialCard } from './MaterialCard'
 
 const ADD_GROUPS = [
@@ -45,6 +47,9 @@ export function MaterialsTab({
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [batchRunning, setBatchRunning] = useState(false)
+  const [copyOpen, setCopyOpen] = useState(false)
+  const [copyTargets, setCopyTargets] = useState<WorkspaceRecord[]>([])
+  const [copyTargetIds, setCopyTargetIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     onSelectedIdsChange?.(selectedIds)
@@ -120,6 +125,36 @@ export function MaterialsTab({
       setBatchRunning(false)
     }
   }, [selectedIds, workspaceId])
+
+  const openCopyTargets = useCallback(async () => {
+    const workspaces = await listWorkspaces()
+    setCopyTargets(workspaces.filter((workspace) => workspace.workspace_id !== workspaceId))
+    setCopyTargetIds(new Set())
+    setCopyOpen(true)
+  }, [workspaceId])
+
+  const copySelected = useCallback(async () => {
+    if (copyTargetIds.size === 0 || selectedIds.size === 0) return
+    setBatchRunning(true)
+    try {
+      const references = [...selectedIds].map((itemId) => ({
+        workspace_id: workspaceId,
+        item_id: itemId,
+      }))
+      const results = await Promise.all(
+        [...copyTargetIds].map((targetId) => batchAddItemsToWorkspace(targetId, references)),
+      )
+      const added = results.reduce((sum, result) => sum + result.added, 0)
+      toast.success(`已创建 ${added} 个独立副本`)
+      setCopyOpen(false)
+      setSelectedIds(new Set())
+      setSelectMode(false)
+    } catch {
+      toast.error('复制到合集失败，请重试')
+    } finally {
+      setBatchRunning(false)
+    }
+  }, [copyTargetIds, selectedIds, workspaceId])
 
   if (items.length === 0) {
     return (
@@ -223,6 +258,14 @@ export function MaterialsTab({
             批量导出
           </button>
           <button
+            className="btn btn-ghost btn-sm"
+            disabled={batchRunning}
+            onClick={() => void openCopyTargets()}
+          >
+            <Copy size={13} />
+            复制到合集
+          </button>
+          <button
             className="btn btn-ghost btn-sm btn-danger"
             disabled={batchRunning}
             onClick={() => onDeleteSelected?.([...selectedIds])}
@@ -239,6 +282,38 @@ export function MaterialsTab({
               对比
             </button>
           )}
+        </div>
+      )}
+      {copyOpen && (
+        <div className="tb-modal-overlay" onClick={() => setCopyOpen(false)}>
+          <div className="tb-modal" onClick={(event) => event.stopPropagation()}>
+            <h2 className="text-lg font-semibold">复制到一个或多个合集</h2>
+            <p className="text-sm text-muted-foreground">每个目标都会得到可独立修改的副本，并保留同源关系。</p>
+            <div className="my-4 max-h-72 space-y-2 overflow-y-auto">
+              {copyTargets.map((workspace) => (
+                <label key={workspace.workspace_id} className="flex gap-2">
+                  <input
+                    type="checkbox"
+                    checked={copyTargetIds.has(workspace.workspace_id)}
+                    onChange={(event) => setCopyTargetIds((current) => {
+                      const next = new Set(current)
+                      if (event.target.checked) next.add(workspace.workspace_id)
+                      else next.delete(workspace.workspace_id)
+                      return next
+                    })}
+                  />
+                  {workspace.name}
+                </label>
+              ))}
+              {copyTargets.length === 0 && <div>暂无其他合集</div>}
+            </div>
+            <div className="flex gap-2">
+              <button className="btn" type="button" onClick={() => setCopyOpen(false)}>取消</button>
+              <button className="btn btn-primary" type="button" disabled={copyTargetIds.size === 0 || batchRunning} onClick={() => void copySelected()}>
+                确认复制
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>

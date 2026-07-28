@@ -463,7 +463,7 @@ export default function LibraryPage() {
       return
     }
     if (selectedItemRefs.length === 0) {
-      toast.error('请选择要加入合集的内容')
+      toast.error('请选择要复制到合集的内容')
       return
     }
     setAddingToCollection(true)
@@ -471,20 +471,20 @@ export default function LibraryPage() {
     try {
       const res = await batchAddItemsToWorkspace(collectionTargetId, selectedItemRefs)
       if (res.added > 0) {
-        toast.success(`已加入 ${res.added} 项到「${targetName}」${res.skipped ? `，${res.skipped} 项已存在` : ''}`)
+        toast.success(`已复制 ${res.added} 项到「${targetName}」${res.skipped ? `，${res.skipped} 项已存在` : ''}`)
         setSelectedSet(new Set())
         setSelecting(false)
       } else if (res.skipped > 0) {
         toast.info(`选中内容已在「${targetName}」中`)
       } else {
-        toast.error('没有内容被加入合集')
+        toast.error('没有内容被复制到合集')
       }
       if (res.failed > 0) {
         toast.error(`${res.failed} 项加入失败，请检查目标合集类型`)
       }
       await load()
     } catch {
-      toast.error('加入合集失败，请重试')
+      toast.error('复制到合集失败，请重试')
     } finally {
       setAddingToCollection(false)
     }
@@ -606,7 +606,7 @@ export default function LibraryPage() {
                 onClick={handleBatchAddToCollection}
               >
                 <FolderInput size={13} />
-                {addingToCollection ? '加入中…' : '加入合集'}
+                {addingToCollection ? '复制中…' : '复制到合集'}
               </button>
             </div>
           )}
