@@ -10,7 +10,7 @@
  */
 
 import '@testing-library/jest-dom'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import DeployMonitorPage from '@/pages/SettingPage/DeployMonitorPage'
 
@@ -37,6 +37,7 @@ vi.mock('@/services/client', () => ({
 describe('DeployMonitorPage 标准日志', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.history.replaceState({}, '', '/settings/monitor')
     // 模拟系统指标
     httpGetMock.mockImplementation((url: string) => {
       if (url === '/admin/system/stats') {
@@ -105,5 +106,74 @@ describe('DeployMonitorPage 标准日志', () => {
   it('有级别过滤下拉框', async () => {
     render(<DeployMonitorPage />)
     expect(screen.getByRole('combobox')).toBeInTheDocument()
+  })
+
+  it('首次只按最新 200 条加载标准日志', async () => {
+    render(<DeployMonitorPage />)
+    await waitFor(() => {
+      expect(httpGetMock).toHaveBeenCalledWith('/admin/logs', {
+        params: { limit: 200 },
+      })
+    })
+    expect(
+      httpGetMock.mock.calls.some(([url]) => String(url).includes('/pipeline/tasks')),
+    ).toBe(false)
+  })
+
+  it('URL 中的 batch 和 level 初始化过滤器', async () => {
+    window.history.replaceState({}, '', '/settings/monitor?batch_id=b1&level=ERROR')
+    render(<DeployMonitorPage />)
+    await screen.findByText('标准日志')
+    expect(screen.getByLabelText('日志级别')).toHaveValue('ERROR')
+    expect(screen.getByLabelText('批次 ID')).toHaveValue('b1')
+  })
+
+  it('加载更早使用当前 oldest_id', async () => {
+    httpGetMock.mockImplementation((url: string, options?: { params?: Record<string, number> }) => {
+      if (url === '/admin/system/stats') {
+        return Promise.resolve({
+          data: {
+            cpu: { percent: 1, count_logical: 1, count_physical: 1 },
+            memory: { total: 1, available: 1, used: 0, percent: 0 },
+            disk: { total: 1, used: 0, free: 1, percent: 0 },
+            timestamp: Date.now(),
+          },
+        })
+      }
+      if (url === '/admin/logs' && options?.params?.before_id === 10) {
+        return Promise.resolve({
+          data: {
+            entries: [{ id: 1, timestamp: new Date().toISOString(), level: 'INFO', category: 'app', message: 'older' }],
+            latest_id: 20,
+            oldest_id: 1,
+            has_more_older: false,
+          },
+        })
+      }
+      if (url === '/admin/logs') {
+        return Promise.resolve({
+          data: {
+            entries: [{ id: 10, timestamp: new Date().toISOString(), level: 'INFO', category: 'app', message: 'newest' }],
+            latest_id: 20,
+            oldest_id: 10,
+            has_more_older: true,
+          },
+        })
+      }
+      return Promise.resolve({ data: {} })
+    })
+    render(<DeployMonitorPage />)
+    fireEvent.click(await screen.findByRole('button', { name: '加载更早' }))
+    await waitFor(() =>
+      expect(httpGetMock).toHaveBeenCalledWith('/admin/logs', {
+        params: { before_id: 10, limit: 100 },
+      }),
+    )
+  })
+
+  it('提供脱敏诊断导出说明', async () => {
+    render(<DeployMonitorPage />)
+    expect(await screen.findByRole('button', { name: '导出诊断' })).toBeInTheDocument()
+    expect(screen.getByText(/已自动脱敏，不包含 API 密钥和 Cookie/)).toBeInTheDocument()
   })
 })
