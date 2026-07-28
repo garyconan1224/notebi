@@ -22,7 +22,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import asdict, dataclass
-from typing import Deque, Dict, List, Optional
+from typing import Deque, Dict, List, Optional, Protocol
 
 #: 环形缓冲默认上限。
 DEFAULT_MAX_ENTRIES: int = 5000
@@ -152,10 +152,16 @@ class RuntimeLogBuffer:
 # --------------------------------------------------------------------------- #
 # logging.Handler
 # --------------------------------------------------------------------------- #
-class RuntimeLogHandler(logging.Handler):
-    """把 LogRecord 写入 RuntimeLogBuffer 的 handler。"""
+class LogSink(Protocol):
+    """RuntimeLogHandler 可写入的最小接口。"""
 
-    def __init__(self, buffer: RuntimeLogBuffer) -> None:
+    def append(self, level: str, category: str, message: str) -> object: ...
+
+
+class RuntimeLogHandler(logging.Handler):
+    """把 LogRecord 写入统一日志 sink 的 handler。"""
+
+    def __init__(self, buffer: LogSink) -> None:
         super().__init__()
         self.buffer = buffer
 
@@ -178,7 +184,7 @@ _INSTALL_LOCK = threading.Lock()
 
 
 def install(
-    buffer: Optional[RuntimeLogBuffer] = None,
+    buffer: Optional[LogSink] = None,
     logger: Optional[logging.Logger] = None,
 ) -> RuntimeLogHandler:
     """把 RuntimeLogHandler 挂到目标 logger（默认 root）。
@@ -191,7 +197,12 @@ def install(
         for handler in target.handlers:
             if isinstance(handler, RuntimeLogHandler):
                 return handler
-        buf = buffer if buffer is not None else get_default_buffer()
+        if buffer is None:
+            # 延迟导入避免 runtime_log_store 复用 sanitize_message 时形成循环导入。
+            from backend.app.services.runtime_log_store import get_default_store
+
+            buffer = get_default_store()
+        buf = buffer
         handler = RuntimeLogHandler(buf)
         target.addHandler(handler)
         return handler

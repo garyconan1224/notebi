@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 
 from backend.app.routes import admin as admin_module
 from backend.app.services import runtime_log_buffer as rlb
+from backend.app.services import runtime_log_store as rls
 from backend.app.services.runtime_log_store import RuntimeLogStore
 
 
@@ -143,6 +144,27 @@ def test_handler_stores_sanitized_message() -> None:
     entries = buf.query()
     assert entries
     assert "supersecretvalue" not in entries[-1].message
+
+
+def test_default_handler_writes_to_persistent_store(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """生产默认 handler 必须写入 /admin/logs 使用的持久 store。"""
+    store = RuntimeLogStore(tmp_path / "logs")
+    monkeypatch.setattr(rls, "_default_store", store)
+    logger = logging.getLogger("standard-log.production-chain")
+    logger.handlers.clear()
+    logger.setLevel(logging.INFO)
+
+    rlb.install(logger=logger)
+    try:
+        logger.info("persistent-standard-log")
+    finally:
+        rlb.uninstall(logger=logger)
+
+    entries = store.query(limit=10).entries
+    assert [entry.message for entry in entries] == ["persistent-standard-log"]
 
 
 # --------------------------------------------------------------------------- #
