@@ -1,48 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
-import {
-  Activity,
-  Cpu,
-  HardDrive,
-  ListChecks,
-  MemoryStick,
-  Pause,
-  Play,
-  ScrollText,
-  Server,
-  CircleDot,
-  CircleOff,
-  Trash2,
-} from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Activity, Cpu, HardDrive, MemoryStick, Pause, Play, ScrollText } from 'lucide-react'
 import { Section } from '@/components/ui/section'
 import { StatCard } from '@/components/ui/stat-card'
-import { LogConsole, type LogLevel, type LogLine } from '@/components/ui/log-console'
 import { useHealthPulse } from '@/hooks/useHealthPulse'
 import http from '@/services/client'
-import {
-  buildActivityItems,
-  fetchAdminLogs,
-  fetchMonitorTasks,
-  summarizeTasks,
-  type AdminLogEntry,
-} from '@/services/monitor'
-import type { TaskRecord } from '@/types/task'
 import { cn } from '@/lib/utils'
 
 /**
- * 部署监控页（M4 / R6-B）。
+ * 部署监控页（S2 重构）。
  *
- * 组成：
- * - 顶部状态条：在线/离线徽章 + 版本 + uptime；
- * - 指标卡片：CPU / 内存 / 磁盘（定时轮询 /admin/system/stats）；
- * - 任务活动 / 应用日志切换：
- *   - 任务活动：复用 /pipeline/tasks?include_logs=true&limit=50，统计
- *     queued/running/failed/success，空日志任务从生命周期生成活动项，点击进入处理页；
- *   - 应用日志：按 latest_id 每 2 秒增量轮询 /admin/logs，支持暂停/恢复/
- *     自动跟随/level/类别/关键词过滤，清空只清浏览器视图。
- *
- * 只读：不修改任务状态，不清理服务端日志。
+ * - 顶部状态条：在线/离线徽章 + 版本 + uptime
+ * - 指标卡片：CPU / 内存 / 磁盘
+ * - 标准日志：单一日志视图，支持级别过滤、暂停/恢复、加载更早
+ * - 已移除：任务活动/应用日志双标签
  */
 
 interface SystemStats {
@@ -52,8 +22,22 @@ interface SystemStats {
   timestamp: number
 }
 
-const LOG_POLL_MS = 2000
-const TASK_POLL_MS = 3000
+interface LogEntry {
+  id: number
+  timestamp: string
+  level: string
+  category: string
+  message: string
+  task_id?: string
+  batch_id?: string
+}
+
+interface LogsResponse {
+  entries: LogEntry[]
+  latest_id: number
+  oldest_id: number
+  has_more_older: boolean
+}
 
 function formatBytes(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return '0 B'
@@ -74,78 +58,41 @@ function formatUptime(sec: number): string {
   return `${s}s`
 }
 
-function formatClock(ms: number): string {
-  const d = new Date(ms)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+function formatTime(ts: string): string {
+  try {
+    const d = new Date(ts)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  } catch {
+    return ts
+  }
 }
 
-function mapLevel(level: string): LogLevel {
-  const upper = String(level).toUpperCase()
-  if (upper === 'ERROR') return 'error'
-  if (upper === 'WARNING' || upper === 'WARN') return 'warn'
-  if (upper === 'DEBUG') return 'debug'
-  return 'info'
+const LEVEL_COLORS: Record<string, string> = {
+  DEBUG: 'text-zinc-500',
+  INFO: 'text-zinc-700',
+  WARNING: 'text-amber-600',
+  ERROR: 'text-rose-600',
 }
 
-const LEVEL_DOT: Record<string, string> = {
-  info: 'bg-zinc-400',
-  warning: 'bg-amber-400',
-  error: 'bg-rose-500',
-}
-
-const COUNT_TONE: Record<string, string> = {
-  gray: 'text-zinc-700',
-  blue: 'text-cyan-700',
-  rose: 'text-rose-700',
-  emerald: 'text-emerald-700',
-}
-
-function CountBadge({
-  testId,
-  label,
-  value,
-  tone,
-}: {
-  testId: string
-  label: string
-  value: number
-  tone: keyof typeof COUNT_TONE
-}) {
-  return (
-    <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 shadow-sm">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div data-testid={testId} className={cn('mt-0.5 text-xl font-semibold', COUNT_TONE[tone])}>
-        {value}
-      </div>
-    </div>
-  )
-}
+const LOG_POLL_MS = 2000
 
 export default function DeployMonitorPage() {
-  const { t } = useTranslation('settings')
-  const navigate = useNavigate()
   const health = useHealthPulse(5000)
 
   const [stats, setStats] = useState<SystemStats | null>(null)
   const [statsError, setStatsError] = useState<string | null>(null)
 
-  // 任务活动 / 应用日志 切换
-  const [tab, setTab] = useState<'activity' | 'logs'>('activity')
-
-  // 任务活动
-  const [tasks, setTasks] = useState<TaskRecord[]>([])
-
-  // 应用日志
-  const [logs, setLogs] = useState<AdminLogEntry[]>([])
+  // 标准日志状态
+  const [logs, setLogs] = useState<LogEntry[]>([])
   const [paused, setPaused] = useState(false)
-  const [autoFollow, setAutoFollow] = useState(true)
   const [levelFilter, setLevelFilter] = useState('all')
-  const [categoryFilter, setCategoryFilter] = useState('all')
-  const [keyword, setKeyword] = useState('')
+  const [hasMore, setHasMore] = useState(false)
   const latestIdRef = useRef(0)
+  const oldestIdRef = useRef(0)
+  const logEndRef = useRef<HTMLDivElement>(null)
 
-  // 系统指标轮询（保留 M4 行为）
+  // 系统指标轮询
   useEffect(() => {
     let cancelled = false
     let timer: number | null = null
@@ -172,42 +119,41 @@ export default function DeployMonitorPage() {
     }
   }, [])
 
-  // 任务列表轮询（复用 /pipeline/tasks?include_logs=true&limit=50）
+  // 初始加载最新日志
   useEffect(() => {
-    let cancelled = false
-    const tick = async () => {
+    const loadInitial = async () => {
       try {
-        const list = await fetchMonitorTasks(50)
-        if (!cancelled) setTasks(list)
+        const res = await http.get<LogsResponse>('/admin/logs', { params: { limit: 200 } })
+        setLogs(res.data.entries)
+        latestIdRef.current = res.data.latest_id
+        oldestIdRef.current = res.data.oldest_id
+        setHasMore(res.data.has_more_older)
       } catch {
-        // 网络失败保留旧内容
+        // 忽略初始加载错误
       }
     }
-    tick()
-    const timer = window.setInterval(tick, TASK_POLL_MS)
-    return () => {
-      cancelled = true
-      window.clearInterval(timer)
-    }
+    loadInitial()
   }, [])
 
-  // 应用日志增量轮询（每 2 秒按 latest_id）
+  // 增量轮询新日志
   useEffect(() => {
     let cancelled = false
     const tick = async () => {
       if (paused) return
       try {
-        const resp = await fetchAdminLogs(latestIdRef.current, 200)
-        if (cancelled) return
-        if (resp.entries.length > 0) {
-          setLogs((prev) => [...prev, ...resp.entries])
+        const res = await http.get<LogsResponse>('/admin/logs', {
+          params: { after_id: latestIdRef.current, limit: 100 },
+        })
+        if (!cancelled && res.data.entries.length > 0) {
+          setLogs((prev) => [...prev, ...res.data.entries])
+          latestIdRef.current = res.data.latest_id
+          // 自动滚动到底部
+          logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
         }
-        latestIdRef.current = resp.latest_id
       } catch {
-        // 网络失败保留旧内容
+        // 忽略轮询错误
       }
     }
-    tick()
     const timer = window.setInterval(tick, LOG_POLL_MS)
     return () => {
       cancelled = true
@@ -215,258 +161,133 @@ export default function DeployMonitorPage() {
     }
   }, [paused])
 
-  const counts = useMemo(() => summarizeTasks(tasks), [tasks])
-  const activity = useMemo(() => buildActivityItems(tasks), [tasks])
+  // 加载更早日志
+  const loadOlder = async () => {
+    if (!hasMore || oldestIdRef.current === 0) return
+    try {
+      const res = await http.get<LogsResponse>('/admin/logs', {
+        params: { before_id: oldestIdRef.current, limit: 100 },
+      })
+      if (res.data.entries.length > 0) {
+        setLogs((prev) => [...res.data.entries, ...prev])
+        oldestIdRef.current = res.data.oldest_id
+        setHasMore(res.data.has_more_older)
+      }
+    } catch {
+      // 忽略错误
+    }
+  }
 
-  const categories = useMemo(() => {
-    const set = new Set<string>()
-    for (const l of logs) set.add(l.category)
-    return Array.from(set).sort()
-  }, [logs])
-
-  const visibleLogs = useMemo(() => {
-    const kw = keyword.trim().toLowerCase()
-    return logs.filter((l) => {
-      if (levelFilter !== 'all' && String(l.level).toUpperCase() !== levelFilter) return false
-      if (categoryFilter !== 'all' && l.category !== categoryFilter) return false
-      if (kw && !l.message.toLowerCase().includes(kw)) return false
-      return true
-    })
-  }, [logs, levelFilter, categoryFilter, keyword])
-
-  const logLines: LogLine[] = useMemo(
-    () =>
-      visibleLogs.map((l) => ({
-        id: l.id,
-        text: `[${l.category}] ${l.message}`,
-        level: mapLevel(l.level),
-        ts: l.timestamp * 1000,
-      })),
-    [visibleLogs],
-  )
-
-  const online = health.online
-  const uptimeLabel = useMemo(
-    () => (health.data ? formatUptime(health.data.uptime_sec) : '—'),
-    [health.data],
-  )
+  // 过滤日志
+  const filteredLogs = levelFilter === 'all' ? logs : logs.filter((l) => l.level === levelFilter)
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 p-6">
-      {/* 页面标题 */}
-      <div>
-        <h1 className="text-[28px] font-semibold tracking-tight">{t('monitor.title', '部署监控')}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t('monitor.subtitle', '实时查看后端服务状态、系统资源占用与运行日志')}
-        </p>
-      </div>
-
-      {/* 顶部状态条：在线/离线徽章 + 版本 + uptime */}
-      <div
-        role="status"
-        aria-live="polite"
-        className="flex flex-wrap items-center gap-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm"
-      >
-        <div
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium',
-            online ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700',
+    <div className="mx-auto max-w-5xl space-y-6 p-6">
+      {/* 状态条 */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">部署监控</h1>
+        <div className="flex items-center gap-4 text-sm">
+          <span
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-medium',
+              health.online ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700',
+            )}
+          >
+            <span className={cn('size-2 rounded-full', health.online ? 'bg-emerald-500' : 'bg-rose-500')} />
+            {health.online ? '在线' : '离线'}
+          </span>
+          {health.online && health.data && (
+            <>
+              <span className="text-muted-foreground">版本: {health.data.version || '—'}</span>
+              <span className="text-muted-foreground">运行时长: {formatUptime(health.data.uptime_sec)}</span>
+            </>
           )}
-        >
-          {online ? <CircleDot className="size-3.5" /> : <CircleOff className="size-3.5" />}
-          <span>{online ? t('monitor.status.online', '在线') : t('monitor.status.offline', '离线')}</span>
         </div>
-        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <Server className="size-4" />
-          <span>{t('monitor.version', '版本')}:</span>
-          <span className="font-mono text-foreground">{health.data?.version ?? '—'}</span>
-        </div>
-        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <Activity className="size-4" />
-          <span>{t('monitor.uptime', '运行时长')}:</span>
-          <span className="font-mono text-foreground">{uptimeLabel}</span>
-        </div>
-        {health.error ? <div className="ml-auto text-xs text-rose-600">{health.error}</div> : null}
       </div>
 
       {/* 系统指标 */}
-      <Section
-        title={t('monitor.stats.title', '系统指标')}
-        description={t('monitor.stats.description', 'CPU / 内存 / 磁盘 使用率（每 5 秒刷新）')}
-        icon={<Cpu className="size-4" />}
-      >
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <StatCard
-            label={t('monitor.stats.cpu', 'CPU 使用率')}
-            icon={<Cpu className="size-4" />}
-            value={stats ? `${stats.cpu.percent.toFixed(1)}%` : '—'}
-            percent={stats?.cpu.percent}
-            hint={
-              stats
-                ? t('monitor.stats.cpuHint', {
-                    logical: stats.cpu.count_logical,
-                    physical: stats.cpu.count_physical,
-                  })
-                : undefined
-            }
-            loading={!stats && !statsError}
-          />
-          <StatCard
-            label={t('monitor.stats.memory', '内存使用率')}
-            icon={<MemoryStick className="size-4" />}
-            value={stats ? `${stats.memory.percent.toFixed(1)}%` : '—'}
-            percent={stats?.memory.percent}
-            hint={stats ? `${formatBytes(stats.memory.used)} / ${formatBytes(stats.memory.total)}` : undefined}
-            loading={!stats && !statsError}
-          />
-          <StatCard
-            label={t('monitor.stats.disk', '磁盘使用率')}
-            icon={<HardDrive className="size-4" />}
-            value={stats ? `${stats.disk.percent.toFixed(1)}%` : '—'}
-            percent={stats?.disk.percent}
-            hint={stats ? `${formatBytes(stats.disk.used)} / ${formatBytes(stats.disk.total)}` : undefined}
-            loading={!stats && !statsError}
-          />
-        </div>
-        {statsError ? <p className="text-xs text-rose-600">{statsError}</p> : null}
-      </Section>
-
-      {/* 任务活动 / 应用日志 */}
-      <Section
-        title={t('monitor.runtime.title', '任务活动与应用日志')}
-        description={t('monitor.runtime.description', '查看后台任务进展与脱敏后的应用日志')}
-        icon={<Activity className="size-4" />}
-      >
-        {/* 切换 */}
-        <div className="mb-4 inline-flex items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50 p-1">
-          <button
-            type="button"
-            onClick={() => setTab('activity')}
-            aria-pressed={tab === 'activity'}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-              tab === 'activity' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <ListChecks className="size-4" />
-            {t('monitor.activity.tab', '任务活动')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('logs')}
-            aria-pressed={tab === 'logs'}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-              tab === 'logs' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <ScrollText className="size-4" />
-            {t('monitor.logs.tab', '应用日志')}
-          </button>
-        </div>
-
-        {tab === 'activity' ? (
-          <div>
-            {/* 数量统计 */}
-            <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <CountBadge testId="count-queued" label={t('monitor.activity.queued', '排队中')} value={counts.queued} tone="gray" />
-              <CountBadge testId="count-running" label={t('monitor.activity.running', '运行中')} value={counts.running} tone="blue" />
-              <CountBadge testId="count-failed" label={t('monitor.activity.failed', '失败')} value={counts.failed} tone="rose" />
-              <CountBadge testId="count-success" label={t('monitor.activity.success', '成功')} value={counts.success} tone="emerald" />
-            </div>
-
-            {/* 活动列表 */}
-            <div className="max-h-[360px] space-y-1.5 overflow-y-auto pr-1">
-              {activity.length === 0 ? (
-                <p className="py-8 text-center text-xs text-muted-foreground">
-                  {t('monitor.activity.empty', '暂无任务活动')}
-                </p>
-              ) : (
-                activity.map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    data-testid={`activity-item-${item.taskId}`}
-                    onClick={() => navigate(`/processing/${item.taskId}`)}
-                    className="flex w-full items-start gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-left text-xs transition-colors hover:bg-zinc-50"
-                  >
-                    <span className={cn('mt-1 size-2 shrink-0 rounded-full', LEVEL_DOT[item.level] ?? LEVEL_DOT.info)} />
-                    <span className="flex-1 break-all text-foreground">{item.text}</span>
-                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground">{formatClock(item.ts)}</span>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
+      <Section title="系统指标" description="CPU / 内存 / 磁盘 使用率（每 5 秒刷新）" icon={<Activity className="size-4" />}>
+        {statsError ? (
+          <div className="p-4 text-sm text-rose-600">{statsError}</div>
         ) : (
-          <div>
-            {/* 控制台工具条 */}
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setPaused((p) => !p)}
-                className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium hover:bg-zinc-50"
-              >
-                {paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
-                {paused ? t('monitor.logs.resume', '恢复') : t('monitor.logs.pause', '暂停')}
-              </button>
-              <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                <input
-                  type="checkbox"
-                  checked={autoFollow}
-                  onChange={(e) => setAutoFollow(e.target.checked)}
-                  className="size-3.5"
-                />
-                {t('monitor.logs.autoFollow', '自动跟随')}
-              </label>
-              <select
-                data-testid="log-level-filter"
-                value={levelFilter}
-                onChange={(e) => setLevelFilter(e.target.value)}
-                className="rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs"
-              >
-                <option value="all">{t('monitor.logs.allLevels', '全部级别')}</option>
-                <option value="DEBUG">DEBUG</option>
-                <option value="INFO">INFO</option>
-                <option value="WARNING">WARNING</option>
-                <option value="ERROR">ERROR</option>
-              </select>
-              <select
-                data-testid="log-category-filter"
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs"
-              >
-                <option value="all">{t('monitor.logs.allCategories', '全部类别')}</option>
-                {categories.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-              <input
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                placeholder={t('monitor.logs.keyword', '关键词过滤')}
-                className="rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs"
-              />
-              <button
-                type="button"
-                onClick={() => setLogs([])}
-                className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50"
-              >
-                <Trash2 className="size-3.5" />
-                {t('monitor.logs.clear', '清空')}
-              </button>
-            </div>
-            <LogConsole
-              lines={logLines}
-              height={360}
-              autoScroll={autoFollow}
-              emptyText={t('monitor.logs.empty', '暂无日志')}
+          <div className="grid grid-cols-3 gap-4">
+            <StatCard
+              label="CPU 使用率"
+              value={stats ? `${stats.cpu.percent.toFixed(1)}%` : '—'}
+              icon={<Cpu className="size-4" />}
+            />
+            <StatCard
+              label="内存使用率"
+              value={stats ? `${formatBytes(stats.memory.used)} / ${formatBytes(stats.memory.total)}` : '—'}
+              icon={<MemoryStick className="size-4" />}
+            />
+            <StatCard
+              label="磁盘使用率"
+              value={stats ? `${stats.disk.percent.toFixed(1)}%` : '—'}
+              icon={<HardDrive className="size-4" />}
             />
           </div>
         )}
+      </Section>
+
+      {/* 标准日志 */}
+      <Section title="标准日志" description="统一的任务和应用日志（实时刷新）" icon={<ScrollText className="size-4" />}>
+        {/* 控制栏 */}
+        <div className="mb-4 flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => setPaused(!paused)}
+            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent"
+          >
+            {paused ? <Play className="size-4" /> : <Pause className="size-4" />}
+            {paused ? '恢复' : '暂停'}
+          </button>
+
+          <select
+            value={levelFilter}
+            onChange={(e) => setLevelFilter(e.target.value)}
+            className="rounded-md border px-3 py-1.5 text-sm"
+          >
+            <option value="all">全部级别</option>
+            <option value="DEBUG">DEBUG</option>
+            <option value="INFO">INFO</option>
+            <option value="WARNING">WARNING</option>
+            <option value="ERROR">ERROR</option>
+          </select>
+
+          {hasMore && (
+            <button
+              type="button"
+              onClick={loadOlder}
+              className="text-sm text-primary underline hover:no-underline"
+            >
+              加载更早
+            </button>
+          )}
+
+          <span className="ml-auto text-xs text-muted-foreground">{filteredLogs.length} 条日志</span>
+        </div>
+
+        {/* 日志列表 */}
+        <div className="max-h-[400px] overflow-y-auto rounded-lg border bg-zinc-50 font-mono text-xs">
+          {filteredLogs.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground">暂无日志</div>
+          ) : (
+            <div className="divide-y divide-zinc-100">
+              {filteredLogs.map((log) => (
+                <div key={log.id} className="flex items-start gap-2 px-3 py-1.5 hover:bg-zinc-100">
+                  <span className="shrink-0 text-zinc-400">{formatTime(log.timestamp)}</span>
+                  <span className={cn('shrink-0 font-medium', LEVEL_COLORS[log.level] || 'text-zinc-700')}>
+                    {log.level}
+                  </span>
+                  <span className="shrink-0 text-zinc-400">[{log.category}]</span>
+                  <span className="break-all text-zinc-700">{log.message}</span>
+                </div>
+              ))}
+              <div ref={logEndRef} />
+            </div>
+          )}
+        </div>
       </Section>
     </div>
   )
