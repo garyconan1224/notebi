@@ -15,10 +15,11 @@ from backend.app.models.tasks import TERMINAL_STATUS_VALUES, TaskStatus
 from backend.app.services.pipeline_tasks import register_pipeline_handlers
 from backend.app.services.task_runner import TaskRunner
 from backend.app.services.task_store import TaskStore
+from backend.app.services.runtime_log_store import get_default_store
 
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 _store = TaskStore()
-_runner = TaskRunner(_store)
+_runner = TaskRunner(_store, event_sink=get_default_store())
 register_pipeline_handlers(_runner)
 
 _TERMINAL_STATUSES = TERMINAL_STATUS_VALUES

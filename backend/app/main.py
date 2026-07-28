@@ -122,6 +122,14 @@ async def lifespan(app: FastAPI):
     _migrate_legacy_metadata()
     # R6-A：挂载脱敏运行日志 handler（幂等，热重载/测试不重复安装），shutdown 移除
     install_runtime_log_handler()
+    from backend.app.services.runtime_log_store import get_default_store
+
+    get_default_store().append(
+        "INFO",
+        "app",
+        "NoteBi application started",
+        stage="application_started",
+    )
     yield
     uninstall_runtime_log_handler()
 

@@ -201,6 +201,19 @@ def test_sanitize_absolute_path_keeps_filename() -> None:
     assert "audio.mp3" in out
 
 
+@pytest.mark.parametrize(
+    "raw, forbidden",
+    [
+        ("proxy=http://user:secret@example.com:7890", "secret"),
+        ("Cookie: session=top-secret", "top-secret"),
+        ("reading /Users/conan/Downloads/cookies.txt", "/Users/conan"),
+    ],
+)
+def test_additional_sensitive_values_are_redacted(raw: str, forbidden: str) -> None:
+    out = rlb.sanitize_message(raw)
+    assert forbidden not in out
+
+
 # --------------------------------------------------------------------------- #
 # 只读 API（使用新 RuntimeLogStore）
 # --------------------------------------------------------------------------- #
@@ -260,3 +273,27 @@ def test_get_logs_after_and_before_422(client: TestClient, store: RuntimeLogStor
     store.append(level="INFO", category="app", message="test")
     resp = client.get("/admin/logs", params={"after_id": 1, "before_id": 5})
     assert resp.status_code == 422
+
+
+def test_export_contains_filtered_redacted_diagnostics(
+    client: TestClient,
+    store: RuntimeLogStore,
+) -> None:
+    store.append(level="INFO", category="app", message="normal")
+    store.append(
+        level="ERROR",
+        category="task",
+        message="proxy=http://user:secret@example.com:7890",
+        task_id="t1",
+    )
+    response = client.get(
+        "/admin/logs/export",
+        params={"level": "ERROR", "task_id": "t1"},
+    )
+    assert response.status_code == 200
+    assert "attachment;" in response.headers["content-disposition"]
+    payload = response.json()
+    assert len(payload["entries"]) == 1
+    assert payload["entries"][0]["level"] == "ERROR"
+    assert "secret" not in response.text
+    assert set(payload) == {"generated_at", "system", "config_status", "entries"}

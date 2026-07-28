@@ -155,6 +155,7 @@ def test_default_returns_latest(store: RuntimeLogStore) -> None:
     # 是最新的 5 条
     assert result.entries[0].id == 6
     assert result.entries[-1].id == 10
+    assert result.oldest_id == 6
     assert result.has_more_older is True
 
 
@@ -170,3 +171,20 @@ def test_sensitive_values_redacted(store: RuntimeLogStore) -> None:
     )
     assert "secret123" not in event.message
     assert "***" in event.message
+
+
+def test_details_are_allowlisted_and_sanitized(store: RuntimeLogStore) -> None:
+    event = store.append(
+        level="ERROR",
+        category="network",
+        message="failed",
+        details={
+            "platform": "youtube",
+            "error_type": "proxy=http://user:secret@example.com",
+            "api_key": "must-not-persist",
+        },
+    )
+    assert event.details == {
+        "platform": "youtube",
+        "error_type": "proxy=http://user:***@example.com",
+    }

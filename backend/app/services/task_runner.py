@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Protocol
 
 from backend.app.models.tasks import TERMINAL_STATUS_VALUES, TaskRecord, TaskStatus
 from backend.app.services.task_store import TaskStore
@@ -16,15 +16,59 @@ PartialCallback = Callable[[TaskRecord, "TaskRunner"], None]
 CompletionCallback = Callable[[TaskRecord, "TaskRunner"], None]
 
 
+class TaskEventSink(Protocol):
+    def append(
+        self,
+        level: str,
+        category: str,
+        message: str,
+        **kwargs: Any,
+    ) -> object: ...
+
+
 class TaskRunner:
-    def __init__(self, store: TaskStore, max_workers: int = 4) -> None:
+    def __init__(
+        self,
+        store: TaskStore,
+        max_workers: int = 4,
+        event_sink: Optional[TaskEventSink] = None,
+    ) -> None:
         self.store = store
+        self._event_sink = event_sink
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="vps-task")
         self._handlers: Dict[str, TaskHandler] = {}
         self._success_callbacks: Dict[str, List[SuccessCallback]] = {}
         self._partial_callbacks: Dict[str, List[PartialCallback]] = {}
         self._completion_callbacks: List[CompletionCallback] = []
+        self._emitted_events: set[tuple[str, str]] = set()
         self._lock = threading.Lock()
+
+    def _emit_task_event(
+        self,
+        record: TaskRecord,
+        stage: str,
+        message: str,
+        *,
+        level: str = "INFO",
+    ) -> None:
+        if self._event_sink is None:
+            return
+        identity = (record.task_id, stage)
+        with self._lock:
+            if identity in self._emitted_events:
+                return
+            self._emitted_events.add(identity)
+        self._event_sink.append(
+            level,
+            "task",
+            message,
+            task_id=record.task_id,
+            batch_id=record.batch_id or None,
+            workspace_id=record.project_id or None,
+            stage=stage,
+            progress=record.progress,
+            retry_count=max(0, record.attempt_no - 1),
+        )
 
     def register(self, task_type: str, handler: TaskHandler) -> None:
         with self._lock:
@@ -140,6 +184,7 @@ class TaskRunner:
         )
         self.store.create(rec)
         self.store.append_log(rec.task_id, "Task accepted")
+        self._emit_task_event(rec, "created", "任务已创建")
         self._executor.submit(self._run, rec.task_id)
         return rec
 
@@ -188,6 +233,8 @@ class TaskRunner:
         initial_status = _INITIAL_STATUS.get(record.task_type, TaskStatus.DOWNLOAD.value)
         self.store.update(task_id, status=initial_status, progress=0.01)
         self.store.append_log(task_id, "Task started")
+        started_record = self.store.get(task_id) or record
+        self._emit_task_event(started_record, "started", "任务已开始")
         try:
             result = handler(record, self)
             current = self.store.get(task_id)
@@ -196,6 +243,13 @@ class TaskRunner:
                 # 不再硬写 1.0（否则取消任务也会显示 100%）。
                 self.store.update(task_id, status=TaskStatus.CANCELLED.value, result=result)
                 self.store.append_log(task_id, "Task cancelled by request", level="warning")
+                cancelled = self.store.get(task_id) or record
+                self._emit_task_event(
+                    cancelled,
+                    "cancelled",
+                    "任务已取消",
+                    level="WARNING",
+                )
                 return
             # A3: handler 设了 AWAITING_CONFIRM 后提前返回——不覆盖为 SUCCESS，等用户确认
             if current and current.status == TaskStatus.AWAITING_CONFIRM.value:
@@ -213,6 +267,8 @@ class TaskRunner:
                 return
             self.store.update(task_id, status=TaskStatus.SUCCESS.value, progress=1.0, result=result, error="")
             self.store.append_log(task_id, "Task succeeded")
+            succeeded = self.store.get(task_id) or record
+            self._emit_task_event(succeeded, "succeeded", "任务已完成")
             # 触发成功回调（例如：download→analyze 任务链）
             with self._lock:
                 callbacks = list(self._success_callbacks.get(record.task_type, []))
@@ -224,6 +280,13 @@ class TaskRunner:
         except Exception as err:  # noqa: BLE001
             self.store.update(task_id, status=TaskStatus.FAILED.value, error=str(err))
             self.store.append_log(task_id, f"Task failed: {err}", level="error")
+            failed = self.store.get(task_id) or record
+            self._emit_task_event(
+                failed,
+                "failed",
+                f"任务失败：{err}",
+                level="ERROR",
+            )
 
     def set_progress(self, task_id: str, progress: float, message: Optional[str] = None) -> None:
         pct = max(0.0, min(float(progress), 1.0))
@@ -256,6 +319,12 @@ class TaskRunner:
         # 非终结态一律可取消（覆盖 PENDING 及各运行阶段）
         if rec.status not in TERMINAL_STATUS_VALUES:
             rec = self.store.update(task_id, status=TaskStatus.CANCELLED.value)
+            self._emit_task_event(
+                rec,
+                "cancelled",
+                "任务已取消",
+                level="WARNING",
+            )
         return rec
 
     def retry_task(self, task_id: str, *, stage: Optional[str] = None) -> TaskRecord:

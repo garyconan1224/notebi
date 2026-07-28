@@ -9,6 +9,10 @@
 """
 from __future__ import annotations
 
+import asyncio
+
+from backend.app.services.runtime_log_store import RuntimeLogStore
+
 
 def test_main_imports_successfully():
     import backend.app.main as main
@@ -33,3 +37,22 @@ def test_static_route_mounted():
     assert any(path.startswith("/static") for path in mounted), (
         f"/static 挂载缺失，实际路由前缀样本={mounted[:10]}"
     )
+
+
+def test_lifespan_writes_application_started(tmp_path, monkeypatch):
+    import backend.app.main as main
+    from backend.app.services import runtime_log_store
+
+    store = RuntimeLogStore(tmp_path / "logs")
+    monkeypatch.setattr(runtime_log_store, "_default_store", store)
+    monkeypatch.setattr(main, "_seed_siliconflow_provider", lambda: None)
+    monkeypatch.setattr(main, "_purge_legacy_replica_data", lambda: None)
+    monkeypatch.setattr(main, "_migrate_legacy_metadata", lambda: None)
+
+    async def run_lifespan():
+        async with main.lifespan(main.app):
+            pass
+
+    asyncio.run(run_lifespan())
+    events = store.query(limit=10).entries
+    assert events[-1].stage == "application_started"

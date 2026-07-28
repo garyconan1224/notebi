@@ -58,6 +58,10 @@ _URL_PARAM_RE = re.compile(
     r"(?i)([?&])(api[_-]?key|access[_-]?token|token|secret|key|credential|password)="
     r"[^&\s]+"
 )
+_URL_CREDENTIAL_RE = re.compile(
+    r"(?i)(https?://[^:\s/@]+:)([^@\s/]+)(@)"
+)
+_COOKIE_HEADER_RE = re.compile(r"(?i)\b(Set-)?Cookie\b\s*[:=]\s*[^\r\n]+")
 # POSIX 绝对路径（两段及以上），保留最后一段文件名
 _POSIX_PATH_RE = re.compile(r"(?:/[\w.\-]+){2,}")
 # Windows 绝对路径 C:\Users\... ，保留最后一段
@@ -89,6 +93,11 @@ def sanitize_message(text: str) -> str:
     result = _AUTH_HEADER_RE.sub("Authorization: ***", result)
     result = _KEY_VALUE_RE.sub(lambda m: f"{m.group(1)}=***", result)
     result = _URL_PARAM_RE.sub(lambda m: f"{m.group(1)}{m.group(2)}=***", result)
+    result = _URL_CREDENTIAL_RE.sub(r"\1***\3", result)
+    result = _COOKIE_HEADER_RE.sub(
+        lambda m: f"{'Set-' if m.group(1) else ''}Cookie: ***",
+        result,
+    )
     result = _WIN_PATH_RE.sub(_mask_win_path, result)
     result = _POSIX_PATH_RE.sub(_mask_path, result)
     return result

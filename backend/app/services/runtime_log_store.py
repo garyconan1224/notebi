@@ -23,6 +23,16 @@ from pydantic import BaseModel
 # 默认配置
 DEFAULT_MAX_BYTES = 50 * 1024 * 1024  # 50 MB
 DEFAULT_RETENTION_DAYS = 7
+_ALLOWED_DETAIL_KEYS = frozenset(
+    {
+        "platform",
+        "host",
+        "status_code",
+        "error_type",
+        "item_count",
+        "source_type",
+    }
+)
 
 
 class LogEvent(BaseModel):
@@ -153,6 +163,14 @@ class RuntimeLogStore:
         from backend.app.services.runtime_log_buffer import sanitize_message
 
         sanitized = sanitize_message(message)
+        sanitized_details = None
+        if details:
+            sanitized_details = {
+                key: sanitize_message(value) if isinstance(value, str) else value
+                for key, value in details.items()
+                if key in _ALLOWED_DETAIL_KEYS
+                and isinstance(value, (str, int, float, bool, type(None)))
+            }
 
         with self._lock:
             event = LogEvent(
@@ -168,7 +186,7 @@ class RuntimeLogStore:
                 progress=progress,
                 duration_ms=duration_ms,
                 retry_count=retry_count,
-                details=details,
+                details=sanitized_details,
             )
             self._next_id += 1
 
@@ -249,8 +267,6 @@ class RuntimeLogStore:
 
             # 分页
             latest_id = all_entries[-1].id if all_entries else 0
-            oldest_id = all_entries[0].id if all_entries else 0
-
             if before_id:
                 # 向前分页：取最后 limit 条
                 result = filtered[-limit:] if len(filtered) > limit else filtered
@@ -267,7 +283,7 @@ class RuntimeLogStore:
             return QueryResult(
                 entries=result,
                 latest_id=latest_id,
-                oldest_id=oldest_id,
+                oldest_id=result[0].id if result else 0,
                 has_more_older=has_more,
             )
 

@@ -11,12 +11,15 @@ S2 日志契约：
 - 支持 level/category/task_id/batch_id/workspace_id 过滤
 """
 
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 import psutil
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
 
 from backend.app.services.runtime_log_store import get_default_store
+from shared.settings_store import load_settings
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -121,3 +124,45 @@ def get_runtime_logs(
         "has_more_older": result.has_more_older,
     }
 
+
+@router.get("/logs/export")
+def export_runtime_logs(
+    level: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    task_id: Optional[str] = Query(None),
+    batch_id: Optional[str] = Query(None),
+    workspace_id: Optional[str] = Query(None),
+) -> JSONResponse:
+    """导出当前过滤条件下最多 5000 条、已统一脱敏的诊断信息。"""
+    store = get_default_store()
+    result = store.query(
+        level=level,
+        category=category,
+        task_id=task_id,
+        batch_id=batch_id,
+        workspace_id=workspace_id,
+        limit=5000,
+    )
+    settings = load_settings()
+    now = datetime.now().astimezone()
+    payload = {
+        "generated_at": now.isoformat(),
+        "system": {
+            "cpu": _collect_cpu(),
+            "memory": _collect_memory(),
+            "disk": _collect_disk(),
+        },
+        "config_status": {
+            "provider_count": len(settings.providers),
+            "network_routing_mode": settings.network.routing_mode,
+            "network_proxy_configured": bool(settings.network.global_proxy),
+            "download_proxy_mode": settings.download.proxy_mode,
+            "download_cookie_mode": settings.download.cookie_mode,
+        },
+        "entries": [event.model_dump(mode="json") for event in result.entries],
+    }
+    filename = now.strftime("notebi-diagnostics-%Y%m%d-%H%M%S.json")
+    return JSONResponse(
+        payload,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
