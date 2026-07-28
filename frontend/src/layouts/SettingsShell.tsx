@@ -16,6 +16,7 @@ import { LangSwitcher } from '@/components/LangSwitcher'
 import { cn } from '@/lib/utils'
 import { useHealthPulse } from '@/hooks/useHealthPulse'
 import { APP_NAME } from '@/config/product'
+import { useSettingsShellStore } from '@/store/settingsShellStore'
 
 /** SaveBar 状态类型（保留向后兼容，Step 2+ 逐步移入各 panel 内） */
 export interface SaveBarState {
@@ -50,6 +51,10 @@ export function SettingsShell() {
   const health = useHealthPulse(0)
   const version = health.data?.version ?? 'v0.4.0'
   const location = useLocation()
+  const saveBar = useSettingsShellStore((state) => state.saveBarState)
+  const dirty = saveBar.dirtyCount > 0
+  const saving = saveBar.saving ?? false
+  const childOwnsSaveBar = location.pathname === '/settings/analysis-defaults'
 
   const navItems: NavItem[] = [
     { path: '/settings/providers-models', icon: <Cpu size={16} />, label: '模型与渠道' },
@@ -120,6 +125,29 @@ export function SettingsShell() {
         {/* 右侧内容 */}
         <main className="settings-content">
           <Outlet />
+          {!childOwnsSaveBar && (saveBar.onSave || saveBar.onReset) && (
+            <div className="settings-header-actions settings-shared-savebar">
+              <span className="text-xs text-[var(--mut)]">
+                {dirty ? `${saveBar.dirtyCount} 项未保存` : '所有变更已保存'}
+              </span>
+              <button
+                type="button"
+                className="settings-reset-btn"
+                onClick={saveBar.onReset}
+                disabled={!dirty || saving}
+              >
+                重置
+              </button>
+              <button
+                type="button"
+                className="settings-save-btn"
+                onClick={saveBar.onSave}
+                disabled={!dirty || saving}
+              >
+                {saving ? '保存中…' : '保存'}
+              </button>
+            </div>
+          )}
         </main>
       </div>
     </div>
