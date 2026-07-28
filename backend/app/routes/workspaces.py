@@ -22,6 +22,7 @@ from __future__ import annotations
 """
 
 import io
+import hashlib
 import json
 import logging
 import re
@@ -90,6 +91,7 @@ from backend.app.services.summary_templates import list_template_ids
 from backend.app.services.video_result_demo import build_demo_video_result
 from backend.app.services.workspace_search_service import _jump_url, search_one_workspace
 from backend.app.services.workspace_store import WorkspaceStore
+from backend.app.services.workspace_knowledge import invalidate_workspace_index
 from shared.config import DATA_DIR
 from shared.settings_store import load_settings
 from shared.url_sniffer import sniff_url
@@ -2361,11 +2363,22 @@ def list_item_lineage(workspace_id: str, item_id: str) -> Dict[str, Any]:
                 "name": item.name,
                 "type": item.type,
                 "updated_at": item.updated_at,
+                "summary_preview": str(
+                    (item.results or {}).get("summary")
+                    or (item.results or {}).get("content_md")
+                    or ""
+                )[:240],
                 "jump_url": _jump_url(workspace.workspace_id, item.item_id, item.type),
             })
     return {
         "content_id": current.content_id,
         "lineage_id": current.lineage_id,
+        "current": {
+            "workspace_id": workspace_id,
+            "item_id": current.item_id,
+            "content_id": current.content_id,
+            "updated_at": current.updated_at,
+        },
         "copies": sorted(copies, key=lambda copy: copy["updated_at"], reverse=True),
     }
 
@@ -2566,7 +2579,10 @@ def empty_trash() -> Dict[str, Any]:
 
 
 @router.delete("/{workspace_id}")
-def delete_workspace(workspace_id: str) -> Dict[str, Any]:
+def delete_workspace(
+    workspace_id: str,
+    content_policy: Literal["keep", "trash"] = Query("keep"),
+) -> Dict[str, Any]:
     """软删除：标记 trashed=True，不删 JSON 记录与素材文件。
 
     通过 POST /workspaces/{id}/restore 恢复；
@@ -2577,9 +2593,65 @@ def delete_workspace(workspace_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
     if rec.trashed:
         # 已经在垃圾桶里，幂等返回
-        return {"trashed": True, "workspace_id": workspace_id, "already": True}
+        return {
+            "trashed": True,
+            "workspace_id": workspace_id,
+            "already": True,
+            "moved_to_inbox": 0,
+            "already_elsewhere": 0,
+            "trashed_count": len(rec.items),
+        }
+
+    moved_to_inbox = 0
+    already_elsewhere = 0
+    if content_policy == "keep" and rec.source != "inbox":
+        active_records = [
+            workspace
+            for workspace in _store.list_all(include_trashed=False)
+            if workspace.workspace_id != workspace_id
+        ]
+        active_lineages = {
+            item.lineage_id
+            for workspace in active_records
+            for item in workspace.items
+            if item.lineage_id
+        }
+        unique_items = []
+        for item in rec.items:
+            if item.lineage_id and item.lineage_id in active_lineages:
+                already_elsewhere += 1
+            else:
+                unique_items.append(item)
+        if unique_items:
+            ensure_inbox()
+            copy_result = batch_add_items_to_workspace(
+                BatchAddToWorkspaceRequest(
+                    target_workspace_id=_INBOX_WORKSPACE_ID,
+                    items=[
+                        {"workspace_id": workspace_id, "item_id": item.item_id}
+                        for item in unique_items
+                    ],
+                )
+            )
+            if copy_result.get("failed"):
+                raise HTTPException(
+                    status_code=500,
+                    detail={
+                        "message": "内容保留到收纳箱失败，合集未删除",
+                        "failures": copy_result.get("failures") or [],
+                    },
+                )
+            moved_to_inbox = int(copy_result.get("added") or 0)
+            already_elsewhere += int(copy_result.get("skipped") or 0)
     _store.update(workspace_id, trashed=True)
-    return {"trashed": True, "workspace_id": workspace_id}
+    invalidate_workspace_index(workspace_id)
+    return {
+        "trashed": True,
+        "workspace_id": workspace_id,
+        "moved_to_inbox": moved_to_inbox,
+        "already_elsewhere": already_elsewhere,
+        "trashed_count": len(rec.items) if content_policy == "trash" else 0,
+    }
 
 
 @router.post("/{workspace_id}/restore")
@@ -5707,6 +5779,59 @@ class MergeRequest(BaseModel):
     style: str = "综合大纲"  # 融合风格：综合大纲 / 知识图谱 / 精华摘要
 
 
+class MergedNoteCreateRequest(BaseModel):
+    title: str = "综合笔记"
+    content_md: str
+    item_ids: List[str] = Field(default_factory=list)
+
+
+class MergedNoteUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    content_md: Optional[str] = None
+    item_ids: Optional[List[str]] = None
+
+
+def _merged_source_snapshot(
+    rec: WorkspaceRecord,
+    item_ids: List[str],
+) -> List[Dict[str, str]]:
+    selected = set(item_ids)
+    snapshots: List[Dict[str, str]] = []
+    for item in rec.items:
+        if item.item_id not in selected:
+            continue
+        results = item.results if isinstance(item.results, dict) else {}
+        summary = str(results.get("summary") or results.get("content_md") or "")
+        snapshots.append(
+            {
+                "item_id": item.item_id,
+                "content_id": item.content_id,
+                "lineage_id": item.lineage_id,
+                "title": item.name or item.source_value or item.item_id,
+                "summary_hash": hashlib.sha256(summary.encode("utf-8")).hexdigest(),
+            }
+        )
+    return snapshots
+
+
+def _append_merged_version(
+    rec: WorkspaceRecord,
+    merged: MergedNote,
+    *,
+    content_md: str,
+    item_ids: List[str],
+    created_by: Literal["ai", "user", "restore"],
+) -> None:
+    merged.append_version(
+        content_md=content_md,
+        item_ids=item_ids,
+        source_snapshot=_merged_source_snapshot(rec, item_ids),
+        created_by=created_by,
+    )
+    _store.update(rec.workspace_id, merged_notes=rec.merged_notes)
+    invalidate_workspace_index(rec.workspace_id)
+
+
 @router.post("/{workspace_id}/merge")
 def merge_notes(workspace_id: str, req: MergeRequest) -> Dict[str, Any]:
     """融合：取选中素材的笔记 → LLM 合成综合笔记 → 存合集级 merged_notes。"""
@@ -5766,11 +5891,15 @@ def merge_notes(workspace_id: str, req: MergeRequest) -> Dict[str, Any]:
     # 存入合集级载体（不新增 item，避免污染素材网格）
     merged = MergedNote(
         title=f"{req.style} - 综合笔记",
-        item_ids=req.item_ids,
-        content_md=merged_md,
     )
     rec.merged_notes.append(merged)
-    _store.update(workspace_id, merged_notes=rec.merged_notes)
+    _append_merged_version(
+        rec,
+        merged,
+        content_md=merged_md,
+        item_ids=req.item_ids,
+        created_by="ai",
+    )
 
     return merged.to_dict()
 
@@ -5781,7 +5910,30 @@ def list_merged_notes(workspace_id: str) -> List[Dict[str, Any]]:
     rec = _store.get(workspace_id)
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
-    return [mn.to_dict() for mn in rec.merged_notes]
+    return [mn.to_dict() for mn in rec.merged_notes if not mn.deleted_at]
+
+
+@router.post("/{workspace_id}/merged-notes")
+def create_merged_note(
+    workspace_id: str,
+    req: MergedNoteCreateRequest,
+) -> Dict[str, Any]:
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    missing = [item_id for item_id in req.item_ids if not any(item.item_id == item_id for item in rec.items)]
+    if missing:
+        raise HTTPException(status_code=422, detail=f"item not found: {','.join(missing)}")
+    merged = MergedNote(title=req.title.strip() or "综合笔记")
+    rec.merged_notes.append(merged)
+    _append_merged_version(
+        rec,
+        merged,
+        content_md=req.content_md,
+        item_ids=req.item_ids,
+        created_by="user",
+    )
+    return merged.to_dict()
 
 
 @router.get("/{workspace_id}/merged-notes/{merged_id}")
@@ -5791,20 +5943,96 @@ def get_merged_note(workspace_id: str, merged_id: str) -> Dict[str, Any]:
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
     mn = next((m for m in rec.merged_notes if m.merged_id == merged_id), None)
-    if mn is None:
+    if mn is None or mn.deleted_at:
         raise HTTPException(status_code=404, detail=f"merged note not found: {merged_id}")
     return mn.to_dict()
 
 
-@router.delete("/{workspace_id}/merged-notes/{merged_id}")
-def delete_merged_note(workspace_id: str, merged_id: str) -> Dict[str, str]:
-    """删除单条融合笔记。"""
+@router.patch("/{workspace_id}/merged-notes/{merged_id}")
+def update_merged_note(
+    workspace_id: str,
+    merged_id: str,
+    req: MergedNoteUpdateRequest,
+) -> Dict[str, Any]:
     rec = _store.get(workspace_id)
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
-    before = len(rec.merged_notes)
-    rec.merged_notes = [m for m in rec.merged_notes if m.merged_id != merged_id]
-    if len(rec.merged_notes) == before:
+    merged = next(
+        (note for note in rec.merged_notes if note.merged_id == merged_id and not note.deleted_at),
+        None,
+    )
+    if merged is None:
         raise HTTPException(status_code=404, detail=f"merged note not found: {merged_id}")
+    if req.title is not None:
+        merged.title = req.title.strip() or merged.title
+    if req.content_md is not None:
+        item_ids = list(req.item_ids) if req.item_ids is not None else list(merged.item_ids)
+        _append_merged_version(
+            rec,
+            merged,
+            content_md=req.content_md,
+            item_ids=item_ids,
+            created_by="user",
+        )
+    else:
+        merged.updated_at = datetime.now(timezone.utc).isoformat()
+        _store.update(workspace_id, merged_notes=rec.merged_notes)
+    return merged.to_dict()
+
+
+@router.get("/{workspace_id}/merged-notes/{merged_id}/versions")
+def list_merged_note_versions(
+    workspace_id: str,
+    merged_id: str,
+) -> List[Dict[str, Any]]:
+    note = get_merged_note(workspace_id, merged_id)
+    return list(note["versions"])
+
+
+@router.post("/{workspace_id}/merged-notes/{merged_id}/versions/{version_id}/restore")
+def restore_merged_note_version(
+    workspace_id: str,
+    merged_id: str,
+    version_id: str,
+) -> Dict[str, Any]:
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    merged = next(
+        (note for note in rec.merged_notes if note.merged_id == merged_id and not note.deleted_at),
+        None,
+    )
+    if merged is None:
+        raise HTTPException(status_code=404, detail=f"merged note not found: {merged_id}")
+    version = next(
+        (candidate for candidate in merged.versions if candidate.version_id == version_id),
+        None,
+    )
+    if version is None:
+        raise HTTPException(status_code=404, detail=f"merged note version not found: {version_id}")
+    _append_merged_version(
+        rec,
+        merged,
+        content_md=version.content_md,
+        item_ids=list(version.item_ids),
+        created_by="restore",
+    )
+    return merged.to_dict()
+
+
+@router.delete("/{workspace_id}/merged-notes/{merged_id}")
+def delete_merged_note(workspace_id: str, merged_id: str) -> Dict[str, Any]:
+    """Soft-delete a merged note without deleting source material."""
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    merged = next(
+        (note for note in rec.merged_notes if note.merged_id == merged_id and not note.deleted_at),
+        None,
+    )
+    if merged is None:
+        raise HTTPException(status_code=404, detail=f"merged note not found: {merged_id}")
+    merged.deleted_at = datetime.now(timezone.utc).isoformat()
     _store.update(workspace_id, merged_notes=rec.merged_notes)
-    return {"msg": "deleted"}
+    invalidate_workspace_index(workspace_id)
+    return {"deleted": True, "merged_id": merged_id}

@@ -123,7 +123,8 @@ def _build_source(
     end_ms = int(end_ms) if isinstance(end_ms, (int, float)) else parsed_end
     field = str(raw.get("field") or ("transcript" if start_ms is not None else "content"))
     segment_id = str(raw.get("segment_id") or f"segment-{raw.get('chunk_index', 0)}")
-    jump_url = _jump_url(wid, item_id, item_type)
+    source_type = str(info.get("source_type") or "")
+    jump_url = str(info.get("jump_url") or "") or _jump_url(wid, item_id, item_type)
     if start_ms is not None:
         jump_url = f"{jump_url}?start_ms={start_ms}&field={field}"
     return {
@@ -132,6 +133,7 @@ def _build_source(
         "workspace_name": info.get("workspace_name") or workspace_name_fallback,
         "item_id": item_id,
         "item_type": item_type,
+        "source_type": source_type or ("transcript" if start_ms is not None else "content"),
         "item_title": info.get("item_title") or raw.get("title") or "",
         "excerpt": excerpt,
         "chunk_excerpt": excerpt,

@@ -166,6 +166,10 @@ def _indexable_records(
         rec
         for rec in store.list_all(include_trashed=False)
         if any(_item_has_data(it, task_store) for it in rec.items)
+        or any(
+            not note.deleted_at and note.current_version_id and note.content_md.strip()
+            for note in rec.merged_notes
+        )
     ]
 
 
@@ -230,7 +234,15 @@ def get_global_status(
 
     indexable = _indexable_records(store, task_store)
     indexable_workspaces = len(indexable)
-    indexable_items = sum(sum(1 for it in rec.items if _item_has_data(it, task_store)) for rec in indexable)
+    indexable_items = sum(
+        sum(1 for it in rec.items if _item_has_data(it, task_store))
+        + sum(
+            1
+            for note in rec.merged_notes
+            if not note.deleted_at and note.current_version_id and note.content_md.strip()
+        )
+        for rec in indexable
+    )
     cur_hash = _global_items_hash(indexable)
     meta = _global_meta(cur_hash, embedding_model) if indexable_items > 0 else None
     ready = meta is not None

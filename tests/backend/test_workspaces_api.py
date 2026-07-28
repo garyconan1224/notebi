@@ -771,8 +771,9 @@ def test_library_trashed_filter(client: TestClient) -> None:
     body = resp.json()
     assert len(body["workspaces"]) == 1
     assert body["workspaces"][0]["workspace_id"] == ws1_id
-    assert len(body["items"]) == 1
-    assert body["items"][0]["workspace_id"] == ws1_id
+    # 默认删除策略会把唯一内容复制到稳定收纳箱，因此主库仍能看到该内容。
+    assert len(body["items"]) == 2
+    assert {item["workspace_id"] for item in body["items"]} == {ws1_id, "__inbox__"}
 
     # include_trashed=true
     resp = client.get("/workspaces/library?include_trashed=true")
@@ -781,7 +782,7 @@ def test_library_trashed_filter(client: TestClient) -> None:
     assert len(body["workspaces"]) == 2
     ws_ids = {w["workspace_id"] for w in body["workspaces"]}
     assert ws_ids == {ws1_id, ws2_id}
-    assert len(body["items"]) == 2
+    assert len(body["items"]) == 3
 
 
 def test_library_uses_task_overlay_for_duration_and_thumbnail(

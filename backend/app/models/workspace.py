@@ -258,6 +258,41 @@ def _gen_merged_id() -> str:
     return uuid.uuid4().hex[:12]
 
 
+def _gen_merged_version_id() -> str:
+    return uuid.uuid4().hex[:12]
+
+
+@dataclass
+class MergedNoteVersion:
+    version_id: str = field(default_factory=_gen_merged_version_id)
+    content_md: str = ""
+    item_ids: List[str] = field(default_factory=list)
+    source_snapshot: List[Dict[str, str]] = field(default_factory=list)
+    created_at: str = field(default_factory=_now_iso)
+    created_by: str = "user"  # ai / user / restore
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "MergedNoteVersion":
+        created_by = str(data.get("created_by") or "user")
+        if created_by not in {"ai", "user", "restore"}:
+            created_by = "user"
+        return cls(
+            version_id=str(data.get("version_id") or _gen_merged_version_id()),
+            content_md=str(data.get("content_md") or ""),
+            item_ids=[str(item_id) for item_id in data.get("item_ids") or []],
+            source_snapshot=[
+                {str(key): str(value) for key, value in snapshot.items()}
+                for snapshot in data.get("source_snapshot") or []
+                if isinstance(snapshot, dict)
+            ],
+            created_at=str(data.get("created_at") or _now_iso()),
+            created_by=created_by,
+        )
+
+
 @dataclass
 class MergedNote:
     """合集级融合笔记：多个素材笔记经 LLM 合成后的综合笔记。"""
@@ -267,6 +302,52 @@ class MergedNote:
     item_ids: List[str] = field(default_factory=list)
     content_md: str = ""
     created_at: str = field(default_factory=_now_iso)
+    current_version_id: str = ""
+    versions: List[MergedNoteVersion] = field(default_factory=list)
+    updated_at: str = ""
+    deleted_at: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.versions and (self.content_md or self.item_ids):
+            version = MergedNoteVersion(
+                content_md=self.content_md,
+                item_ids=list(self.item_ids),
+                created_at=self.created_at,
+                created_by="ai",
+            )
+            self.versions.append(version)
+            self.current_version_id = version.version_id
+        if self.versions:
+            current = next(
+                (version for version in self.versions if version.version_id == self.current_version_id),
+                self.versions[-1],
+            )
+            self.current_version_id = current.version_id
+            self.content_md = current.content_md
+            self.item_ids = list(current.item_ids)
+        if not self.updated_at:
+            self.updated_at = self.created_at
+
+    def append_version(
+        self,
+        *,
+        content_md: str,
+        item_ids: List[str],
+        source_snapshot: List[Dict[str, str]],
+        created_by: str,
+    ) -> MergedNoteVersion:
+        version = MergedNoteVersion(
+            content_md=content_md,
+            item_ids=list(item_ids),
+            source_snapshot=list(source_snapshot),
+            created_by=created_by,
+        )
+        self.versions.append(version)
+        self.current_version_id = version.version_id
+        self.content_md = version.content_md
+        self.item_ids = list(version.item_ids)
+        self.updated_at = version.created_at
+        return version
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -275,16 +356,29 @@ class MergedNote:
             "item_ids": list(self.item_ids),
             "content_md": self.content_md,
             "created_at": self.created_at,
+            "current_version_id": self.current_version_id,
+            "versions": [version.to_dict() for version in self.versions],
+            "updated_at": self.updated_at,
+            "deleted_at": self.deleted_at,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "MergedNote":
+        versions = [
+            MergedNoteVersion.from_dict(version)
+            for version in data.get("versions") or []
+            if isinstance(version, dict)
+        ]
         return cls(
             merged_id=str(data.get("merged_id") or _gen_merged_id()),
             title=str(data.get("title") or "综合笔记"),
             item_ids=list(data.get("item_ids") or []),
             content_md=str(data.get("content_md") or ""),
             created_at=str(data.get("created_at") or _now_iso()),
+            current_version_id=str(data.get("current_version_id") or ""),
+            versions=versions,
+            updated_at=str(data.get("updated_at") or ""),
+            deleted_at=str(data.get("deleted_at") or ""),
         )
 
 
