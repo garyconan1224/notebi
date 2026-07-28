@@ -7,7 +7,8 @@ import path from 'node:path'
 
 const BASE = process.env.FRONTEND_URL || 'http://localhost:5181'
 const CHROME = process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-const SHOT_DIR = path.resolve('./screenshots')
+const SHOT_DIR = path.resolve(process.env.REAL_MEDIA_SCREENSHOT_DIR || './screenshots')
+const REPORT_PATH = path.resolve(process.env.REAL_MEDIA_REPORT || './real-media-report.json')
 fs.mkdirSync(SHOT_DIR, { recursive: true })
 
 const VIDEO_URL = `${BASE}/workspaces/6c13ef8c-41e6-4cb4-9508-11764e4b3839/items/f7a57d7e-d36c-4a75-9802-74d8a5d86260/note?start_ms=30000&field=transcript&from=knowledge`
@@ -123,7 +124,8 @@ async function run() {
       audio: path.join(SHOT_DIR, 'real-audio-deeplink.png'),
     },
   }
-  fs.writeFileSync(path.resolve('./real-media-report.json'), JSON.stringify(report, null, 2))
+  fs.mkdirSync(path.dirname(REPORT_PATH), { recursive: true })
+  fs.writeFileSync(REPORT_PATH, JSON.stringify(report, null, 2))
   console.log('\nSUMMARY', JSON.stringify({
     pass: results.filter(r => r.status === 'pass').length,
     fail: results.filter(r => r.status === 'fail').length,
