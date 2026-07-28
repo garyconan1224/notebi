@@ -9,6 +9,8 @@ from backend.app.services.knowledge_source import (
     build_jump_url,
     compute_source_id,
 )
+from backend.app.services.retrieval_service import _extract_citations
+from backend.app.services.workspace_search_service import _build_source
 
 
 # ── Task 1.1: source_id 稳定性 ───────────────────────────────────────────────
@@ -127,3 +129,65 @@ def test_jump_url_zero_start_ms() -> None:
     """start_ms=0 不包含在 URL 中。"""
     url = build_jump_url("w1", "i1", "transcript", start_ms=0)
     assert "start_ms" not in url
+
+
+def test_workspace_source_builder_uses_chunk_identity() -> None:
+    source_map = {
+        "/tmp/item.json": {
+            "workspace_id": "w1",
+            "workspace_name": "合集一",
+            "item_id": "i1",
+            "content_id": "content-1",
+            "lineage_id": "lineage-1",
+            "item_type": "video",
+            "item_title": "视频一",
+        }
+    }
+    first = _build_source(
+        {
+            "source_file": "/tmp/item.json",
+            "field": "transcript",
+            "segment_id": "segment-1",
+            "start_ms": 30_000,
+            "end_ms": 35_000,
+            "skeleton_text": "第一段",
+            "score": 0.9,
+        },
+        source_map,
+        "w1",
+        "合集一",
+    )
+    second = _build_source(
+        {
+            "source_file": "/tmp/item.json",
+            "field": "transcript",
+            "segment_id": "segment-2",
+            "start_ms": 60_000,
+            "end_ms": 65_000,
+            "skeleton_text": "第二段",
+            "score": 0.8,
+        },
+        source_map,
+        "w1",
+        "合集一",
+    )
+
+    assert first["source_id"] != second["source_id"]
+    assert first["content_id"] == "content-1"
+    assert first["lineage_id"] == "lineage-1"
+    assert first["jump_url"].endswith(
+        "?start_ms=30000&field=transcript&segment=segment-1"
+    )
+
+
+def test_unknown_source_citations_are_rejected() -> None:
+    sources = [{"source_id": "known-a"}, {"source_id": "known-b"}]
+
+    citations, warnings = _extract_citations(
+        "可信 [source:known-b]，伪造 [source:made-up]，重复 [source:known-b]",
+        sources,
+        include_warnings=True,
+    )
+
+    assert citations == [{"number": 1, "source_id": "known-b"}]
+    assert warnings == ["unknown citation source_id: made-up"]

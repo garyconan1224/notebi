@@ -32,6 +32,8 @@ class SearchIndexStore:
                 workspace_name TEXT NOT NULL,
                 item_id TEXT NOT NULL,
                 content_id TEXT NOT NULL,
+                lineage_id TEXT NOT NULL DEFAULT '',
+                source_type TEXT NOT NULL DEFAULT 'content',
                 item_type TEXT NOT NULL,
                 item_title TEXT NOT NULL,
                 field TEXT NOT NULL,
@@ -52,6 +54,14 @@ class SearchIndexStore:
         if "content_id" not in columns:
             connection.execute(
                 "ALTER TABLE search_chunks ADD COLUMN content_id TEXT NOT NULL DEFAULT ''"
+            )
+        if "lineage_id" not in columns:
+            connection.execute(
+                "ALTER TABLE search_chunks ADD COLUMN lineage_id TEXT NOT NULL DEFAULT ''"
+            )
+        if "source_type" not in columns:
+            connection.execute(
+                "ALTER TABLE search_chunks ADD COLUMN source_type TEXT NOT NULL DEFAULT 'content'"
             )
         try:
             connection.execute(
@@ -87,10 +97,12 @@ class SearchIndexStore:
                 """
                 INSERT INTO search_chunks (
                     source_id, workspace_id, workspace_name, item_id, content_id,
+                    lineage_id, source_type,
                     item_type, item_title, field, segment_id, start_ms,
                     end_ms, content, tags
                 ) VALUES (
                     :source_id, :workspace_id, :workspace_name, :item_id, :content_id,
+                    :lineage_id, :source_type,
                     :item_type, :item_title, :field, :segment_id, :start_ms,
                     :end_ms, :content, :tags
                 )
@@ -104,7 +116,7 @@ class SearchIndexStore:
             connection.executemany(
                 "INSERT INTO schema_meta(key, value) VALUES(?, ?)",
                 [
-                    ("schema_version", "2"),
+                    ("schema_version", "3"),
                     ("signature", signature),
                     ("fts5", "1" if fts5 else "0"),
                 ],

@@ -15,7 +15,7 @@ def compute_source_id(
     workspace_id: str,
     item_id: str,
     field: str,
-    segment: int = 0,
+    segment: int | str = 0,
     start_ms: int = 0,
     end_ms: int = 0,
 ) -> str:
@@ -42,7 +42,7 @@ class KnowledgeSource:
     title: str = ""
     excerpt: str = ""
     field: str = "transcript"
-    segment: int = 0
+    segment: int | str = 0
     start_ms: int = 0
     end_ms: int = 0
     score: float = 0.0
@@ -63,7 +63,7 @@ class KnowledgeSource:
             title=str(data.get("title") or ""),
             excerpt=str(data.get("excerpt") or ""),
             field=str(data.get("field") or "transcript"),
-            segment=int(data.get("segment") or 0),
+            segment=data.get("segment") or 0,
             start_ms=int(data.get("start_ms") or 0),
             end_ms=int(data.get("end_ms") or 0),
             score=float(data.get("score") or 0.0),
@@ -76,7 +76,7 @@ class KnowledgeSource:
         workspace_id: str,
         item_id: str,
         field: str = "transcript",
-        segment: int = 0,
+        segment: int | str = 0,
         start_ms: int = 0,
         end_ms: int = 0,
         **kwargs: Any,

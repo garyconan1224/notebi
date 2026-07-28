@@ -133,6 +133,8 @@ def collect_workspace_json_paths(
             "workspace_id": workspace_id,
             "workspace_name": rec.name,
             "item_id": it.item_id,
+            "content_id": it.content_id,
+            "lineage_id": it.lineage_id,
             "item_type": it.type,
             "item_title": title,
             "tags": sorted(
@@ -150,6 +152,8 @@ def collect_workspace_json_paths(
         title = merged.title or "综合笔记"
         obj = {
             "item_id": merged.merged_id,
+            "content_id": merged.merged_id,
+            "lineage_id": merged.merged_id,
             "item_type": "text",
             "source_type": "merged_note",
             "title": title,

@@ -10,6 +10,7 @@ from typing import Any, Iterable, Optional
 
 from backend.app.models.workspace import WorkspaceItem, WorkspaceRecord
 from backend.app.services import workspace_knowledge
+from backend.app.services.knowledge_source import compute_source_id
 from backend.app.services.search_index_store import SearchIndexStore
 from backend.app.services.workspace_search_service import _jump_url
 from backend.app.services.workspace_store import WorkspaceStore
@@ -73,13 +74,22 @@ class ExactSearchService:
             }
         )
         return {
-            "source_id": (
-                f"{record.workspace_id}:{item.item_id}:{field}:{segment_id}"
+            "source_id": compute_source_id(
+                record.workspace_id,
+                item.item_id,
+                field,
+                segment_id,
+                int(start_ms or 0),
+                int(end_ms or 0),
             ),
             "workspace_id": record.workspace_id,
             "workspace_name": record.name,
             "item_id": item.item_id,
             "content_id": item.content_id,
+            "lineage_id": item.lineage_id,
+            "source_type": (
+                "transcript" if field == "transcript" else "content"
+            ),
             "item_type": item.type,
             "item_title": item.name or item.source_value or item.item_id,
             "field": field,
@@ -186,7 +196,7 @@ class ExactSearchService:
                 {
                     **{key: row[key] for key in (
                         "source_id", "workspace_id", "workspace_name", "item_id",
-                        "content_id",
+                        "content_id", "lineage_id", "source_type",
                         "item_type", "item_title", "field", "segment_id",
                         "start_ms", "end_ms",
                     )},

@@ -16,11 +16,15 @@ from shared.settings_store import load_settings
 
 
 _CITATION_RE = re.compile(r"\[(\d+)\]")
+_SOURCE_CITATION_RE = re.compile(r"\[source:([A-Za-z0-9._:-]+)\]")
 
 
 def _extract_citations(
-    answer: str, sources: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
+    answer: str,
+    sources: List[Dict[str, Any]],
+    *,
+    include_warnings: bool = False,
+) -> Any:
     """Extract valid [n] citations from answer, map to source_id.
 
     Rules:
@@ -30,22 +34,43 @@ def _extract_citations(
     - Returns [] when no valid citations found.
     """
     if not answer or not sources:
-        return []
-    seen: set[int] = set()
+        return ([], []) if include_warnings else []
+    by_id = {
+        str(source.get("source_id") or ""): source
+        for source in sources
+        if source.get("source_id")
+    }
+    seen_ids: set[str] = set()
     citations: List[Dict[str, Any]] = []
+    warnings: List[str] = []
+    for match in _SOURCE_CITATION_RE.finditer(answer):
+        source_id = match.group(1)
+        if source_id not in by_id:
+            warning = f"unknown citation source_id: {source_id}"
+            if warning not in warnings:
+                warnings.append(warning)
+            continue
+        if source_id in seen_ids:
+            continue
+        seen_ids.add(source_id)
+        citations.append({"number": len(citations) + 1, "source_id": source_id})
+
+    # Backward-compatible parsing for old model responses during migration.
+    seen_numbers: set[int] = set()
     for match in _CITATION_RE.finditer(answer):
         num = int(match.group(1))
         if num < 1 or num > len(sources):
             continue
-        if num in seen:
+        if num in seen_numbers:
             continue
-        seen.add(num)
+        seen_numbers.add(num)
         source = sources[num - 1]
-        citations.append({
-            "number": num,
-            "source_id": source.get("source_id", ""),
-        })
-    return citations
+        source_id = str(source.get("source_id") or "")
+        if not source_id or source_id in seen_ids:
+            continue
+        seen_ids.add(source_id)
+        citations.append({"number": len(citations) + 1, "source_id": source_id})
+    return (citations, warnings) if include_warnings else citations
 
 
 def _now_iso() -> str:
@@ -149,9 +174,15 @@ class RetrievalService:
                 "",
             )
         result["mode"] = mode
-        result["citations"] = _extract_citations(
-            result.get("answer", ""), result.get("sources", [])
+        citations, warnings = _extract_citations(
+            result.get("answer", ""),
+            result.get("sources", []),
+            include_warnings=True,
         )
+        result["citations"] = citations
+        result["warnings"] = warnings
+        if result.get("answer_status") == "complete" and not citations:
+            result["answer_status"] = "insufficient_evidence"
         result["status"] = self.status()
         return result
 

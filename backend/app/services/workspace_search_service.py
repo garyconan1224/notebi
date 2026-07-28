@@ -9,8 +9,10 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from math import ceil
 from typing import Any, Dict, List, Optional, Tuple
 
+from backend.app.services.knowledge_source import compute_source_id
 from backend.app.services.workspace_knowledge import (
     SourceMap,
     build_or_load_workspace_index,
@@ -35,6 +37,7 @@ from src.vidmirror.core.providers.registry import create_default_registry
 
 
 _EXCERPT_LIMIT = 200
+MIN_EVIDENCE_SCORE = 0.20
 
 
 def _excerpt(text: str, limit: int = _EXCERPT_LIMIT) -> str:
@@ -126,12 +129,25 @@ def _build_source(
     source_type = str(info.get("source_type") or "")
     jump_url = str(info.get("jump_url") or "") or _jump_url(wid, item_id, item_type)
     if start_ms is not None:
-        jump_url = f"{jump_url}?start_ms={start_ms}&field={field}"
+        separator = "&" if "?" in jump_url else "?"
+        jump_url = (
+            f"{jump_url}{separator}start_ms={start_ms}"
+            f"&field={field}&segment={segment_id}"
+        )
     return {
-        "source_id": f"{wid}:{item_id}",
+        "source_id": compute_source_id(
+            wid,
+            item_id,
+            field,
+            segment_id,
+            int(start_ms or 0),
+            int(end_ms or 0),
+        ),
         "workspace_id": wid,
         "workspace_name": info.get("workspace_name") or workspace_name_fallback,
         "item_id": item_id,
+        "content_id": str(info.get("content_id") or ""),
+        "lineage_id": str(info.get("lineage_id") or ""),
         "item_type": item_type,
         "source_type": source_type or ("transcript" if start_ms is not None else "content"),
         "item_title": info.get("item_title") or raw.get("title") or "",
@@ -139,6 +155,7 @@ def _build_source(
         "chunk_excerpt": excerpt,
         "field": field,
         "segment_id": segment_id,
+        "segment": segment_id,
         "start_ms": start_ms,
         "end_ms": end_ms,
         "score": float(raw.get("score") or 0.0),
@@ -160,11 +177,18 @@ def _llm_answer(query: str, context: str) -> str:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a helpful RAG assistant. Cite evidence by source index like [1], [2].",
+                    "content": (
+                        "You are a helpful RAG assistant. Every factual claim must cite "
+                        "one of the provided source IDs using exactly "
+                        "[source:<source_id>]. Never invent a source ID."
+                    ),
                 },
                 {
                     "role": "user",
-                    "content": f"Question:\n{query}\n\nContext:\n{context}\n\n请用中文作答，并在引用证据时标注 [1][2] 等。",
+                    "content": (
+                        f"Question:\n{query}\n\nContext:\n{context}\n\n"
+                        "请用中文作答，并用 [source:<source_id>] 标注对应证据。"
+                    ),
                 },
             ],
             temperature=0.2,
@@ -208,7 +232,7 @@ def search_one_workspace(
             s = _build_source(r, source_map, workspace_id, rec.name)
             sources_out.append(s)
             context_parts.append(
-                f"[{i+1}] {s['item_title']} ({s['item_type']})\n"
+                f"[source:{s['source_id']}] {s['item_title']} ({s['item_type']})\n"
                 f"{str(r.get('skeleton_text') or '')[:3000]}"
             )
     else:
@@ -249,7 +273,7 @@ def _retrieve_one(
                     "skeleton_text": knowledge.combined_json_text[:5000],
                     "source_file": "",
                     "title": rec.name,
-                    "score": 0.0,
+                    "score": 1.0,
                 }
             ],
             [],
@@ -298,7 +322,8 @@ def search_across_workspaces(
     if not target_ids:
         return {"answer": "（暂无工作空间）", "sources": []}
 
-    per_ws_top_k = max(top_k, 5)
+    candidate_k = max(top_k, len(target_ids) * 3)
+    per_ws_top_k = max(3, ceil(candidate_k / len(target_ids)))
     pool_raws: List[Tuple[Dict[str, Any], SourceMap, str, str]] = []
 
     with ThreadPoolExecutor(max_workers=min(4, len(target_ids))) as pool:
@@ -329,13 +354,35 @@ def search_across_workspaces(
                 pool_raws.append((r, smap, wid, wname))
 
     if not pool_raws:
-        return {"answer": "（未在选定工作空间中找到相关内容）", "sources": []}
+        return {
+            "answer": "",
+            "sources": [],
+            "answer_status": "insufficient_evidence",
+            "evidence_status": {
+                "sufficient": False,
+                "threshold": MIN_EVIDENCE_SCORE,
+                "best_score": None,
+            },
+        }
+
+    workspace_order = {workspace_id: index for index, workspace_id in enumerate(target_ids)}
+    pool_raws.sort(key=lambda value: workspace_order.get(value[2], len(workspace_order)))
 
     # reranker 二次精排（合并 score 量纲不一致问题）
     docs = [str(r.get("skeleton_text") or "")[:3000] for r, *_ in pool_raws]
     try:
         rr = rerank_documents(eff_key, rerank_model, query, docs, top_n=top_k)
-        order = [(int(item.get("index", -1)), float(item.get("relevance_score", 0.0))) for item in rr]
+        order = sorted(
+            [
+                (
+                    int(item.get("index", -1)),
+                    float(item.get("relevance_score", 0.0)),
+                )
+                for item in rr
+            ],
+            key=lambda value: value[1],
+            reverse=True,
+        )
     except SiliconFlowError:
         # 降级：按原始 score 排序
         order = sorted(
@@ -344,23 +391,67 @@ def search_across_workspaces(
             reverse=True,
         )[:top_k]
 
-    sources_out: List[Dict[str, Any]] = []
-    context_parts: List[str] = []
-    for ord_idx, (i, score) in enumerate(order[:top_k]):
+    ranked_sources: List[Dict[str, Any]] = []
+    ranked_raws: List[Dict[str, Any]] = []
+    for i, score in order:
         if not (0 <= i < len(pool_raws)):
             continue
         raw, smap, wid, wname = pool_raws[i]
         raw_with_score = dict(raw)
         raw_with_score["score"] = score
-        s = _build_source(raw_with_score, smap, wid, wname)
+        ranked_sources.append(_build_source(raw_with_score, smap, wid, wname))
+        ranked_raws.append(raw)
+
+    # Copies in several collections share lineage. Keep only the strongest
+    # equivalent chunk while preserving distinct moments/fields in that lineage.
+    deduped: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
+    seen: set[tuple[Any, ...]] = set()
+    for source, raw in zip(ranked_sources, ranked_raws):
+        lineage = source.get("lineage_id") or source.get("content_id")
+        key = (
+            lineage or source.get("source_id"),
+            source.get("field"),
+            source.get("start_ms"),
+            (source.get("excerpt") or "")[:120].strip(),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append((source, raw))
+        if len(deduped) >= top_k:
+            break
+
+    sources_out: List[Dict[str, Any]] = []
+    context_parts: List[str] = []
+    for s, raw in deduped:
         sources_out.append(s)
         context_parts.append(
-            f"[{ord_idx+1}] [{s['workspace_name']}] {s['item_title']} ({s['item_type']})\n"
+            f"[source:{s['source_id']}] [{s['workspace_name']}] "
+            f"{s['item_title']} ({s['item_type']})\n"
             f"{str(raw.get('skeleton_text') or '')[:2500]}"
         )
 
+    best_score = max((float(source.get("score") or 0.0) for source in sources_out), default=0.0)
+    evidence_status = {
+        "sufficient": best_score >= MIN_EVIDENCE_SCORE,
+        "threshold": MIN_EVIDENCE_SCORE,
+        "best_score": best_score,
+    }
+    if not evidence_status["sufficient"]:
+        return {
+            "answer": "",
+            "sources": sources_out,
+            "answer_status": "insufficient_evidence",
+            "evidence_status": evidence_status,
+        }
+
     answer = _llm_answer(query, "\n\n".join(context_parts))
-    return {"answer": answer, "sources": sources_out}
+    return {
+        "answer": answer,
+        "sources": sources_out,
+        "answer_status": "complete",
+        "evidence_status": evidence_status,
+    }
 
 
 __all__ = [

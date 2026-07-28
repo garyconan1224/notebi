@@ -11,15 +11,18 @@ import { http } from './client'
 export interface SearchSource {
   source_id: string
   content_id?: string
+  lineage_id?: string
   workspace_id: string
   workspace_name: string
   item_id: string
   item_type: 'video' | 'image' | 'audio' | 'text'
+  source_type?: 'transcript' | 'summary' | 'ocr' | 'merged_note' | 'content'
   item_title: string
   chunk_excerpt: string
   excerpt: string
   field: string
   segment_id: string
+  segment?: string | number
   start_ms: number | null
   end_ms: number | null
   score: number
@@ -39,6 +42,13 @@ export interface SearchResponse {
   citations?: SearchCitation[]
   mode?: 'smart' | 'exact' | 'hybrid'
   status?: import('./knowledge').KnowledgeStatus
+  answer_status?: 'complete' | 'insufficient_evidence' | 'generation_failed'
+  evidence_status?: {
+    sufficient: boolean
+    threshold: number
+    best_score: number | null
+  }
+  warnings?: string[]
 }
 
 export interface GlobalSearchOptions {
