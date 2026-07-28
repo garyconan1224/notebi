@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-07-28T15:58:14.294Z",
+  "target_sec": 30,
+  "checks": [
+    {
+      "item": "视频 start_ms=30000 跳转到 ~30s",
+      "status": "pass",
+      "detail": "currentTime=30.00 duration=364.670091 readyState=1 paused=true autoplayHint=true"
+    },
+    {
+      "item": "视频自动播放被拒绝时保留时间+提示",
+      "status": "pass",
+      "detail": "paused=true currentTime=30.00 hint可见"
+    },
+    {
+      "item": "音频 start_ms=30000 跳转到 ~30s",
+      "status": "pass",
+      "detail": "currentTime=30.00 duration=1551.079771 readyState=4 paused=true autoplayHint=true"
+    },
+    {
+      "item": "音频自动播放被拒绝时保留时间+提示",
+      "status": "pass",
+      "detail": "paused=true currentTime=30.00 hint可见"
+    }
+  ],
+  "console_errors": [],
+  "screenshots": {
+    "video": "/Users/conan/Desktop/notebi-exec/scripts/knowledge_acceptance/evidence/screenshots/real-video-deeplink.png",
+    "audio": "/Users/conan/Desktop/notebi-exec/scripts/knowledge_acceptance/evidence/screenshots/real-audio-deeplink.png"
+  }
+}

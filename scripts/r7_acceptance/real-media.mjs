@@ -1,9 +1,14 @@
 // R7 向前修复验收脚本（feat/r7-fix-forward）。前置：npm i playwright-core，并安装系统 Chrome。
 // 可用环境变量覆盖：CHROME_BIN（Chrome 可执行路径）、FRONTEND_URL（前端地址，默认 http://localhost:5181）。
 // R7 真实媒体验收：视频 + 音频 start_ms 深链接跳转 + 自动播放拒绝路径
-import { chromium } from 'playwright-core'
 import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
+
+const require = process.env.NODE_MODULE_DIR
+  ? createRequire(path.resolve(process.env.NODE_MODULE_DIR, 'package.json'))
+  : createRequire(import.meta.url)
+const { chromium } = require('playwright-core')
 
 const BASE = process.env.FRONTEND_URL || 'http://localhost:5181'
 const CHROME = process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
@@ -11,8 +16,12 @@ const SHOT_DIR = path.resolve(process.env.REAL_MEDIA_SCREENSHOT_DIR || './screen
 const REPORT_PATH = path.resolve(process.env.REAL_MEDIA_REPORT || './real-media-report.json')
 fs.mkdirSync(SHOT_DIR, { recursive: true })
 
-const VIDEO_URL = `${BASE}/workspaces/6c13ef8c-41e6-4cb4-9508-11764e4b3839/items/f7a57d7e-d36c-4a75-9802-74d8a5d86260/note?start_ms=30000&field=transcript&from=knowledge`
-const AUDIO_URL = `${BASE}/workspaces/c77afb23-b376-4dc0-9720-034f7750685a/items/41469d2e-5fc5-407f-8700-c7a42a009e68/note?start_ms=30000&field=transcript&from=knowledge`
+const VIDEO_WORKSPACE_ID = process.env.REAL_VIDEO_WORKSPACE_ID || '6c13ef8c-41e6-4cb4-9508-11764e4b3839'
+const VIDEO_ITEM_ID = process.env.REAL_VIDEO_ITEM_ID || 'f8f3050f-f0e2-493c-916a-2d7c3dc52671'
+const AUDIO_WORKSPACE_ID = process.env.REAL_AUDIO_WORKSPACE_ID || 'c77afb23-b376-4dc0-9720-034f7750685a'
+const AUDIO_ITEM_ID = process.env.REAL_AUDIO_ITEM_ID || '41469d2e-5fc5-407f-8700-c7a42a009e68'
+const VIDEO_URL = `${BASE}/workspaces/${VIDEO_WORKSPACE_ID}/items/${VIDEO_ITEM_ID}/note?start_ms=30000&field=transcript&from=knowledge`
+const AUDIO_URL = `${BASE}/workspaces/${AUDIO_WORKSPACE_ID}/items/${AUDIO_ITEM_ID}/note?start_ms=30000&field=transcript&from=knowledge`
 const TARGET_SEC = 30
 
 const results = []

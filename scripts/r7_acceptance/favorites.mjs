@@ -1,13 +1,19 @@
 // R7 向前修复验收脚本（feat/r7-fix-forward）。前置：npm i playwright-core，并安装系统 Chrome。
-// 可用环境变量覆盖：CHROME_BIN（Chrome 可执行路径）、FRONTEND_URL（前端地址，默认 http://localhost:5181）。
+// 可用环境变量覆盖：CHROME_BIN、FRONTEND_URL、NODE_MODULE_DIR、FAVORITES_REPORT、FAVORITES_SCREENSHOT_DIR。
 // R7 收藏夹实战演练：渲染 / 分组（副本隔离）/ 刷新 / 取消收藏
-import { chromium } from 'playwright-core'
 import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
+
+const require = process.env.NODE_MODULE_DIR
+  ? createRequire(path.resolve(process.env.NODE_MODULE_DIR, 'package.json'))
+  : createRequire(import.meta.url)
+const { chromium } = require('playwright-core')
 
 const BASE = process.env.FRONTEND_URL || 'http://localhost:5181'
 const CHROME = process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-const SHOT_DIR = path.resolve('./screenshots')
+const SHOT_DIR = path.resolve(process.env.FAVORITES_SCREENSHOT_DIR || './screenshots')
+const REPORT_PATH = path.resolve(process.env.FAVORITES_REPORT || './favorites-report.json')
 fs.mkdirSync(SHOT_DIR, { recursive: true })
 
 const results = []
@@ -96,7 +102,8 @@ async function run() {
       afterUnfavorite: path.join(SHOT_DIR, 'fav-02-after-unfavorite.png'),
     },
   }
-  fs.writeFileSync(path.resolve('./favorites-report.json'), JSON.stringify(report, null, 2))
+  fs.mkdirSync(path.dirname(REPORT_PATH), { recursive: true })
+  fs.writeFileSync(REPORT_PATH, JSON.stringify(report, null, 2))
   console.log('\nSUMMARY', JSON.stringify({
     pass: results.filter(r => r.status === 'pass').length,
     fail: results.filter(r => r.status === 'fail').length,

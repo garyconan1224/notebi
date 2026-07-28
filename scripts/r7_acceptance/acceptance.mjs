@@ -2,13 +2,28 @@
 // 可用环境变量覆盖：CHROME_BIN（Chrome 可执行路径）、FRONTEND_URL（前端地址，默认 http://localhost:5181）。
 // R7 浏览器验收脚本（小米 v2.5pro 串行执行作业书 §11）
 // 输出：Playwright 风格 JSON 证据 + 关键截图（绝对路径）
-import { chromium } from 'playwright-core'
 import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 
+const require = process.env.NODE_MODULE_DIR
+  ? createRequire(path.resolve(process.env.NODE_MODULE_DIR, 'package.json'))
+  : createRequire(import.meta.url)
+const { chromium } = require('playwright-core')
+
 const BASE = process.env.FRONTEND_URL || 'http://localhost:5181'
+const BACKEND = process.env.BACKEND_URL || 'http://localhost:8001'
 const CHROME = process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-const SHOT_DIR = path.resolve('./screenshots')
+const SHOT_DIR = path.resolve(process.env.ACCEPTANCE_SCREENSHOT_DIR || './screenshots')
+const REPORT_PATH = path.resolve(process.env.ACCEPTANCE_REPORT || './acceptance-report.json')
+const REAL_MEDIA_REPORT_PATH = path.resolve(
+  process.env.REAL_MEDIA_REPORT
+    || './scripts/knowledge_acceptance/evidence/real-media-report.json',
+)
+const FAVORITES_REPORT_PATH = path.resolve(
+  process.env.FAVORITES_REPORT
+    || './scripts/knowledge_acceptance/evidence/favorites-report.json',
+)
 fs.mkdirSync(SHOT_DIR, { recursive: true })
 
 const VIEWPORTS = [
@@ -56,7 +71,11 @@ function makeCollector(page) {
   const netFailures = []
   const httpErrors = []
   page.on('console', (msg) => {
-    if (msg.type() === 'error') consoleErrors.push(msg.text().slice(0, 300))
+    if (msg.type() === 'error') {
+      const location = msg.location()
+      const suffix = location?.url ? ` @ ${location.url}` : ''
+      consoleErrors.push(`${msg.text().slice(0, 300)}${suffix}`)
+    }
   })
   page.on('pageerror', (err) => pageErrors.push(String(err).slice(0, 300)))
   page.on('requestfailed', (req) => {
@@ -64,7 +83,7 @@ function makeCollector(page) {
   })
   page.on('response', (res) => {
     const t = res.request().resourceType()
-    if ((t === 'xhr' || t === 'fetch') && res.status() >= 400) {
+    if (res.status() >= 400) {
       httpErrors.push(`${res.status()} ${res.request().method()} ${res.url().slice(0, 160)}`)
     }
   })
@@ -120,9 +139,13 @@ async function run() {
 
   // Item 2: 全部 / 单个 / 多个合集（范围选择器）
   {
-    await gotoSafe(page, `${BASE}/knowledge`, col)
+    await gotoSafe(
+      page,
+      `${BASE}/knowledge?workspace_ids=c77afb23-b376-4dc0-9720-034f7750685a&new=1`,
+      col,
+    )
     // 寻找范围选择器触发按钮（摘要文案：全部合集 / 已选 N 个合集）
-    const scopeBtn = page.locator('button:has-text("合集"), [data-testid*="scope"], button:has-text("全部合集")').first()
+    const scopeBtn = page.locator('[aria-label="知识库范围"]').first()
     let scopeFound = false
     try { scopeFound = await scopeBtn.isVisible({ timeout: 2000 }) } catch { /* */ }
     if (scopeFound) {
@@ -146,20 +169,24 @@ async function run() {
     // 请求前先记录 /knowledge/status（审查要求）
     let statusBefore = null
     try {
-      const resp = await page.request.get(`${BASE.replace('5181', '8001')}/knowledge/status`, { timeout: 15000 })
+      const resp = await page.request.get(`${BACKEND}/knowledge/status`, { timeout: 15000 })
       statusBefore = await resp.json()
     } catch (e) { statusBefore = { error: e.message } }
     console.log('   [item3] status before:', JSON.stringify(statusBefore && { ready: statusBefore.ready, indexed: statusBefore.indexed_item_count, item: statusBefore.item_count, embedding: statusBefore.embedding_model }))
 
-    await gotoSafe(page, `${BASE}/knowledge`, col)
-    const input = page.locator('.search-input').first()
+    await gotoSafe(
+      page,
+      `${BASE}/knowledge?workspace_ids=c77afb23-b376-4dc0-9720-034f7750685a&new=1`,
+      col,
+    )
+    const input = page.locator('[aria-label="知识库提问"]').first()
     let asked = false
     let submitError = ''
     try {
       if (await input.isVisible({ timeout: 3000 })) {
         await input.fill('这个视频讲了什么')
         await page.waitForTimeout(300)
-        const sendBtn = page.locator('button:has-text("问知识库")').first()
+        const sendBtn = page.locator('[aria-label="发送问题"]').first()
         if (await sendBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
           await sendBtn.click().catch(() => {})
           asked = true
@@ -170,66 +197,73 @@ async function run() {
         submitError = '未找到搜索输入框'
       }
     } catch (e) { submitError = e.message }
-    // 等待 LLM 检索响应（外部 chat 模型可达 ~50s，放宽到 70s）
+    // 等待 LLM 检索响应。外部模型耗时不稳定，最多等待 180 秒。
     let answerSeen = false
     if (asked) {
       try {
-        await page.waitForSelector('.search-citations, [aria-label="回答引用"], .search-answer, .search-no-citations, .search-error, text=引用来源', { timeout: 70000 })
+        await page.locator('[aria-label="发送问题"]:not([disabled])').waitFor({
+          state: 'visible',
+          timeout: 180000,
+        })
         answerSeen = true
       } catch { /* 超时 */ }
     }
     await page.waitForTimeout(800)
     screenshots['03-ai-answer'] = await shot(page, '03-ai-answer')
     const hasCitation = await page.locator('[aria-label="回答引用"], .search-citations').first().isVisible({ timeout: 1000 }).catch(() => false)
-    const hasSources = await textPresent(page, '引用来源') || await textPresent(page, '转写原文') || await textPresent(page, '内容原文')
-    const hasAnswer = await page.locator('.search-answer').first().isVisible({ timeout: 1000 }).catch(() => false)
+    const hasSources = await page.locator('.knowledge-source-card, .search-citations').first().isVisible({ timeout: 1000 }).catch(() => false)
+    const hasAnswer = await page.locator('.knowledge-message-assistant p, .search-answer').first().isVisible({ timeout: 1000 }).catch(() => false)
     const noCitation = await textPresent(page, '本回答未包含可核验的引用标记')
     const errText = await page.locator('.search-error').first().innerText({ timeout: 1000 }).catch(() => '')
     const idxReady = statusBefore && statusBefore.ready === true
     if (asked && (hasCitation || hasSources)) {
-      record('3', 'AI 回答含真实引用/相关原文', 'pass', `status.ready=${idxReady} indexed=${statusBefore?.indexed_item_count}/${statusBefore?.item_count}；answer=${hasAnswer}；引用chip=${hasCitation}；引用来源/原文=${hasSources}；冷热计时与完整 answer+citations+sources 见 item3-cold.json/item3-warm.json`)
+      record('3', 'AI 回答含真实引用/相关原文', 'pass', `status.ready=${idxReady} indexed=${statusBefore?.indexed_item_count}/${statusBefore?.item_count}；answer=${hasAnswer}；引用chip=${hasCitation}；引用来源/原文=${hasSources}；冷热计时与完整 answer+citations+sources 见 knowledge-scoped-cold.json/knowledge-scoped-warm.json`)
     } else if (asked && (noCitation || hasAnswer)) {
-      record('3', 'AI 回答含真实引用/相关原文', 'pass', `status.ready=${idxReady}；AI 已响应（noCitation=${noCitation} answer=${hasAnswer}）；完整证据见 item3-*.json`)
+      record('3', 'AI 回答含真实引用/相关原文', 'pass', `status.ready=${idxReady}；AI 已响应（noCitation=${noCitation} answer=${hasAnswer}）；完整证据见 knowledge-scoped-*.json`)
     } else {
-      record('3', 'AI 回答含真实引用/相关原文', 'skip', `status.ready=${idxReady} indexed=${statusBefore?.indexed_item_count}/${statusBefore?.item_count}；asked=${asked} answerSeen=${answerSeen} err=${errText || submitError || '超时'}；后端直调证据见 item3-cold.json(冷17.7s)/item3-warm.json(热50.5s) 均 HTTP200 含真实 citations`)
+      record('3', 'AI 回答含真实引用/相关原文', 'skip', `status.ready=${idxReady} indexed=${statusBefore?.indexed_item_count}/${statusBefore?.item_count}；asked=${asked} answerSeen=${answerSeen} err=${errText || submitError || '超时'}；后端直调证据见 knowledge-scoped-cold.json/knowledge-scoped-warm.json`)
     }
   }
 
   // Item 4 & 5: 音视频时间点深链接 + 自动播放被拒保留位置（真实媒体证据见 real-media-report.json）
   {
-    // 使用可播放的 mp4 视频项（f7a57d7e）做真实跳转校验
-    const playableVideoItem = 'f7a57d7e-d36c-4a75-9802-74d8a5d86260'
-    const deepUrl = `${BASE}/workspaces/${WS_WITH_ITEMS}/items/${playableVideoItem}/note?start_ms=30000&field=transcript&from=knowledge`
-    const err = await gotoSafe(page, deepUrl, col)
-    await page.waitForSelector('video', { timeout: 15000 }).catch(() => {})
-    // 轮询 video.currentTime 直到接近 30s
-    let vState = null
-    const t0 = Date.now()
-    while (Date.now() - t0 < 20000) {
-      vState = await page.evaluate(() => {
-        const v = document.querySelector('video')
-        return v ? { currentTime: v.currentTime, duration: v.duration, readyState: v.readyState, paused: v.paused } : null
-      })
-      if (vState && Number.isFinite(vState.currentTime) && Math.abs(vState.currentTime - 30) < 2) break
-      await page.waitForTimeout(400)
+    let mediaReport = null
+    try {
+      mediaReport = JSON.parse(fs.readFileSync(REAL_MEDIA_REPORT_PATH, 'utf8'))
+    } catch {
+      // Missing evidence is an explicit failure, never an implicit pass.
     }
-    screenshots['04-note-deeplink'] = await shot(page, '04-note-deeplink')
-    if (!err && vState && Math.abs(vState.currentTime - 30) < 2) {
-      record('4', '视频时间点深链接跳转到 ~30s', 'pass', `currentTime=${vState.currentTime.toFixed(2)} duration=${vState.duration} readyState=${vState.readyState}（音频同样跳转 30.00s，详见 real-media-report.json）`)
-    } else {
-      record('4', '视频时间点深链接跳转到 ~30s', 'fail', `err=${err} state=${JSON.stringify(vState)}`)
-    }
-    record('5', '自动播放被拒时保留 seek 位置+提示', 'pass', '真实媒体验收（real-media-report.json）：play() 被拒后视频/音频均 paused 停在 30.00s 且显示 deeplink-autoplay-hint')
+    const mediaChecks = mediaReport?.checks ?? []
+    const allMediaPassed = mediaChecks.length === 4
+      && mediaChecks.every((check) => check.status === 'pass')
+      && (mediaReport?.console_errors ?? []).length === 0
+    const detail = allMediaPassed
+      ? '独立真实媒体验收：视频/音频均跳转 30.00s，play() 被拒后保持位置且提示可见，console error=0'
+      : `证据缺失或未全通过：${REAL_MEDIA_REPORT_PATH}`
+    record('4', '音视频时间点深链接跳转到 ~30s', allMediaPassed ? 'pass' : 'fail', detail)
+    record('5', '自动播放被拒时保留 seek 位置+提示', allMediaPassed ? 'pass' : 'fail', detail)
   }
 
   // Item 6: 收藏夹（inbox/普通合集 收藏/取消/刷新/分组/副本隔离）
   {
     const err = await gotoSafe(page, `${BASE}/favorites`, col)
     const favRendered = await textPresent(page, '收藏') || await page.locator('main, [role="main"]').first().isVisible({ timeout: 2000 }).catch(() => false)
-    const hasGroup = await textPresent(page, '分组') || await textPresent(page, '全部')
     screenshots['06-favorites'] = await shot(page, '06-favorites')
-    if (!err && favRendered) record('6', '收藏夹页面渲染（分组/刷新）', 'pass', `url=${page.url()}；分组控件=${hasGroup}（当前无收藏数据，收藏/取消/副本隔离交互未逐项演练）`)
-    else record('6', '收藏夹页面渲染（分组/刷新）', 'fail', `err=${err} url=${page.url()}`)
+    let favoritesReport = null
+    try {
+      favoritesReport = JSON.parse(fs.readFileSync(FAVORITES_REPORT_PATH, 'utf8'))
+    } catch {
+      // Missing evidence is an explicit failure, never an implicit pass.
+    }
+    const favoritesChecks = favoritesReport?.checks ?? []
+    const favoritesPassed = favoritesChecks.length === 5
+      && favoritesChecks.every((check) => check.status === 'pass')
+      && (favoritesReport?.console_errors ?? []).length === 0
+    if (!err && favRendered && favoritesPassed) {
+      record('6', '收藏夹副本隔离/刷新/分组/取消', 'pass', '独立实战验收 5/5，收纳箱与普通合集并存，console error=0')
+    } else {
+      record('6', '收藏夹副本隔离/刷新/分组/取消', 'fail', `err=${err} rendered=${favRendered} evidence=${FAVORITES_REPORT_PATH}`)
+    }
   }
 
   // Item 7 & 8: /notes 新建/选择/加入合集不撑高 Hero；无文件夹/移动/标签/整理；单一 ViewToggle
@@ -292,27 +326,22 @@ async function run() {
     }
   }
 
-  // Item 10: Monitor 任务活动 / 日志 / 暂停 / 过滤 / 脱敏
+  // Item 10: 单一标准日志 / 最新优先 / 暂停 / 过滤 / 脱敏
   {
     const err = await gotoSafe(page, `${BASE}/settings/monitor`, col)
     await page.waitForTimeout(1500)
-    const badges = {}
-    for (const id of ['count-queued', 'count-running', 'count-failed', 'count-success']) {
-      badges[id] = await page.locator(`[data-testid="${id}"]`).first().isVisible({ timeout: 1500 }).catch(() => false)
-    }
-    // 切到应用日志 tab
-    const logsTab = page.locator('button:has-text("应用日志")').first()
-    let logsTabOk = false
-    try { if (await logsTab.isVisible({ timeout: 2000 })) { await logsTab.click(); logsTabOk = true; await page.waitForTimeout(600) } } catch { /* */ }
-    const levelFilter = await page.locator('[data-testid="log-level-filter"]').first().isVisible({ timeout: 1500 }).catch(() => false)
-    const categoryFilter = await page.locator('[data-testid="log-category-filter"]').first().isVisible({ timeout: 1500 }).catch(() => false)
+    const standardLog = await textPresent(page, '标准日志')
+    const levelFilter = await page.locator('[aria-label="日志级别"]').first().isVisible({ timeout: 1500 }).catch(() => false)
+    const categoryFilter = await page.locator('[aria-label="日志类别"]').first().isVisible({ timeout: 1500 }).catch(() => false)
+    const keywordFilter = await page.locator('[aria-label="关键词"]').first().isVisible({ timeout: 1500 }).catch(() => false)
     const pauseBtn = await page.locator('button:has-text("暂停"), button:has-text("恢复")').first().isVisible({ timeout: 1500 }).catch(() => false)
+    const exportBtn = await page.locator('button:has-text("导出诊断")').first().isVisible({ timeout: 1500 }).catch(() => false)
+    const redaction = await textPresent(page, '不包含 API 密钥和 Cookie')
     screenshots['10-monitor'] = await shot(page, '10-monitor')
-    const badgesOk = Object.values(badges).every(Boolean)
-    if (!err && badgesOk && logsTabOk && levelFilter && pauseBtn) {
-      record('10', 'Monitor 任务活动/日志/暂停/过滤', 'pass', `徽章=${JSON.stringify(badges)}；日志tab=${logsTabOk}；level过滤=${levelFilter}；category过滤=${categoryFilter}；暂停=${pauseBtn}（脱敏已在后端端到端验证）`)
+    if (!err && standardLog && levelFilter && categoryFilter && keywordFilter && pauseBtn && exportBtn && redaction) {
+      record('10', 'Monitor 单一标准日志/暂停/过滤/脱敏', 'pass', `标准日志=${standardLog}；level=${levelFilter}；category=${categoryFilter}；keyword=${keywordFilter}；暂停=${pauseBtn}；导出=${exportBtn}；脱敏说明=${redaction}`)
     } else {
-      record('10', 'Monitor 任务活动/日志/暂停/过滤', 'fail', `err=${err} 徽章=${JSON.stringify(badges)} 日志tab=${logsTabOk} level=${levelFilter} pause=${pauseBtn}`)
+      record('10', 'Monitor 单一标准日志/暂停/过滤/脱敏', 'fail', `err=${err} standard=${standardLog} level=${levelFilter} category=${categoryFilter} keyword=${keywordFilter} pause=${pauseBtn} export=${exportBtn} redaction=${redaction}`)
     }
   }
 
@@ -346,8 +375,10 @@ async function run() {
   if (!anyOverflow) record('11', '五视口无横向溢出', 'pass', `视口=${VIEWPORTS.map((v) => v.name).join(',')} 均 scrollWidth<=clientWidth`)
   else record('11', '五视口无横向溢出', 'fail', JSON.stringify(overflowReport.flatMap((v) => v.routes).filter((r) => r.overflow)))
 
-  // 过滤掉资源类（favicon/字体/媒体）网络失败，聚焦 xhr/fetch 与 console error
+  // 浏览器关闭页面/切换路由会主动中止健康轮询；只保留可行动的网络失败。
   const realConsoleErrors = allConsoleErrors.filter((t) => !/favicon|\.ico|Download the React DevTools/i.test(t))
+  const ignoredNetworkAborts = allNetFailures.filter((t) => /net::ERR_ABORTED/.test(t))
+  const actionableNetworkFailures = allNetFailures.filter((t) => !/net::ERR_ABORTED/.test(t))
   if (realConsoleErrors.length === 0) record('12', 'console error 为 0', 'pass', '全部视口/路由 console error=0')
   else record('12', 'console error 为 0', 'fail', `共 ${realConsoleErrors.length} 条：${realConsoleErrors.slice(0, 5).join(' || ')}`)
 
@@ -369,14 +400,15 @@ async function run() {
     checks: results,
     overflow: overflowReport,
     console_errors: realConsoleErrors,
-    network_failures: allNetFailures,
+    network_failures: actionableNetworkFailures,
+    ignored_network_aborts: ignoredNetworkAborts.length,
     screenshots,
   }
-  const outPath = path.resolve('./acceptance-report.json')
-  fs.writeFileSync(outPath, JSON.stringify(report, null, 2))
+  fs.mkdirSync(path.dirname(REPORT_PATH), { recursive: true })
+  fs.writeFileSync(REPORT_PATH, JSON.stringify(report, null, 2))
   console.log('\n=== SUMMARY ===')
   console.log(JSON.stringify(report.summary))
-  console.log(`report: ${outPath}`)
+  console.log(`report: ${REPORT_PATH}`)
 }
 
 run().catch((e) => {

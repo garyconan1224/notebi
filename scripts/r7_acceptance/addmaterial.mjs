@@ -1,13 +1,19 @@
 // R7 向前修复验收脚本（feat/r7-fix-forward）。前置：npm i playwright-core，并安装系统 Chrome。
-// 可用环境变量覆盖：CHROME_BIN（Chrome 可执行路径）、FRONTEND_URL（前端地址，默认 http://localhost:5181）。
+// 可用环境变量覆盖：CHROME_BIN、FRONTEND_URL、NODE_MODULE_DIR、ADDMATERIAL_REPORT、ADDMATERIAL_SCREENSHOT_DIR。
 // R7 AddMaterial 实战演练：五种笔记类型 + 四种来源 + 高频设置同屏 + 无旧 action
-import { chromium } from 'playwright-core'
 import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
+
+const require = process.env.NODE_MODULE_DIR
+  ? createRequire(path.resolve(process.env.NODE_MODULE_DIR, 'package.json'))
+  : createRequire(import.meta.url)
+const { chromium } = require('playwright-core')
 
 const BASE = process.env.FRONTEND_URL || 'http://localhost:5181'
 const CHROME = process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-const SHOT_DIR = path.resolve('./screenshots')
+const SHOT_DIR = path.resolve(process.env.ADDMATERIAL_SCREENSHOT_DIR || './screenshots')
+const REPORT_PATH = path.resolve(process.env.ADDMATERIAL_REPORT || './addmaterial-report.json')
 fs.mkdirSync(SHOT_DIR, { recursive: true })
 
 const results = []
@@ -68,17 +74,20 @@ async function run() {
 
   // 5. 五种类型可切换（点击类型卡标题，验证不报错）
   let switchOk = 0
+  const switchFailures = []
   for (const t of noteTypes) {
-    const card = page.getByText(t, { exact: false }).first()
+    const card = page.locator('button.note-type-card').filter({ hasText: t }).first()
     try {
-      await card.click({ force: true, timeout: 1500 })
+      await card.click({ timeout: 3000 })
       switchOk++
       await page.waitForTimeout(200)
-    } catch { /* */ }
+    } catch (error) {
+      switchFailures.push(`${t}: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`)
+    }
   }
   await page.screenshot({ path: path.join(SHOT_DIR, 'addmat-02-types.png') })
   if (switchOk === 5) record('五种类型均可点击切换', 'pass', `成功切换=${switchOk}/5`)
-  else record('五种类型均可点击切换', 'fail', `成功切换=${switchOk}/5`)
+  else record('五种类型均可点击切换', 'fail', `成功切换=${switchOk}/5；${switchFailures.join(' | ')}`)
 
   await browser.close()
   const report = {
@@ -90,7 +99,8 @@ async function run() {
       types: path.join(SHOT_DIR, 'addmat-02-types.png'),
     },
   }
-  fs.writeFileSync(path.resolve('./addmaterial-report.json'), JSON.stringify(report, null, 2))
+  fs.mkdirSync(path.dirname(REPORT_PATH), { recursive: true })
+  fs.writeFileSync(REPORT_PATH, JSON.stringify(report, null, 2))
   console.log('\nSUMMARY', JSON.stringify({
     pass: results.filter(r => r.status === 'pass').length,
     fail: results.filter(r => r.status === 'fail').length,
