@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MergedNotesTab } from '@/pages/WorkspacePage/TaskboardPage/MergedNotesTab'
+import type { MergedNote } from '@/services/workspaces'
 
 const {
   createMock,
@@ -26,7 +27,7 @@ vi.mock('@/services/workspaces', () => ({
   updateMergedNote: updateMock,
 }))
 
-const note = {
+const note: MergedNote = {
   merged_id: 'merged-1',
   title: '综合主题',
   item_ids: ['item-1'],
@@ -65,7 +66,7 @@ const note = {
       created_by: 'user',
     },
   ],
-} as const
+}
 
 describe('MergedNotesTab', () => {
   beforeEach(() => {
