@@ -16,6 +16,15 @@ export interface NetworkConfigUpdate {
   global_proxy?: string
 }
 
+export interface NetworkTestResult {
+  target: string
+  route: string
+  proxy_used: boolean
+  elapsed_ms: number
+  ok: boolean
+  message: string
+}
+
 /**
  * 获取网络配置。
  */
@@ -29,6 +38,11 @@ export async function getNetworkConfig(): Promise<NetworkConfig> {
  */
 export async function updateNetworkConfig(data: NetworkConfigUpdate): Promise<NetworkConfig> {
   const res = await http.patch<NetworkConfig>('/network_config', data)
+  return res.data
+}
+
+export async function testNetworkTarget(target: string): Promise<NetworkTestResult> {
+  const res = await http.post<NetworkTestResult>('/network_config/test', { target })
   return res.data
 }
 

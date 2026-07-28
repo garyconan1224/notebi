@@ -3,8 +3,8 @@
 验证：
 - GET /network_config 返回默认值
 - PATCH /network_config 保存并读回
-- 无效 routing_mode 回退到 smart
-- 代理密码不在响应中泄露
+- 无效 routing_mode / 代理地址返回 422
+- 连通性测试返回可解释结果且不泄露代理密码
 """
 
 from __future__ import annotations
@@ -62,11 +62,19 @@ def test_patch_network_config_round_trip(client: TestClient) -> None:
 # ── Task 2.3: 无效枚举回退 ───────────────────────────────────────────────────
 
 
-def test_invalid_routing_mode_falls_back(client: TestClient) -> None:
-    """无效 routing_mode 回退到 smart。"""
+def test_invalid_routing_mode_is_rejected(client: TestClient) -> None:
+    """无效 routing_mode 返回 422，不静默改变用户输入。"""
     response = client.patch("/network_config", json={"routing_mode": "invalid"})
-    assert response.status_code == 200
-    assert response.json()["routing_mode"] == "smart"
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "proxy",
+    ["ftp://127.0.0.1:21", "127.0.0.1:7890", "javascript:alert(1)"],
+)
+def test_invalid_proxy_is_rejected(client: TestClient, proxy: str) -> None:
+    response = client.patch("/network_config", json={"global_proxy": proxy})
+    assert response.status_code == 422
 
 
 # ── Task 2.4: 部分更新保留其他字段 ───────────────────────────────────────────
@@ -96,3 +104,38 @@ def test_post_network_config_compat(client: TestClient) -> None:
     response = client.post("/network_config", json={"routing_mode": "direct"})
     assert response.status_code == 200
     assert response.json()["routing_mode"] == "direct"
+
+
+def test_connection_probe_reports_route_without_proxy_password(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client.patch(
+        "/network_config",
+        json={
+            "routing_mode": "proxy",
+            "global_proxy": "http://user:secret@127.0.0.1:7890",
+        },
+    )
+    monkeypatch.setattr(
+        "backend.app.routes.network_config._probe_url",
+        lambda target, proxy: (True, "连接成功"),
+    )
+
+    response = client.post(
+        "/network_config/test",
+        json={"target": "https://www.youtube.com/"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert set(data) == {
+        "target",
+        "route",
+        "proxy_used",
+        "elapsed_ms",
+        "ok",
+        "message",
+    }
+    assert data["ok"] is True
+    assert data["proxy_used"] is True
+    assert "secret" not in response.text

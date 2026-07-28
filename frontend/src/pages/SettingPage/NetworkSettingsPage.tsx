@@ -6,8 +6,10 @@ import { useSettingsShellStore } from '@/store/settingsShellStore'
 import {
   getNetworkConfig,
   updateNetworkConfig,
+  testNetworkTarget,
   ROUTING_MODE_DESCRIPTIONS,
   type NetworkConfig,
+  type NetworkTestResult,
 } from '@/services/network'
 
 /**
@@ -26,6 +28,8 @@ const NetworkSettingsPage = () => {
   const [draft, setDraft] = useState<NetworkConfig>({ routing_mode: 'smart', global_proxy: '' })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [testingTarget, setTestingTarget] = useState('')
+  const [testResult, setTestResult] = useState<NetworkTestResult | null>(null)
 
   // 加载配置
   const loadConfig = useCallback(async () => {
@@ -74,6 +78,18 @@ const NetworkSettingsPage = () => {
   const handleReset = useCallback(() => {
     setDraft(config)
   }, [config])
+
+  const handleTest = useCallback(async (target: string) => {
+    setTestingTarget(target)
+    try {
+      setTestResult(await testNetworkTarget(target))
+    } catch (err) {
+      toast.error('连通性测试失败')
+      console.error(err)
+    } finally {
+      setTestingTarget('')
+    }
+  }, [])
 
   // SaveBar 桥接
   useEffect(() => {
@@ -170,6 +186,38 @@ const NetworkSettingsPage = () => {
               <span className="inline-block w-2 h-2 rounded-full bg-gray-400" />
               <span>其他：默认直连</span>
             </div>
+          </div>
+          <div className="border-t px-6 py-4">
+            <div className="mb-3 text-sm font-medium">按实际目标测试</div>
+            <div className="flex flex-wrap gap-2">
+              {[
+                ['测试 Bilibili', 'https://www.bilibili.com/'],
+                ['测试 YouTube', 'https://www.youtube.com/'],
+                ['测试 Tavily', 'https://api.tavily.com/'],
+                ['测试模型服务', 'https://api.openai.com/'],
+              ].map(([label, target]) => (
+                <button
+                  key={target}
+                  type="button"
+                  className="chip"
+                  disabled={testingTarget === target}
+                  onClick={() => void handleTest(target)}
+                >
+                  {testingTarget === target ? '测试中…' : label}
+                </button>
+              ))}
+            </div>
+            {testResult && (
+              <div
+                className="mt-3 rounded border p-3 text-sm"
+                role="status"
+              >
+                <div>{testResult.ok ? '连接成功' : '连接失败'} · {testResult.elapsed_ms} ms</div>
+                <div className="text-muted-foreground">
+                  {testResult.route}；{testResult.proxy_used ? '已使用代理' : '未使用代理'}；{testResult.message}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
