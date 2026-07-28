@@ -68,14 +68,11 @@ export interface DownloadConfig extends Record<string, unknown> {
   outputDir: string
   /** yt-dlp outtmpl 模板(空串=回落旧硬编码 %(title)s.%(ext)s) */
   filenameTemplate: string
-  /** 下载专用 HTTP/SOCKS 代理(与全局 httpProxy 语义一致,独立字段便于未来解耦) */
-  httpProxy: string
-  /** YouTube PO Token */
-  poToken: string
-  /** YouTube Visitor Data */
-  visitorData: string
-  /** Cookie 基目录列表(绝对路径数组) */
-  cookieBaseDirs: string[]
+  proxyMode: 'inherit' | 'direct' | 'proxy'
+  cookieMode: 'none' | 'browser' | 'file'
+  cookieBrowser: string
+  cookieProfile: string
+  cookieFilePath: string
   /** yt-dlp concurrent_fragment_downloads,后端 clamp [1,8] */
   concurrencyLimit: number
   /** yt-dlp retries,后端 clamp [0,10] */
@@ -146,13 +143,6 @@ export interface ConfigState {
 
   /** 下载策略预设（均衡/优先速度/优先画质/仅提取音频） */
   downloadMode: DownloadMode
-  /** YouTube PO Token（可选，用于突破限流） */
-  poToken: string
-  /** YouTube Visitor Data（可选，用于突破限流） */
-  visitorData: string
-  /** Cookie 基目录（多行，每行一个绝对路径；为空则使用默认目录） */
-  cookieBaseDirs: string
-
   /** Tavily 联网搜索 API Key */
   tavilyApiKey: string
   /** 总结弹窗上次选择的 provider_id（记忆用） */
@@ -198,10 +188,11 @@ type ConfigStateActionKey =
 const DEFAULT_DOWNLOAD_CONFIG: DownloadConfig = {
   outputDir: '',
   filenameTemplate: '%(title)s-%(id)s.%(ext)s',
-  httpProxy: '',
-  poToken: '',
-  visitorData: '',
-  cookieBaseDirs: [],
+  proxyMode: 'inherit',
+  cookieMode: 'browser',
+  cookieBrowser: 'chrome',
+  cookieProfile: '',
+  cookieFilePath: '',
   concurrencyLimit: 2,
   retryCount: 3,
   socketTimeout: 30,
@@ -257,10 +248,6 @@ const DEFAULT_CONFIG: Omit<ConfigState, ConfigStateActionKey> = {
 
   // 下载偏好（默认均衡；高级字段留空，仅在用户显式填写后生效）
   downloadMode: 'balanced',
-  poToken: '',
-  visitorData: '',
-  cookieBaseDirs: '',
-
   // Tavily 联网搜索 + 总结弹窗模型记忆
   tavilyApiKey: '',
   summaryProviderId: '',
@@ -275,10 +262,11 @@ function fromWire(p: DownloadConfigPayload): DownloadConfig {
   return {
     outputDir: p.output_dir,
     filenameTemplate: p.filename_template,
-    httpProxy: p.http_proxy,
-    poToken: p.po_token,
-    visitorData: p.visitor_data,
-    cookieBaseDirs: Array.isArray(p.cookie_base_dirs) ? [...p.cookie_base_dirs] : [],
+    proxyMode: p.proxy_mode,
+    cookieMode: p.cookie_mode,
+    cookieBrowser: p.cookie_browser,
+    cookieProfile: p.cookie_profile,
+    cookieFilePath: p.cookie_file_path,
     concurrencyLimit: p.concurrency_limit,
     retryCount: p.retry_count,
     socketTimeout: p.socket_timeout,
@@ -290,10 +278,11 @@ function toWirePatch(patch: Partial<DownloadConfig>): DownloadConfigPatchPayload
   const out: DownloadConfigPatchPayload = {}
   if (patch.outputDir !== undefined) out.output_dir = patch.outputDir
   if (patch.filenameTemplate !== undefined) out.filename_template = patch.filenameTemplate
-  if (patch.httpProxy !== undefined) out.http_proxy = patch.httpProxy
-  if (patch.poToken !== undefined) out.po_token = patch.poToken
-  if (patch.visitorData !== undefined) out.visitor_data = patch.visitorData
-  if (patch.cookieBaseDirs !== undefined) out.cookie_base_dirs = [...patch.cookieBaseDirs]
+  if (patch.proxyMode !== undefined) out.proxy_mode = patch.proxyMode
+  if (patch.cookieMode !== undefined) out.cookie_mode = patch.cookieMode
+  if (patch.cookieBrowser !== undefined) out.cookie_browser = patch.cookieBrowser
+  if (patch.cookieProfile !== undefined) out.cookie_profile = patch.cookieProfile
+  if (patch.cookieFilePath !== undefined) out.cookie_file_path = patch.cookieFilePath
   if (patch.concurrencyLimit !== undefined) out.concurrency_limit = patch.concurrencyLimit
   if (patch.retryCount !== undefined) out.retry_count = patch.retryCount
   if (patch.socketTimeout !== undefined) out.socket_timeout = patch.socketTimeout

@@ -99,10 +99,7 @@ export interface AnalyzePayload {
   extras?: string
   browser?: string
   proxy?: string
-  po_token?: string
-  visitor_data?: string
   format_selector?: string
-  cookie_base_dirs?: string[]
 }
 
 /** download 任务 payload */
@@ -110,10 +107,7 @@ export interface DownloadPayload {
   url: string
   browser?: string
   proxy?: string
-  po_token?: string
-  visitor_data?: string
   format_selector?: string
-  cookie_base_dirs?: string[]
 }
 
 // 任务创建请求

@@ -50,6 +50,7 @@ const DownloadSettingsPage = () => {
   const [draft, setDraft] = useState<DownloadConfig>(DEFAULT_CONFIG)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [cookieMessage, setCookieMessage] = useState('')
 
   // 加载配置
   const loadConfig = useCallback(async () => {
@@ -93,6 +94,46 @@ const DownloadSettingsPage = () => {
   const handleReset = useCallback(() => {
     setDraft(config)
   }, [config])
+
+  const handleCookieTest = useCallback(async () => {
+    try {
+      const res = await http.post<{ readable: boolean; message: string }>(
+        '/download_config/test-cookie',
+      )
+      setCookieMessage(res.data.message)
+    } catch (err) {
+      toast.error('Cookie 测试失败')
+      console.error(err)
+    }
+  }, [])
+
+  const handleCookieImport = useCallback(async (file: File | undefined) => {
+    if (!file) return
+    const body = new FormData()
+    body.append('file', file)
+    try {
+      const res = await http.post<{ success: boolean; error?: string }>(
+        '/download_config/import-cookie',
+        body,
+      )
+      if (!res.data.success) throw new Error(res.data.error || '导入失败')
+      await loadConfig()
+      toast.success('Cookie 文件已安全导入')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Cookie 导入失败')
+    }
+  }, [loadConfig])
+
+  const handleCookieDelete = useCallback(async () => {
+    try {
+      await http.delete('/download_config/cookie')
+      await loadConfig()
+      toast.success('Cookie 文件已删除')
+    } catch (err) {
+      toast.error('删除 Cookie 文件失败')
+      console.error(err)
+    }
+  }, [loadConfig])
 
   // SaveBar 桥接
   useEffect(() => {
@@ -245,26 +286,62 @@ const DownloadSettingsPage = () => {
           </div>
 
           {draft.cookie_mode === 'browser' && (
-            <FieldRow htmlFor="cookie-browser" label="浏览器" hint="选择要读取 Cookie 的浏览器">
-              <select
-                id="cookie-browser"
-                value={draft.cookie_browser}
-                onChange={(e) => setDraft((prev) => ({ ...prev, cookie_browser: e.target.value }))}
-                className="w-full rounded border px-3 py-2 text-sm"
+            <>
+              <FieldRow htmlFor="cookie-browser" label="浏览器" hint="选择要读取 Cookie 的浏览器">
+                <select
+                  id="cookie-browser"
+                  value={draft.cookie_browser}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, cookie_browser: e.target.value }))}
+                  className="w-full rounded border px-3 py-2 text-sm"
+                >
+                  <option value="chrome">Chrome</option>
+                  <option value="firefox">Firefox</option>
+                  <option value="safari">Safari</option>
+                  <option value="edge">Edge</option>
+                </select>
+              </FieldRow>
+              <FieldRow
+                htmlFor="cookie-profile"
+                label="浏览器 Profile"
+                hint="多用户浏览器可填写 Profile 目录名；默认用户请留空"
               >
-                <option value="chrome">Chrome</option>
-                <option value="firefox">Firefox</option>
-                <option value="safari">Safari</option>
-                <option value="edge">Edge</option>
-              </select>
-            </FieldRow>
+                <Input
+                  id="cookie-profile"
+                  value={draft.cookie_profile}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, cookie_profile: e.target.value }))}
+                  placeholder="例如 Profile 1"
+                />
+              </FieldRow>
+            </>
           )}
 
-          {draft.cookie_mode === 'file' && (
-            <div className="px-6 pb-4 text-sm text-muted-foreground">
-              提示：请先通过 API 导入 cookies.txt 文件
+          <div className="border-t px-6 py-4 space-y-3 text-sm">
+            <p className="text-muted-foreground">
+              浏览器 Cookie 被占用时，请关闭浏览器后再测试；指定 Profile 只在多用户场景填写。
+            </p>
+            <p className="text-muted-foreground">
+              文件回退仅接受 Netscape 格式 cookies.txt。请从可信扩展导出，不要把 Cookie 正文粘贴到页面或日志。
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="chip" onClick={() => void handleCookieTest()}>
+                测试 Cookie
+              </button>
+              <label className="chip cursor-pointer">
+                导入 cookies.txt
+                <input
+                  className="sr-only"
+                  type="file"
+                  accept=".txt,text/plain"
+                  aria-label="导入 cookies.txt"
+                  onChange={(event) => void handleCookieImport(event.target.files?.[0])}
+                />
+              </label>
+              <button type="button" className="chip" onClick={() => void handleCookieDelete()}>
+                删除 Cookie 文件
+              </button>
             </div>
-          )}
+            {cookieMessage && <div role="status">{cookieMessage}</div>}
+          </div>
         </div>
       </div>
 
