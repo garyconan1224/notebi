@@ -1,5 +1,22 @@
 # AI Handoff
 
+## 当前执行指针（2026-07-28）
+
+- **当前任务**：完成批准的 NoteBi S1–S6 方案并做最终验收；基线为 `codex/design-knowledge-tasks-settings` 的 `49364c8`。
+- **当前工作分支**：`codex/complete-approved-plan`，最终 HEAD 为 `2c5f6df`；主工作树 `/Users/conan/Desktop/notebi` 未修改。
+- **验收结论**：**通过**。业务修复、全量测试、真实浏览器/媒体/知识库证据均已完成；S6 提交只增加验收脚本、证据和文档，保存条遮挡修复已单独提交 `9d8d557`。
+- **全量验证**：后端 `1218 passed, 2 skipped, 5 warnings`；前端 `53 files / 292 tests passed`；`pnpm build` 通过（2985 modules，存在 NoteShell >500KB 的既有 chunk 警告）；`compileall backend shared scripts` 与 `git diff --check` 通过。
+- **设置与日志**：网络、下载均完成保存 → GET 读回 → 刷新一致；响应不再序列化 `po_token`、`visitor_data`、`cookie_base_dirs`；`/admin/logs` 返回 `entries/latest_id/oldest_id/has_more_older`，`after_id` 与 `before_id` 互斥，标准日志默认加载最新并支持暂停/过滤/导出脱敏。
+- **任务与合集**：任务中心/批量任务统一入口；暂停不等于取消、恢复、取消、终态删除限制、失败重试均有正反例，任务生命周期定向测试 `29 passed`；合集工作台真实路由与独立副本语义通过。
+- **知识库**：`/search` 重定向至 `/knowledge`；支持单/多合集范围、AI 回答和原文来源；请求前状态 `ready=true, indexed_item_count=23/23, embedding_model=BAAI/bge-m3`；冷热请求均 HTTP 200、含完整 answer/citations/sources（冷约 29.0s，热约 91.0s，外部模型耗时不稳定）。
+- **真实媒体**：视频和音频深链接均跳转 `30.00s`；`play()` 被拒时仍停在 30.00s 并显示提示，4/4 通过、console error 0。
+- **浏览器验收**：`scripts/knowledge_acceptance/evidence/s6-browser-report.json` 为 `13 pass / 0 fail / 0 skip`；五视口 `1440x900、1366x768、1024x768、768x1024、375x812` 均无横向溢出，console error 0；设置/任务实战 `10/10`，收藏夹 `5/5`，AddMaterial `5/5`。
+- **历史与回档**：原有 `checkpoint/s1-complete` 至 `checkpoint/s6-final` 及 `feat/s1...feat/s6` 指针未移动；未 rebase/reset/amend/filter-repo/cherry-pick/push。当前修复沿现有历史向前提交，避免重写已保留历史。
+- **未验证/环境限制**：Vitest 仍提示 `KnowledgeRouteRedirect.test.tsx` 内嵌 `vi.mock` 将来会变成错误；Vite 有单个大 chunk 警告；未在真实 Windows 机器运行。浏览器报告中的 45 个 `ERR_ABORTED` 为页面切换时主动取消健康轮询，已单独计数，不属于可行动网络错误。
+- **保留边界**：不恢复 PO Token、Visitor Data 或 `cookie_base_dirs`；不恢复学习笔记选择、文件夹/移动/整理管理入口；不把 pause 实现成 cancel；不重写既有历史。
+
+---
+
 ## 当前执行指针（2026-07-25）
 
 - **当前任务**：修复结果页导出菜单 / AI 工具 / 删除任务同步 / 默认模型读回（6 组问题）。
