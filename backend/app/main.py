@@ -39,6 +39,7 @@ from backend.app.routes.workspaces import (
     migrate_legacy_metadata as _migrate_legacy_metadata,
     router as workspaces_router,
 )
+from shared.config import DATA_DIR
 from backend.app.routes.chat import router as chat_router
 from backend.app.routes.link_preview import router as link_preview_router
 from backend.app.routes.knowledge import router as knowledge_router
@@ -159,8 +160,8 @@ app = FastAPI(title="NoteBi API", version=_APP_VERSION, lifespan=lifespan)
 # 静态文件挂载：/static → data/ 目录（关键帧图片、项目资源等）
 # 干净 checkout 可能没有 data/（被 .gitignore 排除）；StaticFiles 默认 check_dir=True
 # 会在目录缺失时于导入期抛错。挂载前确保目录存在，使无 data/ 的全新检出也能启动与测试。
-(_ROOT_DIR / "data").mkdir(parents=True, exist_ok=True)
-app.mount("/static", StaticFiles(directory=str(_ROOT_DIR / "data")), name="static")
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(DATA_DIR)), name="static")
 
 # 允许前端开发服务器跨域访问；origin 列表由根 .env 中 VITE_PORT/CORS_ALLOW_ORIGINS 决定
 # 浏览器把 localhost 和 127.0.0.1 视为不同源，自动展开两种变体

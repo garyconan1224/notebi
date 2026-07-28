@@ -10,6 +10,9 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import subprocess
+import sys
 
 from backend.app.services.runtime_log_store import RuntimeLogStore
 
@@ -37,6 +40,29 @@ def test_static_route_mounted():
     assert any(path.startswith("/static") for path in mounted), (
         f"/static 挂载缺失，实际路由前缀样本={mounted[:10]}"
     )
+
+
+def test_static_route_uses_configured_data_dir(tmp_path):
+    configured = tmp_path / "isolated-data"
+    script = """
+from backend.app import main
+route = next(route for route in main.app.routes if route.path == "/static")
+print(route.app.directory)
+"""
+    env = {
+        **os.environ,
+        "NOTEBI_DATA_DIR": str(configured),
+    }
+
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.stdout.strip() == str(configured.resolve())
 
 
 def test_lifespan_writes_application_started(tmp_path, monkeypatch):
