@@ -50,11 +50,18 @@ def validate_netscape_format(content: str) -> tuple[bool, str]:
     if len(content) > 1024 * 1024:
         return False, "文件过大（超过 1MB）"
 
-    # 检查 Netscape 头（可选但推荐）
+    # 只接受 yt-dlp 可识别的 Netscape 导出格式。
     first_line = content.strip().split("\n")[0]
-    if not first_line.startswith("#"):
-        # 不以注释开头也可以，但必须是有效格式
-        pass
+    if first_line != _NETSCAPE_HEADER:
+        return False, "仅支持 Netscape 格式 cookies.txt"
+
+    data_lines = [
+        line
+        for line in content.splitlines()[1:]
+        if line.strip() and not line.startswith("#")
+    ]
+    if any(len(line.split("\t")) != 7 for line in data_lines):
+        return False, "Cookie 文件不是有效的 Netscape 七列格式"
 
     return True, ""
 

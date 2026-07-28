@@ -54,10 +54,8 @@ def validate_filename_template(template: str) -> tuple[bool, str]:
     if ".." in template:
         return False, "模板不能包含 .."
 
-    # 检查空扩展
-    if re.search(r"%\(ext\)s\s*$", template) is None and "%(ext)s" not in template:
-        # 没有扩展名表达式也可以，但如果有空的则不行
-        pass
+    if "%(ext)s" not in template:
+        return False, "模板必须包含 %(ext)s 扩展名表达式"
 
     # 基本合法性
     if not template.strip():

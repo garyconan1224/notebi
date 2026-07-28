@@ -554,17 +554,7 @@ def _build_video_summary_prompt(
 
 
 def _resolve_download_kwargs(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """合并 payload 与 AppSettings.download 作为 run_ytdlp_download 的 kwargs。
-
-    规则（M3)：
-    - 字符串字段（proxy / po_token / visitor_data) 与 format_selector：payload 非空时用 payload，
-      否则回落到 ``AppSettings.download``；
-    - cookie_base_dirs：payload 提供非空 list 时用 payload，否则落 settings.cookie_base_dirs；
-    - filename_template / retry_count / socket_timeout / concurrent_fragment_downloads：
-      payload 不出现 (legacy 链路从不下发) 时直接取 settings；
-    - 所有 settings 读取均用 ``isinstance`` 守卫，避免被 MagicMock 覆写时把非预期对象
-      透传给 yt-dlp（保持现有 test_pipeline_tasks.py mock 的行为不变）。
-    """
+    """把后端持久化配置解析为 downloader 的唯一有效参数。"""
     try:
         settings = load_settings()
         dl = getattr(settings, "download", None)
@@ -579,39 +569,23 @@ def _resolve_download_kwargs(payload: Dict[str, Any]) -> Dict[str, Any]:
         v = getattr(dl, name, None) if dl is not None else None
         return v if isinstance(v, int) and not isinstance(v, bool) else None
 
-    def _dirs() -> Optional[List[str]]:
-        v = getattr(dl, "cookie_base_dirs", None) if dl is not None else None
-        if isinstance(v, (list, tuple)) and v:
-            cleaned = [str(x) for x in v if isinstance(x, str) and x.strip()]
-            return cleaned or None
-        return None
-
-    # 字符串字段：payload 非空优先，否则回落 settings
-    proxy = str(payload.get("proxy") or "") or _s("http_proxy")
-    po_token = str(payload.get("po_token") or "") or _s("po_token")
-    visitor_data = str(payload.get("visitor_data") or "") or _s("visitor_data")
     format_selector = str(payload.get("format_selector") or "") or "best"
 
-    # cookie_base_dirs：payload 的 list 优先
-    raw_dirs = payload.get("cookie_base_dirs")
-    cookie_dirs: Optional[List[str]] = None
-    if isinstance(raw_dirs, list) and raw_dirs:
-        cookie_dirs = [str(x) for x in raw_dirs]
-    else:
-        cookie_dirs = _dirs()
+    filename_template = _s("filename_template") or "%(title)s.%(ext)s"
+    cookie_options: Dict[str, Any] = {}
+    if dl is not None:
+        from backend.app.services.cookie_config import build_ytdlp_cookie_args
 
-    # filename_template：空串也视为"未提供"（避免前端误传空串）
-    filename_template = str(payload.get("filename_template") or "") or _s("filename_template")
+        cookie_options = build_ytdlp_cookie_args(
+            _s("cookie_mode"),
+            _s("cookie_browser") or "chrome",
+            _s("cookie_profile"),
+        )
 
     return {
-        "browser": str(payload.get("browser") or "chrome"),
-        "proxy": proxy,
-        "po_token": po_token,
-        "visitor_data": visitor_data,
         "format_selector": format_selector,
-        "cookie_base_dirs_list": cookie_dirs,
-        # 仅在有具体值时传入，避免空串污染 _build_attempts 的默认模板兜底
-        **({"filename_template": filename_template} if filename_template else {}),
+        "cookie_options": cookie_options,
+        "filename_template": filename_template,
         "retry_count": _i_or_none("retry_count"),
         "socket_timeout": _i_or_none("socket_timeout"),
         "concurrent_fragment_downloads": _i_or_none("concurrency_limit"),
@@ -624,10 +598,30 @@ def handle_download_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, An
     url = str(record.payload.get("url") or "").strip()
     if not url:
         raise ValueError("download payload.url is required")
-    project_video_dir = get_workspace_videos_dir(record.project_id)
-    project_video_dir.mkdir(parents=True, exist_ok=True)
+    settings = load_settings()
+    from shared.download_helpers import (
+        ensure_directory_exists,
+        resolve_workspace_media_dir,
+    )
+    from shared.network_routing import resolve_proxy
 
+    if settings.download.output_dir:
+        project_video_dir = resolve_workspace_media_dir(
+            settings.download,
+            record.project_id,
+        )
+    else:
+        project_video_dir = get_workspace_videos_dir(record.project_id)
+    directory_ok, directory_error = ensure_directory_exists(project_video_dir)
+    if not directory_ok:
+        runner.append_log(record.task_id, directory_error)
+        raise RuntimeError(directory_error)
     dl_kwargs = _resolve_download_kwargs(record.payload)
+    dl_kwargs["proxy"] = resolve_proxy(
+        url,
+        settings.network,
+        settings.download.proxy_mode,
+    ) or ""
     out = run_ytdlp_download(
         url=url,
         output_dir=str(project_video_dir),
@@ -734,12 +728,18 @@ def _try_cc_subtitle(
 
         # 复用 pipeline 的下载上下文（cookie/extras），B站 412 必需
         dl_kwargs = _resolve_download_kwargs(payload)
+        settings = load_settings()
+        from shared.network_routing import resolve_proxy
+
+        subtitle_proxy = resolve_proxy(
+            video_url,
+            settings.network,
+            settings.download.proxy_mode,
+        )
         result = fetch_best_subtitle(
             video_url,
-            proxy=dl_kwargs.get('proxy'),
-            po_token=dl_kwargs.get('po_token'),
-            visitor_data=dl_kwargs.get('visitor_data'),
-            cookie_base_dirs=dl_kwargs.get('cookie_base_dirs_list'),
+            proxy=subtitle_proxy,
+            cookie_options=dl_kwargs.get('cookie_options'),
         )
 
         if not result:

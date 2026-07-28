@@ -4,7 +4,7 @@
 - GET /download_config 返回新默认值
 - PATCH /download_config 保存并读回
 - 废弃字段不再出现
-- 无效枚举回退
+- 无效枚举和文件名模板返回 422
 """
 
 from __future__ import annotations
@@ -83,18 +83,31 @@ def test_patch_download_config_round_trip(client: TestClient) -> None:
 # ── Task 2.4: 无效枚举回退 ───────────────────────────────────────────────────
 
 
-def test_invalid_proxy_mode_falls_back(client: TestClient) -> None:
-    """无效 proxy_mode 回退到 inherit。"""
+def test_invalid_proxy_mode_is_rejected(client: TestClient) -> None:
+    """无效 proxy_mode 返回 422。"""
     response = client.patch("/download_config", json={"proxy_mode": "invalid"})
-    assert response.status_code == 200
-    assert response.json()["proxy_mode"] == "inherit"
+    assert response.status_code == 422
 
 
-def test_invalid_cookie_mode_falls_back(client: TestClient) -> None:
-    """无效 cookie_mode 回退到 browser。"""
+def test_invalid_cookie_mode_is_rejected(client: TestClient) -> None:
+    """无效 cookie_mode 返回 422。"""
     response = client.patch("/download_config", json={"cookie_mode": "invalid"})
-    assert response.status_code == 200
-    assert response.json()["cookie_mode"] == "browser"
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "template",
+    ["/tmp/%(title)s.%(ext)s", "../%(title)s.%(ext)s", "%(title)s"],
+)
+def test_invalid_filename_template_is_rejected(
+    client: TestClient,
+    template: str,
+) -> None:
+    response = client.patch(
+        "/download_config",
+        json={"filename_template": template},
+    )
+    assert response.status_code == 422
 
 
 # ── Task 2.5: 数值边界校验 ───────────────────────────────────────────────────

@@ -13,10 +13,10 @@ S1 冻结契约：
 """
 
 from dataclasses import asdict, replace
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, File, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from shared.settings_store import (
     DownloadConfig,
@@ -39,14 +39,26 @@ class DownloadConfigUpdateRequest(BaseModel):
 
     output_dir: Optional[str] = None
     filename_template: Optional[str] = None
-    proxy_mode: Optional[str] = None
-    cookie_mode: Optional[str] = None
+    proxy_mode: Optional[Literal["inherit", "direct", "proxy"]] = None
+    cookie_mode: Optional[Literal["none", "browser", "file"]] = None
     cookie_browser: Optional[str] = None
     cookie_profile: Optional[str] = None
     cookie_file_path: Optional[str] = None
     concurrency_limit: Optional[int] = Field(default=None, ge=1, le=8)
     retry_count: Optional[int] = Field(default=None, ge=0, le=10)
     socket_timeout: Optional[int] = Field(default=None, ge=5, le=300)
+
+    @field_validator("filename_template")
+    @classmethod
+    def validate_template(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        from shared.download_helpers import validate_filename_template
+
+        valid, message = validate_filename_template(value)
+        if not valid:
+            raise ValueError(message)
+        return value
 
 
 def _serialize(cfg: DownloadConfig) -> Dict[str, Any]:
@@ -75,11 +87,11 @@ def update_download_config(req: DownloadConfigUpdateRequest) -> Dict[str, Any]:
     # 枚举字段校验
     proxy_mode = current.proxy_mode
     if req.proxy_mode is not None:
-        proxy_mode = req.proxy_mode if req.proxy_mode in ("inherit", "direct", "proxy") else "inherit"  # type: ignore[assignment]
+        proxy_mode = req.proxy_mode
 
     cookie_mode = current.cookie_mode
     if req.cookie_mode is not None:
-        cookie_mode = req.cookie_mode if req.cookie_mode in ("none", "browser", "file") else "browser"  # type: ignore[assignment]
+        cookie_mode = req.cookie_mode
 
     new_cfg = DownloadConfig(
         output_dir=req.output_dir if req.output_dir is not None else current.output_dir,
@@ -192,4 +204,3 @@ def delete_cookie() -> Dict[str, Any]:
         save_settings(replace(settings, download=new_cfg))
 
     return result
-

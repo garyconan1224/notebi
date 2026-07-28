@@ -45,6 +45,7 @@ def test_empty_output_dir_raises() -> None:
         ("", False),  # 空
         ("   ", False),  # 空白
         ("C:\\Windows\\path.%(ext)s", False),  # Windows 绝对路径
+        ("%(title)s", False),  # 必须保留扩展表达式
     ],
 )
 def test_filename_template_validation(template: str, expected_valid: bool) -> None:

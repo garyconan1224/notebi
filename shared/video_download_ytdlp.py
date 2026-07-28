@@ -358,6 +358,7 @@ def run_ytdlp_download(
     visitor_data: str = "",
     format_selector: str = "best",
     cookie_base_dirs_list: list[str] | None = None,
+    cookie_options: dict[str, Any] | None = None,
     log: Callable[[str], None] | None = None,
     progress_callback: Callable[[float, str], None] | None = None,
     # 实时下载速度回调（字符串形式，例如 "1.23MiB/s"），供上层写入任务状态供前端展示
@@ -549,6 +550,10 @@ def run_ytdlp_download(
         )
         for opts in attempts:
             opts["postprocessor_hooks"] = [_pp_hook]
+            if cookie_options is not None:
+                opts.pop("cookiefile", None)
+                opts.pop("cookiesfrombrowser", None)
+                opts.update(cookie_options)
 
         for i, opts in enumerate(attempts):
             if log:
