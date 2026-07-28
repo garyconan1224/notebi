@@ -11,6 +11,7 @@ export type KnowledgeSourceSnapshot = Partial<SearchSource> & {
   source_id: string
   workspace_id: string
   item_id: string
+  title?: string
 }
 
 export interface KnowledgeMessage {

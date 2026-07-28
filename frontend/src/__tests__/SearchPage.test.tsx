@@ -1,15 +1,16 @@
+import '@testing-library/jest-dom'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import SearchPage from '@/pages/SearchPage/SearchPage'
-import type { WorkspaceRecord } from '@/types/workspace'
 import * as knowledge from '@/services/knowledge'
-import * as search from '@/services/search'
+import * as stream from '@/services/knowledgeStream'
 import * as workspaces from '@/services/workspaces'
+import type { WorkspaceRecord } from '@/types/workspace'
 
 vi.mock('@/services/knowledge')
-vi.mock('@/services/search')
+vi.mock('@/services/knowledgeStream')
 vi.mock('@/services/workspaces')
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
@@ -62,113 +63,132 @@ const status: knowledge.KnowledgeStatus = {
   },
 }
 
+const conversation = {
+  conversation_id: 'c1',
+  title: '新会话',
+  default_scope: [],
+  messages: [],
+  created_at: '2026-07-25T00:00:00Z',
+  updated_at: '2026-07-25T00:00:00Z',
+}
+
+const source = {
+  source_id: 'source-1',
+  workspace_id: 'ws-1',
+  workspace_name: '产品研究',
+  item_id: 'item-1',
+  item_type: 'video' as const,
+  item_title: '发布会',
+  chunk_excerpt: '支持离线搜索',
+  excerpt: '支持离线搜索',
+  field: 'transcript',
+  segment_id: 'transcript-0',
+  start_ms: 10_000,
+  end_ms: 18_000,
+  score: 0.9,
+  jump_url: '/workspaces/ws-1/items/item-1/video_detail?start_ms=10000',
+}
+
 describe('SearchPage', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
     vi.mocked(workspaces.listWorkspaces).mockResolvedValue([workspace, workspace2])
     vi.mocked(knowledge.getKnowledgeStatus).mockResolvedValue(status)
-    vi.mocked(search.searchGlobal).mockResolvedValue({
-      answer: '离线搜索见来源 [1]',
-      sources: [{
-        source_id: 'ws-1:item-1',
-        workspace_id: 'ws-1',
-        workspace_name: '产品研究',
-        item_id: 'item-1',
-        item_type: 'video',
-        item_title: '发布会',
-        chunk_excerpt: '支持离线搜索',
-        excerpt: '支持离线搜索',
-        field: 'transcript',
-        segment_id: 'transcript-0',
-        start_ms: 10_000,
-        end_ms: 18_000,
-        score: 0.9,
-        jump_url: '/workspaces/ws-1/items/item-1/video_detail?start_ms=10000',
-      }],
-      citations: [{ number: 1, source_id: 'ws-1:item-1' }],
-      mode: 'smart',
-      status,
+    vi.mocked(knowledge.listKnowledgeConversations).mockResolvedValue({
+      items: [],
+      total: 0,
+    })
+    vi.mocked(knowledge.createKnowledgeConversation).mockResolvedValue(conversation)
+    vi.mocked(knowledge.getKnowledgeConversation).mockResolvedValue(conversation)
+    vi.mocked(knowledge.searchKnowledgeOriginals).mockResolvedValue({
+      answer: '',
+      sources: [source],
+      citations: [],
+      mode: 'exact',
+    })
+    vi.mocked(stream.sendKnowledgeMessage).mockImplementation(async options => {
+      options.onSources?.([source])
+      options.onDelta?.('离线搜索见来源')
+      return undefined
     })
     Element.prototype.scrollIntoView = vi.fn()
-    localStorage.clear()
   })
 
-  it('shows knowledge base title and mode labels', async () => {
+  it('shows knowledge base title and approved mode labels', async () => {
     render(<MemoryRouter><SearchPage /></MemoryRouter>)
     expect(await screen.findByText('知识库')).toBeTruthy()
     expect(screen.getAllByText('问知识库').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('查找原文').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByRole('button', { name: '找原文' })).toBeTruthy()
     expect(screen.queryByText('智能检索')).toBeNull()
     expect(screen.queryByText('智能回答')).toBeNull()
   })
 
-  it('shows smart answer and navigable evidence', async () => {
+  it('shows streamed answer and evidence preview', async () => {
     render(<MemoryRouter><SearchPage /></MemoryRouter>)
     await screen.findByText('索引已就绪')
-    fireEvent.change(screen.getByPlaceholderText(/哪些内容提到了/), {
+    fireEvent.change(screen.getByRole('textbox', { name: '知识库提问' }), {
       target: { value: '离线搜索' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '执行知识库检索' }))
+    fireEvent.click(screen.getByRole('button', { name: '发送问题' }))
 
-    expect(await screen.findByText('离线搜索见来源 [1]')).toBeTruthy()
-    expect(screen.getByText('支持离线搜索')).toBeTruthy()
+    expect(await screen.findByText('离线搜索见来源')).toBeTruthy()
+    expect(screen.getAllByText('支持离线搜索').length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: '查看来源 1' }))
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
+    expect(screen.getByRole('link', { name: '在笔记中打开' })).toHaveAttribute(
+      'href',
+      source.jump_url,
+    )
   })
 
-  it('passes all scope (no workspaceIds) by default', async () => {
+  it('passes all scope as undefined by default', async () => {
     render(<MemoryRouter><SearchPage /></MemoryRouter>)
     await screen.findByText('索引已就绪')
-    fireEvent.change(screen.getByPlaceholderText(/哪些内容提到了/), {
+    fireEvent.change(screen.getByRole('textbox', { name: '知识库提问' }), {
       target: { value: '测试' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '执行知识库检索' }))
+    fireEvent.click(screen.getByRole('button', { name: '发送问题' }))
     await waitFor(() => {
-      expect(search.searchGlobal).toHaveBeenCalledWith('测试', expect.objectContaining({
-        workspaceIds: undefined,
-      }))
+      expect(stream.sendKnowledgeMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ workspaceIds: undefined }),
+      )
     })
   })
 
-  it('passes selected workspaceIds when scope is selected', async () => {
+  it('passes selected workspace IDs and clearing does not become all', async () => {
     render(<MemoryRouter><SearchPage /></MemoryRouter>)
     await screen.findByText('索引已就绪')
-
-    // Open scope picker and select one workspace
     fireEvent.click(screen.getByRole('button', { name: '知识库范围' }))
-    // Click on '产品研究' option
-    const options = screen.getAllByRole('option')
-    fireEvent.click(options[0]) // ws-1
-
-    fireEvent.change(screen.getByPlaceholderText(/哪些内容提到了/), {
+    fireEvent.click(screen.getAllByRole('option')[0])
+    fireEvent.change(screen.getByRole('textbox', { name: '知识库提问' }), {
       target: { value: '测试多选' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '执行知识库检索' }))
+    fireEvent.click(screen.getByRole('button', { name: '发送问题' }))
     await waitFor(() => {
-      expect(search.searchGlobal).toHaveBeenCalledWith('测试多选', expect.objectContaining({
-        workspaceIds: ['ws-1'],
-      }))
+      expect(stream.sendKnowledgeMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ workspaceIds: ['ws-1'] }),
+      )
     })
   })
 
-  it('scope picker shows summary text', async () => {
+  it('scope picker starts with all collections', async () => {
     render(<MemoryRouter><SearchPage /></MemoryRouter>)
-    await screen.findByText('索引已就绪')
-    // Default is "全部合集"
-    expect(screen.getByText('全部合集')).toBeTruthy()
+    expect(await screen.findByText('全部合集')).toBeTruthy()
   })
 
-  it('updates favorite state from a source card', async () => {
+  it('exact source card updates favorite state', async () => {
     vi.mocked(workspaces.favoriteItem).mockResolvedValue({
       ...workspace,
       favorites: ['item-1'],
     })
     render(<MemoryRouter><SearchPage /></MemoryRouter>)
     await screen.findByText('索引已就绪')
-    fireEvent.change(screen.getByPlaceholderText(/哪些内容提到了/), {
+    fireEvent.click(screen.getByRole('button', { name: '找原文' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '知识库提问' }), {
       target: { value: '离线搜索' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '执行知识库检索' }))
-    await screen.findByText('支持离线搜索')
+    fireEvent.click(screen.getByRole('button', { name: '查找原文' }))
+    expect((await screen.findAllByText('支持离线搜索')).length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: '收藏来源' }))
 
     await waitFor(() => {

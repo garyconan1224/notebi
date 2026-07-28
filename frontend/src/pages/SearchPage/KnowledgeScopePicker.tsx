@@ -44,6 +44,7 @@ export function persistScope(scope: KnowledgeScope): void {
 /** 范围摘要文案 */
 export function scopeSummary(scope: KnowledgeScope, workspaces: WorkspaceRecord[]): string {
   if (scope.type === 'all') return '全部合集'
+  if (scope.workspaceIds.length === 0) return '请选择合集'
   if (scope.workspaceIds.length === 1) {
     const ws = workspaces.find(w => w.workspace_id === scope.workspaceIds[0])
     return ws?.name ?? '已选 1 个合集'
@@ -98,11 +99,7 @@ export function KnowledgeScopePicker({ workspaces, scope, onChange }: KnowledgeS
     const next = current.includes(id)
       ? current.filter(x => x !== id)
       : [...current, id]
-    if (next.length === 0) {
-      onChange({ type: 'all', workspaceIds: [] })
-    } else {
-      onChange({ type: 'selected', workspaceIds: next })
-    }
+    onChange({ type: 'selected', workspaceIds: next })
   }, [scope, onChange])
 
   const selectAll = useCallback(() => {
@@ -110,7 +107,7 @@ export function KnowledgeScopePicker({ workspaces, scope, onChange }: KnowledgeS
   }, [onChange])
 
   const clearSelection = useCallback(() => {
-    onChange({ type: 'all', workspaceIds: [] })
+    onChange({ type: 'selected', workspaceIds: [] })
   }, [onChange])
 
   const isAll = scope.type === 'all'
