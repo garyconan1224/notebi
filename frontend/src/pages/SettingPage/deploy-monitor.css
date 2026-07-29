@@ -1,0 +1,271 @@
+.deploy-monitor-page {
+  height: 100%;
+  overflow-y: auto;
+  background: var(--bg);
+  color: var(--fg);
+  padding: 32px;
+}
+
+.deploy-monitor-shell {
+  display: grid;
+  width: min(1000px, 100%);
+  margin: 0 auto;
+  gap: 18px;
+}
+
+.monitor-health {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--mut);
+  font-family: var(--fm);
+  font-size: var(--xs);
+}
+
+.monitor-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.monitor-stats article {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 7px 8px;
+  padding: 14px;
+  border-radius: var(--r);
+  background: var(--bgalt);
+  color: var(--fg2);
+  font-size: var(--xs);
+}
+
+.monitor-stats strong {
+  grid-column: 1 / -1;
+  color: var(--fg);
+  font-family: var(--fm);
+  font-size: var(--base);
+}
+
+.monitor-error {
+  padding: 12px;
+  border-radius: var(--r);
+  background: var(--errl);
+  color: var(--err);
+}
+
+.monitor-view-tabs {
+  display: flex;
+  width: fit-content;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--r);
+  background: var(--bgalt);
+}
+
+.monitor-view-tabs button {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: var(--rs);
+  color: var(--fg2);
+  font-size: var(--sm);
+  font-weight: 500;
+}
+
+.monitor-view-tabs button[aria-pressed='true'] {
+  background: var(--srf);
+  color: var(--fg);
+  box-shadow: var(--sh1);
+}
+
+.monitor-activity-list {
+  display: grid;
+  gap: 8px;
+}
+
+.monitor-activity-card {
+  display: grid;
+  grid-template-columns: 12px 1fr;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--r);
+  background: var(--srf);
+}
+
+.monitor-activity-card[data-level='ERROR'],
+.monitor-activity-card[data-level='WARNING'] {
+  border-color: color-mix(in oklch, var(--err) 28%, var(--bdr));
+  background: color-mix(in oklch, var(--errl) 45%, var(--srf));
+}
+
+.monitor-stage-marker {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: var(--rf);
+  background: var(--acc);
+  box-shadow: 0 0 0 4px var(--accl);
+}
+
+.monitor-activity-card[data-level='ERROR'] .monitor-stage-marker,
+.monitor-activity-card[data-level='WARNING'] .monitor-stage-marker {
+  background: var(--err);
+  box-shadow: 0 0 0 4px var(--errl);
+}
+
+.monitor-activity-heading,
+.monitor-activity-heading > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.monitor-activity-heading strong {
+  font-size: var(--base);
+}
+
+.monitor-activity-heading span,
+.monitor-activity-heading b {
+  color: var(--mut);
+  font-family: var(--fm);
+  font-size: var(--xs);
+}
+
+.monitor-activity-main > p {
+  margin-top: 7px;
+  color: var(--err);
+  font-size: var(--sm);
+}
+
+.monitor-activity-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 8px;
+  color: var(--mut);
+  font-size: var(--xs);
+}
+
+.monitor-progress {
+  height: 6px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: var(--rf);
+  background: var(--bgalt);
+}
+
+.monitor-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--acc);
+}
+
+.monitor-empty {
+  padding: 28px;
+  border: 1px dashed var(--bdrs);
+  border-radius: var(--r);
+  color: var(--mut);
+  text-align: center;
+}
+
+.monitor-diagnostics {
+  border: 1px solid var(--bdr);
+  border-radius: var(--rl);
+  background: var(--srf);
+  box-shadow: var(--sh1);
+}
+
+.monitor-diagnostics > summary {
+  padding: 16px 20px;
+  cursor: pointer;
+  color: var(--fg2);
+  font-weight: 600;
+}
+
+.monitor-diagnostics-body {
+  display: grid;
+  gap: 12px;
+  padding: 0 20px 20px;
+  color: var(--mut);
+  font-size: var(--xs);
+}
+
+.monitor-diagnostic-controls {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(110px, 1fr)) auto;
+  gap: 8px;
+}
+
+.monitor-diagnostic-controls .input {
+  height: 36px;
+  padding-inline: 10px;
+  box-shadow: none;
+}
+
+.monitor-privacy {
+  color: var(--fg2);
+}
+
+.monitor-raw-logs {
+  max-height: 360px;
+  overflow-y: auto;
+  border-radius: var(--r);
+  background: var(--bgalt);
+  font-family: var(--fm);
+}
+
+.monitor-raw-logs > div {
+  display: grid;
+  grid-template-columns: 70px 62px 100px 1fr;
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--bdr);
+  color: var(--fg2);
+}
+
+.monitor-raw-logs b[data-level='ERROR'] {
+  color: var(--err);
+}
+
+.monitor-raw-logs b[data-level='WARNING'] {
+  color: var(--wrn);
+}
+
+.monitor-raw-logs code {
+  color: var(--mut);
+}
+
+@media (max-width: 820px) {
+  .monitor-diagnostic-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .deploy-monitor-page {
+    padding: 20px 14px 88px;
+  }
+
+  .monitor-health {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .monitor-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .monitor-diagnostic-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .monitor-raw-logs > div {
+    grid-template-columns: 64px 54px 1fr;
+  }
+
+  .monitor-raw-logs span {
+    grid-column: 1 / -1;
+  }
+}

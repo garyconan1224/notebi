@@ -17,6 +17,8 @@ import {
 } from './libraryHelpers'
 import './library.css'
 
+const PAGE_SIZE = 24
+
 function matchesQuery(query: string, values: Array<string | null | undefined>): boolean {
   if (!query) return true
   return values.some((value) => value?.toLowerCase().includes(query))
@@ -168,6 +170,10 @@ export default function LibraryPage() {
   const [creatingWorkspace, setCreatingWorkspace] = useState(false)
   const [collectionTargetId, setCollectionTargetId] = useState('')
   const [query, setQuery] = useState('')
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [collectionPickerOpen, setCollectionPickerOpen] = useState(false)
+  const [collectionQuery, setCollectionQuery] = useState('')
+  const [page, setPage] = useState(1)
 
   const selectedFilters = useLibraryStore((s) => s.selectedFilters)
   const setSelectedFilters = useLibraryStore((s) => s.setSelectedFilters)
@@ -329,6 +335,22 @@ export default function LibraryPage() {
   }, [visibleWorkspaces, visibleItems, itemsByWorkspace, sortBy])
 
   const hasVisibleEntries = visibleEntries.length > 0
+  const pageCount = Math.max(1, Math.ceil(visibleEntries.length / PAGE_SIZE))
+  const pageEntries = useMemo(
+    () => visibleEntries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [visibleEntries, page],
+  )
+  const filteredCollectionWorkspaces = useMemo(() => {
+    const normalized = collectionQuery.trim().toLowerCase()
+    if (!normalized) return collectionWorkspaces
+    return collectionWorkspaces.filter((workspace) =>
+      workspace.name.toLowerCase().includes(normalized),
+    )
+  }, [collectionWorkspaces, collectionQuery])
+
+  useEffect(() => {
+    setPage(1)
+  }, [selectedFilters, sortBy, query, intentFilter])
 
   const selectedItemRefs = useMemo(() => {
     const refs = new Map<string, { workspace_id: string; item_id: string }>()
@@ -352,10 +374,12 @@ export default function LibraryPage() {
 
   const selectAll = useCallback(() => {
     const next = new Set<string>()
-    visibleItems.forEach((it) => next.add(selectionKey(it.workspace_id, it.item_id)))
-    visibleWorkspaces.forEach((ws) => next.add(`ws:${ws.workspace_id}`))
+    pageEntries.forEach((entry) => {
+      if (entry.kind === 'workspace') next.add(`ws:${entry.workspace.workspace_id}`)
+      else next.add(selectionKey(entry.item.workspace_id, entry.item.item_id))
+    })
     setSelectedSet(next)
-  }, [visibleItems, visibleWorkspaces])
+  }, [pageEntries])
 
   const handleDeleteOne = useCallback(async (item: LibraryItem) => {
     const label = item.name || '未命名'
@@ -550,6 +574,10 @@ export default function LibraryPage() {
 
   const pageTone = 'note'
   const pageKicker = 'NOTE LIBRARY'
+  const activeFilterCount = selectedFilters.includes('all') ? 0 : selectedFilters.length
+  const selectedCollectionName = collectionWorkspaces.find(
+    (workspace) => workspace.workspace_id === collectionTargetId,
+  )?.name
 
   return (
     <div className={`lib-page lib-page--${pageTone}`}>
@@ -580,47 +608,9 @@ export default function LibraryPage() {
         </div>
       </div>
 
-      {/* ── 工具栏 / 批量栏 ── */}
-      {selectMode ? (
-        <div className="lib-toolbar lib-toolbar--batch">
-          <span className="batch-count">已选 {selectedItemRefs.length} 项</span>
-          <button className="btn btn-sm" onClick={selectAll}>全选</button>
-          <button className="btn btn-sm" onClick={clearSelection}>取消</button>
-          {collectionWorkspaces.length > 0 && (
-            <div className="batch-collection-control">
-              <select
-                value={collectionTargetId}
-                onChange={(event) => setCollectionTargetId(event.target.value)}
-                title="选择目标合集"
-              >
-                {collectionWorkspaces.map((ws) => (
-                  <option key={ws.workspace_id} value={ws.workspace_id}>
-                    {ws.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                className={`btn btn-sm${selectedItemRefs.length > 0 ? ' btn-secondary' : ''}`}
-                disabled={addingToCollection || selectedItemRefs.length === 0 || !collectionTargetId}
-                onClick={handleBatchAddToCollection}
-              >
-                <FolderInput size={13} />
-                {addingToCollection ? '复制中…' : '复制到合集'}
-              </button>
-            </div>
-          )}
-          <button
-            className={`btn btn-sm${selectedSet.size > 0 ? ' btn-danger' : ''}`}
-            disabled={deleting || selectedSet.size === 0}
-            onClick={handleBatchDelete}
-          >
-            <Trash2 size={13} />
-            删除{selectedSet.size > 0 ? ` (${selectedSet.size})` : ''}
-          </button>
-        </div>
-      ) : (
+      {/* ── 紧凑工具栏：筛选和排序放入弹层 ── */}
+      {!selectMode && (
         <div className="lib-toolbar">
-          <FilterChips counts={chipCounts} />
           <div className="lib-search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
@@ -632,7 +622,29 @@ export default function LibraryPage() {
               onChange={(event) => setQuery(event.target.value)}
             />
           </div>
-          <SortMenu />
+          <div className="lib-filter-control">
+            <button
+              type="button"
+              className="btn btn-sm"
+              aria-expanded={filterOpen}
+              onClick={() => setFilterOpen((value) => !value)}
+            >
+              <Filter size={13} />
+              筛选{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+            </button>
+            {filterOpen && (
+              <div className="lib-filter-popover">
+                <div>
+                  <span>内容类型与状态</span>
+                  <FilterChips counts={chipCounts} />
+                </div>
+                <div>
+                  <span>排序</span>
+                  <SortMenu />
+                </div>
+              </div>
+            )}
+          </div>
           {hasVisibleEntries && (
             <button className="btn btn-sm" onClick={enterSelectMode}>选择</button>
           )}
@@ -677,7 +689,7 @@ export default function LibraryPage() {
             </div>
           ) : (
             <div className={`note-grid note-grid--cols-${cardColumns}${viewMode === 'list' ? ' is-list' : ''}`}>
-              {visibleEntries.map((entry) => (
+              {pageEntries.map((entry) => (
                 entry.kind === 'workspace' ? (
                   <WorkspaceCard
                     key={entry.workspace.workspace_id}
@@ -703,7 +715,92 @@ export default function LibraryPage() {
               ))}
             </div>
           )}
+          {hasVisibleEntries && pageCount > 1 && (
+            <nav className="lib-pagination" aria-label="笔记分页">
+              <button
+                type="button"
+                className="btn btn-sm"
+                disabled={page === 1}
+                onClick={() => setPage((value) => Math.max(1, value - 1))}
+              >
+                上一页
+              </button>
+              <span>{page} / {pageCount}</span>
+              <button
+                type="button"
+                className="btn btn-sm"
+                disabled={page === pageCount}
+                onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
+              >
+                下一页
+              </button>
+            </nav>
+          )}
         </>
+      )}
+
+      {selectMode && (
+        <div className="lib-selection-dock" role="toolbar" aria-label="批量操作">
+          <strong>已选 {selectedItemRefs.length} 项</strong>
+          <button className="btn btn-sm" onClick={selectAll}>全选</button>
+          {collectionWorkspaces.length > 0 && (
+            <div className="batch-collection-control">
+              <button
+                type="button"
+                className="btn btn-sm"
+                aria-expanded={collectionPickerOpen}
+                onClick={() => setCollectionPickerOpen((value) => !value)}
+              >
+                <FolderInput size={13} />
+                目标合集：{selectedCollectionName || '请选择'}
+              </button>
+              {collectionPickerOpen && (
+                <div className="collection-picker">
+                  <input
+                    className="input"
+                    aria-label="搜索合集"
+                    placeholder="搜索合集"
+                    value={collectionQuery}
+                    onChange={(event) => setCollectionQuery(event.target.value)}
+                  />
+                  <div className="collection-picker-list">
+                    {filteredCollectionWorkspaces.length === 0 ? (
+                      <span>没有匹配的合集</span>
+                    ) : filteredCollectionWorkspaces.map((workspace) => (
+                      <button
+                        key={workspace.workspace_id}
+                        type="button"
+                        aria-pressed={workspace.workspace_id === collectionTargetId}
+                        onClick={() => {
+                          setCollectionTargetId(workspace.workspace_id)
+                          setCollectionPickerOpen(false)
+                        }}
+                      >
+                        {workspace.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <button
+                className={`btn btn-sm${selectedItemRefs.length > 0 ? ' btn-secondary' : ''}`}
+                disabled={addingToCollection || selectedItemRefs.length === 0 || !collectionTargetId}
+                onClick={handleBatchAddToCollection}
+              >
+                {addingToCollection ? '处理中…' : '加入合集'}
+              </button>
+            </div>
+          )}
+          <button
+            className={`btn btn-sm${selectedSet.size > 0 ? ' btn-danger' : ''}`}
+            disabled={deleting || selectedSet.size === 0}
+            onClick={handleBatchDelete}
+          >
+            <Trash2 size={13} />
+            删除{selectedSet.size > 0 ? ` (${selectedSet.size})` : ''}
+          </button>
+          <button className="btn btn-sm" onClick={clearSelection}>完成</button>
+        </div>
       )}
     </div>
   )

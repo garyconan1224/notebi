@@ -9,7 +9,7 @@
 .lib-page {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 32px 48px;
+  padding: 20px 32px 92px;
   background: var(--bg);
 }
 .lib-page-header {
@@ -214,11 +214,50 @@
    Toolbar — 设计稿 notes-toolbar 模式
    ═══════════════════════════════════════════════ */
 .lib-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(200px, 300px) auto;
+  position: relative;
+  display: flex;
   gap: 10px;
   align-items: center;
   margin-bottom: 14px;
+}
+
+.lib-toolbar .lib-search {
+  flex: 1;
+  max-width: 520px;
+}
+
+.lib-filter-control {
+  position: relative;
+}
+
+.lib-filter-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 50;
+  display: grid;
+  width: min(520px, calc(100vw - 48px));
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--r);
+  background: var(--srf);
+  box-shadow: var(--sh2);
+}
+
+.lib-filter-popover > div {
+  display: grid;
+  gap: 7px;
+}
+
+.lib-filter-popover > div > span {
+  color: var(--mut);
+  font-family: var(--fm);
+  font-size: var(--xs);
+}
+
+.lib-filter-popover .sort-menu {
+  width: fit-content;
 }
 
 /* ── Filter chips ── */
@@ -743,7 +782,125 @@
 .sort-option:hover { color: var(--fg); background: var(--bgalt); }
 .sort-option--active { color: var(--fg); background: var(--bgalt); }
 
+.lib-selection-dock {
+  position: fixed;
+  right: 24px;
+  bottom: 18px;
+  left: max(24px, calc(var(--sidebar-width, 0px) + 24px));
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: calc(100vw - 48px);
+  margin: 0 auto;
+  padding: 10px 12px;
+  border: 1px solid var(--bdrs);
+  border-radius: var(--rl);
+  background: color-mix(in oklch, var(--srf) 92%, transparent);
+  box-shadow: var(--sh3);
+  backdrop-filter: blur(18px);
+}
+
+.lib-selection-dock > strong {
+  padding: 0 8px;
+  color: var(--fg);
+  font-size: var(--sm);
+}
+
+.batch-collection-control {
+  position: relative;
+}
+
+.collection-picker {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 70;
+  width: 280px;
+  padding: 10px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--r);
+  background: var(--srf);
+  box-shadow: var(--sh2);
+}
+
+.collection-picker .input {
+  height: 36px;
+  box-shadow: none;
+}
+
+.collection-picker-list {
+  display: grid;
+  max-height: 220px;
+  gap: 3px;
+  margin-top: 8px;
+  overflow-y: auto;
+}
+
+.collection-picker-list button,
+.collection-picker-list > span {
+  padding: 8px 9px;
+  border-radius: var(--rs);
+  color: var(--fg2);
+  font-size: var(--sm);
+  text-align: left;
+}
+
+.collection-picker-list button:hover,
+.collection-picker-list button[aria-pressed='true'] {
+  background: var(--accl);
+  color: var(--acc);
+}
+
+.collection-picker-list > span {
+  color: var(--mut);
+}
+
+.lib-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 20px;
+  color: var(--mut);
+  font-family: var(--fm);
+  font-size: var(--xs);
+}
+
 @media (max-width: 760px) {
+  .lib-page {
+    padding: 16px 14px 108px;
+  }
+
+  .lib-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .lib-toolbar .lib-search {
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  .lib-selection-dock {
+    right: 10px;
+    bottom: 10px;
+    left: 10px;
+    flex-wrap: wrap;
+    max-width: calc(100vw - 20px);
+  }
+
+  .batch-collection-control {
+    max-width: 100%;
+  }
+
+  .collection-picker {
+    right: auto;
+    left: 0;
+    width: min(280px, calc(100vw - 40px));
+  }
+
   .lib-page .note-grid.is-list .note-card {
     grid-template-columns: 1fr;
     min-height: 0;

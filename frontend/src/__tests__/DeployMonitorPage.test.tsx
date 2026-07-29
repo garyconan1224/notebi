@@ -1,16 +1,16 @@
 /**
- * S2 — 部署监控页（标准日志）测试。
+ * S2 — 运行监控页测试。
  *
  * 覆盖点：
  * - 显示健康状态、版本、运行时长
  * - 显示系统指标（CPU/内存/磁盘）
- * - 标准日志单视图（无“任务活动/应用日志”双标签）
- * - 日志级别过滤
+ * - 用户可读的处理阶段和问题视图
+ * - 原始日志折叠在高级诊断
  * - 暂停/恢复轮询
  */
 
 import '@testing-library/jest-dom'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import DeployMonitorPage, {
   mergeLogEntries,
@@ -57,9 +57,31 @@ describe('DeployMonitorPage 标准日志', () => {
           data: {
             entries: [
               { id: 1, timestamp: new Date().toISOString(), level: 'INFO', category: 'app', message: 'started' },
-              { id: 2, timestamp: new Date().toISOString(), level: 'ERROR', category: 'task', message: 'failed' },
+              {
+                id: 2,
+                timestamp: new Date().toISOString(),
+                level: 'INFO',
+                category: 'pipeline',
+                message: 'transcribing',
+                task_id: 't1',
+                batch_id: 'b1',
+                stage: 'ASR',
+                progress: 0.48,
+                duration_ms: 1250,
+                retry_count: 1,
+              },
+              {
+                id: 3,
+                timestamp: new Date().toISOString(),
+                level: 'ERROR',
+                category: 'provider',
+                message: 'provider timeout',
+                task_id: 't1',
+                batch_id: 'b1',
+                stage: 'SUM',
+              },
             ],
-            latest_id: 2,
+            latest_id: 3,
             oldest_id: 1,
             has_more_older: false,
           },
@@ -84,30 +106,51 @@ describe('DeployMonitorPage 标准日志', () => {
     })
   })
 
-  it('显示标准日志标题，不显示双标签', async () => {
+  it('显示运行监控，不再把日志类别作为主导航', async () => {
     render(<DeployMonitorPage />)
-    expect(screen.getByText('标准日志')).toBeInTheDocument()
-    // 不应该有旧的双标签
-    expect(screen.queryByText('任务活动')).not.toBeInTheDocument()
-    expect(screen.queryByText('应用日志')).not.toBeInTheDocument()
+    expect(screen.getByText('运行监控')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /处理进度/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /需要处理/ })).toBeInTheDocument()
+    expect(screen.queryByLabelText('日志类别')).not.toBeInTheDocument()
   })
 
-  it('显示日志条目', async () => {
+  it('把结构化日志解释成阶段、进度、耗时和重试', async () => {
     render(<DeployMonitorPage />)
     await waitFor(() => {
-      expect(screen.getByText('started')).toBeInTheDocument()
-      expect(screen.getByText('failed')).toBeInTheDocument()
+      expect(screen.getByText('语音转写')).toBeInTheDocument()
+      expect(screen.getByText('48%')).toBeInTheDocument()
+      expect(screen.getByText(/1\.3 秒/)).toBeInTheDocument()
+      expect(screen.getByText(/已重试 1 次/)).toBeInTheDocument()
     })
   })
 
-  it('有暂停/恢复按钮', async () => {
+  it('优先显示需要处理的问题，并提供所属环节', async () => {
+    render(<DeployMonitorPage />)
+    const issuesButton = await screen.findByRole('button', { name: /需要处理/ })
+    fireEvent.click(issuesButton)
+    const activitySection = issuesButton.closest('section')
+    expect(activitySection).not.toBeNull()
+    expect(within(activitySection!).getByText('provider timeout')).toBeVisible()
+    expect(within(activitySection!).getByText('生成总结')).toBeVisible()
+  })
+
+  it('原始日志默认折叠在高级诊断', async () => {
+    render(<DeployMonitorPage />)
+    await screen.findByText('语音转写')
+    expect(screen.getByText('started')).not.toBeVisible()
+    fireEvent.click(screen.getByText('高级诊断日志'))
+    expect(screen.getByText('started')).toBeVisible()
+  })
+
+  it('有暂停/恢复按钮', () => {
     render(<DeployMonitorPage />)
     expect(screen.getByRole('button', { name: /暂停/ })).toBeInTheDocument()
   })
 
-  it('有级别过滤下拉框', async () => {
+  it('高级诊断保留技术级别过滤', () => {
     render(<DeployMonitorPage />)
-    expect(screen.getByRole('combobox')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('高级诊断日志'))
+    expect(screen.getByLabelText('日志级别')).toBeInTheDocument()
   })
 
   it('首次只按最新 200 条加载标准日志', async () => {
@@ -125,7 +168,8 @@ describe('DeployMonitorPage 标准日志', () => {
   it('URL 中的 batch 和 level 初始化过滤器', async () => {
     window.history.replaceState({}, '', '/settings/monitor?batch_id=b1&level=ERROR')
     render(<DeployMonitorPage />)
-    await screen.findByText('标准日志')
+    await screen.findByText('运行监控')
+    fireEvent.click(screen.getByText('高级诊断日志'))
     expect(screen.getByLabelText('日志级别')).toHaveValue('ERROR')
     expect(screen.getByLabelText('批次 ID')).toHaveValue('b1')
   })

@@ -1,19 +1,21 @@
-import { useEffect, useRef, useState } from 'react'
-import { Activity, Cpu, Download, HardDrive, MemoryStick, Pause, Play, ScrollText } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Activity,
+  Cpu,
+  Download,
+  HardDrive,
+  MemoryStick,
+  Pause,
+  Play,
+} from 'lucide-react'
+
+import { PageHeader } from '@/components/ui/page-header'
 import { Section } from '@/components/ui/section'
-import { StatCard } from '@/components/ui/stat-card'
+import { StatusBadge } from '@/components/ui/status-badge'
 import { useHealthPulse } from '@/hooks/useHealthPulse'
 import http from '@/services/client'
-import { cn } from '@/lib/utils'
 
-/**
- * 部署监控页（S2 重构）。
- *
- * - 顶部状态条：在线/离线徽章 + 版本 + uptime
- * - 指标卡片：CPU / 内存 / 磁盘
- * - 标准日志：单一日志视图，支持级别过滤、暂停/恢复、加载更早
- * - 已移除：任务活动/应用日志双标签
- */
+import './deploy-monitor.css'
 
 interface SystemStats {
   cpu: { percent: number; count_logical: number; count_physical: number }
@@ -44,6 +46,23 @@ interface LogsResponse {
   has_more_older: boolean
 }
 
+type ActivityView = 'progress' | 'issues'
+
+const STAGE_LABELS: Record<string, string> = {
+  PENDING: '等待开始',
+  DOWNLOAD: '下载媒体',
+  PROBE: '识别媒体信息',
+  FRAMES: '提取关键画面',
+  ASR: '语音转写',
+  VLM: '画面理解',
+  DIARIZATION: '区分说话人',
+  SUM: '生成总结',
+  SUMMARY: '生成总结',
+  STORE: '保存笔记',
+}
+
+const LOG_POLL_MS = 2000
+
 /** 合并初始页、增量轮询和向前翻页结果，避免并发响应重复插入同一日志。 */
 export function mergeLogEntries(...groups: LogEntry[][]): LogEntry[] {
   const byId = new Map<number, LogEntry>()
@@ -53,141 +72,174 @@ export function mergeLogEntries(...groups: LogEntry[][]): LogEntry[] {
   return [...byId.values()].sort((left, right) => left.id - right.id)
 }
 
-function formatBytes(n: number): string {
-  if (!Number.isFinite(n) || n <= 0) return '0 B'
+function formatBytes(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(1024)))
-  return `${(n / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 2)} ${units[i]}`
+  const index = Math.min(
+    units.length - 1,
+    Math.floor(Math.log(value) / Math.log(1024)),
+  )
+  return `${(value / Math.pow(1024, index)).toFixed(index === 0 ? 0 : 1)} ${units[index]}`
 }
 
-function formatUptime(sec: number): string {
-  if (!Number.isFinite(sec) || sec < 0) return '—'
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  const s = Math.floor(sec % 60)
-  if (d > 0) return `${d}d ${h}h ${m}m`
-  if (h > 0) return `${h}h ${m}m ${s}s`
-  if (m > 0) return `${m}m ${s}s`
-  return `${s}s`
+function formatUptime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '—'
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  if (days > 0) return `${days} 天 ${hours} 小时`
+  if (hours > 0) return `${hours} 小时 ${minutes} 分钟`
+  return `${minutes} 分钟`
 }
 
-function formatTime(ts: string): string {
-  try {
-    const d = new Date(ts)
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-  } catch {
-    return ts
-  }
+function formatTime(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(date)
 }
 
-const LEVEL_COLORS: Record<string, string> = {
-  DEBUG: 'text-zinc-500',
-  INFO: 'text-zinc-700',
-  WARNING: 'text-amber-600',
-  ERROR: 'text-rose-600',
+function formatDuration(value?: number) {
+  if (typeof value !== 'number' || value < 0) return ''
+  if (value < 1000) return `${Math.round(value)} 毫秒`
+  return `${(value / 1000).toFixed(1)} 秒`
 }
 
-const LOG_POLL_MS = 2000
+function stageLabel(stage?: string) {
+  if (!stage) return '应用运行'
+  return STAGE_LABELS[stage.toUpperCase()] || stage
+}
 
-function scrollElementIntoView(
-  element: HTMLDivElement | null,
-  options?: ScrollIntoViewOptions,
+function isIssue(log: LogEntry) {
+  return log.level === 'ERROR' || log.level === 'WARNING'
+}
+
+function matchesScope(
+  log: LogEntry,
+  filters: {
+    level: string
+    task: string
+    batch: string
+    workspace: string
+    keyword: string
+  },
 ) {
-  if (element && typeof element.scrollIntoView === 'function') {
-    element.scrollIntoView(options)
-  }
+  if (filters.level !== 'all' && log.level !== filters.level) return false
+  if (filters.task && log.task_id !== filters.task) return false
+  if (filters.batch && log.batch_id !== filters.batch) return false
+  if (filters.workspace && log.workspace_id !== filters.workspace) return false
+  if (
+    filters.keyword
+    && !log.message.toLowerCase().includes(filters.keyword.toLowerCase())
+  ) return false
+  return true
 }
 
 export default function DeployMonitorPage() {
   const health = useHealthPulse(5000)
-
+  const initialParams = useRef(new URLSearchParams(window.location.search))
   const [stats, setStats] = useState<SystemStats | null>(null)
   const [statsError, setStatsError] = useState<string | null>(null)
-
-  // 标准日志状态
   const [logs, setLogs] = useState<LogEntry[]>([])
+  const [view, setView] = useState<ActivityView>('progress')
   const [paused, setPaused] = useState(false)
-  const initialParams = useRef(new URLSearchParams(window.location.search))
-  const [levelFilter, setLevelFilter] = useState(initialParams.current.get('level') || 'all')
-  const [categoryFilter, setCategoryFilter] = useState(initialParams.current.get('category') || '')
-  const [taskFilter, setTaskFilter] = useState(initialParams.current.get('task_id') || '')
-  const [batchFilter, setBatchFilter] = useState(initialParams.current.get('batch_id') || '')
-  const [workspaceFilter, setWorkspaceFilter] = useState(initialParams.current.get('workspace_id') || '')
-  const [keywordFilter, setKeywordFilter] = useState(initialParams.current.get('q') || '')
+  const [levelFilter, setLevelFilter] = useState(
+    initialParams.current.get('level') || 'all',
+  )
+  const [taskFilter, setTaskFilter] = useState(
+    initialParams.current.get('task_id') || '',
+  )
+  const [batchFilter, setBatchFilter] = useState(
+    initialParams.current.get('batch_id') || '',
+  )
+  const [workspaceFilter, setWorkspaceFilter] = useState(
+    initialParams.current.get('workspace_id') || '',
+  )
+  const [keywordFilter, setKeywordFilter] = useState(
+    initialParams.current.get('q') || '',
+  )
   const [hasMore, setHasMore] = useState(false)
-  const [autoFollow, setAutoFollow] = useState(true)
   const [exporting, setExporting] = useState(false)
   const latestIdRef = useRef(0)
   const oldestIdRef = useRef(0)
-  const logEndRef = useRef<HTMLDivElement>(null)
   const logContainerRef = useRef<HTMLDivElement>(null)
 
-  // 系统指标轮询
   useEffect(() => {
     let cancelled = false
-    let timer: number | null = null
-
     const tick = async () => {
       try {
-        const res = await http.get<SystemStats>('/admin/system/stats', { timeout: 5000 })
+        const response = await http.get<SystemStats>(
+          '/admin/system/stats',
+          { timeout: 5000 },
+        )
         if (!cancelled) {
-          setStats(res.data)
+          setStats(response.data)
           setStatsError(null)
         }
-      } catch (err) {
+      } catch (reason) {
         if (!cancelled) {
-          setStatsError(err instanceof Error ? err.message : String(err))
+          setStatsError(reason instanceof Error ? reason.message : String(reason))
         }
       }
     }
-
-    tick()
-    timer = window.setInterval(tick, 5000)
+    void tick()
+    const timer = window.setInterval(tick, 5000)
     return () => {
       cancelled = true
-      if (timer !== null) window.clearInterval(timer)
+      window.clearInterval(timer)
     }
   }, [])
 
-  // 初始加载最新日志
   useEffect(() => {
+    let cancelled = false
     const loadInitial = async () => {
       try {
-        const res = await http.get<LogsResponse>('/admin/logs', { params: { limit: 200 } })
-        setLogs((prev) => mergeLogEntries(prev, res.data.entries))
-        latestIdRef.current = Math.max(latestIdRef.current, res.data.latest_id)
+        const response = await http.get<LogsResponse>(
+          '/admin/logs',
+          { params: { limit: 200 } },
+        )
+        if (cancelled) return
+        setLogs((previous) => mergeLogEntries(previous, response.data.entries))
+        latestIdRef.current = Math.max(
+          latestIdRef.current,
+          response.data.latest_id,
+        )
         oldestIdRef.current = oldestIdRef.current
-          ? Math.min(oldestIdRef.current, res.data.oldest_id)
-          : res.data.oldest_id
-        setHasMore(res.data.has_more_older)
-        window.requestAnimationFrame(() => scrollElementIntoView(logEndRef.current))
+          ? Math.min(oldestIdRef.current, response.data.oldest_id)
+          : response.data.oldest_id
+        setHasMore(response.data.has_more_older)
       } catch {
-        // 忽略初始加载错误
+        // 监控页仍可显示系统状态；日志会在下一轮继续尝试。
       }
     }
-    loadInitial()
+    void loadInitial()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
-  // 增量轮询新日志
   useEffect(() => {
     let cancelled = false
     const tick = async () => {
       if (paused) return
       try {
-        const res = await http.get<LogsResponse>('/admin/logs', {
+        const response = await http.get<LogsResponse>('/admin/logs', {
           params: { after_id: latestIdRef.current, limit: 100 },
         })
-        if (!cancelled && res.data.entries.length > 0) {
-          setLogs((prev) => mergeLogEntries(prev, res.data.entries))
-          latestIdRef.current = Math.max(latestIdRef.current, res.data.latest_id)
-          if (autoFollow) {
-            scrollElementIntoView(logEndRef.current, { behavior: 'smooth' })
-          }
+        if (!cancelled && response.data.entries.length > 0) {
+          setLogs((previous) =>
+            mergeLogEntries(previous, response.data.entries),
+          )
+          latestIdRef.current = Math.max(
+            latestIdRef.current,
+            response.data.latest_id,
+          )
         }
       } catch {
-        // 忽略轮询错误
+        // 增量失败不清空已经展示的活动。
       }
     }
     const timer = window.setInterval(tick, LOG_POLL_MS)
@@ -195,57 +247,81 @@ export default function DeployMonitorPage() {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [paused, autoFollow])
+  }, [paused])
 
-  // 加载更早日志
-  const loadOlder = async () => {
-    if (!hasMore || oldestIdRef.current === 0) return
-    try {
-      const container = logContainerRef.current
-      const priorHeight = container?.scrollHeight || 0
-      const res = await http.get<LogsResponse>('/admin/logs', {
-        params: { before_id: oldestIdRef.current, limit: 100 },
-      })
-      if (res.data.entries.length > 0) {
-        setLogs((prev) => mergeLogEntries(res.data.entries, prev))
-        oldestIdRef.current = Math.min(oldestIdRef.current, res.data.oldest_id)
-        setHasMore(res.data.has_more_older)
-        window.requestAnimationFrame(() => {
-          if (container) container.scrollTop += container.scrollHeight - priorHeight
-        })
-      }
-    } catch {
-      // 忽略错误
-    }
-  }
+  const scopeFilters = useMemo(() => ({
+    level: levelFilter,
+    task: taskFilter,
+    batch: batchFilter,
+    workspace: workspaceFilter,
+    keyword: keywordFilter,
+  }), [
+    levelFilter,
+    taskFilter,
+    batchFilter,
+    workspaceFilter,
+    keywordFilter,
+  ])
 
-  // 过滤日志
-  const filteredLogs = logs.filter((log) => {
-    if (levelFilter !== 'all' && log.level !== levelFilter) return false
-    if (categoryFilter && log.category !== categoryFilter) return false
-    if (taskFilter && log.task_id !== taskFilter) return false
-    if (batchFilter && log.batch_id !== batchFilter) return false
-    if (workspaceFilter && log.workspace_id !== workspaceFilter) return false
-    if (keywordFilter && !log.message.toLowerCase().includes(keywordFilter.toLowerCase())) return false
-    return true
-  })
+  const scopedLogs = useMemo(
+    () => logs.filter((log) => matchesScope(log, scopeFilters)),
+    [logs, scopeFilters],
+  )
+  const progressLogs = useMemo(
+    () => scopedLogs.filter((log) => log.stage && !isIssue(log)).slice().reverse(),
+    [scopedLogs],
+  )
+  const issueLogs = useMemo(
+    () => scopedLogs.filter(isIssue).slice().reverse(),
+    [scopedLogs],
+  )
+  const visibleActivity = view === 'progress' ? progressLogs : issueLogs
 
   useEffect(() => {
     const params = new URLSearchParams()
     if (levelFilter !== 'all') params.set('level', levelFilter)
-    if (categoryFilter) params.set('category', categoryFilter)
     if (taskFilter) params.set('task_id', taskFilter)
     if (batchFilter) params.set('batch_id', batchFilter)
     if (workspaceFilter) params.set('workspace_id', workspaceFilter)
     if (keywordFilter) params.set('q', keywordFilter)
     const query = params.toString()
-    window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`)
-  }, [levelFilter, categoryFilter, taskFilter, batchFilter, workspaceFilter, keywordFilter])
+    window.history.replaceState(
+      {},
+      '',
+      `${window.location.pathname}${query ? `?${query}` : ''}`,
+    )
+  }, [
+    levelFilter,
+    taskFilter,
+    batchFilter,
+    workspaceFilter,
+    keywordFilter,
+  ])
 
-  const handleLogScroll = () => {
-    const element = logContainerRef.current
-    if (!element) return
-    setAutoFollow(element.scrollHeight - element.scrollTop - element.clientHeight < 24)
+  const loadOlder = async () => {
+    if (!hasMore || oldestIdRef.current === 0) return
+    try {
+      const previousHeight = logContainerRef.current?.scrollHeight || 0
+      const response = await http.get<LogsResponse>('/admin/logs', {
+        params: { before_id: oldestIdRef.current, limit: 100 },
+      })
+      setLogs((previous) =>
+        mergeLogEntries(response.data.entries, previous),
+      )
+      oldestIdRef.current = Math.min(
+        oldestIdRef.current,
+        response.data.oldest_id,
+      )
+      setHasMore(response.data.has_more_older)
+      window.requestAnimationFrame(() => {
+        if (logContainerRef.current) {
+          logContainerRef.current.scrollTop +=
+            logContainerRef.current.scrollHeight - previousHeight
+        }
+      })
+    } catch {
+      // 保持当前列表，用户可再次尝试。
+    }
   }
 
   const exportDiagnostics = async () => {
@@ -253,7 +329,6 @@ export default function DeployMonitorPage() {
     try {
       const params: Record<string, string> = {}
       if (levelFilter !== 'all') params.level = levelFilter
-      if (categoryFilter) params.category = categoryFilter
       if (taskFilter) params.task_id = taskFilter
       if (batchFilter) params.batch_id = batchFilter
       if (workspaceFilter) params.workspace_id = workspaceFilter
@@ -273,178 +348,229 @@ export default function DeployMonitorPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-6">
-      {/* 状态条 */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">部署监控</h1>
-        <div className="flex items-center gap-4 text-sm">
-          <span
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-medium',
-              health.online ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700',
-            )}
-          >
-            <span className={cn('size-2 rounded-full', health.online ? 'bg-emerald-500' : 'bg-rose-500')} />
-            {health.online ? '在线' : '离线'}
-          </span>
-          {health.online && health.data && (
-            <>
-              <span className="text-muted-foreground">版本: {health.data.version || '—'}</span>
-              <span className="text-muted-foreground">运行时长: {formatUptime(health.data.uptime_sec)}</span>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* 系统指标 */}
-      <Section title="系统指标" description="CPU / 内存 / 磁盘 使用率（每 5 秒刷新）" icon={<Activity className="size-4" />}>
-        {statsError ? (
-          <div className="p-4 text-sm text-rose-600">{statsError}</div>
-        ) : (
-          <div className="grid grid-cols-3 gap-4">
-            <StatCard
-              label="CPU 使用率"
-              value={stats ? `${stats.cpu.percent.toFixed(1)}%` : '—'}
-              icon={<Cpu className="size-4" />}
-            />
-            <StatCard
-              label="内存使用率"
-              value={stats ? `${formatBytes(stats.memory.used)} / ${formatBytes(stats.memory.total)}` : '—'}
-              icon={<MemoryStick className="size-4" />}
-            />
-            <StatCard
-              label="磁盘使用率"
-              value={stats ? `${stats.disk.percent.toFixed(1)}%` : '—'}
-              icon={<HardDrive className="size-4" />}
-            />
-          </div>
-        )}
-      </Section>
-
-      {/* 标准日志 */}
-      <Section title="标准日志" description="统一的任务和应用日志（实时刷新）" icon={<ScrollText className="size-4" />}>
-        {/* 控制栏 */}
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setPaused(!paused)}
-            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent"
-          >
-            {paused ? <Play className="size-4" /> : <Pause className="size-4" />}
-            {paused ? '恢复' : '暂停'}
-          </button>
-
-          <select
-            aria-label="日志级别"
-            value={levelFilter}
-            onChange={(e) => setLevelFilter(e.target.value)}
-            className="rounded-md border px-3 py-1.5 text-sm"
-          >
-            <option value="all">全部级别</option>
-            <option value="DEBUG">DEBUG</option>
-            <option value="INFO">INFO</option>
-            <option value="WARNING">WARNING</option>
-            <option value="ERROR">ERROR</option>
-          </select>
-
-          <input
-            aria-label="日志类别"
-            value={categoryFilter}
-            onChange={(event) => setCategoryFilter(event.target.value)}
-            placeholder="类别"
-            className="w-28 rounded-md border px-3 py-1.5 text-sm"
-          />
-          <input
-            aria-label="任务 ID"
-            value={taskFilter}
-            onChange={(event) => setTaskFilter(event.target.value)}
-            placeholder="任务 ID"
-            className="w-28 rounded-md border px-3 py-1.5 text-sm"
-          />
-          <input
-            aria-label="批次 ID"
-            value={batchFilter}
-            onChange={(event) => setBatchFilter(event.target.value)}
-            placeholder="批次 ID"
-            className="w-28 rounded-md border px-3 py-1.5 text-sm"
-          />
-          <input
-            aria-label="合集 ID"
-            value={workspaceFilter}
-            onChange={(event) => setWorkspaceFilter(event.target.value)}
-            placeholder="合集 ID"
-            className="w-28 rounded-md border px-3 py-1.5 text-sm"
-          />
-          <input
-            aria-label="关键词"
-            value={keywordFilter}
-            onChange={(event) => setKeywordFilter(event.target.value)}
-            placeholder="关键词"
-            className="min-w-32 flex-1 rounded-md border px-3 py-1.5 text-sm"
-          />
-
-          {hasMore && (
-            <button
-              type="button"
-              onClick={loadOlder}
-              className="text-sm text-primary underline hover:no-underline"
-            >
-              加载更早
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={() => void exportDiagnostics()}
-            disabled={exporting}
-            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm"
-          >
-            <Download className="size-4" />
-            {exporting ? '导出中…' : '导出诊断'}
-          </button>
-          <span className="text-xs text-muted-foreground">{filteredLogs.length} 条日志</span>
-        </div>
-        <div className="mb-3 text-xs text-muted-foreground">
-          导出内容已自动脱敏，不包含 API 密钥和 Cookie。
-        </div>
-
-        {/* 日志列表 */}
-        <div
-          ref={logContainerRef}
-          onScroll={handleLogScroll}
-          className="relative max-h-[400px] overflow-y-auto rounded-lg border bg-zinc-50 font-mono text-xs"
-        >
-          {filteredLogs.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">暂无日志</div>
-          ) : (
-            <div className="divide-y divide-zinc-100">
-              {filteredLogs.map((log) => (
-                <div key={log.id} className="flex items-start gap-2 px-3 py-1.5 hover:bg-zinc-100">
-                  <span className="shrink-0 text-zinc-400">{formatTime(log.timestamp)}</span>
-                  <span className={cn('shrink-0 font-medium', LEVEL_COLORS[log.level] || 'text-zinc-700')}>
-                    {log.level}
-                  </span>
-                  <span className="shrink-0 text-zinc-400">[{log.category}]</span>
-                  <span className="break-all text-zinc-700">{log.message}</span>
-                </div>
-              ))}
-              <div ref={logEndRef} />
+    <main className="deploy-monitor-page">
+      <div className="deploy-monitor-shell">
+        <PageHeader
+          eyebrow="RUNTIME · LOCAL"
+          title="运行监控"
+          description="先看任务进行到哪个环节、哪里需要处理；原始技术日志收在高级诊断中。"
+          actions={(
+            <div className="monitor-health">
+              <StatusBadge status={health.online ? 'success' : 'offline'}>
+                {health.online ? '在线' : '离线'}
+              </StatusBadge>
+              {health.online && health.data && (
+                <span>
+                  {health.data.version || '版本未知'} · 已运行{' '}
+                  {formatUptime(health.data.uptime_sec)}
+                </span>
+              )}
             </div>
           )}
-          {!autoFollow && (
+        />
+
+        <Section
+          title="设备状态"
+          description="CPU、内存和磁盘每 5 秒更新一次。"
+          icon={<Activity className="size-4" />}
+          collapsible
+        >
+          {statsError ? (
+            <div className="monitor-error">{statsError}</div>
+          ) : (
+            <div className="monitor-stats">
+              <article>
+                <Cpu className="size-4" />
+                <span>CPU 使用率</span>
+                <strong>{stats ? `${stats.cpu.percent.toFixed(1)}%` : '—'}</strong>
+              </article>
+              <article>
+                <MemoryStick className="size-4" />
+                <span>内存使用率</span>
+                <strong>
+                  {stats
+                    ? `${formatBytes(stats.memory.used)} / ${formatBytes(stats.memory.total)}`
+                    : '—'}
+                </strong>
+              </article>
+              <article>
+                <HardDrive className="size-4" />
+                <span>磁盘使用率</span>
+                <strong>
+                  {stats
+                    ? `${stats.disk.percent.toFixed(1)}%`
+                    : '—'}
+                </strong>
+              </article>
+            </div>
+          )}
+        </Section>
+
+        <Section
+          title="任务活动"
+          description="按实际处理环节解释运行事件，不显示内部日志类别。"
+          action={(
             <button
               type="button"
-              className="sticky bottom-3 left-full mr-3 rounded-full border bg-white px-3 py-1.5 shadow"
-              onClick={() => {
-                setAutoFollow(true)
-                scrollElementIntoView(logEndRef.current, { behavior: 'smooth' })
-              }}
+              className="btn btn-ghost"
+              onClick={() => setPaused((value) => !value)}
             >
-              回到最新
+              {paused
+                ? <Play className="size-4" />
+                : <Pause className="size-4" />}
+              {paused ? '恢复更新' : '暂停更新'}
             </button>
           )}
-        </div>
-      </Section>
-    </div>
+        >
+          <div className="monitor-view-tabs">
+            <button
+              type="button"
+              aria-pressed={view === 'progress'}
+              onClick={() => setView('progress')}
+            >
+              处理进度 ({progressLogs.length})
+            </button>
+            <button
+              type="button"
+              aria-pressed={view === 'issues'}
+              onClick={() => setView('issues')}
+            >
+              需要处理 ({issueLogs.length})
+            </button>
+          </div>
+
+          <div className="monitor-activity-list">
+            {visibleActivity.length === 0 && (
+              <div className="monitor-empty">
+                {view === 'progress'
+                  ? '当前没有可展示的处理进度'
+                  : '当前没有需要处理的问题'}
+              </div>
+            )}
+            {visibleActivity.map((log) => (
+              <article
+                key={log.id}
+                className="monitor-activity-card"
+                data-level={log.level}
+              >
+                <div className="monitor-stage-marker" aria-hidden="true" />
+                <div className="monitor-activity-main">
+                  <div className="monitor-activity-heading">
+                    <div>
+                      <strong>{stageLabel(log.stage)}</strong>
+                      <span>{formatTime(log.timestamp)}</span>
+                    </div>
+                    {typeof log.progress === 'number' && (
+                      <b>{Math.round(log.progress * 100)}%</b>
+                    )}
+                  </div>
+                  {isIssue(log) && <p>{log.message}</p>}
+                  <div className="monitor-activity-meta">
+                    {log.task_id && <span>任务 {log.task_id}</span>}
+                    {log.batch_id && <span>批次 {log.batch_id}</span>}
+                    {typeof log.duration_ms === 'number' && (
+                      <span>本环节 {formatDuration(log.duration_ms)}</span>
+                    )}
+                    {Boolean(log.retry_count) && (
+                      <span>已重试 {log.retry_count} 次</span>
+                    )}
+                  </div>
+                  {typeof log.progress === 'number' && (
+                    <div
+                      className="monitor-progress"
+                      role="progressbar"
+                      aria-label={`${stageLabel(log.stage)}进度`}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={Math.round(log.progress * 100)}
+                    >
+                      <span style={{ width: `${Math.round(log.progress * 100)}%` }} />
+                    </div>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        </Section>
+
+        <details className="monitor-diagnostics">
+          <summary>高级诊断日志</summary>
+          <div className="monitor-diagnostics-body">
+            <p>面向排错的原始事件。日常使用只需查看上方任务活动。</p>
+            <div className="monitor-diagnostic-controls">
+              <select
+                aria-label="日志级别"
+                className="input"
+                value={levelFilter}
+                onChange={(event) => setLevelFilter(event.target.value)}
+              >
+                <option value="all">全部级别</option>
+                <option value="DEBUG">DEBUG</option>
+                <option value="INFO">INFO</option>
+                <option value="WARNING">WARNING</option>
+                <option value="ERROR">ERROR</option>
+              </select>
+              <input
+                aria-label="任务 ID"
+                className="input"
+                value={taskFilter}
+                onChange={(event) => setTaskFilter(event.target.value)}
+                placeholder="任务 ID"
+              />
+              <input
+                aria-label="批次 ID"
+                className="input"
+                value={batchFilter}
+                onChange={(event) => setBatchFilter(event.target.value)}
+                placeholder="批次 ID"
+              />
+              <input
+                aria-label="合集 ID"
+                className="input"
+                value={workspaceFilter}
+                onChange={(event) => setWorkspaceFilter(event.target.value)}
+                placeholder="合集 ID"
+              />
+              <input
+                aria-label="关键词"
+                className="input"
+                value={keywordFilter}
+                onChange={(event) => setKeywordFilter(event.target.value)}
+                placeholder="关键词"
+              />
+              <button
+                type="button"
+                className="btn"
+                disabled={exporting}
+                onClick={() => void exportDiagnostics()}
+              >
+                <Download className="size-4" />
+                {exporting ? '导出中…' : '导出诊断'}
+              </button>
+            </div>
+            <p className="monitor-privacy">
+              导出内容已自动脱敏，不包含 API 密钥和 Cookie。
+            </p>
+            {hasMore && (
+              <button type="button" className="btn" onClick={() => void loadOlder()}>
+                加载更早
+              </button>
+            )}
+            <div ref={logContainerRef} className="monitor-raw-logs">
+              {scopedLogs.length === 0 ? (
+                <div className="monitor-empty">暂无日志</div>
+              ) : scopedLogs.map((log) => (
+                <div key={log.id}>
+                  <time>{formatTime(log.timestamp)}</time>
+                  <b data-level={log.level}>{log.level}</b>
+                  <code>{log.category}</code>
+                  <span>{log.message}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </details>
+      </div>
+    </main>
   )
 }
