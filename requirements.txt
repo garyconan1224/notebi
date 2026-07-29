@@ -15,6 +15,8 @@ python-multipart>=0.0.9
 requests>=2.31.0
 tenacity>=8.2.0
 httpx>=0.24.0
+# Starlette 1.x TestClient 已迁移到 HTTPX2；保留 httpx 供现有 SDK 使用。
+httpx2>=2.0.0
 
 # ── RAG 向量检索 ──────────────────────────────────────────────
 faiss-cpu>=1.7.4
