@@ -15,10 +15,11 @@ from backend.app.models.tasks import TERMINAL_STATUS_VALUES, TaskStatus
 from backend.app.services.pipeline_tasks import register_pipeline_handlers
 from backend.app.services.task_runner import TaskRunner
 from backend.app.services.task_store import TaskStore
+from backend.app.services.runtime_log_store import get_default_store
 
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 _store = TaskStore()
-_runner = TaskRunner(_store)
+_runner = TaskRunner(_store, event_sink=get_default_store())
 register_pipeline_handlers(_runner)
 
 _TERMINAL_STATUSES = TERMINAL_STATUS_VALUES
@@ -26,7 +27,7 @@ _TERMINAL_STATUSES = TERMINAL_STATUS_VALUES
 
 class TaskCreateRequest(BaseModel):
     project_id: str
-    task_type: str = Field(description="download|analyze|create|storyboard|note|text|image|audio")
+    task_type: str = Field(description="download|analyze|note|text|image|audio")
     payload: Dict[str, Any] = Field(default_factory=dict)
     steps: List[str] = Field(
         default=["download", "transcribe", "analyze", "note"],
@@ -92,12 +93,19 @@ def list_tasks(
 @router.post("/tasks")
 def create_task(req: TaskCreateRequest) -> Dict[str, Any]:
     try:
+        if not _runner.supports(req.task_type):
+            raise HTTPException(
+                status_code=400,
+                detail=f"unsupported task_type: {req.task_type}",
+            )
         payload = dict(req.payload or {})
         # 将 steps 注入 payload，供 handle_note_task 读取
         if req.task_type == "note":
             payload["steps"] = req.steps
         rec = _runner.create_task(req.project_id, req.task_type, payload)
         return {"status": "accepted", "task_id": rec.task_id}
+    except HTTPException:
+        raise
     except Exception as err:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=str(err)) from err
 

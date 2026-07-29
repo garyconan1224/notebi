@@ -111,13 +111,6 @@ class TestGetVideoModelPrompt:
         assert "知识点" in prompt
         assert "JSON" in prompt
 
-    def test_replica_prompt(self) -> None:
-        from backend.app.services.pipeline_tasks import _get_video_model_prompt
-
-        prompt = _get_video_model_prompt("replica")
-        assert "拆片" in prompt or "翻拍" in prompt
-        assert "镜头" in prompt
-
     def test_default_prompt(self) -> None:
         from backend.app.services.pipeline_tasks import _get_video_model_prompt
 

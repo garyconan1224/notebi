@@ -8,7 +8,7 @@ import threading
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from backend.app.models.workspace import WorkspaceRecord
 from backend.app.services.workspace_knowledge import (
@@ -27,7 +27,7 @@ from backend.app.services.workspace_search_service import (
     _llm_answer,
     _resolve_api_key,
 )
-from backend.app.services.workspace_store import WorkspaceStore, normalize_workspace_kinds
+from backend.app.services.workspace_store import WorkspaceStore
 from shared.knowledge_base import LongKnowledge, ShortKnowledge, retrieve_with_sources
 from shared.config import EMBEDDING_MODEL
 from shared.runtime_llm_config import get_embedding_model_for_rag
@@ -138,34 +138,38 @@ def invalidate_global_knowledge_caches() -> None:
     """Remove global and scoped-global knowledge caches after bulk kind cleanup."""
 
     invalidate_workspace_index(GLOBAL_CACHE_ID)
+    failures: List[str] = []
     for path in (_short_cache_path(GLOBAL_CACHE_ID),):
         if path.exists():
             try:
                 path.unlink()
-            except OSError:
-                pass
+            except OSError as exc:
+                failures.append(f"{path}: {exc}")
 
-    if not CACHE_DIR.exists():
-        return
-    for path in CACHE_DIR.glob("__global_sub__:*"):
-        if not path.is_file():
-            continue
-        try:
-            path.unlink()
-        except OSError:
-            pass
+    if CACHE_DIR.exists():
+        for path in CACHE_DIR.glob("__global_sub__:*"):
+            if not path.is_file():
+                continue
+            try:
+                path.unlink()
+            except OSError as exc:
+                failures.append(f"{path}: {exc}")
+    if failures:
+        raise OSError("failed to invalidate global knowledge caches: " + "; ".join(failures))
 
 
 def _indexable_records(
     store: WorkspaceStore,
     task_store: Any = None,
-    *,
-    allowed_kinds: Optional[Iterable[str]] = None,
 ) -> List[WorkspaceRecord]:
     return [
         rec
-        for rec in store.list_all(include_trashed=False, kinds=allowed_kinds)
+        for rec in store.list_all(include_trashed=False)
         if any(_item_has_data(it, task_store) for it in rec.items)
+        or any(
+            not note.deleted_at and note.current_version_id and note.content_md.strip()
+            for note in rec.merged_notes
+        )
     ]
 
 
@@ -185,12 +189,11 @@ def collect_all_json_paths(
     *,
     store: Optional[WorkspaceStore] = None,
     task_store: Any = None,
-    allowed_kinds: Optional[Iterable[str]] = None,
 ) -> Tuple[List[Path], SourceMap, List[WorkspaceRecord]]:
     """Serialize all non-trashed workspace item results into one temp tree."""
 
     store = store or WorkspaceStore()
-    records = _indexable_records(store, task_store, allowed_kinds=allowed_kinds)
+    records = _indexable_records(store, task_store)
     paths: List[Path] = []
     source_map: SourceMap = {}
     for rec in records:
@@ -221,19 +224,25 @@ def get_global_status(
     *,
     store: Optional[WorkspaceStore] = None,
     task_store: Any = None,
-    allowed_kinds: Optional[Iterable[str]] = None,
 ) -> Dict[str, Any]:
     """Return coverage/readiness for the global knowledge surface."""
 
     store = store or WorkspaceStore()
     settings = load_settings()
     embedding_model = get_embedding_model_for_rag(settings)
-    kind_filter = normalize_workspace_kinds(allowed_kinds)
-    records = store.list_all(include_trashed=False, kinds=kind_filter)
+    records = store.list_all(include_trashed=False)
 
-    indexable = _indexable_records(store, task_store, allowed_kinds=kind_filter)
+    indexable = _indexable_records(store, task_store)
     indexable_workspaces = len(indexable)
-    indexable_items = sum(sum(1 for it in rec.items if _item_has_data(it, task_store)) for rec in indexable)
+    indexable_items = sum(
+        sum(1 for it in rec.items if _item_has_data(it, task_store))
+        + sum(
+            1
+            for note in rec.merged_notes
+            if not note.deleted_at and note.current_version_id and note.content_md.strip()
+        )
+        for rec in indexable
+    )
     cur_hash = _global_items_hash(indexable)
     meta = _global_meta(cur_hash, embedding_model) if indexable_items > 0 else None
     ready = meta is not None
@@ -265,10 +274,8 @@ def _run_rebuild(
     task_store: Any,
     api_key: str,
     embedding_model: str,
-    allowed_kinds: Optional[Iterable[str]] = None,
 ) -> None:
-    kind_filter = normalize_workspace_kinds(allowed_kinds)
-    records = _indexable_records(store, task_store, allowed_kinds=kind_filter)
+    records = _indexable_records(store, task_store)
     _update_state(
         running=True,
         started_at=_now_iso(),
@@ -294,7 +301,6 @@ def _run_rebuild(
                     Path(td),
                     store=store,
                     task_store=task_store,
-                    allowed_kinds=kind_filter,
                 )
                 if paths:
                     from shared.knowledge_base import load_folder_as_knowledge
@@ -323,19 +329,17 @@ def start_global_rebuild(
     store: Optional[WorkspaceStore] = None,
     task_store: Any = None,
     api_key: Optional[str] = None,
-    allowed_kinds: Optional[Iterable[str]] = None,
 ) -> Dict[str, Any]:
     """Start background warming of the global index."""
 
     state = _snapshot_state()
     if state.get("running"):
-        return get_global_status(store=store, task_store=task_store, allowed_kinds=allowed_kinds)
+        return get_global_status(store=store, task_store=task_store)
 
     settings = load_settings()
     eff_key = _resolve_api_key(api_key)
     embedding_model = get_embedding_model_for_rag(settings)
     effective_store = store or WorkspaceStore()
-    kind_filter = normalize_workspace_kinds(allowed_kinds)
     thread = threading.Thread(
         target=_run_rebuild,
         kwargs={
@@ -344,12 +348,11 @@ def start_global_rebuild(
             "task_store": task_store,
             "api_key": eff_key,
             "embedding_model": embedding_model,
-            "allowed_kinds": kind_filter,
         },
         daemon=True,
     )
     thread.start()
-    return get_global_status(store=effective_store, task_store=task_store, allowed_kinds=kind_filter)
+    return get_global_status(store=effective_store, task_store=task_store)
 
 
 def ask_global(
@@ -357,7 +360,6 @@ def ask_global(
     question: str,
     top_k: int = 10,
     workspace_ids: Optional[List[str]] = None,
-    allowed_kinds: Optional[Iterable[str]] = None,
     store: Optional[WorkspaceStore] = None,
     task_store: Any = None,
     api_key: Optional[str] = None,
@@ -371,21 +373,20 @@ def ask_global(
     effective_store = store or WorkspaceStore()
     settings = load_settings()
     embedding_model = get_embedding_model_for_rag(settings)
-    kind_filter = normalize_workspace_kinds(allowed_kinds)
-    all_records = _indexable_records(effective_store, task_store, allowed_kinds=kind_filter)
+    all_records = _indexable_records(effective_store, task_store)
 
     # Filter by workspace_ids when provided
     if workspace_ids:
         ws_set = set(workspace_ids)
         records = [r for r in all_records if r.workspace_id in ws_set]
         if not records:
-            return {"answer": "（所选合集中暂无可用于知识库问答的笔记）", "sources": [], "status": get_global_status(store=effective_store, task_store=task_store, allowed_kinds=kind_filter)}
+            return {"answer": "（所选合集中暂无可用于知识库问答的笔记）", "sources": [], "status": get_global_status(store=effective_store, task_store=task_store)}
     else:
         records = all_records
 
     item_count = sum(sum(1 for it in rec.items if _item_has_data(it, task_store)) for rec in records)
     if item_count <= 0:
-        return {"answer": "（暂无可用于知识库问答的笔记）", "sources": [], "status": get_global_status(store=effective_store, task_store=task_store, allowed_kinds=kind_filter)}
+        return {"answer": "（暂无可用于知识库问答的笔记）", "sources": [], "status": get_global_status(store=effective_store, task_store=task_store)}
 
     cur_hash = _global_items_hash(records)
     if workspace_ids:
@@ -405,7 +406,6 @@ def ask_global(
                 Path(td),
                 store=effective_store,
                 task_store=task_store,
-                allowed_kinds=kind_filter,
             )
             # Filter paths to only requested workspaces.
             # collect_all_json_paths writes dest/<ws_id>/..., so the first
@@ -450,7 +450,7 @@ def ask_global(
     if cached is None and not workspace_ids:
         raise RuntimeError("knowledge index is not ready; rebuild first")
     if cached is None:
-        return {"answer": "（所选合集索引未就绪，请先刷新索引）", "sources": [], "status": get_global_status(store=effective_store, task_store=task_store, allowed_kinds=kind_filter)}
+        return {"answer": "（所选合集索引未就绪，请先刷新索引）", "sources": [], "status": get_global_status(store=effective_store, task_store=task_store)}
 
     if len(cached) == 3:
         knowledge, source_map, _ = cached
@@ -478,5 +478,5 @@ def ask_global(
     return {
         "answer": answer,
         "sources": sources_out,
-        "status": get_global_status(store=effective_store, task_store=task_store, allowed_kinds=kind_filter),
+        "status": get_global_status(store=effective_store, task_store=task_store),
     }

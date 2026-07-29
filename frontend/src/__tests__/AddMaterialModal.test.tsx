@@ -123,8 +123,7 @@ describe('AddMaterialModal', () => {
     )
 
     expect(screen.getByText('② 合集归属')).toBeTruthy()
-    expect(screen.getByText('③ 你要做什么')).toBeTruthy()
-    expect(screen.getByText('④ 笔记设置')).toBeTruthy()
+    expect(screen.getByText('③ 笔记设置')).toBeTruthy()
     expect(screen.getByText('test video')).toBeTruthy()
     expect(screen.getByText('已识别视频')).toBeTruthy()
     expect(screen.getByRole('button', { name: /开始生成/ })).toBeTruthy()
@@ -239,7 +238,6 @@ describe('AddMaterialModal', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /学习笔记/ }))
     fireEvent.click(screen.getByRole('button', { name: /图文笔记/ }))
     fireEvent.click(screen.getByRole('button', { name: /开始生成/ }))
 
@@ -392,65 +390,6 @@ describe('AddMaterialModal', () => {
     })
   })
 
-  it('选择复刻时提交 intent=replica', async () => {
-    generateNoteMock.mockResolvedValueOnce({
-      task_id: 'task-replica-1',
-      task_type: 'replica',
-      item_type: 'video',
-      item_id: 'item-2',
-      workspace: {},
-    })
-
-    render(
-      <AddMaterialModal
-        open={true}
-        onOpenChange={vi.fn()}
-        workspaceIds={['ws-1']}
-        urlValue="https://example.com/video"
-        sniffResult={{
-          primary_type: 'video',
-          possible_types: ['video'],
-          platform: 'bilibili',
-          title: '复刻测试',
-          thumbnail: null,
-          content_type_header: null,
-        }}
-      />,
-    )
-
-    // 点击复刻大卡
-    fireEvent.click(screen.getByRole('button', { name: /逐帧复刻/ }))
-    // 此时应该切到“④ 复刻设置”
-    expect(screen.queryByText('④ 笔记设置')).toBeNull()
-    expect(screen.getByText('④ 复刻设置')).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: /开始生成/ }))
-
-    await waitFor(() => {
-      expect(generateNoteMock).toHaveBeenCalledWith(
-        'ws-1',
-        'https://example.com/video',
-        '复刻测试',
-        true,
-        'replica_prompt',
-        10,
-        '',
-        'replica',
-        'auto',
-        { diarize: false, summary_template: 'standard', user_notes: '', replica_kind: 'prompt' },
-      )
-    })
-    expect(navigateMock).toHaveBeenCalledWith('/processing/task-replica-1', {
-      state: {
-        url: 'https://example.com/video',
-        workspaceId: 'ws-1',
-        taskType: 'replica',
-        itemId: 'item-2',
-        itemType: 'video',
-      },
-    })
-  })
-
   it('没有工作空间时落入收纳箱，再生成笔记', async () => {
     ensureInboxMock.mockResolvedValue({ workspace_id: '__inbox__', name: '收纳箱' })
 
@@ -521,7 +460,7 @@ describe('AddMaterialModal', () => {
     expect(screen.queryByText('视觉模型')).toBeNull()
     expect(screen.queryByText('取画面')).toBeNull()
     expect(screen.getByText('区分说话人')).toBeTruthy()
-    expect(screen.queryByPlaceholderText(/可选：输入额外要求/)).toBeNull()
+    expect(screen.getByPlaceholderText(/可选：输入额外要求/)).toBeTruthy()
     expect(screen.queryByText('AI视频')).toBeNull()
     expect(screen.queryByText('分镜脚本')).toBeNull()
     expect(screen.queryByText('二创改写')).toBeNull()
@@ -534,7 +473,7 @@ describe('AddMaterialModal', () => {
     expect(screen.getByRole('combobox', { name: '预计说话人数' })).toBeTruthy()
     expect(screen.getByText('自动判断')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: /高级设置/ }))
+    // R5-C: 补充说明常驻，无需展开高级设置
     expect(screen.getByPlaceholderText(/可选：输入额外要求/)).toBeTruthy()
   })
 
@@ -585,33 +524,6 @@ describe('AddMaterialModal', () => {
     })
   })
 
-  it('复刻设置展示取画面，不展示笔记专属项', () => {
-    render(
-      <AddMaterialModal
-        open={true}
-        onOpenChange={vi.fn()}
-        workspaceIds={['ws-1']}
-        urlValue="https://example.com/video"
-        sniffResult={{
-          primary_type: 'video',
-          possible_types: ['video'],
-          platform: 'bilibili',
-          title: '复刻视频',
-          thumbnail: null,
-          content_type_header: null,
-        }}
-      />,
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: /逐帧复刻/ }))
-    fireEvent.click(screen.getByRole('button', { name: /高级设置/ }))
-
-    expect(screen.queryByText('笔记风格')).toBeNull()
-    expect(screen.queryByText('区分发言人')).toBeNull()
-    expect(screen.getByText('画面分析')).toBeTruthy()
-    expect(screen.getByText('取画面')).toBeTruthy()
-  })
-
   it('内部输入链接后自动嗅探并展示视频卡', async () => {
     sniffUrlMock.mockResolvedValue({
       primary_type: 'text',
@@ -638,5 +550,55 @@ describe('AddMaterialModal', () => {
       expect(screen.getByText('文章标题')).toBeTruthy()
       expect(screen.getByText('已识别网页')).toBeTruthy()
     })
+  })
+
+  it('R5-C: 双栏结构——左栏来源+合集，右栏笔记设置', () => {
+    render(
+      <AddMaterialModal
+        open
+        onOpenChange={vi.fn()}
+        workspaceIds={['ws-1']}
+      />,
+    )
+    const cols = document.body.querySelector('.m-body-cols')
+    expect(cols).toBeTruthy()
+    const left = cols!.querySelector('.m-col-left')
+    const right = cols!.querySelector('.m-col-right')
+    expect(left).toBeTruthy()
+    expect(right).toBeTruthy()
+    // 左栏包含素材源和合集归属
+    expect(left!.textContent).toContain('① 素材源')
+    expect(left!.textContent).toContain('② 合集归属')
+    // 右栏包含笔记设置
+    expect(right!.textContent).toContain('③ 笔记设置')
+  })
+
+  it('R5-C: 补充说明常驻，无高级设置折叠器', () => {
+    render(
+      <AddMaterialModal
+        open
+        onOpenChange={vi.fn()}
+        workspaceIds={['ws-1']}
+      />,
+    )
+    // 补充说明 textarea 始终可见
+    expect(screen.getByPlaceholderText(/可选：输入额外要求或上下文/)).toBeTruthy()
+    // 高级设置折叠器已删除
+    expect(screen.queryByText('高级设置')).toBeNull()
+  })
+
+  it('R5-C: 页脚固定显示状态摘要和开始生成', () => {
+    render(
+      <AddMaterialModal
+        open
+        onOpenChange={vi.fn()}
+        workspaceIds={['ws-1']}
+      />,
+    )
+    expect(screen.getByText('开始生成')).toBeTruthy()
+    // 页脚状态摘要包含“笔记”
+    const footer = document.body.querySelector('.m-foot')
+    expect(footer).toBeTruthy()
+    expect(footer!.textContent).toContain('笔记')
   })
 })

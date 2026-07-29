@@ -16,13 +16,17 @@
   justify-content: space-between;
   gap: 24px;
   margin-bottom: 20px;
-  padding: 20px 0 14px;
+  padding: 24px 0 14px;
   border-bottom: 1px solid var(--line);
 }
 .tb-head-l h1.display {
   font-size: clamp(1.9rem, 3.2vw, 2.8rem);
   margin: 0;
   line-height: 1.04;
+}
+/* R4-C: 防止左侧内容溢出 */
+.tb-head-l {
+  min-width: 0;
 }
 .tb-head-back {
   display: inline-flex;
@@ -145,8 +149,8 @@
   top: calc(100% + 4px);
   right: 0;
   min-width: 140px;
-  background: var(--bg-card, #fff);
-  border: 1px solid var(--border-subtle, #eee);
+  background: var(--srf);
+  border: 1px solid var(--bdr);
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.12);
   padding: 4px;
@@ -167,7 +171,7 @@
   transition: background 0.1s;
 }
 .tb-head-more-item:hover {
-  background: var(--bg-hover, #f5f5f5);
+  background: var(--ov-glass-54);
 }
 .tb-head-more-item:disabled {
   opacity: 0.4;
@@ -483,10 +487,10 @@
   margin-left: auto;
 }
 .mat-card[data-selected='true'] {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--acc);
   outline-offset: -1px;
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
-  background: color-mix(in oklch, var(--accent) 8%, var(--bg-card, #fff));
+  box-shadow: 0 0 0 4px color-mix(in oklch, var(--acc) 18%, transparent);
+  background: color-mix(in oklch, var(--acc) 8%, var(--srf));
 }
 .mat-select-chk {
   position: absolute;
@@ -586,7 +590,7 @@
   color: var(--ink);
   font-family: var(--mono);
   font-size: 36px;
-  font-weight: 900;
+  font-weight: 700;
   line-height: 1;
 }
 
@@ -714,7 +718,7 @@
   overflow: hidden;
   color: var(--ink);
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -802,7 +806,7 @@
 .qp-log-head {
   color: var(--ink-2);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .qp-log-empty {
@@ -866,6 +870,13 @@
 
   .qp-log {
     padding-left: 14px;
+  }
+}
+
+/* R4-C: 中等宽度头部换行 */
+@media (max-width: 900px) {
+  .tb-head {
+    flex-wrap: wrap;
   }
 }
 
@@ -1134,7 +1145,7 @@
   to   { opacity: 1 }
 }
 .tb-modal {
-  background: var(--bg-card, #fff);
+  background: var(--srf);
   border-radius: 14px;
   box-shadow: 0 16px 48px rgba(0,0,0,0.2);
   width: min(800px, 90vw);
@@ -1161,5 +1172,5 @@
   line-height: 1;
 }
 .tb-modal-close:hover {
-  background: var(--bg-hover, #f0f0f0);
+  background: var(--ov-glass-54);
 }

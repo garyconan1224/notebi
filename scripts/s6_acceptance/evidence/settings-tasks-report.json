@@ -1,0 +1,63 @@
+{
+  "generated_at": "2026-07-28T16:37:55.436Z",
+  "frontend": "http://127.0.0.1:5183",
+  "backend": "http://127.0.0.1:8003",
+  "summary": {
+    "total": 10,
+    "pass": 10,
+    "fail": 0
+  },
+  "checks": [
+    {
+      "name": "网络设置保存、GET 读回、刷新一致",
+      "status": "pass",
+      "detail": "HTTP=200 routing_mode=smart refresh=true"
+    },
+    {
+      "name": "网络响应不序列化废弃字段",
+      "status": "pass",
+      "detail": "废弃字段均不存在"
+    },
+    {
+      "name": "网络用途说明和四个测试入口常驻",
+      "status": "pass",
+      "detail": "智能分流、代理规则和实际目标测试可见"
+    },
+    {
+      "name": "下载设置保存、GET 读回、刷新一致",
+      "status": "pass",
+      "detail": "HTTP=200 concurrency=4 refresh=true"
+    },
+    {
+      "name": "下载响应不序列化废弃字段",
+      "status": "pass",
+      "detail": "废弃字段均不存在"
+    },
+    {
+      "name": "Cookie 教程和操作入口完整",
+      "status": "pass",
+      "detail": "测试、导入、删除及安全说明均可见"
+    },
+    {
+      "name": "统一任务中心入口",
+      "status": "pass",
+      "detail": "批量任务和单条任务共用 /tasks"
+    },
+    {
+      "name": "批量任务创建页默认笔记语义",
+      "status": "pass",
+      "detail": "创建页可用且没有恢复已删除的学习笔记 action"
+    },
+    {
+      "name": "合集工作台真实路由",
+      "status": "pass",
+      "detail": "url=http://127.0.0.1:5183/workspaces/6c13ef8c-41e6-4cb4-9508-11764e4b3839"
+    },
+    {
+      "name": "设置与任务中心 console error 为 0",
+      "status": "pass",
+      "detail": "console error=0"
+    }
+  ],
+  "console_errors": []
+}

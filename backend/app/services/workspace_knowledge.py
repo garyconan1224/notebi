@@ -51,6 +51,17 @@ def _items_hash(rec: WorkspaceRecord) -> str:
                 "updated": it.updated_at,
             }
             for it in rec.items
+        ]
+        + [
+            {
+                "id": note.merged_id,
+                "title": note.title,
+                "current_version_id": note.current_version_id,
+                "content_md": note.content_md,
+                "updated": note.updated_at,
+            }
+            for note in rec.merged_notes
+            if not note.deleted_at and note.current_version_id
         ],
         ensure_ascii=False,
         sort_keys=True,
@@ -122,8 +133,47 @@ def collect_workspace_json_paths(
             "workspace_id": workspace_id,
             "workspace_name": rec.name,
             "item_id": it.item_id,
+            "content_id": it.content_id,
+            "lineage_id": it.lineage_id,
             "item_type": it.type,
             "item_title": title,
+            "tags": sorted(
+                {
+                    str(tag)
+                    for values in it.tags.values()
+                    for tag in (values if isinstance(values, list) else [values])
+                    if str(tag).strip()
+                }
+            ),
+        }
+    for merged in rec.merged_notes:
+        if merged.deleted_at or not merged.current_version_id or not merged.content_md.strip():
+            continue
+        title = merged.title or "综合笔记"
+        obj = {
+            "item_id": merged.merged_id,
+            "content_id": merged.merged_id,
+            "lineage_id": merged.merged_id,
+            "item_type": "text",
+            "source_type": "merged_note",
+            "title": title,
+            "content_md": merged.content_md,
+        }
+        path = (dest / f"merged-{merged.merged_id}.json").resolve()
+        path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+        paths.append(path)
+        source_map[str(path)] = {
+            "workspace_id": workspace_id,
+            "workspace_name": rec.name,
+            "item_id": merged.merged_id,
+            "item_type": "text",
+            "item_title": title,
+            "source_type": "merged_note",
+            "jump_url": (
+                f"/workspaces/{workspace_id}?tab=merged"
+                f"&merged_id={merged.merged_id}"
+            ),
+            "tags": [],
         }
     return paths, source_map, rec
 
@@ -214,7 +264,12 @@ def build_or_load_workspace_index(
         task_store = TaskStore()
 
     items_with_data = [it for it in rec.items if _item_has_data(it, task_store)]
-    if not items_with_data:
+    merged_with_data = [
+        note
+        for note in rec.merged_notes
+        if not note.deleted_at and note.current_version_id and note.content_md.strip()
+    ]
+    if not items_with_data and not merged_with_data:
         raise ValueError(f"workspace {workspace_id} has no items with analysis results")
 
     cur_hash = _items_hash(rec)

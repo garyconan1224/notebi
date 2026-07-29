@@ -201,3 +201,54 @@ describe('taskStore smoke tests', () => {
     expect(t.progress).toBe(1.0)
   })
 })
+
+describe('taskStore removeTasks 精确移除（阶段 C）', () => {
+  beforeEach(() => {
+    useTaskStore.setState({ tasks: [], hiddenTaskIds: [], currentTaskId: null, isPolling: false })
+  })
+
+  it('removeTasks 精确移除一组 task ID，不影响同 workspace 其它素材任务', () => {
+    useTaskStore.getState().addTask(makeTask({ task_id: 't-a', project_id: 'ws-1' }))
+    useTaskStore.getState().addTask(makeTask({ task_id: 't-a-summary', project_id: 'ws-1' }))
+    useTaskStore.getState().addTask(makeTask({ task_id: 't-b', project_id: 'ws-1' }))
+
+    useTaskStore.getState().removeTasks(['t-a', 't-a-summary'])
+
+    const ids = useTaskStore.getState().tasks.map((t) => t.task_id)
+    expect(ids).toEqual(['t-b'])
+    // 被删任务进入隐藏集合，防止飞行中的旧轮询复活
+    expect(useTaskStore.getState().hiddenTaskIds).toContain('t-a')
+    expect(useTaskStore.getState().hiddenTaskIds).toContain('t-a-summary')
+    expect(useTaskStore.getState().hiddenTaskIds).not.toContain('t-b')
+  })
+
+  it('removeTasks 后被隐藏的 task 不会被 setTasks 重新同步回来', () => {
+    useTaskStore.getState().removeTasks(['t-gone'])
+    useTaskStore.getState().setTasks([
+      makeTask({ task_id: 't-gone' }),
+      makeTask({ task_id: 't-stay' }),
+    ])
+
+    expect(useTaskStore.getState().tasks.map((t) => t.task_id)).toEqual(['t-stay'])
+  })
+
+  it('removeTasks 空数组不改变状态', () => {
+    useTaskStore.getState().addTask(makeTask({ task_id: 't-keep' }))
+    const before = useTaskStore.getState().tasks.length
+
+    useTaskStore.getState().removeTasks([])
+
+    expect(useTaskStore.getState().tasks.length).toBe(before)
+  })
+
+  it('removeByProject 仍只用于整个 workspace 隐藏/删除场景', () => {
+    useTaskStore.getState().addTask(makeTask({ task_id: 't-ws1-a', project_id: 'ws-1' }))
+    useTaskStore.getState().addTask(makeTask({ task_id: 't-ws1-b', project_id: 'ws-1' }))
+    useTaskStore.getState().addTask(makeTask({ task_id: 't-ws2-a', project_id: 'ws-2' }))
+
+    useTaskStore.getState().removeByProject('ws-1')
+
+    const ids = useTaskStore.getState().tasks.map((t) => t.task_id)
+    expect(ids).toEqual(['t-ws2-a'])
+  })
+})

@@ -1,93 +1,9 @@
-export type ProductMode = 'nibi' | 'notebi' | 'replicabi'
-export type WorkspaceKind = 'note' | 'replica'
-
-export interface ProductConfig {
-  mode: ProductMode
-  name: string
-  allowedKinds: WorkspaceKind[]
-  defaultKind: WorkspaceKind
-  storagePrefix: string
-  showKnowledge: boolean
-  showReplica: boolean
-  showStoryboard: boolean
-  showDirector: boolean
-  showPromptFormat: boolean
-  allowReplicaCleanup: boolean
-}
-
-const PRODUCT_CONFIGS: Record<ProductMode, ProductConfig> = {
-  nibi: {
-    mode: 'nibi',
-    // 保留 legacy mode 与 storagePrefix，避免既有本地数据失效；所有界面统一显示 NoteBi。
-    name: 'NoteBi',
-    allowedKinds: ['note', 'replica'],
-    defaultKind: 'note',
-    storagePrefix: 'nibi',
-    showKnowledge: true,
-    showReplica: true,
-    showStoryboard: true,
-    showDirector: true,
-    showPromptFormat: true,
-    allowReplicaCleanup: false,
-  },
-  notebi: {
-    mode: 'notebi',
-    name: 'NoteBi',
-    allowedKinds: ['note'],
-    defaultKind: 'note',
-    storagePrefix: 'notebi',
-    showKnowledge: true,
-    showReplica: false,
-    showStoryboard: false,
-    showDirector: false,
-    showPromptFormat: false,
-    allowReplicaCleanup: true,
-  },
-  replicabi: {
-    mode: 'replicabi',
-    name: 'ReplicaBi',
-    allowedKinds: ['replica'],
-    defaultKind: 'replica',
-    storagePrefix: 'replicabi',
-    showKnowledge: false,
-    showReplica: true,
-    showStoryboard: true,
-    showDirector: true,
-    showPromptFormat: true,
-    allowReplicaCleanup: false,
-  },
-}
-
-export function resolveProductMode(rawMode: unknown): ProductMode {
-  const mode = String(rawMode ?? '').trim().toLowerCase()
-  if (mode === 'notebi' || mode === 'replicabi') return mode
-  return 'nibi'
-}
-
-export function getProductConfig(rawMode: unknown): ProductConfig {
-  return PRODUCT_CONFIGS[resolveProductMode(rawMode)]
-}
-
-export const productConfig = getProductConfig(import.meta.env.VITE_PRODUCT_MODE)
-
-export function isWorkspaceKindAllowed(kind?: string | null): kind is WorkspaceKind {
-  return productConfig.allowedKinds.includes((kind || '') as WorkspaceKind)
-}
-
-export function isFeatureEnabled(feature: keyof Pick<
-  ProductConfig,
-  | 'showKnowledge'
-  | 'showReplica'
-  | 'showStoryboard'
-  | 'showDirector'
-  | 'showPromptFormat'
-  | 'allowReplicaCleanup'
->): boolean {
-  return Boolean(productConfig[feature])
-}
+/** The application has one fixed product surface. */
+export const APP_NAME = 'NoteBi'
+const STORAGE_PREFIX = 'notebi'
 
 export function productStorageKey(key: string): string {
-  return `${productConfig.storagePrefix}-${key}`
+  return `${STORAGE_PREFIX}-${key}`
 }
 
 export function getProductStorageItem(key: string, legacyKey?: string): string | null {

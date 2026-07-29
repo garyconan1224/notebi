@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Trash2, RotateCcw, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   emptyWorkspaceTrash,
   listWorkspaces,
@@ -109,8 +110,10 @@ export default function TrashPage() {
       )}
 
       {loading ? (
-        <div className="rounded-md border border-border p-6 text-center text-sm text-muted-foreground">
-          加载中…
+        <div className="space-y-2" role="status" aria-label="加载中">
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-14 w-full" />
         </div>
       ) : items.length === 0 ? (
         <div className="rounded-md border border-dashed border-border p-12 text-center">

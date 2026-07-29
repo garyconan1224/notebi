@@ -53,18 +53,18 @@ def _check_required_paths(root: Path) -> list[str]:
     return errors
 
 
-def _check_frontend_product_mode(root: Path) -> list[str]:
-    """Reject a static bundle compiled in legacy Nibi mode."""
+def _check_frontend_build_marker(root: Path) -> list[str]:
+    """Reject a static bundle that was not built for NoteBi."""
 
     index_path = root / "frontend" / "dist" / "index.html"
     try:
         index = index_path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
         return [f"cannot read frontend/dist/index.html: {exc}"]
-    if 'name="notebi-product-mode" content="notebi"' not in index:
+    if 'name="notebi-build" content="1"' not in index:
         return [
-            "frontend/dist is not compiled for NoteBi mode; "
-            "rebuild with VITE_PRODUCT_MODE=notebi"
+            "frontend/dist is not a NoteBi build; "
+            "run ./build-notebi.sh to rebuild the frontend"
         ]
     return []
 
@@ -130,7 +130,7 @@ def check_offline_bundle(root: Path) -> list[str]:
     """Return human-readable errors for a Windows offline bundle."""
 
     root = root.resolve()
-    return _check_required_paths(root) + _check_frontend_product_mode(root) + _check_model_manifest(root)
+    return _check_required_paths(root) + _check_frontend_build_marker(root) + _check_model_manifest(root)
 
 
 def check_source_tree(root: Path) -> list[str]:

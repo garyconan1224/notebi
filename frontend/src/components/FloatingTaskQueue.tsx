@@ -4,6 +4,7 @@ import { RotateCcw, X } from 'lucide-react'
 import { useTaskStore } from '@/store/taskStore'
 import { usePipelineTasks } from '@/hooks/usePipelineTasks'
 import { deletePipelineTask } from '@/services/pipeline'
+import { cancelTaskBatch, pauseTaskBatch } from '@/services/taskBatches'
 import { PROCESSING_STAGES, isTaskTerminal, type TaskRecord } from '@/types/task'
 import { categorizeError } from '@/lib/errorCategories'
 import { toast } from 'sonner'
@@ -24,6 +25,7 @@ interface QueueRow {
   stage: string
   stageFull?: string
   workspaceId: string
+  batchId?: string
   itemId?: string
   failedTaskIds: string[]
   retryStage?: RetryStage
@@ -126,7 +128,9 @@ export function FloatingTaskQueue() {
     for (const task of tasks) {
       const payload = (task.payload ?? {}) as Record<string, unknown>
       const url = (payload?.url as string) || (payload?.source_url as string) || ''
-      const key = `${task.project_id}::${url || task.task_id}`
+      const key = task.batch_id
+        ? `batch:${task.batch_id}`
+        : `${task.project_id}::${url || task.task_id}`
       const group = groups.get(key) || []
       group.push(task)
       groups.set(key, group)
@@ -195,6 +199,7 @@ export function FloatingTaskQueue() {
           stage: getStageLabel(t.status, t.error || undefined),
           stageFull: t.error || undefined,
           workspaceId: t.project_id,
+          batchId: t.batch_id,
           itemId: payload?.item_id as string | undefined,
           failedTaskIds,
           retryStage,
@@ -212,16 +217,12 @@ export function FloatingTaskQueue() {
     ? Math.round(rows.reduce((a, r) => a + (r.progress || 0), 0) / total)
     : 0
 
-  const primaryWorkspaceId = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const row of rows) {
-      if (!row.workspaceId || row.workspaceId === 'default_project') continue
-      counts.set(row.workspaceId, (counts.get(row.workspaceId) ?? 0) + 1)
-    }
-    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? ''
-  }, [rows])
-
   const handleSelectTask = (row: QueueRow) => {
+    if (row.batchId) {
+      navigate(`/tasks/batches/${row.batchId}`)
+      setOpen(false)
+      return
+    }
     setCurrentTask(row.id)
     navigate(`/processing/${row.id}`, {
       state: {
@@ -248,6 +249,12 @@ export function FloatingTaskQueue() {
       }
       return
     }
+    if (row.batchId) {
+      void cancelTaskBatch(row.batchId).catch(() => {
+        toast.error('取消批次失败，请稍后重试')
+      })
+      return
+    }
     void cancelTask(row.id)
   }
 
@@ -257,9 +264,13 @@ export function FloatingTaskQueue() {
     }
   }
 
-  const cancelActive = (activeRows: QueueRow[]) => {
-    for (const row of activeRows) {
-      void cancelTask(row.id)
+  const pauseActiveBatches = async (activeRows: QueueRow[]) => {
+    const batchIds = Array.from(new Set(
+      activeRows.map((row) => row.batchId).filter((id): id is string => Boolean(id)),
+    ))
+    const results = await Promise.allSettled(batchIds.map((batchId) => pauseTaskBatch(batchId)))
+    if (results.some((result) => result.status === 'rejected')) {
+      toast.error('部分批次暂停失败，请稍后重试')
     }
   }
 
@@ -515,7 +526,7 @@ export function FloatingTaskQueue() {
               className="btn"
               style={{ flex: 1, height: 30, fontSize: 12 }}
               onClick={() => {
-                navigate(primaryWorkspaceId ? `/processing/batch/${primaryWorkspaceId}` : '/workspaces')
+                navigate('/tasks')
                 setOpen(false)
               }}
             >
@@ -524,10 +535,10 @@ export function FloatingTaskQueue() {
             <button
               className="btn"
               style={{ flex: 1, height: 30, fontSize: 12 }}
-              disabled={activeRows.length === 0}
-              onClick={() => cancelActive(activeRows)}
+              disabled={!activeRows.some((row) => row.batchId)}
+              onClick={() => void pauseActiveBatches(activeRows)}
             >
-              暂停全部
+              暂停批次
             </button>
             <button
               className="btn"

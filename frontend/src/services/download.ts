@@ -3,8 +3,8 @@
  *
  * 后端 `GET/POST /download_config` 统一返回完整 `DownloadConfigPayload`：
  *   {
- *     output_dir, filename_template, http_proxy, po_token, visitor_data,
- *     cookie_base_dirs: string[], concurrency_limit, retry_count, socket_timeout
+ *     output_dir, filename_template, proxy_mode, cookie_mode, cookie_browser,
+ *     cookie_profile, cookie_file_path, concurrency_limit, retry_count, socket_timeout
  *   }
  * POST 支持部分更新语义（字段为 null/undefined 时保留旧值，非空显式覆盖）。
  *
@@ -21,10 +21,11 @@ import { http } from './client'
 export interface DownloadConfigPayload {
   output_dir: string
   filename_template: string
-  http_proxy: string
-  po_token: string
-  visitor_data: string
-  cookie_base_dirs: string[]
+  proxy_mode: 'inherit' | 'direct' | 'proxy'
+  cookie_mode: 'none' | 'browser' | 'file'
+  cookie_browser: string
+  cookie_profile: string
+  cookie_file_path: string
   concurrency_limit: number
   retry_count: number
   socket_timeout: number
@@ -51,4 +52,3 @@ export async function updateDownloadConfig(
   const res = await http.post<DownloadConfigPayload>('/download_config', patch)
   return res.data
 }
-

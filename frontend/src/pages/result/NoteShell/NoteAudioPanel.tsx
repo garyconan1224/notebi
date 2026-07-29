@@ -56,6 +56,8 @@ interface NoteAudioPanelProps {
 export interface NoteAudioPanelHandle {
   seekTo: (sec: number) => void
   togglePlay: () => void
+  /** 可等待的播放：返回原生 play() Promise，调用者可感知自动播放拒绝。 */
+  play: () => Promise<void>
   readonly isPlaying: boolean
   readonly currentTime: number
   readonly duration: number
@@ -342,9 +344,29 @@ const NoteAudioPanel = forwardRef<NoteAudioPanelHandle, NoteAudioPanelProps>(
       seekTo(sec: number) {
         const a = audioRef.current
         if (!a) return
-        a.currentTime = Math.max(0, Math.min(a.duration || 0, sec))
+        const applySeek = () => {
+          const dur = a.duration
+          // duration 非有限值或为 0 时不能钳制到 0：直接设置目标时间，
+          // 浏览器会在元数据就绪后从该位置播放。
+          a.currentTime = Number.isFinite(dur) && dur > 0 ? Math.max(0, Math.min(dur, sec)) : Math.max(0, sec)
+        }
+        if (Number.isFinite(a.duration) && a.duration > 0) {
+          applySeek()
+          return
+        }
+        // 元数据未就绪：等 loadedmetadata 后再 seek，绝不提前钳制到 0。
+        const onMeta = () => {
+          a.removeEventListener('loadedmetadata', onMeta)
+          applySeek()
+        }
+        a.addEventListener('loadedmetadata', onMeta)
       },
       togglePlay,
+      play() {
+        const a = audioRef.current
+        if (!a) return Promise.resolve()
+        return a.play()
+      },
       get isPlaying() {
         return playing
       },

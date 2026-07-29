@@ -2,7 +2,8 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { createBrowserRouter, Navigate, redirect } from 'react-router-dom'
 import Index from '@/pages/Index'
-import { isFeatureEnabled, productConfig, type WorkspaceKind } from '@/config/product'
+import RouteErrorPage from '@/components/RouteErrorPage'
+import { Skeleton } from '@/components/ui/skeleton'
 
 // 按路由做代码分割：每个页面组件通过动态 import 拆成独立 chunk
 const SettingPage = lazy(() => import('@/pages/SettingPage/index'))
@@ -34,17 +35,25 @@ const ResultsOverview = lazy(() => import('@/pages/result/ResultsOverview/index'
 const FavoritesPage = lazy(() => import('@/pages/FavoritesPage/FavoritesPage'))
 const SearchPage = lazy(() => import('@/pages/SearchPage/SearchPage'))
 const WorkbenchPage = lazy(() => import('@/pages/WorkbenchPage/index'))
-const KnowledgePage = lazy(() => import('@/pages/KnowledgePage/index'))
 const ProcessingPage = lazy(() => import('@/pages/result/ProcessingPage/index'))
-const BatchProcessingPage = lazy(() => import('@/pages/result/BatchProcessingPage/index'))
-const StoryboardPage = lazy(() => import('@/pages/StoryboardPage/index'))
 const LibraryPage = lazy(() => import('@/pages/LibraryPage/index'))
 const NoteShell = lazy(() => import('@/pages/result/NoteShell/index'))
+const TaskCenterPage = lazy(() => import('@/pages/TaskCenterPage/index'))
+const BatchCreatePage = lazy(() => import('@/pages/TaskCenterPage/BatchCreatePage'))
+const BatchDetailPage = lazy(() => import('@/pages/TaskCenterPage/BatchDetailPage'))
 
-// 懒加载 fallback：保持极简，避免把额外依赖拉进主 chunk
+// 懒加载 fallback：骨架屏替代纯文本（Skeleton 仅依赖 cn，不增加主 chunk 负担）
 const RouteFallback = () => (
-  <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
-    Loading…
+  <div className="flex h-full w-full flex-col gap-3 p-8" role="status" aria-label="页面加载中">
+    <Skeleton className="h-7 w-56" />
+    <Skeleton className="h-4 w-full max-w-xl" />
+    <Skeleton className="h-4 w-4/5 max-w-lg" />
+    <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <Skeleton className="h-32 rounded-lg" />
+      <Skeleton className="h-32 rounded-lg" />
+      <Skeleton className="h-32 rounded-lg" />
+      <Skeleton className="h-32 rounded-lg" />
+    </div>
   </div>
 )
 
@@ -52,34 +61,33 @@ const withSuspense = (node: ReactNode) => (
   <Suspense fallback={<RouteFallback />}>{node}</Suspense>
 )
 
-const fallbackLibraryPath = productConfig.defaultKind === 'replica' ? '/replicas' : '/notes'
-
-function guardRoute(enabled: boolean, node: ReactNode, fallback = '/'): ReactNode {
-  return enabled ? node : <Navigate to={fallback} replace />
-}
-
-function guardKindRoute(kind: WorkspaceKind, node: ReactNode): ReactNode {
-  return guardRoute(productConfig.allowedKinds.includes(kind), node, fallbackLibraryPath)
-}
-
 // React Router v7 Data Router 定义；URL 与原 BrowserRouter + Routes + Route 完全一致。
 export const router = createBrowserRouter([
   {
     path: '/',
     element: <Index />,
+    errorElement: <RouteErrorPage />,
     children: [
       { index: true, element: withSuspense(<WorkbenchPage />) },
       { path: 'new', element: <Navigate to="/" replace /> },
       {
         path: 'workspaces',
-        element: guardRoute(productConfig.mode === 'nibi', withSuspense(<WorkspaceList />), fallbackLibraryPath),
+        element: withSuspense(<WorkspaceList />),
       },
       { path: 'favorites', element: withSuspense(<FavoritesPage />) },
-      { path: 'search', element: withSuspense(<SearchPage />) },
+      { path: 'knowledge', element: withSuspense(<SearchPage />) },
+      {
+        path: 'search',
+        loader: ({ request }) => {
+          const url = new URL(request.url)
+          return redirect(`/knowledge${url.search}`)
+        },
+      },
       { path: 'library', element: withSuspense(<LibraryPage />) },
-      { path: 'notes', element: guardKindRoute('note', withSuspense(<LibraryPage kind="note" />)) },
-      { path: 'replicas', element: guardKindRoute('replica', withSuspense(<LibraryPage kind="replica" />)) },
-      { path: 'knowledge', element: guardRoute(isFeatureEnabled('showKnowledge'), withSuspense(<KnowledgePage />)) },
+      { path: 'notes', element: withSuspense(<LibraryPage />) },
+      { path: 'tasks', element: withSuspense(<TaskCenterPage />) },
+      { path: 'tasks/new', element: withSuspense(<BatchCreatePage />) },
+      { path: 'tasks/batches/:batchId', element: withSuspense(<BatchDetailPage />) },
       { path: 'workspaces/:id', element: withSuspense(<TaskboardPage />) },
       {
         path: 'workspaces/:workspaceId/items/:itemId/overview',
@@ -104,7 +112,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'workspaces/:workspaceId/items/:itemId/note',
-        element: guardKindRoute('note', withSuspense(<NoteShell />)),
+        element: withSuspense(<NoteShell />),
       },
       // 旧路由兼容（保留一个 release，loader redirect 到新路径）
       {
@@ -125,13 +133,12 @@ export const router = createBrowserRouter([
       },
       {
         path: 'processing/batch/:workspaceId',
-        element: withSuspense(<BatchProcessingPage />),
+        loader: () => redirect('/tasks'),
       },
       {
         path: 'processing/:taskId',
         element: withSuspense(<ProcessingPage />),
       },
-      { path: 'storyboard', element: guardRoute(isFeatureEnabled('showStoryboard'), withSuspense(<StoryboardPage />)) },
       {
         path: 'settings',
         element: withSuspense(<SettingPage />),
@@ -153,7 +160,6 @@ export const router = createBrowserRouter([
           { path: 'models', element: <Navigate to="/settings/providers-models" replace /> },
           { path: 'screenshot', element: <Navigate to="/settings/analysis-defaults" replace /> },
           { path: 'transcriber', element: <Navigate to="/settings/analysis-defaults" replace /> },
-          { path: 'prompt-formats', element: <Navigate to="/settings/analysis-defaults" replace /> },
           { path: '*', element: withSuspense(<NotFoundPage />) },
         ],
       },

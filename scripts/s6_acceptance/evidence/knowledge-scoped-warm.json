@@ -1,0 +1,102 @@
+{
+  "http_status": 200,
+  "total_time_sec": 90.996809,
+  "answer": "根据提供的资料，高手使用AI的核心方法主要体现在与普通用户不同的使用方式上，具体包括：\n\n1. **超越基础对话**：高手不局限于使用像ChatGPT这样的通用对话模型，而是采用更专业或定制化的AI工具来满足特定需求[source:7ecf92bb52f48d6c]。\n2. **注重实践与场景化应用**：高手会将AI深度融入实际工作或生活场景中，通过具体案例提升效率或解决问题，而非仅进行泛泛的问答[source:ac61dce59c14db06]。\n3. **经验借鉴与学习**：身边的高手使用AI的方法可以作为参考，表明核心方法往往来源于实践经验的积累和优化[source:79adbb3ce783a785]。\n\n总之，高手使用AI的核心在于**专业化、场景化和实践化**，而非仅依赖通用工具的基础功能。",
+  "answer_status": "complete",
+  "citations": [
+    {
+      "number": 1,
+      "source_id": "7ecf92bb52f48d6c"
+    },
+    {
+      "number": 2,
+      "source_id": "ac61dce59c14db06"
+    },
+    {
+      "number": 3,
+      "source_id": "79adbb3ce783a785"
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "7ecf92bb52f48d6c",
+      "workspace_id": "c77afb23-b376-4dc0-9720-034f7750685a",
+      "workspace_name": "新笔记合集",
+      "item_id": "41469d2e-5fc5-407f-8700-c7a42a009e68",
+      "content_id": "c589ffc8-bf46-4414-baa1-d2e0bc8fb0fb",
+      "lineage_id": "5a7d73a6-277d-57d4-9c48-bfeaf8cc495a",
+      "item_type": "audio",
+      "source_type": "transcript",
+      "item_title": "【十字路口】高手怎么用 AI？——停止用 ChatGPT 吧｜Koji 对谈课代表立正（上）【视频播客】.m4a",
+      "excerpt": "所以听起来高手用AI",
+      "chunk_excerpt": "所以听起来高手用AI",
+      "field": "transcript",
+      "segment_id": "transcript-90",
+      "segment": "transcript-90",
+      "start_ms": 184640,
+      "end_ms": 186560,
+      "score": 0.878920316696167,
+      "jump_url": "/workspaces/c77afb23-b376-4dc0-9720-034f7750685a/items/41469d2e-5fc5-407f-8700-c7a42a009e68/note?start_ms=184640&field=transcript&segment=transcript-90"
+    },
+    {
+      "source_id": "ac61dce59c14db06",
+      "workspace_id": "c77afb23-b376-4dc0-9720-034f7750685a",
+      "workspace_name": "新笔记合集",
+      "item_id": "41469d2e-5fc5-407f-8700-c7a42a009e68",
+      "content_id": "c589ffc8-bf46-4414-baa1-d2e0bc8fb0fb",
+      "lineage_id": "5a7d73a6-277d-57d4-9c48-bfeaf8cc495a",
+      "item_type": "audio",
+      "source_type": "transcript",
+      "item_title": "【十字路口】高手怎么用 AI？——停止用 ChatGPT 吧｜Koji 对谈课代表立正（上）【视频播客】.m4a",
+      "excerpt": "高手用AI到底有哪些不一样",
+      "chunk_excerpt": "高手用AI到底有哪些不一样",
+      "field": "transcript",
+      "segment_id": "transcript-49",
+      "segment": "transcript-49",
+      "start_ms": 105760,
+      "end_ms": 108320,
+      "score": 0.7265021204948425,
+      "jump_url": "/workspaces/c77afb23-b376-4dc0-9720-034f7750685a/items/41469d2e-5fc5-407f-8700-c7a42a009e68/note?start_ms=105760&field=transcript&segment=transcript-49"
+    },
+    {
+      "source_id": "79adbb3ce783a785",
+      "workspace_id": "c77afb23-b376-4dc0-9720-034f7750685a",
+      "workspace_name": "新笔记合集",
+      "item_id": "41469d2e-5fc5-407f-8700-c7a42a009e68",
+      "content_id": "c589ffc8-bf46-4414-baa1-d2e0bc8fb0fb",
+      "lineage_id": "5a7d73a6-277d-57d4-9c48-bfeaf8cc495a",
+      "item_type": "audio",
+      "source_type": "transcript",
+      "item_title": "【十字路口】高手怎么用 AI？——停止用 ChatGPT 吧｜Koji 对谈课代表立正（上）【视频播客】.m4a",
+      "excerpt": "我身边有一个高手用AI",
+      "chunk_excerpt": "我身边有一个高手用AI",
+      "field": "transcript",
+      "segment_id": "transcript-117",
+      "segment": "transcript-117",
+      "start_ms": 232080,
+      "end_ms": 234400,
+      "score": 0.6086449027061462,
+      "jump_url": "/workspaces/c77afb23-b376-4dc0-9720-034f7750685a/items/41469d2e-5fc5-407f-8700-c7a42a009e68/note?start_ms=232080&field=transcript&segment=transcript-117"
+    }
+  ],
+  "status": {
+    "ready": false,
+    "running": false,
+    "workspace_count": 3,
+    "indexable_workspace_count": 3,
+    "indexed_workspace_count": 2,
+    "item_count": 23,
+    "indexed_item_count": 4,
+    "stale_workspace_ids": [
+      "__inbox__"
+    ],
+    "last_indexed_at": null,
+    "embedding_model": "BAAI/bge-m3",
+    "rebuild": {
+      "running": false,
+      "started_at": null,
+      "finished_at": null,
+      "error": null
+    }
+  }
+}

@@ -3,8 +3,10 @@ from __future__ import annotations
 """Phase 1H — 图片结果页端点测试。
 
 覆盖：
-  GET happy path 返回 demo fixture（含 prompts / tags / exif）
+  GET happy path 返回 demo fixture（含 description / tags / exif / dimensions）
   GET 404 workspace 不存在
+
+Phase 5 后新契约：视觉理解字段（description/OCR/tags），不再含 prompts。
 """
 
 from pathlib import Path
@@ -49,11 +51,9 @@ def test_image_result_happy_path(client: TestClient) -> None:
     assert body["source"] == "demo_fixture"
     assert "image_url" in body["image"]
     assert body["image"]["item_id"] == item_id
-    # prompts 结构
-    assert "mj" in body["prompts"]
-    assert "sd" in body["prompts"]
-    assert "positive" in body["prompts"]["sd"]
-    # tags 结构
+    # Phase 5 新契约：不再含 prompts
+    assert "prompts" not in body
+    # tags 结构（视觉理解）
     for key in ("subject", "scene", "style", "lighting", "color", "composition", "lens"):
         assert key in body["tags"]
     # exif
@@ -73,3 +73,21 @@ def test_image_result_404_workspace_not_found(client: TestClient) -> None:
     resp = client.get("/workspaces/nonexistent/items/anything/image_result")
     assert resp.status_code == 404
     assert "workspace not found" in resp.json()["detail"]
+
+
+def test_image_compare_omits_legacy_prompts(client: TestClient) -> None:
+    """Legacy prompt artifacts must not be exposed by the retained image compare API."""
+    ws_id, item_id = _create_image_workspace(client)
+    rec = ws_module._store.get(ws_id)
+    assert rec is not None
+    rec.items[0].results = {
+        "description": "真实画面描述",
+        "tags": {"subject": ["山"]},
+        "prompts": {"mj": "legacy prompt"},
+    }
+    ws_module._store.update(ws_id, items=rec.items)
+
+    response = client.get(f"/workspaces/{ws_id}/items/{item_id}/image_compare")
+
+    assert response.status_code == 200
+    assert "prompts" not in response.json()["images"][0]

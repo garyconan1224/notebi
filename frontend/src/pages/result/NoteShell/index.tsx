@@ -11,9 +11,10 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Bold, BookOpenCheck, Brain, Camera, Check, ChevronDown, Code2, Download, ExternalLink, FileDown, FileText, FileType, Image, Italic, List, MessageCircle, Minus, Pause, Pencil, Play, Plus, Presentation, Sparkles, Strikethrough, Subtitles, Trash2, Type, Underline, X } from 'lucide-react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { ArrowLeft, Bold, BookOpenCheck, Brain, Camera, Check, ChevronDown, Code2, Download, ExternalLink, FileDown, FileText, FileType, History, Image, Italic, List, MessageCircle, Minus, Pause, Pencil, Play, Plus, Presentation, Sparkles, Strikethrough, Subtitles, Trash2, Type, Underline, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { Skeleton } from '@/components/ui/skeleton'
 
 import { downloadItemNoteExport, downloadTranscript, exportItemNoteObsidian, getItemNote, putItemNote, updateSpeakerMap, type ItemNoteExportFormat, type TranscriptExportMode } from '@/services/workspaces'
 import type { VideoResultTranscriptLine } from '@/services/workspaces'
@@ -30,6 +31,7 @@ import MilkdownEditor from './MilkdownEditor'
 import LNVideoPanel, { type LNVideoPanelHandle } from '@/pages/results/LearningNotesPage/LNVideoPanel'
 import LNTranscriptPanel from '@/pages/results/LearningNotesPage/LNTranscriptPanel'
 import NoteAudioPanel, { type NoteAudioPanelHandle } from './NoteAudioPanel'
+import { NoteHistoryPanel } from './NoteHistoryPanel'
 import '@/pages/results/LearningNotesPage/learning-notes.css'
 import './note-shell.css'
 import { NewSummaryModal } from '@/components/NewSummaryModal'
@@ -454,6 +456,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [exportBusy, setExportBusy] = useState<NoteExportBusy | null>(null)
   const [immersiveOpen, setImmersiveOpen] = useState(false)
   const [sourceMdOpen, setSourceMdOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   // VN4.3 AI 工具下拉
   const [aiToolsOpen, setAiToolsOpen] = useState(false)
   const aiToolsDropRef = useRef<HTMLDivElement>(null)
@@ -464,6 +467,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [operationNotice, setOperationNotice] = useState<OperationNotice | null>(null)
   // 新建总结（复用 NewSummaryModal）
   const [showNewSummaryModal, setShowNewSummaryModal] = useState(false)
+  // AI 工具菜单常用模板快捷项预选值；undefined 表示用 note.summary_hint 默认模板
+  const [newSummaryTemplate, setNewSummaryTemplate] = useState<string | undefined>(undefined)
   const [creatingSummary, setCreatingSummary] = useState(false)
   const [creatingSummaryTaskId, setCreatingSummaryTaskId] = useState<string | null>(null)
   const [retryingAutoSummary, setRetryingAutoSummary] = useState(false)
@@ -854,6 +859,36 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     return () => document.removeEventListener('mousedown', handle)
   }, [aiToolsOpen])
 
+  // 点击外部关闭导出下拉
+  useEffect(() => {
+    if (!exportOpen) return
+    const handle = (e: MouseEvent) => {
+      if (exportDropRef.current && !exportDropRef.current.contains(e.target as Node)) {
+        setExportOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [exportOpen])
+
+  // Escape 关闭导出/AI 菜单并把焦点还给触发按钮
+  useEffect(() => {
+    if (!exportOpen && !aiToolsOpen) return
+    const handle = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (exportOpen) {
+        setExportOpen(false)
+        exportDropRef.current?.querySelector('button')?.focus()
+      }
+      if (aiToolsOpen) {
+        setAiToolsOpen(false)
+        aiToolsDropRef.current?.querySelector('button')?.focus()
+      }
+    }
+    document.addEventListener('keydown', handle)
+    return () => document.removeEventListener('keydown', handle)
+  }, [exportOpen, aiToolsOpen])
+
   useEffect(() => {
     if (!editorPrefsOpen) return
     const handle = (e: MouseEvent) => {
@@ -876,6 +911,41 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     audioRef.current?.seekTo(sec)
     mediaCompanionRef.current?.seekTo(sec)
   }, [])
+
+  // R2-D: 知识库深链接 — 读取 start_ms，等播放器 handle 就绪后只消费一次
+  const [searchParams] = useSearchParams()
+  const deepLinkConsumed = useRef(false)
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false)
+
+  useEffect(() => {
+    if (deepLinkConsumed.current) return
+    if (loading || !note) return
+    const startMs = searchParams.get('start_ms')
+    if (!startMs) return
+    const sec = parseInt(startMs, 10) / 1000
+    if (!Number.isFinite(sec) || sec < 0) return
+
+    // 依据笔记类型选择对应播放器 handle；尚未挂载则不消费，等下次渲染再试。
+    const noteType = String(((note.frontmatter ?? {}) as Record<string, unknown>).type ?? '')
+    const handle =
+      noteType === 'audio'
+        ? audioRef.current
+        : noteType === 'video'
+          ? videoRef.current
+          : (audioRef.current ?? videoRef.current)
+    if (!handle) return
+
+    // handle 已挂载 → 消费参数。seekTo 内部会等 metadata，duration 无效时不钳制到 0。
+    deepLinkConsumed.current = true
+    setAutoplayBlocked(false)
+    handleSeek(sec)
+
+    // 暴露可等待的 play()；自动播放被拒绝时保留目标时间并显示“点击播放”提示。
+    const playPromise = handle.play ? handle.play() : null
+    if (playPromise && typeof playPromise.catch === 'function') {
+      playPromise.catch(() => setAutoplayBlocked(true))
+    }
+  }, [loading, note, searchParams, handleSeek, audioDuration, videoDuration])
 
   const transcriptLines = useMemo<VideoResultTranscriptLine[]>(() => (
     Array.isArray(note?.transcript) ? note.transcript as VideoResultTranscriptLine[] : []
@@ -1110,7 +1180,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     setExportBusy(busyKey)
     try {
       await withStatusToast(
-        () => downloadTranscript(workspaceId, itemId, mode),
+        () => downloadTranscript(workspaceId, itemId, mode, exportTitle),
         {
           id: `note-export-transcript-${mode}`,
           loading: `正在导出${label}…`,
@@ -1314,8 +1384,9 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   // ─── loading / error ───
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--mut)' }}>
-        加载中…
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 12, height: '100%', padding: 24 }} role="status" aria-label="加载中">
+        <Skeleton className="h-5 w-48" />
+        <Skeleton className="h-4 w-64" />
       </div>
     )
   }
@@ -1423,11 +1494,16 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const sourceMarker = sourceMarkerFromUrl(sourceUrl)
   const mediaDuration = isVideoNote ? effectiveVideoDuration : isAudioNote ? effectiveAudioDuration : 0
   const saveStatusNode = (
-    <span className={`nibi-note-save nibi-note-save--${saveStatus}`}>
-      {saveStatus === 'saving' && '保存中…'}
-      {saveStatus === 'saved' && `已保存 ${savedAt}`}
-      {saveStatus === 'failed' && '保存失败'}
-      {saveStatus === 'idle' && '自动保存'}
+    <span className="nibi-note-save-actions">
+      <span className={`nibi-note-save nibi-note-save--${saveStatus}`}>
+        {saveStatus === 'saving' && '保存中…'}
+        {saveStatus === 'saved' && `已保存 ${savedAt}`}
+        {saveStatus === 'failed' && '保存失败'}
+        {saveStatus === 'idle' && '自动保存'}
+      </span>
+      <button className="btn-ghost" onClick={() => setHistoryOpen(true)}>
+        <History size={13} />版本历史
+      </button>
     </span>
   )
   const noteMetaRows = [
@@ -1469,6 +1545,34 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
 
   return (
     <div className={`nibi-note-shell nibi-note-shell--${itemType}`}>
+      {/* R2-D: 自动播放被拒绝时保留目标时间并提示点击播放 */}
+      {autoplayBlocked && (
+        <button
+          type="button"
+          data-testid="deeplink-autoplay-hint"
+          onClick={() => {
+            const handle = audioRef.current ?? videoRef.current
+            const p = handle?.play ? handle.play() : null
+            if (p && typeof p.catch === 'function') p.catch(() => {})
+            setAutoplayBlocked(false)
+          }}
+          style={{
+            display: 'block',
+            width: '100%',
+            padding: '8px 16px',
+            border: 'none',
+            borderBottom: '1px solid var(--bdr)',
+            background: 'var(--acc-soft, #eef6ff)',
+            color: 'var(--acc, #2563eb)',
+            fontSize: 13,
+            fontWeight: 500,
+            textAlign: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          自动播放被阻止，已停在目标时间，点击播放
+        </button>
+      )}
       {/* ════════ 顶栏：.note-bar（设计稿 .note-bar 对齐） ════════ */}
       <div className="nibi-note-bar">
         <button className="nibi-note-bar-back" onClick={() => navigate(-1)} title="返回任务中心">
@@ -1691,18 +1795,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
               <ExternalLink size={14} /> 原视频
             </a>
           )}
-          {note.source_md && (
-            <button
-              className="nibi-note-bar-btn nibi-note-bar-btn--label"
-              onClick={() => {
-                setExportOpen(false)
-                setSourceMdOpen(true)
-              }}
-              title="查看原始素材 Markdown"
-            >
-              <FileText size={14} /> 原始素材
-            </button>
-          )}
           <div style={{ position: 'relative' }} ref={exportDropRef}>
             <button
               className="nibi-note-bar-btn nibi-note-bar-btn--label"
@@ -1716,37 +1808,58 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
             </button>
             {exportOpen && (
               <div className="nibi-note-export-menu">
+                {/* 组一：笔记正文 */}
+                <div className="nibi-note-export-group-label">笔记正文</div>
                 <button className="nibi-note-export-item" onClick={handleExportMarkdown} disabled={!!exportBusy}>
                   <FileText size={15} />
-                  <span>{exportBusy === 'markdown' ? '导出中…' : '当前正文.md'}</span>
+                  <span>{exportBusy === 'markdown' ? '导出中…' : 'Markdown'}</span>
                 </button>
-                <button className="nibi-note-export-item" onClick={handleExportObsidian} disabled={!!exportBusy}>
-                  <BookOpenCheck size={15} />
-                  <span>{exportBusy === 'obsidian' ? '导出中…' : 'Obsidian 包'}</span>
+                <button className="nibi-note-export-item" onClick={() => handleDownloadNoteExport('html')} disabled={!!exportBusy}>
+                  <FileText size={15} />
+                  <span>{exportBusy === 'html' ? '导出中…' : 'HTML'}</span>
                 </button>
+
+                {/* 组二：转录与原始内容 */}
+                <div className="nibi-note-export-group-label">转录与原始内容</div>
                 {(isVideoNote || isAudioNote) && (
                   <button className="nibi-note-export-item" onClick={() => handleExportTranscript('article')} disabled={!!exportBusy}>
                     <Subtitles size={15} />
-                    <span>{exportBusy === 'transcript_article' ? '导出中…' : `${title} · 转写文本`}</span>
+                    <span>{exportBusy === 'transcript_article' ? '导出中…' : '转写文本'}</span>
                   </button>
                 )}
                 {(isVideoNote || isAudioNote) && (
                   <button className="nibi-note-export-item" onClick={() => handleExportTranscript('speaker_grouped')} disabled={!!exportBusy}>
                     <Subtitles size={15} />
-                    <span>{exportBusy === 'transcript_speakers' ? '导出中…' : `${title} · 转写文本（区分说话人）`}</span>
+                    <span>{exportBusy === 'transcript_speakers' ? '导出中…' : '转写文本（区分说话人）'}</span>
                   </button>
                 )}
+                {note.source_md && (
+                  <button
+                    className="nibi-note-export-item"
+                    onClick={() => {
+                      setExportOpen(false)
+                      setSourceMdOpen(true)
+                    }}
+                    disabled={!!exportBusy}
+                  >
+                    <FileText size={15} />
+                    <span>原始素材</span>
+                  </button>
+                )}
+
+                {/* 组三：整理与展示 */}
+                <div className="nibi-note-export-group-label">整理与展示</div>
                 {[
-                  { icon: <FileText size={15} />, label: 'HTML', format: 'html' as const },
                   { icon: <FileDown size={15} />, label: 'PDF', format: 'pdf' as const },
                   { icon: <FileType size={15} />, label: 'Word', format: 'docx' as const },
                   { icon: <Image size={15} />, label: '长图', format: 'long_image' as const },
                   { icon: <Presentation size={15} />, label: 'PPT', format: 'pptx' as const },
+                  { icon: <BookOpenCheck size={15} />, label: 'Obsidian 包', format: 'obsidian' as const },
                 ].map((item) => (
                   <button
                     key={item.label}
                     className="nibi-note-export-item"
-                    onClick={() => handleDownloadNoteExport(item.format)}
+                    onClick={() => (item.format === 'obsidian' ? handleExportObsidian() : handleDownloadNoteExport(item.format))}
                     disabled={!!exportBusy}
                   >
                     {item.icon}
@@ -1775,19 +1888,56 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
               <Brain size={14} /> AI 工具<ChevronDown size={11} />
             </button>
             {aiToolsOpen && (
-              <div style={{ position: 'absolute', right: 0, top: 34, zIndex: 20, minWidth: 180, padding: '4px', border: '1px solid var(--bdr)', borderRadius: 'var(--radius-sm)', background: 'var(--bg)', boxShadow: 'var(--shadow-md)' }}>
+              <div className="nibi-note-ai-menu">
                 <button
-                  className="btn-ghost"
+                  className="nibi-note-ai-action"
                   onClick={() => {
-                    setAskAiOpen(true)
                     setAiToolsOpen(false)
+                    setAskAiOpen(true)
                   }}
-                  style={{ width: '100%', justifyContent: 'flex-start', height: 30, padding: '0 10px', fontSize: 12 }}
                 >
-                  <MessageCircle size={13} />
-                  基于当前笔记问 AI
+                  <MessageCircle size={16} />
+                  <div>
+                    <div className="nibi-note-ai-action-title">问 AI</div>
+                    <div className="nibi-note-ai-action-desc">基于当前笔记与转写证据继续提问</div>
+                  </div>
                 </button>
-                <button className="btn-ghost" disabled title="即将上线" style={{ width: '100%', justifyContent: 'flex-start', height: 30, padding: '0 10px', fontSize: 12, color: 'var(--mut)', cursor: 'not-allowed' }}>更多 AI 工具</button>
+                <button
+                  className="nibi-note-ai-action"
+                  onClick={() => {
+                    setAiToolsOpen(false)
+                    setNewSummaryTemplate(undefined)
+                    setShowNewSummaryModal(true)
+                  }}
+                >
+                  <Sparkles size={16} />
+                  <div>
+                    <div className="nibi-note-ai-action-title">生成新总结</div>
+                    <div className="nibi-note-ai-action-desc">选择模板并生成一个新的总结版本</div>
+                  </div>
+                </button>
+                <div className="nibi-note-ai-quick">
+                  <span className="nibi-note-ai-quick-label">常用模板</span>
+                  {[
+                    { value: 'standard', label: '标准总结' },
+                    { value: 'detailed', label: '详细要点' },
+                    { value: 'outline', label: '大纲' },
+                    { value: 'qa', label: '问答卡' },
+                    { value: 'actions', label: '行动清单' },
+                  ].map((tpl) => (
+                    <button
+                      key={tpl.value}
+                      className="nibi-note-ai-quick-chip"
+                      onClick={() => {
+                        setAiToolsOpen(false)
+                        setNewSummaryTemplate(tpl.value)
+                        setShowNewSummaryModal(true)
+                      }}
+                    >
+                      {tpl.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -2575,12 +2725,15 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
       {showNewSummaryModal && (
         <NewSummaryModal
           creating={creatingSummary}
-          defaultTemplate={note.summary_hint?.default_template}
+          defaultTemplate={newSummaryTemplate ?? note.summary_hint?.default_template}
           allowSpeakerAware={isAudioNote || (isVideoNote && speakerIds.length > 0)}
           speakerAwareAvailable={speakerIds.length > 0}
           templateCategory={isAudioNote ? 'style_audio' : 'style_video_with_frames'}
           onSubmit={handleCreateSummary}
-          onClose={() => setShowNewSummaryModal(false)}
+          onClose={() => {
+            setShowNewSummaryModal(false)
+            setNewSummaryTemplate(undefined)
+          }}
         />
       )}
       <SourceMdModal
@@ -2589,6 +2742,21 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         onClose={() => setSourceMdOpen(false)}
         onDownload={handleDownloadSourceMd}
         downloading={exportBusy === 'source_md'}
+      />
+      <NoteHistoryPanel
+        open={historyOpen}
+        workspaceId={workspaceId}
+        itemId={itemId}
+        onClose={() => setHistoryOpen(false)}
+        onRestored={(updated) => {
+          setNote(updated)
+          switchEditorBody(extractEditableBody(
+            updated.note_md,
+            String(updated.frontmatter?.type ?? ''),
+          ))
+          setSaveStatus('saved')
+          setSavedAt(formatTime(new Date()))
+        }}
       />
     </div>
   )

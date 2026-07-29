@@ -6,7 +6,6 @@
 //   - 出错由 axios 抛，调用方用 try/catch 或 react-query 的 error 处理
 
 import { http } from './client'
-import type { WorkspaceKind } from '@/config/product'
 import type {
   ItemAddRequest,
   ItemNote,
@@ -20,49 +19,151 @@ import type {
 
 const BASE = '/workspaces'
 
-export interface WorkspaceKindSummary {
-  note_count: number
-  replica_count: number
-  note_items: number
-  replica_items: number
+export interface FavoriteGroup {
+  group_id: string
+  name: string
+  item_count: number
 }
 
-export interface WorkspaceKindCleanupResponse {
-  kind: 'replica'
-  mode: 'trash'
-  count: number
-  workspace_ids: string[]
+export interface FavoriteGroupItem {
+  workspace_id: string
+  content_id: string
+  note: string
+  created_at: string
+}
+
+export interface ResolvedFavorite {
+  workspace_id: string
+  workspace_name: string
+  item_id: string
+  content_id: string
+  item_name: string
+  item_type: string
+  group_ids: string[]
+  favorited_at: string
+  jump_url: string
+}
+
+export interface WorkspaceFolder {
+  folder_id: string
+  workspace_id: string
+  parent_id?: string | null
+  name: string
+}
+
+export interface NoteVersion {
+  version_id: string
+  content_id: string
+  version_no: number
+  content_hash: string
+  source: 'BASELINE' | 'USER_EDIT' | 'RESTORE' | 'ADOPT_FROM_SIBLING'
+  created_at: string
+  preview: string
+  body_md?: string
+}
+
+export interface LineageCopy {
+  workspace_id: string
+  workspace_name: string
+  item_id: string
+  content_id: string
+  lineage_id: string
+  name: string
+  type: ItemType
+  updated_at: string
+  summary_preview: string
+  jump_url: string
+}
+
+export async function listFavoriteGroups(): Promise<FavoriteGroup[]> {
+  const res = await http.get<FavoriteGroup[]>(`${BASE}/metadata/favorite-groups`)
+  return res.data
+}
+
+export async function listFavoriteGroupItems(
+  groupId: string,
+): Promise<FavoriteGroupItem[]> {
+  const res = await http.get<FavoriteGroupItem[]>(
+    `${BASE}/metadata/favorite-groups/${groupId}/items`,
+  )
+  return res.data
+}
+
+export async function createFavoriteGroup(name: string): Promise<FavoriteGroup> {
+  const res = await http.post<FavoriteGroup>(
+    `${BASE}/metadata/favorite-groups`,
+    { name },
+  )
+  return res.data
+}
+
+export async function listResolvedFavorites(
+  opts?: { group_id?: string },
+): Promise<ResolvedFavorite[]> {
+  const params = opts?.group_id ? { group_id: opts.group_id } : undefined
+  const res = await http.get<ResolvedFavorite[]>(
+    `${BASE}/metadata/favorites/resolved`,
+    { params },
+  )
+  return res.data
+}
+
+export async function exportFavoriteMetadata(): Promise<Record<string, unknown>> {
+  const res = await http.get<Record<string, unknown>>(
+    `${BASE}/metadata/favorites/export`,
+  )
+  return res.data
+}
+
+export async function importFavoriteMetadata(
+  payload: Record<string, unknown>,
+): Promise<{ imported: number; skipped: number }> {
+  const res = await http.post(
+    `${BASE}/metadata/favorites/import`,
+    { payload },
+  )
+  return res.data as { imported: number; skipped: number }
+}
+
+export async function listWorkspaceFolders(
+  workspaceId: string,
+): Promise<WorkspaceFolder[]> {
+  const res = await http.get<WorkspaceFolder[]>(`${BASE}/${workspaceId}/folders`)
+  return res.data
+}
+
+export async function createWorkspaceFolder(
+  workspaceId: string,
+  name: string,
+  parentId?: string,
+): Promise<WorkspaceFolder> {
+  const res = await http.post<WorkspaceFolder>(`${BASE}/${workspaceId}/folders`, {
+    name,
+    parent_id: parentId,
+  })
+  return res.data
+}
+
+export async function moveItemToFolder(
+  workspaceId: string,
+  itemId: string,
+  folderId: string,
+): Promise<void> {
+  await http.put(`${BASE}/${workspaceId}/items/${itemId}/folder`, {
+    folder_id: folderId,
+  })
 }
 
 /** GET /workspaces — 列表（默认排除 trashed） */
 export async function listWorkspaces(opts?: {
   trashedOnly?: boolean
   includeTrashed?: boolean
-  kinds?: WorkspaceKind[]
 }): Promise<WorkspaceRecord[]> {
   const params = new URLSearchParams()
   if (opts?.trashedOnly) params.set('trashed_only', 'true')
   if (opts?.includeTrashed) params.set('include_trashed', 'true')
-  opts?.kinds?.forEach((kind) => params.append('kinds', kind))
   const res = await http.get<WorkspaceRecord[]>(BASE, {
     params: params.size ? params : undefined,
-  })
-  return res.data
-}
-
-/** GET /workspaces/kind-summary — 产品拆分迁移用 kind 汇总 */
-export async function getWorkspaceKindSummary(): Promise<WorkspaceKindSummary> {
-  const res = await http.get<WorkspaceKindSummary>(`${BASE}/kind-summary`)
-  return res.data
-}
-
-/** POST /workspaces/cleanup-by-kind — 仅支持把 replica 合集移入回收站 */
-export async function cleanupWorkspacesByKind(
-  kind: 'replica',
-): Promise<WorkspaceKindCleanupResponse> {
-  const res = await http.post<WorkspaceKindCleanupResponse>(`${BASE}/cleanup-by-kind`, {
-    kind,
-    mode: 'trash',
   })
   return res.data
 }
@@ -85,7 +186,7 @@ export async function createWorkspace(
 export async function autoCreateWorkspace(req: {
   hint_url?: string
   hint_text?: string
-  kind?: 'note' | 'replica'
+  kind?: 'note'
 }): Promise<WorkspaceRecord> {
   const res = await http.post<WorkspaceRecord>(`${BASE}/auto-create`, req)
   return res.data
@@ -110,8 +211,22 @@ export async function updateWorkspace(
 }
 
 /** DELETE /workspaces/{id} — 软删除（标记 trashed=True） */
-export async function deleteWorkspace(workspaceId: string): Promise<void> {
-  await http.delete(`${BASE}/${workspaceId}`)
+export interface DeleteWorkspaceResult {
+  trashed: boolean
+  workspace_id: string
+  moved_to_inbox: number
+  already_elsewhere: number
+  trashed_count: number
+}
+
+export async function deleteWorkspace(
+  workspaceId: string,
+  contentPolicy: 'keep' | 'trash' = 'keep',
+): Promise<DeleteWorkspaceResult> {
+  const response = await http.delete<DeleteWorkspaceResult>(`${BASE}/${workspaceId}`, {
+    params: { content_policy: contentPolicy },
+  })
+  return response.data
 }
 
 /** POST /workspaces/{id}/restore — 从垃圾桶恢复 */
@@ -172,7 +287,7 @@ export interface BatchSourceResolveResponse {
 
 export interface BatchSourceImportRequest {
   workspace_name?: string
-  kind?: 'note' | 'replica'
+  kind?: 'note'
   source_type: string
   source_url?: string
   items: BatchSourceItem[]
@@ -182,7 +297,6 @@ export interface BatchSourceImportRequest {
   frame_interval?: number
   vision_model?: string
   intent?: string
-  replica_kind?: string
   note_media_kind?: string
   summary_template?: string
   diarize?: boolean
@@ -348,7 +462,7 @@ export async function generateNote(
   visionModel: string = '',
   intent: string = 'note',
   noteMediaKind: string = 'auto',
-  extra?: { diarize?: boolean; summary_mode?: 'general' | 'speaker_aware'; speaker_count?: number; summary_template?: string; user_notes?: string; replica_kind?: string },
+  extra?: { diarize?: boolean; summary_mode?: 'general' | 'speaker_aware'; speaker_count?: number; summary_template?: string; user_notes?: string },
 ): Promise<GenerateNoteResponse> {
   const res = await http.post<GenerateNoteResponse>(
     `${BASE}/${workspaceId}/items/generate-note`,
@@ -367,9 +481,6 @@ export interface VideoResultFrame {
   title: string
   subtitle: string
   description: string
-  prompt_mj: string
-  prompt_sd: { positive: string; negative: string }
-  prompt_video: string
   tags: Record<string, string[]>
   image_path?: string
   /** 后端物化时可能用 timestamp 而非 sec；前端优先用 sec */
@@ -408,7 +519,7 @@ export interface VideoResult {
   video_template?: string
   /** V3.3: LLM 自动检测到的模板名 */
   detected_template?: string
-  /** R21.P3.S3: 素材意图（learning / replica / 空） */
+  /** R21.P3.S3: 素材意图（learning / 空） */
   intent?: string
 }
 
@@ -449,11 +560,6 @@ export interface ImageResult {
     format: string
     size_kb: number
   }
-  prompts: {
-    mj: string
-    sd: { positive: string; negative: string }
-    json: string
-  }
   tags: Record<string, string[]>
   associations?: Record<string, string>
 }
@@ -479,7 +585,6 @@ export interface ImageCompareItem {
   description: string
   ocr_text: string
   tags: Record<string, string[]>
-  prompts: Record<string, unknown>
   associations: Record<string, string>
   has_result: boolean
 }
@@ -683,13 +788,7 @@ export async function translateTranscriptSegments(
   return res.data
 }
 
-// ── Phase 2C.2: 文本结果页 + 提示词版本栈 ──────────────────
-
-export interface PromptVersion {
-  version: number
-  content: string
-  created_at: string
-}
+// ── Phase 2C.2: 文本结果页 ──────────────────
 
 export interface KeyPoint {
   text: string
@@ -742,7 +841,6 @@ export interface TextResult {
   source_type: string
   source_url: string
   meta: Record<string, unknown>
-  prompt_versions: PromptVersion[]
   /** N10: 联想归纳 {方向: 分析} */
   associations?: Record<string, string>
   /** N10: 改写/润色 {风格: 结果} — T1.2 升级为 AlignedTextSection */
@@ -762,38 +860,14 @@ export async function getTextItemResult(
   return res.data
 }
 
-/** POST /workspaces/{id}/items/{itemId}/prompts/versions — 追加提示词版本 */
-export async function addPromptVersion(
-  workspaceId: string,
-  itemId: string,
-  content: string,
-): Promise<PromptVersion> {
-  const res = await http.post<PromptVersion>(
-    `${BASE}/${workspaceId}/items/${itemId}/prompts/versions`,
-    { content },
-  )
-  return res.data
-}
-
-/** GET /workspaces/{id}/items/{itemId}/prompts/versions — 列出提示词版本 */
-export async function listPromptVersions(
-  workspaceId: string,
-  itemId: string,
-): Promise<PromptVersion[]> {
-  const res = await http.get<PromptVersion[]>(
-    `${BASE}/${workspaceId}/items/${itemId}/prompts/versions`,
-  )
-  return res.data
-}
-
-/** GET /workspaces/{id}/items/{itemId}/export — 下载复刻工作包 zip */
+/** GET /workspaces/{id}/items/{itemId}/export — 下载笔记素材包 zip */
 export async function downloadExport(workspaceId: string, itemId: string): Promise<void> {
   const res = await http.get(`${BASE}/${workspaceId}/items/${itemId}/export`, {
     responseType: 'blob',
   })
   // 从 Content-Disposition 提取文件名
   const disposition = res.headers['content-disposition'] as string | undefined
-  let filename = '复刻工作包.zip'
+  let filename = '笔记素材包.zip'
   if (disposition) {
     const match = disposition.match(/filename\*=(?:UTF-8''|")?([^";]+)/i)
     if (match) filename = decodeURIComponent(match[1])
@@ -836,6 +910,25 @@ export interface MergedNote {
   item_ids: string[]
   content_md: string
   created_at: string
+  current_version_id: string
+  versions: MergedNoteVersion[]
+  updated_at: string
+  deleted_at: string
+}
+
+export interface MergedNoteVersion {
+  version_id: string
+  content_md: string
+  item_ids: string[]
+  source_snapshot: Array<{
+    item_id: string
+    content_id: string
+    lineage_id: string
+    title: string
+    summary_hash: string
+  }>
+  created_at: string
+  created_by: 'ai' | 'user' | 'restore'
 }
 
 /** POST /workspaces/{id}/merge — 融合选中素材笔记 */
@@ -854,39 +947,53 @@ export async function listMergedNotes(workspaceId: string): Promise<MergedNote[]
   return res.data as MergedNote[]
 }
 
+export async function createMergedNote(
+  workspaceId: string,
+  payload: { title: string; content_md: string; item_ids: string[] },
+): Promise<MergedNote> {
+  const response = await http.post<MergedNote>(`${BASE}/${workspaceId}/merged-notes`, payload)
+  return response.data
+}
+
+export async function updateMergedNote(
+  workspaceId: string,
+  mergedId: string,
+  payload: { title?: string; content_md?: string; item_ids?: string[] },
+): Promise<MergedNote> {
+  const response = await http.patch<MergedNote>(
+    `${BASE}/${workspaceId}/merged-notes/${mergedId}`,
+    payload,
+  )
+  return response.data
+}
+
+export async function listMergedNoteVersions(
+  workspaceId: string,
+  mergedId: string,
+): Promise<MergedNoteVersion[]> {
+  const response = await http.get<MergedNoteVersion[]>(
+    `${BASE}/${workspaceId}/merged-notes/${mergedId}/versions`,
+  )
+  return response.data
+}
+
+export async function restoreMergedNoteVersion(
+  workspaceId: string,
+  mergedId: string,
+  versionId: string,
+): Promise<MergedNote> {
+  const response = await http.post<MergedNote>(
+    `${BASE}/${workspaceId}/merged-notes/${mergedId}/versions/${versionId}/restore`,
+  )
+  return response.data
+}
+
 /** DELETE /workspaces/{id}/merged-notes/{mergedId} — 删除融合笔记 */
 export async function deleteMergedNote(
   workspaceId: string,
   mergedId: string,
 ): Promise<void> {
   await http.delete(`${BASE}/${workspaceId}/merged-notes/${mergedId}`)
-}
-
-/** POST /workspaces/{id}/items/{itemId}/reproduce/export — 下载复刻包 zip */
-export async function exportReproducePackage(
-  workspaceId: string,
-  itemId: string,
-  frameIndices: number[],
-): Promise<void> {
-  const res = await http.post(
-    `${BASE}/${workspaceId}/items/${itemId}/reproduce/export`,
-    { frame_indices: frameIndices },
-    { responseType: 'blob' },
-  )
-  const disposition = res.headers['content-disposition'] as string | undefined
-  let filename = '复刻工作包.zip'
-  if (disposition) {
-    const match = disposition.match(/filename\*=(?:UTF-8''|")?([^";]+)/i)
-    if (match) filename = decodeURIComponent(match[1])
-  }
-  const url = URL.createObjectURL(res.data as Blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
 }
 
 /** POST /workspaces/{id}/items/batch-export — 批量导出多个素材 */
@@ -951,20 +1058,29 @@ export async function downloadSubtitles(
 
 export type TranscriptExportMode = 'article' | 'speaker_grouped'
 
+/** 把标题转成安全文件名片段（去掉路径/非法字符）。 */
+function safeTitleForFilename(title: string): string {
+  return title.replace(/[/\\:*?"<>|]/g, '_').trim().slice(0, 80)
+}
+
 /** GET /workspaces/{id}/items/{itemId}/transcript — 下载无时间轴文章或说话人归组文章 */
 export async function downloadTranscript(
   workspaceId: string,
   itemId: string,
   mode: TranscriptExportMode,
+  title?: string,
 ): Promise<void> {
   const res = await http.get(`${BASE}/${workspaceId}/items/${itemId}/transcript`, {
     params: { mode },
     responseType: 'blob',
   })
   const disposition = res.headers['content-disposition'] as string | undefined
-  let filename = mode === 'speaker_grouped'
-    ? '转写文本（无时间轴·区分说话人）.txt'
-    : '转写文本（无时间轴）.txt'
+  const suffix = mode === 'speaker_grouped'
+    ? '转写文本（无时间轴·区分说话人）'
+    : '转写文本（无时间轴）'
+  // fallback 文件名必须带标题，否则用户本地无法区分多篇笔记；后端 header 为权威源。
+  const safeTitle = title ? safeTitleForFilename(title) : ''
+  let filename = safeTitle ? `${safeTitle}-${suffix}.txt` : `${suffix}.txt`
   if (disposition) {
     const match = disposition.match(/filename\*=(?:UTF-8''|")?([^";]+)/i)
     if (match) filename = decodeURIComponent(match[1])
@@ -1059,6 +1175,60 @@ export async function putItemNote(
 ): Promise<ItemNote> {
   const res = await http.put(`${BASE}/${workspaceId}/items/${itemId}/note`, { body })
   return res.data as ItemNote
+}
+
+export async function listNoteVersions(
+  workspaceId: string,
+  itemId: string,
+): Promise<NoteVersion[]> {
+  const res = await http.get<NoteVersion[]>(
+    `${BASE}/${workspaceId}/items/${itemId}/note/versions`,
+  )
+  return res.data
+}
+
+export async function getNoteVersion(
+  workspaceId: string,
+  itemId: string,
+  versionId: string,
+): Promise<NoteVersion> {
+  const res = await http.get<NoteVersion>(
+    `${BASE}/${workspaceId}/items/${itemId}/note/versions/${versionId}`,
+  )
+  return res.data
+}
+
+export async function restoreNoteVersion(
+  workspaceId: string,
+  itemId: string,
+  versionId: string,
+): Promise<ItemNote> {
+  const res = await http.post<ItemNote>(
+    `${BASE}/${workspaceId}/items/${itemId}/note/versions/${versionId}/restore`,
+  )
+  return res.data
+}
+
+export async function listItemLineage(
+  workspaceId: string,
+  itemId: string,
+): Promise<{ content_id: string; lineage_id: string; copies: LineageCopy[] }> {
+  const res = await http.get(
+    `${BASE}/${workspaceId}/items/${itemId}/lineage`,
+  )
+  return res.data as { content_id: string; lineage_id: string; copies: LineageCopy[] }
+}
+
+export async function adoptSiblingNote(
+  workspaceId: string,
+  itemId: string,
+  siblingContentId: string,
+): Promise<ItemNote> {
+  const res = await http.post<ItemNote>(
+    `${BASE}/${workspaceId}/items/${itemId}/note/adopt-sibling`,
+    { sibling_content_id: siblingContentId },
+  )
+  return res.data
 }
 
 /** R4.3: GET /workspaces/{id}/items/{itemId}/note/export?format=obsidian */

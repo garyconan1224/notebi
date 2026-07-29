@@ -136,9 +136,9 @@ def build_bundle(
     if not (source_root / "frontend" / "dist" / "index.html").is_file():
         raise ValueError("frontend/dist/index.html not found; build the frontend before packaging")
     frontend_index = (source_root / "frontend" / "dist" / "index.html").read_text(encoding="utf-8")
-    if 'name="notebi-product-mode" content="notebi"' not in frontend_index:
+    if 'name="notebi-build" content="1"' not in frontend_index:
         raise ValueError(
-            'frontend/dist was not built with VITE_PRODUCT_MODE=notebi; '
+            "frontend/dist is not a NoteBi build; "
             "run ./build-notebi.sh before packaging"
         )
 

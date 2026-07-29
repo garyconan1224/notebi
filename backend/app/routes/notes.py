@@ -127,7 +127,7 @@ class VideoRequest(BaseModel):
     grid_size: List[int] = Field(default_factory=lambda: [3, 3])
 # ── NoteBi 扩展字段（BiliNote 原协议无）──
     project_id: Optional[str] = None
-    task_type: Literal["download", "analyze", "storyboard", "note"] = "note"
+    task_type: Literal["download", "analyze", "note"] = "note"
 
 
 class DeleteTaskRequest(BaseModel):

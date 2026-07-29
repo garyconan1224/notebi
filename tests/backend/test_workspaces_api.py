@@ -82,6 +82,21 @@ def test_list_workspaces_derived_fields_present(client: TestClient) -> None:
     assert ws["last_active_at"] == ws["updated_at"]
 
 
+def test_create_workspace_rejects_retired_replica_kind(client: TestClient) -> None:
+    """Public workspace creation must not silently normalize legacy replica input."""
+    response = client.post("/workspaces", json={"name": "旧复刻", "kind": "replica"})
+
+    assert response.status_code == 422
+
+
+def test_workspace_list_contract_has_no_kind_filter(client: TestClient) -> None:
+    """单产品 API 不再向调用方公开按 product kind 筛选的参数。"""
+    schema = client.get("/openapi.json").json()
+    for path in ("/workspaces", "/workspaces/library"):
+        parameters = schema["paths"][path]["get"].get("parameters", [])
+        assert "kinds" not in {parameter["name"] for parameter in parameters}
+
+
 def test_get_workspace_derived_fields_present(client: TestClient) -> None:
     """GET /workspaces/{id} 详情也含派生字段。"""
     resp = client.post("/workspaces", json={"name": "详情测试"})
@@ -447,7 +462,7 @@ def test_get_item_result_returns_demo_fixture_when_results_empty(client: TestCli
     assert isinstance(body["transcript"], list) and len(body["transcript"]) >= 3
     assert body["tracks_meta"]["frame_count"] == len(body["frames"])
     first_frame = body["frames"][0]
-    for key in ("idx", "ts", "sec", "prompt_mj", "prompt_sd", "tags"):
+    for key in ("idx", "ts", "sec", "description", "tags"):
         assert key in first_frame
 
 
@@ -756,8 +771,9 @@ def test_library_trashed_filter(client: TestClient) -> None:
     body = resp.json()
     assert len(body["workspaces"]) == 1
     assert body["workspaces"][0]["workspace_id"] == ws1_id
-    assert len(body["items"]) == 1
-    assert body["items"][0]["workspace_id"] == ws1_id
+    # 默认删除策略会把唯一内容复制到稳定收纳箱，因此主库仍能看到该内容。
+    assert len(body["items"]) == 2
+    assert {item["workspace_id"] for item in body["items"]} == {ws1_id, "__inbox__"}
 
     # include_trashed=true
     resp = client.get("/workspaces/library?include_trashed=true")
@@ -766,7 +782,7 @@ def test_library_trashed_filter(client: TestClient) -> None:
     assert len(body["workspaces"]) == 2
     ws_ids = {w["workspace_id"] for w in body["workspaces"]}
     assert ws_ids == {ws1_id, ws2_id}
-    assert len(body["items"]) == 2
+    assert len(body["items"]) == 3
 
 
 def test_library_uses_task_overlay_for_duration_and_thumbnail(
@@ -828,66 +844,6 @@ def test_library_uses_task_overlay_for_duration_and_thumbnail(
     assert item_out["thumbnail"] == "/static/videos/cover.jpg"
     assert item_out["results_summary"]["has_summary"] is True
     assert item_out["primary_task_status"] == TaskStatus.SUCCESS.value
-
-
-def test_library_materializes_replica_frames_from_json_outputs(
-    client: TestClient,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """复刻卡片应从视觉 JSON 物化帧数，避免结果页有帧但库卡显示 0 帧。"""
-    data_root = tmp_path / "data"
-    json_dir = data_root / "workspaces" / "ws-replica" / "json_data"
-    frames_dir = json_dir / "sample_分析报告" / "frames"
-    frames_dir.mkdir(parents=True)
-    frame_path = frames_dir / "sample_00_00_00.jpg"
-    frame_path.write_bytes(b"fake-frame")
-    json_path = json_dir / "sample_视觉数据.json"
-    json_path.write_text(
-        """
-        {
-          "frames": [
-            {
-              "timestamp": "00:00:00",
-              "description_zh": "开场画面",
-              "image_prompt_en": "opening frame"
-            }
-          ],
-          "global_visual_summary": "视觉总结"
-        }
-        """,
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(ws_module, "_ROOT_DIR", tmp_path)
-
-    ws = client.post("/workspaces", json={"workspace_id": "ws-replica", "name": "复刻合集", "kind": "replica"}).json()
-    ws_id = ws["workspace_id"]
-    item = client.post(
-        f"/workspaces/{ws_id}/items",
-        json={
-            "type": "video",
-            "source": "url",
-            "source_value": "https://example.com/v.mp4",
-            "name": "复刻视频",
-        },
-    ).json()["items"][0]
-    item_id = item["item_id"]
-    ws_module._store.update_item(
-        ws_id,
-        item_id,
-        preflight=PreflightConfig(intent="replica"),
-        results={
-            "json_outputs": [str(json_path)],
-            "json_output_basenames": ["sample"],
-        },
-    )
-
-    resp = client.get("/workspaces/library")
-    assert resp.status_code == 200
-    item_out = resp.json()["items"][0]
-    assert item_out["frames_count"] == 1
-    assert item_out["primary_view"] == "replica"
-    assert item_out["thumbnail"] == "/static/workspaces/ws-replica/json_data/sample_分析报告/frames/sample_00_00_00.jpg"
 
 
 def test_library_task_overlay_enriches_existing_item_results(client: TestClient) -> None:

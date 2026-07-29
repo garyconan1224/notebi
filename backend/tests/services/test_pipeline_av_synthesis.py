@@ -35,9 +35,9 @@ def workspace(tmp_path: Path) -> Path:
         "product_name": "Python 入门",
         "global_visual_summary": "Python 基础语法教学",
         "frames": [
-            {"timestamp": "00:05", "description_zh": "开场介绍", "image_prompt_en": ""},
-            {"timestamp": "01:30", "description_zh": "变量定义", "image_prompt_en": ""},
-            {"timestamp": "03:00", "description_zh": "函数演示", "image_prompt_en": ""},
+            {"timestamp": "00:05", "description_zh": "开场介绍"},
+            {"timestamp": "01:30", "description_zh": "变量定义"},
+            {"timestamp": "03:00", "description_zh": "函数演示"},
         ],
     }
     (video_dir / "demo_视觉数据.json").write_text(

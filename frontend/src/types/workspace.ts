@@ -19,7 +19,7 @@ export interface PreflightConfig {
   models: { vision?: string; text?: string; video?: string }
   /** 任务勾选项 + 子参数；结构按 item.type 不同 */
   tasks: Record<string, unknown>
-  /** 素材意图：learning（学习消费）/ replica（复刻生产）/ 空 */
+  /** 素材意图：learning（学习消费）/ 空 */
   intent?: string
 }
 
@@ -48,6 +48,10 @@ export interface ItemTags {
 
 export interface WorkspaceItem {
   item_id: string
+  content_id?: string
+  lineage_id?: string
+  origin_content_id?: string | null
+  legacy_item_id?: string
   type: ItemType
   source: ItemSource
   source_value: string
@@ -85,7 +89,7 @@ export interface WorkspaceRecord {
   favorites: string[]
   created_at: string
   updated_at: string
-  kind: 'note' | 'replica'
+  kind: 'note'
   source: string
   source_meta?: Record<string, any>
 }
@@ -94,7 +98,7 @@ export interface WorkspaceRecord {
 export interface WorkspaceCreateRequest {
   name: string
   background?: Partial<WorkspaceBackground>
-  kind?: 'note' | 'replica'
+  kind?: 'note'
   source?: string
   source_meta?: Record<string, any>
 }
@@ -127,7 +131,7 @@ export interface PreflightSaveRequest {
 export interface StartItemResponse {
   workspace: WorkspaceRecord
   task_id: string
-  task_type: 'download' | 'analyze' | 'create' | 'storyboard' | 'note'
+  task_type: 'download' | 'analyze' | 'note'
 }
 
 /** R0.2: GET /…/note 返回的单条 summary 结构 */

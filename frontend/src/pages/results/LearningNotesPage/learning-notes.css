@@ -19,6 +19,7 @@
   border-bottom: 1px solid var(--line);
   background: var(--bg-elev);
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .vm-ln-scope .ln-nav .ln-back {
@@ -56,9 +57,9 @@
   font-family: var(--mono);
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   background: var(--accent-2);
-  color: #fff;
+  color: var(--accfg);
 }
 
 .vm-ln-scope .ln-nav .ln-save-status {
@@ -733,7 +734,7 @@
   font-weight: 600;
   color: var(--ink-3);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   margin-bottom: 8px;
 }
 
@@ -803,7 +804,7 @@
   font-size: 13px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   margin: 24px 0 12px;
   padding-bottom: 6px;
   border-bottom: 1px solid var(--line);
@@ -933,7 +934,7 @@
 .vm-ln-scope .ln-tr-title {
   color: var(--ink);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .vm-ln-scope .ln-tr-count {
@@ -961,13 +962,13 @@
 }
 
 .vm-ln-scope .ln-tr-status--error {
-  color: #b42318;
-  background: #fff1ef;
+  color: var(--err);
+  background: var(--errl);
 }
 
 .vm-ln-scope .ln-tr-status--warning {
-  color: #98630c;
-  background: #fff7e6;
+  color: var(--wrn);
+  background: var(--wrnl);
 }
 
 .vm-ln-scope .ln-tr-head-tools {
@@ -1015,7 +1016,7 @@
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-weight: 800;
+  font-weight: 700;
   outline: none;
   cursor: pointer;
 }
@@ -1037,7 +1038,7 @@
   background: var(--accent-pink);
   color: white;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
   white-space: nowrap;
@@ -1105,13 +1106,13 @@
   background: color-mix(in oklch, var(--speaker-color) 16%, var(--bg));
   color: var(--speaker-color);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .vm-ln-scope .ln-tr-speaker-name {
   color: var(--speaker-color);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .vm-ln-scope .ln-tr-time {
@@ -1310,17 +1311,17 @@
   padding: 10px 16px;
   border-radius: 9999px;
   border: none;
-  background: var(--color-violet-600, #7c3aed);
-  color: #fff;
+  background: var(--acc);
+  color: var(--accfg);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+  box-shadow: 0 4px 12px oklch(0% 0 0 / 0.18);
   transition: transform 0.15s, box-shadow 0.15s;
 }
 .ln-chat-fab:hover {
   transform: scale(1.05);
-  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.4);
+  box-shadow: 0 6px 16px oklch(0% 0 0 / 0.24);
 }
 
 /* 悬浮面板：fixed 右下角（外框样式；内部 UI 由 NoteChatDrawer.css 提供） */

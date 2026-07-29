@@ -18,7 +18,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.app.models.workspace import WorkspaceRecord, WorkspaceStatus
+from backend.app.models.workspace import WorkspaceItem, WorkspaceRecord, WorkspaceStatus
 from backend.app.routes import workspaces as ws_module
 from backend.app.services.workspace_store import WorkspaceStore
 
@@ -125,3 +125,77 @@ def test_to_dict_includes_trashed():
     d = rec.to_dict()
     assert d["trashed"] is True
     assert d["status"] == WorkspaceStatus.ACTIVE.value
+
+
+def test_delete_collection_keeps_unique_content_in_stable_inbox(client):
+    c, store = client
+    wid = _make_ws(c, "keep-unique")
+    store.add_item(
+        wid,
+        WorkspaceItem(
+            item_id="unique",
+            type="text",
+            source="local",
+            source_value="manual",
+            lineage_id="lineage-unique",
+        ),
+    )
+
+    response = c.delete(f"/workspaces/{wid}")
+    assert response.status_code == 200
+    assert response.json()["moved_to_inbox"] == 1
+    inbox = store.get("__inbox__")
+    assert inbox is not None
+    assert [item.lineage_id for item in inbox.items] == ["lineage-unique"]
+
+    c.post(f"/workspaces/{wid}/restore")
+    second = c.delete(f"/workspaces/{wid}")
+    assert second.json()["moved_to_inbox"] == 0
+    assert second.json()["already_elsewhere"] == 1
+    assert len(store.get("__inbox__").items) == 1
+
+
+def test_delete_collection_does_not_duplicate_shared_content(client):
+    c, store = client
+    first = _make_ws(c, "first")
+    second = _make_ws(c, "second")
+    for workspace_id, item_id in ((first, "a"), (second, "b")):
+        store.add_item(
+            workspace_id,
+            WorkspaceItem(
+                item_id=item_id,
+                type="text",
+                source="local",
+                source_value="manual",
+                lineage_id="shared-lineage",
+            ),
+        )
+
+    response = c.delete(f"/workspaces/{first}")
+    assert response.json()["moved_to_inbox"] == 0
+    assert response.json()["already_elsewhere"] == 1
+
+
+def test_explicit_trash_policy_does_not_copy_content(client):
+    c, store = client
+    wid = _make_ws(c, "trash-content")
+    store.add_item(
+        wid,
+        WorkspaceItem(
+            item_id="trash",
+            type="text",
+            source="local",
+            source_value="manual",
+        ),
+    )
+    response = c.delete(f"/workspaces/{wid}?content_policy=trash")
+    assert response.status_code == 200
+    assert response.json()["moved_to_inbox"] == 0
+    assert store.get("__inbox__") is None
+
+
+def test_invalid_content_policy_is_rejected(client):
+    c, _store = client
+    wid = _make_ws(c)
+    response = c.delete(f"/workspaces/{wid}?content_policy=destroy")
+    assert response.status_code == 422

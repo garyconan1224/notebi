@@ -15,7 +15,8 @@ import { useTranslation } from 'react-i18next'
 import { LangSwitcher } from '@/components/LangSwitcher'
 import { cn } from '@/lib/utils'
 import { useHealthPulse } from '@/hooks/useHealthPulse'
-import { productConfig } from '@/config/product'
+import { APP_NAME } from '@/config/product'
+import { useSettingsShellStore } from '@/store/settingsShellStore'
 
 /** SaveBar 状态类型（保留向后兼容，Step 2+ 逐步移入各 panel 内） */
 export interface SaveBarState {
@@ -50,6 +51,10 @@ export function SettingsShell() {
   const health = useHealthPulse(0)
   const version = health.data?.version ?? 'v0.4.0'
   const location = useLocation()
+  const saveBar = useSettingsShellStore((state) => state.saveBarState)
+  const dirty = saveBar.dirtyCount > 0
+  const saving = saveBar.saving ?? false
+  const childOwnsSaveBar = location.pathname === '/settings/analysis-defaults'
 
   const navItems: NavItem[] = [
     { path: '/settings/providers-models', icon: <Cpu size={16} />, label: '模型与渠道' },
@@ -73,13 +78,13 @@ export function SettingsShell() {
           >
             <ArrowLeft size={14} />
             <span style={{ fontFamily: 'var(--fd)' }} className="text-base font-semibold text-[var(--fg)]">
-              {productConfig.name}
+              {APP_NAME}
             </span>
           </Link>
           <span className="text-[var(--mut)] text-xs">/</span>
           <LangSwitcher />
         </div>
-        <div className="eyebrow">SETTINGS · LOCAL · {productConfig.name.toUpperCase()}</div>
+        <div className="eyebrow">SETTINGS · LOCAL · {APP_NAME.toUpperCase()}</div>
         <h1>设置</h1>
         <p>
           模型、API 密钥、下载路径、分析默认偏好。所有设置本地存储，不上传到服务器。
@@ -113,13 +118,36 @@ export function SettingsShell() {
           <div className="settings-nav-footer">
             <div className="eyebrow">Build</div>
             <div className="build-version">{version}</div>
-            <div className="build-meta">local · {productConfig.mode}</div>
+            <div className="build-meta">local · NoteBi</div>
           </div>
         </aside>
 
         {/* 右侧内容 */}
         <main className="settings-content">
           <Outlet />
+          {!childOwnsSaveBar && (saveBar.onSave || saveBar.onReset) && (
+            <div className="settings-header-actions settings-shared-savebar">
+              <span className="text-xs text-[var(--mut)]">
+                {dirty ? `${saveBar.dirtyCount} 项未保存` : '所有变更已保存'}
+              </span>
+              <button
+                type="button"
+                className="settings-reset-btn"
+                onClick={saveBar.onReset}
+                disabled={!dirty || saving}
+              >
+                重置
+              </button>
+              <button
+                type="button"
+                className="settings-save-btn"
+                onClick={saveBar.onSave}
+                disabled={!dirty || saving}
+              >
+                {saving ? '保存中…' : '保存'}
+              </button>
+            </div>
+          )}
         </main>
       </div>
     </div>

@@ -22,16 +22,18 @@ from __future__ import annotations
 """
 
 import io
+import hashlib
 import json
 import logging
 import re
 import shutil
+import sqlite3
 import threading
 import uuid
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import parse_qs, quote, urlparse
 
 import httpx
@@ -77,6 +79,8 @@ from backend.app.services.note_assembler import (
     note_dir,
 )
 from backend.app.services.note_exporter import build_note_export_response
+from backend.app.services.metadata_store import MetadataStore
+from backend.app.services.note_version_store import NoteVersionStore
 from backend.app.services.speaker_labels import (
     SPEAKER_ROLE_OPTIONS,
     apply_speaker_map,
@@ -85,9 +89,9 @@ from backend.app.services.speaker_labels import (
 from backend.app.services.summary_generator import generate_summary
 from backend.app.services.summary_templates import list_template_ids
 from backend.app.services.video_result_demo import build_demo_video_result
-from backend.app.services.global_knowledge import invalidate_global_knowledge_caches
-from backend.app.services.workspace_search_service import search_one_workspace
+from backend.app.services.workspace_search_service import _jump_url, search_one_workspace
 from backend.app.services.workspace_store import WorkspaceStore
+from backend.app.services.workspace_knowledge import invalidate_workspace_index
 from shared.config import DATA_DIR
 from shared.settings_store import load_settings
 from shared.url_sniffer import sniff_url
@@ -100,6 +104,13 @@ router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
 # 进程级单例 store（与 pipeline 路由的 _store 同模式）
 _store = WorkspaceStore()
+_metadata = MetadataStore()
+_note_versions = NoteVersionStore()
+
+
+def migrate_legacy_metadata() -> int:
+    """在应用启动期把兼容 JSON 元数据幂等同步到 SQLite。"""
+    return _metadata.migrate_legacy(_store.list_all(include_trashed=True))
 
 
 def _handle_summary_task(record: TaskRecord, runner: Any) -> Dict[str, Any]:
@@ -728,7 +739,7 @@ _EXTENSION_TYPE_MAP: Dict[str, str] = {
 class WorkspaceCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120, description="工作空间名称")
     background: Dict[str, Any] = Field(default_factory=dict)
-    kind: str = Field(default="note", description="合集类型：note|replica")
+    kind: Literal["note"] = Field(default="note", description="合集类型：note")
     source: str = Field(default="manual", description="manual|inbox|...")
     source_meta: Dict[str, Any] = Field(default_factory=dict)
 
@@ -737,11 +748,6 @@ class WorkspaceUpdateRequest(BaseModel):
     name: Optional[str] = None
     status: Optional[str] = Field(default=None, description="active|processing|analyzed|archived")
     background: Optional[Dict[str, Any]] = None
-
-
-class WorkspaceCleanupByKindRequest(BaseModel):
-    kind: str = Field(description="Only replica cleanup is supported")
-    mode: str = Field(default="trash", description="Only trash mode is supported")
 
 
 class ItemAddRequest(BaseModel):
@@ -761,10 +767,9 @@ class GenerateNoteRequest(BaseModel):
     image_mode: str = Field(default="vision", description="提取模式: vision 或 ocr")
     frame_interval: int = Field(default=5, description="截帧间隔，多少秒截一帧")
     vision_model: str = Field(default="", description="视觉模型 ID（空=用系统默认）")
-    intent: str = Field(default="note", description="任务意图：note / replica / collect 等")
-    replica_kind: str = Field(
-        default="prompt",
-        description="复刻二级类型：prompt（复刻提示词）/ story（拉片分析）/ compete（竞品对标）",
+    intent: Literal["note", "learning", "collect"] = Field(
+        default="note",
+        description="任务意图：note / learning / collect",
     )
     note_media_kind: str = Field(
         default="auto",
@@ -810,7 +815,7 @@ class BatchSourceResolveRequest(BaseModel):
 
 class BatchSourceImportRequest(BaseModel):
     workspace_name: str = Field(default="", max_length=120)
-    kind: str = Field(default="note", pattern="^(note|replica)$")
+    kind: str = Field(default="note", pattern="^note$")
     source_type: str = Field(
         default="multi_url",
         pattern="^(multi_url|youtube_playlist|bilibili_multipart|bilibili_favorites|bilibili_uploader)$",
@@ -823,7 +828,6 @@ class BatchSourceImportRequest(BaseModel):
     frame_interval: int = Field(default=5, ge=1, le=120)
     vision_model: str = Field(default="")
     intent: str = Field(default="note")
-    replica_kind: str = Field(default="prompt")
     note_media_kind: str = Field(default="video")
     summary_template: str = Field(default="standard")
     diarize: bool = Field(default=False)
@@ -835,7 +839,7 @@ class BatchSourceImportRequest(BaseModel):
 class PreflightSaveRequest(BaseModel):
     """前置配置保存请求体（设计文档第 4 章）。"""
 
-    intent: str = Field(default="", description='"learning" | "replica" | ""')
+    intent: str = Field(default="", description='"learning" | ""')
     background_overrides: Dict[str, Any] = Field(default_factory=dict)
     models: Dict[str, str] = Field(
         default_factory=dict,
@@ -852,7 +856,7 @@ class AutoCreateRequest(BaseModel):
 
     hint_url: Optional[str] = Field(default=None, description="提示 URL，用于推导名称")
     hint_text: Optional[str] = Field(default=None, description="提示文本，用于推导名称")
-    kind: str = Field(default="note", description="合集类型：note|replica")
+    kind: Literal["note"] = Field(default="note", description="合集类型：note")
 
 
 class SniffUrlRequest(BaseModel):
@@ -863,12 +867,6 @@ class SniffUrlRequest(BaseModel):
 
 class ProbeDurationRequest(BaseModel):
     url: str
-
-
-class PromptVersionRequest(BaseModel):
-    """提示词版本新增请求体。"""
-
-    content: str = Field(min_length=1, description="提示词内容")
 
 
 # ── 内部小工具 ────────────────────────────────────────────
@@ -1214,12 +1212,11 @@ def _enrich_workspace(rec: WorkspaceRecord) -> Dict[str, Any]:
 def create_workspace(req: WorkspaceCreateRequest) -> Dict[str, Any]:
     """新建一个工作空间。"""
     bg = WorkspaceBackground.from_dict(req.background or {})
-    kind = req.kind if req.kind in ("note", "replica") else "note"
     rec = WorkspaceRecord(
         workspace_id=str(uuid.uuid4()),
         name=req.name.strip(),
         background=bg,
-        kind=kind,
+        kind="note",
         source=req.source.strip() or "manual",
         source_meta=dict(req.source_meta or {}),
     )
@@ -1752,7 +1749,6 @@ def _create_batch_note_task(
             "intent": req.intent or "note",
         },
         "intent": req.intent or "note",
-        "replica_kind": req.replica_kind or "prompt",
         "note_media_kind": req.note_media_kind or "video",
         "source_type": "link",
         "kind_hint": item.type,
@@ -1780,11 +1776,10 @@ def _create_batch_note_task(
 def auto_create_workspace(req: AutoCreateRequest) -> Dict[str, Any]:
     """根据 hint URL/text 用 LLM 生成名字，自动建空间。"""
     name = _generate_workspace_name(req.hint_url, req.hint_text)
-    kind = req.kind if req.kind in ("note", "replica") else "note"
     rec = WorkspaceRecord(
         workspace_id=str(uuid.uuid4()),
         name=name,
-        kind=kind,
+        kind="note",
     )
     _store.create(rec)
     return rec.to_dict()
@@ -1893,74 +1888,19 @@ def probe_item_media(workspace_id: str, item_id: str) -> dict:
 def list_workspaces(
     trashed_only: bool = False,
     include_trashed: bool = False,
-    kinds: Optional[List[str]] = Query(default=None),
 ) -> List[Dict[str, Any]]:
     """列出工作空间。
 
     默认排除 trashed（软删除后的"垃圾桶"内容）。
     trashed_only=true：仅返回垃圾桶；include_trashed=true：返回全部。
     """
-    try:
-        recs = _store.list_all(
-            trashed_only=trashed_only,
-            include_trashed=include_trashed,
-            kinds=kinds,
-        )
-    except ValueError as err:
-        raise HTTPException(status_code=400, detail=str(err)) from err
+    recs = _store.list_all(
+        trashed_only=trashed_only,
+        include_trashed=include_trashed,
+    )
     # 隐藏收纳箱，不在合集列表展示
     recs = [r for r in recs if r.source != "inbox"]
     return [_enrich_workspace(r) for r in recs]
-
-
-@router.get("/kind-summary")
-def workspace_kind_summary() -> Dict[str, int]:
-    """Return non-trashed workspace and item counts grouped by product kind."""
-
-    summary = {
-        "note_count": 0,
-        "replica_count": 0,
-        "note_items": 0,
-        "replica_items": 0,
-    }
-    for rec in _store.list_all(include_trashed=False):
-        if rec.kind == "note":
-            summary["note_count"] += 1
-            summary["note_items"] += len(rec.items)
-        elif rec.kind == "replica":
-            summary["replica_count"] += 1
-            summary["replica_items"] += len(rec.items)
-    return summary
-
-
-@router.post("/cleanup-by-kind")
-def cleanup_by_kind(req: WorkspaceCleanupByKindRequest) -> Dict[str, Any]:
-    """Move all non-trashed replica workspaces to trash.
-
-    This endpoint intentionally does not support permanent deletion or note cleanup.
-    """
-
-    if req.kind != "replica" or req.mode != "trash":
-        raise HTTPException(
-            status_code=400,
-            detail="cleanup-by-kind only supports kind=replica and mode=trash",
-        )
-
-    recs = _store.list_all(include_trashed=False, kinds=["replica"])
-    workspace_ids: List[str] = []
-    for rec in recs:
-        _store.update(rec.workspace_id, trashed=True)
-        workspace_ids.append(rec.workspace_id)
-
-    if workspace_ids:
-        invalidate_global_knowledge_caches()
-
-    return {
-        "kind": "replica",
-        "mode": "trash",
-        "count": len(workspace_ids),
-        "workspace_ids": workspace_ids,
-    }
 
 
 # ── Phase L1：资料库聚合端点 ──────────────────────────────
@@ -2145,17 +2085,11 @@ def _item_primary_task_status(item: WorkspaceItem) -> Optional[str]:
 
 def _compute_primary_view(item: "WorkspaceItem", results: dict) -> str:
     """计算前端该进哪个页。"""
-    intent = getattr(item.preflight, "intent", "") if item.preflight else ""
-    has_frames = bool(results.get("frames")) or bool(results.get("json_outputs"))
-    
-    if has_frames and intent == "replica":
-        return "replica"
-        
     # 有笔记数据（转写/总结/执行过 note 任务）
     has_note_data = bool(results.get("transcript")) or bool(results.get("summary")) or any("note" in t for t in (item.related_task_ids or []))
     if has_note_data:
         return "note"
-        
+
     return "note"
 
 
@@ -2179,17 +2113,12 @@ def _default_summary_template_for_item(item: "WorkspaceItem", results: dict) -> 
 @router.get("/library")
 def get_library(
     include_trashed: bool = False,
-    kinds: Optional[List[str]] = Query(default=None),
 ) -> Dict[str, Any]:
     """聚合端点：摊平所有 workspace items + workspace 摘要，供「资料库」页使用。"""
-    try:
-        recs = _store.list_all(
-            include_trashed=include_trashed,
-            trashed_only=False,
-            kinds=kinds,
-        )
-    except ValueError as err:
-        raise HTTPException(status_code=400, detail=str(err)) from err
+    recs = _store.list_all(
+        include_trashed=include_trashed,
+        trashed_only=False,
+    )
 
     items_out: List[Dict[str, Any]] = []
     workspaces_out: List[Dict[str, Any]] = []
@@ -2234,6 +2163,8 @@ def get_library(
                     audio_nature = "speech"
             items_out.append({
                 "item_id": item.item_id,
+                "content_id": item.content_id,
+                "lineage_id": item.lineage_id,
                 "workspace_id": rec.workspace_id,
                 "workspace_name": rec.name,
                 "workspace_kind": rec.kind,
@@ -2275,6 +2206,12 @@ class BatchAddToWorkspaceRequest(BaseModel):
     items: list[dict]  # [{"workspace_id": "...", "item_id": "..."}, ...]
 
 
+class BatchOrganizeRequest(BaseModel):
+    items: list[dict]
+    tags: Optional[Dict[str, Any]] = None
+    folder_id: Optional[str] = None
+
+
 @router.post("/items/batch-delete")
 def batch_delete_items(req: BatchDeleteRequest) -> Dict[str, Any]:
     """批量删除素材。"""
@@ -2286,11 +2223,22 @@ def batch_delete_items(req: BatchDeleteRequest) -> Dict[str, Any]:
         if not ws_id or not item_id:
             failed.append({**entry, "reason": "missing workspace_id or item_id"})
             continue
+        # 1-B 对齐：删 item 前先取出 related_task_ids，删除后同步清理 task_store，
+        # 否则批量删除会留下孤儿任务（单个删除已处理，批量删除此前遗漏）。
+        ws = _store.get(ws_id)
+        item = next((it for it in ws.items if it.item_id == item_id), None) if ws else None
+        related_tids = list(item.related_task_ids) if item else []
         try:
             _store.remove_item(ws_id, item_id)
             removed.append(item_id)
         except KeyError as err:
             failed.append({"workspace_id": ws_id, "item_id": item_id, "reason": str(err)})
+            continue
+        for tid in related_tids:
+            try:
+                _pipeline_runner.store.delete(tid)
+            except Exception:
+                pass  # 单个删除失败不阻塞主流程
     return {"removed": len(removed), "failed": len(failed), "removed_ids": removed, "failures": failed}
 
 
@@ -2298,15 +2246,14 @@ def batch_delete_items(req: BatchDeleteRequest) -> Dict[str, Any]:
 def batch_add_items_to_workspace(req: BatchAddToWorkspaceRequest) -> Dict[str, Any]:
     """把已有素材加入目标合集。
 
-    当前素材模型允许同一个 item 数据被多个 workspace 引用。这里复制 item 记录本身，
-    保留原结果与任务关联，不重复触发下载/分析。
+    创建独立内容副本，保留同源谱系和只读媒体引用，不重复触发下载/分析。
     """
     target_id = req.target_workspace_id.strip()
     target = _store.get(target_id)
     if target is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {target_id}")
 
-    existing_ids = {item.item_id for item in target.items}
+    existing_lineages = {item.lineage_id for item in target.items}
     added: List[str] = []
     skipped: List[str] = []
     failed: List[Dict[str, Any]] = []
@@ -2317,10 +2264,6 @@ def batch_add_items_to_workspace(req: BatchAddToWorkspaceRequest) -> Dict[str, A
         if not ws_id or not item_id:
             failed.append({**entry, "reason": "missing workspace_id or item_id"})
             continue
-        if item_id in existing_ids:
-            skipped.append(item_id)
-            continue
-
         source = _store.get(ws_id)
         if source is None:
             failed.append({"workspace_id": ws_id, "item_id": item_id, "reason": "source workspace not found"})
@@ -2333,13 +2276,28 @@ def batch_add_items_to_workspace(req: BatchAddToWorkspaceRequest) -> Dict[str, A
         if item is None:
             failed.append({"workspace_id": ws_id, "item_id": item_id, "reason": "item not found"})
             continue
+        if item.lineage_id in existing_lineages:
+            skipped.append(item_id)
+            continue
 
+        target_note_dir: Optional[Path] = None
         try:
             cloned = WorkspaceItem.from_dict(item.to_dict())
+            cloned.item_id = str(uuid.uuid4())
+            cloned.content_id = str(uuid.uuid4())
+            cloned.origin_content_id = item.content_id
+            cloned.legacy_item_id = item.legacy_item_id or item.item_id
+            cloned.related_task_ids = []
+            source_note_dir = note_dir(ws_id, item_id)
+            target_note_dir = note_dir(target_id, cloned.item_id)
+            if source_note_dir.exists():
+                shutil.copytree(source_note_dir, target_note_dir)
             _store.add_item(target_id, cloned)
-            existing_ids.add(item_id)
-            added.append(item_id)
+            existing_lineages.add(cloned.lineage_id)
+            added.append(cloned.item_id)
         except Exception as err:
+            if target_note_dir is not None:
+                shutil.rmtree(target_note_dir, ignore_errors=True)
             failed.append({"workspace_id": ws_id, "item_id": item_id, "reason": str(err)})
 
     return {
@@ -2349,6 +2307,79 @@ def batch_add_items_to_workspace(req: BatchAddToWorkspaceRequest) -> Dict[str, A
         "added_ids": added,
         "skipped_ids": skipped,
         "failures": failed,
+    }
+
+
+@router.post("/items/batch-organize")
+def batch_organize_items(req: BatchOrganizeRequest) -> Dict[str, Any]:
+    """Apply manual tags and/or a workspace folder to selected independent copies."""
+
+    if req.tags is None and req.folder_id is None:
+        raise HTTPException(status_code=400, detail="tags or folder_id is required")
+    if req.tags is not None:
+        _validate_tags(req.tags)
+    changed = 0
+    failures: List[Dict[str, Any]] = []
+    for reference in req.items:
+        workspace_id = str(reference.get("workspace_id") or "")
+        item_id = str(reference.get("item_id") or "")
+        try:
+            item = _store.get_item(workspace_id, item_id)
+            if req.folder_id is not None:
+                _metadata.move_content(workspace_id, item.content_id, req.folder_id)
+            if req.tags is not None:
+                _metadata.replace_tags(item.content_id, req.tags, "MANUAL")
+                automatic = _metadata.tags_for_content(item.content_id, "AUTO")
+                _store.update_item(
+                    workspace_id,
+                    item_id,
+                    tags={**automatic, **req.tags},
+                )
+            changed += 1
+        except (KeyError, ValueError) as error:
+            failures.append({**reference, "reason": str(error)})
+    return {"changed": changed, "failed": len(failures), "failures": failures}
+
+
+@router.get("/{workspace_id}/items/{item_id}/lineage")
+def list_item_lineage(workspace_id: str, item_id: str) -> Dict[str, Any]:
+    """列出其他合集中的同源独立副本，不自动合并或覆盖。"""
+
+    try:
+        current = _store.get_item(workspace_id, item_id)
+    except KeyError as err:
+        raise HTTPException(status_code=404, detail=str(err)) from err
+    copies = []
+    for workspace in _store.list_all(include_trashed=False):
+        for item in workspace.items:
+            if item.lineage_id != current.lineage_id or item.content_id == current.content_id:
+                continue
+            copies.append({
+                "workspace_id": workspace.workspace_id,
+                "workspace_name": workspace.name,
+                "item_id": item.item_id,
+                "content_id": item.content_id,
+                "lineage_id": item.lineage_id,
+                "name": item.name,
+                "type": item.type,
+                "updated_at": item.updated_at,
+                "summary_preview": str(
+                    (item.results or {}).get("summary")
+                    or (item.results or {}).get("content_md")
+                    or ""
+                )[:240],
+                "jump_url": _jump_url(workspace.workspace_id, item.item_id, item.type),
+            })
+    return {
+        "content_id": current.content_id,
+        "lineage_id": current.lineage_id,
+        "current": {
+            "workspace_id": workspace_id,
+            "item_id": current.item_id,
+            "content_id": current.content_id,
+            "updated_at": current.updated_at,
+        },
+        "copies": sorted(copies, key=lambda copy: copy["updated_at"], reverse=True),
     }
 
 
@@ -2377,7 +2408,7 @@ def import_batch_source(req: BatchSourceImportRequest) -> Dict[str, Any]:
         workspace_name = workspace_name[:120].rstrip()
     workspace_id = str(uuid.uuid4())
     items: List[WorkspaceItem] = []
-    intent = req.intent or ("replica" if req.kind == "replica" else "note")
+    intent = req.intent or "note"
 
     for idx, entry in enumerate(req.items, start=1):
         url = _validate_batch_network_url(entry.source_url)
@@ -2399,7 +2430,6 @@ def import_batch_source(req: BatchSourceImportRequest) -> Dict[str, Any]:
                         "summary_template": req.summary_template,
                         "diarize": req.diarize,
                     },
-                    **({"replica_kind": req.replica_kind} if req.kind == "replica" else {}),
                 },
             ),
             results={
@@ -2549,7 +2579,10 @@ def empty_trash() -> Dict[str, Any]:
 
 
 @router.delete("/{workspace_id}")
-def delete_workspace(workspace_id: str) -> Dict[str, Any]:
+def delete_workspace(
+    workspace_id: str,
+    content_policy: Literal["keep", "trash"] = Query("keep"),
+) -> Dict[str, Any]:
     """软删除：标记 trashed=True，不删 JSON 记录与素材文件。
 
     通过 POST /workspaces/{id}/restore 恢复；
@@ -2560,9 +2593,65 @@ def delete_workspace(workspace_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
     if rec.trashed:
         # 已经在垃圾桶里，幂等返回
-        return {"trashed": True, "workspace_id": workspace_id, "already": True}
+        return {
+            "trashed": True,
+            "workspace_id": workspace_id,
+            "already": True,
+            "moved_to_inbox": 0,
+            "already_elsewhere": 0,
+            "trashed_count": len(rec.items),
+        }
+
+    moved_to_inbox = 0
+    already_elsewhere = 0
+    if content_policy == "keep" and rec.source != "inbox":
+        active_records = [
+            workspace
+            for workspace in _store.list_all(include_trashed=False)
+            if workspace.workspace_id != workspace_id
+        ]
+        active_lineages = {
+            item.lineage_id
+            for workspace in active_records
+            for item in workspace.items
+            if item.lineage_id
+        }
+        unique_items = []
+        for item in rec.items:
+            if item.lineage_id and item.lineage_id in active_lineages:
+                already_elsewhere += 1
+            else:
+                unique_items.append(item)
+        if unique_items:
+            ensure_inbox()
+            copy_result = batch_add_items_to_workspace(
+                BatchAddToWorkspaceRequest(
+                    target_workspace_id=_INBOX_WORKSPACE_ID,
+                    items=[
+                        {"workspace_id": workspace_id, "item_id": item.item_id}
+                        for item in unique_items
+                    ],
+                )
+            )
+            if copy_result.get("failed"):
+                raise HTTPException(
+                    status_code=500,
+                    detail={
+                        "message": "内容保留到收纳箱失败，合集未删除",
+                        "failures": copy_result.get("failures") or [],
+                    },
+                )
+            moved_to_inbox = int(copy_result.get("added") or 0)
+            already_elsewhere += int(copy_result.get("skipped") or 0)
     _store.update(workspace_id, trashed=True)
-    return {"trashed": True, "workspace_id": workspace_id}
+    invalidate_workspace_index(workspace_id)
+    return {
+        "trashed": True,
+        "workspace_id": workspace_id,
+        "moved_to_inbox": moved_to_inbox,
+        "already_elsewhere": already_elsewhere,
+        "trashed_count": len(rec.items) if content_policy == "trash" else 0,
+    }
 
 
 @router.post("/{workspace_id}/restore")
@@ -2723,12 +2812,14 @@ def favorite_item(workspace_id: str, item_id: str) -> Dict[str, Any]:
     rec = _store.get(workspace_id)
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
-    if not any(it.item_id == item_id for it in rec.items):
-        raise HTTPException(status_code=404, detail=f"item not found: {item_id}")
-    if item_id in rec.favorites:
-        return rec.to_dict()
-    new_favs = list(rec.favorites) + [item_id]
-    rec = _store.update(workspace_id, favorites=new_favs)
+    item = _find_item(rec, item_id)
+    _metadata.set_favorite(workspace_id, item.content_id)
+    favorite_ids = _metadata.favorite_content_ids(workspace_id)
+    rec = _store.update(
+        workspace_id,
+        favorites=[candidate.item_id for candidate in rec.items
+                   if candidate.content_id in favorite_ids],
+    )
     return rec.to_dict()
 
 
@@ -2737,11 +2828,179 @@ def unfavorite_item(workspace_id: str, item_id: str) -> Dict[str, Any]:
     rec = _store.get(workspace_id)
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
-    if item_id not in rec.favorites:
-        return rec.to_dict()
-    new_favs = [fid for fid in rec.favorites if fid != item_id]
-    rec = _store.update(workspace_id, favorites=new_favs)
+    item = _find_item(rec, item_id)
+    _metadata.remove_favorite(workspace_id, item.content_id)
+    favorite_ids = _metadata.favorite_content_ids(workspace_id)
+    rec = _store.update(
+        workspace_id,
+        favorites=[candidate.item_id for candidate in rec.items
+                   if candidate.content_id in favorite_ids],
+    )
     return rec.to_dict()
+
+
+class MetadataNameRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    parent_id: Optional[str] = None
+
+
+class FolderMoveRequest(BaseModel):
+    folder_id: str
+
+
+class FavoriteImportRequest(BaseModel):
+    payload: Dict[str, Any]
+
+
+@router.get("/metadata/favorite-groups")
+def list_favorite_groups() -> List[Dict[str, Any]]:
+    return _metadata.list_favorite_groups()
+
+
+@router.get("/metadata/favorites/export")
+def export_favorite_metadata() -> Dict[str, Any]:
+    return _metadata.export_favorites()
+
+
+@router.get("/metadata/favorites/resolved")
+def resolved_favorites(
+    group_id: Optional[str] = Query(default=None),
+) -> List[Dict[str, Any]]:
+    """R3-A：已解析收藏数据源。
+
+    解析所有未软删除 workspace（含 __inbox__）中的收藏，
+    按 (workspace_id, content_id) 解析，跳过丢失/已删除内容。
+    """
+    raw_items = _metadata.all_favorite_items(group_id=group_id)
+    # 构建 workspace 索引（含 inbox，排除 trashed）
+    all_recs = _store.list_all(include_trashed=True)
+    ws_index: Dict[str, WorkspaceRecord] = {
+        r.workspace_id: r for r in all_recs if not r.trashed
+    }
+    resolved: List[Dict[str, Any]] = []
+    for entry in raw_items:
+        ws_id = entry["workspace_id"]
+        content_id = entry["content_id"]
+        rec = ws_index.get(ws_id)
+        if rec is None:
+            continue  # workspace 不存在或已软删除
+        # 按 content_id 查找 item
+        item = next(
+            (it for it in rec.items if it.content_id == content_id), None
+        )
+        if item is None:
+            continue  # item 已丢失
+        # 构建 jump_url
+        if item.type in ("audio", "note"):
+            jump_url = f"/workspaces/{ws_id}/items/{item.item_id}/note"
+        else:
+            jump_url = f"/workspaces/{ws_id}/items/{item.item_id}/result"
+        resolved.append({
+            "workspace_id": ws_id,
+            "workspace_name": rec.name,
+            "item_id": item.item_id,
+            "content_id": content_id,
+            "item_name": item.name or item.source_value,
+            "item_type": item.type,
+            "group_ids": entry["group_ids"],
+            "favorited_at": entry["favorited_at"],
+            "jump_url": jump_url,
+        })
+    return resolved
+
+
+@router.post("/metadata/favorites/import")
+def import_favorite_metadata(req: FavoriteImportRequest) -> Dict[str, int]:
+    records = _store.list_all(include_trashed=True)
+    valid = {item.content_id for record in records for item in record.items}
+    result = _metadata.import_favorites(req.payload, valid)
+    for record in records:
+        favorite_ids = _metadata.favorite_content_ids(record.workspace_id)
+        snapshot = [
+            item.item_id for item in record.items if item.content_id in favorite_ids
+        ]
+        if snapshot != record.favorites:
+            _store.update(record.workspace_id, favorites=snapshot)
+    return result
+
+
+@router.post("/metadata/favorite-groups")
+def create_favorite_group(req: MetadataNameRequest) -> Dict[str, Any]:
+    try:
+        return _metadata.create_favorite_group(req.name)
+    except (ValueError, sqlite3.IntegrityError) as err:
+        raise HTTPException(status_code=409, detail=str(err)) from err
+
+
+@router.get("/metadata/favorite-groups/{group_id}/items")
+def list_favorite_group_items(group_id: str) -> List[Dict[str, Any]]:
+    return _metadata.favorite_items(group_id)
+
+
+@router.delete("/metadata/favorite-groups/{group_id}")
+def delete_favorite_group(group_id: str) -> Dict[str, bool]:
+    try:
+        _metadata.delete_favorite_group(group_id)
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+    return {"deleted": True}
+
+
+@router.post("/{workspace_id}/favorites/{item_id}/groups/{group_id}")
+def add_favorite_to_group(
+    workspace_id: str, item_id: str, group_id: str,
+) -> Dict[str, Any]:
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    item = _find_item(rec, item_id)
+    try:
+        _metadata.set_favorite(workspace_id, item.content_id, group_id)
+    except sqlite3.IntegrityError as err:
+        raise HTTPException(status_code=404, detail="favorite group not found") from err
+    if item_id not in rec.favorites:
+        rec = _store.update(workspace_id, favorites=[*rec.favorites, item_id])
+    return rec.to_dict()
+
+
+@router.get("/{workspace_id}/folders")
+def list_workspace_folders(workspace_id: str) -> List[Dict[str, Any]]:
+    if _store.get(workspace_id) is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    return _metadata.list_folders(workspace_id)
+
+
+@router.post("/{workspace_id}/folders")
+def create_workspace_folder(
+    workspace_id: str, req: MetadataNameRequest,
+) -> Dict[str, Any]:
+    if _store.get(workspace_id) is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    try:
+        return _metadata.create_folder(workspace_id, req.name, req.parent_id)
+    except (ValueError, sqlite3.IntegrityError) as err:
+        raise HTTPException(status_code=409, detail=str(err)) from err
+
+
+@router.delete("/{workspace_id}/folders/{folder_id}")
+def delete_workspace_folder(workspace_id: str, folder_id: str) -> Dict[str, bool]:
+    _metadata.delete_folder(workspace_id, folder_id)
+    return {"deleted": True}
+
+
+@router.put("/{workspace_id}/items/{item_id}/folder")
+def move_item_to_folder(
+    workspace_id: str, item_id: str, req: FolderMoveRequest,
+) -> Dict[str, bool]:
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    item = _find_item(rec, item_id)
+    try:
+        _metadata.move_content(workspace_id, item.content_id, req.folder_id)
+    except ValueError as err:
+        raise HTTPException(status_code=409, detail=str(err)) from err
+    return {"moved": True}
 
 
 # ── Preflight 配置 + 触发分析 ───────────────────────────
@@ -2939,10 +3198,6 @@ def _bridge_to_pipeline_payload(
                 payload["background_for_recognition"] = _preflight["background_for_recognition"]
         if "intent" not in payload and item.preflight.intent:
             payload["intent"] = item.preflight.intent
-        # replica 二级类型透传（前端存 tasks.replica_kind）
-        _rk = tasks.get("replica_kind")
-        if _rk:
-            payload["replica_kind"] = _rk
         # R3.11: 透传嵌图配置（embed_frames / max_embed_frames）
         # 前端存 tasks.summary.embed_frames / tasks.summary.max_embed_frames
         _summary_cfg = tasks.get("summary")
@@ -2992,10 +3247,6 @@ def _bridge_to_pipeline_payload(
             payload["background_for_recognition"] = _preflight["background_for_recognition"]
     if "intent" not in payload and item.preflight.intent:
         payload["intent"] = item.preflight.intent
-    # replica 二级类型透传
-    _rk = tasks.get("replica_kind")
-    if _rk:
-        payload["replica_kind"] = _rk
     _summary_cfg = tasks.get("summary")
     _pf: Dict[str, Any] = payload.get("preflight") or {}
     if isinstance(_summary_cfg, dict):
@@ -3152,7 +3403,6 @@ def generate_note(workspace_id: str, req: GenerateNoteRequest) -> Dict[str, Any]
         _task_payload["vision_model"] = req.vision_model.strip()
     # 意图分流：记录用户选择的任务意图和笔记子类型
     _task_payload["intent"] = req.intent or "note"
-    _task_payload["replica_kind"] = req.replica_kind or "prompt"
     _task_payload["note_media_kind"] = req.note_media_kind or "auto"
     # #19: 写入 source_type + kind_hint，ProcessingPage 动态步骤矩阵需要
     _task_payload["source_type"] = "link"
@@ -3304,14 +3554,14 @@ def _locate_analyze_report_dir(
 
 
 def _is_target_frame_format(frames: list) -> bool:
-    """检查 frames 是否已经是目标格式（包含 image_path, sec, ts, prompt_mj 等字段）。
+    """检查 frames 是否已经是目标格式（包含 image_path, sec, ts 等字段）。
     只检查第一帧，因为所有帧应该格式一致。
     """
     if not frames:
         return False
     first = frames[0]
     # 目标格式必须包含这些字段
-    required_fields = ("image_path", "sec", "ts", "prompt_mj")
+    required_fields = ("image_path", "sec", "ts")
     return all(field in first for field in required_fields)
 
 
@@ -3346,7 +3596,7 @@ def _materialize_video_results_from_analyze(
     """
     if not isinstance(results, dict):
         return results
-    # C-0 fix: 只有 frames 已具备目标字段（image_path, sec, ts, prompt_mj）才可以提前返回
+    # C-0 fix: 只有 frames 已具备目标字段（image_path, sec, ts）才可以提前返回
     if results.get("frames") and _is_target_frame_format(results["frames"]):
         return results  # 已是目标格式
     # N7b 路径 1：字幕直接总结结果，无需从 JSON 文件物化
@@ -3419,11 +3669,6 @@ def _materialize_video_results_from_analyze(
                     img_path = "/static/" + str(candidate.relative_to(data_root)).replace("\\", "/")
                 except ValueError:
                     img_path = ""
-        # C-0 fix: 从 image_prompt_en 映射到 prompt_mj，prompt_sd/prompt_video 兜底
-        image_prompt_en = fr.get("image_prompt_en") or fr.get("prompt_mj") or ""
-        prompt_mj = image_prompt_en
-        prompt_sd = fr.get("prompt_sd") or {"positive": image_prompt_en, "negative": ""}
-        prompt_video = fr.get("prompt_video") or image_prompt_en
         frames.append({
             "idx": idx,
             "sec": sec_val,
@@ -3437,9 +3682,6 @@ def _materialize_video_results_from_analyze(
             "shot_type": fr.get("shot_type", ""),
             "title": fr.get("title", ""),
             "subtitle": fr.get("subtitle", ""),
-            "prompt_mj": prompt_mj,
-            "prompt_sd": prompt_sd,
-            "prompt_video": prompt_video,
             "tags": fr.get("tags", {}),
         })
     return {
@@ -3592,8 +3834,8 @@ def get_item_result(workspace_id: str, item_id: str) -> Dict[str, Any]:
 def _build_demo_image_result(item_id: str, item_name: str) -> Dict[str, Any]:
     """图片结果页 demo fixture（Phase 1H）。
 
-    当 item.results 尚未填充时返回固定示例，保证前端左图右信息 + 提示词 tabs 可跑通。
-    数据对齐 v1.1 §7.4 图片结果页布局。
+    当 item.results 尚未填充时返回固定示例，保证前端左图右信息可跑通。
+    数据对齐 v1.1 §7.4 图片结果页布局（视觉理解：描述/OCR/标签/EXIF）。
     """
     return {
         "source": "demo_fixture",
@@ -3619,14 +3861,6 @@ def _build_demo_image_result(item_id: str, item_name: str) -> Dict[str, Any]:
             "format": "JPEG",
             "size_kb": 8520.3,
         },
-        "prompts": {
-            "mj": "majestic mountain reflection on calm lake, green meadow foreground, golden hour sunset, Swiss Alps, photorealistic, landscape photography, --ar 3:2 --style raw --v 6",
-            "sd": {
-                "positive": "majestic mountain reflection, calm lake, green meadow, golden hour, Swiss Alps, landscape photography, ultra detailed, 8k, masterpiece",
-                "negative": "blurry, low quality, oversaturated, watermark, text",
-            },
-            "json": "",
-        },
         "tags": {
             "subject": ["山脉", "湖泊", "草地"],
             "scene": ["瑞士", "因特拉肯", "阿尔卑斯"],
@@ -3644,7 +3878,7 @@ def get_image_result(workspace_id: str, item_id: str) -> Dict[str, Any]:
     """图片结果页聚合数据（v1.1 §7.4）。
 
     优先返回 item.results 里的真数据；当 results 尚未填充时，
-    退化到 demo fixture，保证前端左图右信息 + 提示词 tabs 可跑通。
+    退化到 demo fixture，保证前端左图右信息可跑通。
     """
     rec = _store.get(workspace_id)
     if rec is None:
@@ -3665,7 +3899,9 @@ def get_image_result(workspace_id: str, item_id: str) -> Dict[str, Any]:
     # X.1 bridge: merge task results overlay so image_result sees real data
     overlay = _sync_item_with_tasks(item)
     results = dict(overlay.get("results", {})) if overlay and overlay.get("results") else dict(item.results or {})
-    has_real = isinstance(results, dict) and results.get("description") and results.get("prompts")
+    has_real = isinstance(results, dict) and (
+        results.get("description") or results.get("ocr_text") or results.get("tags")
+    )
     if has_real:
         payload = dict(results)
         payload.setdefault("source", "item_results")
@@ -3722,7 +3958,6 @@ def get_image_compare(
             "description": results.get("description", ""),
             "ocr_text": results.get("ocr_text", ""),
             "tags": results.get("tags", {}),
-            "prompts": results.get("prompts", {}),
             "associations": results.get("associations", {}),
             "has_result": has_real,
         })
@@ -3981,7 +4216,6 @@ def get_text_result(workspace_id: str, item_id: str) -> Dict[str, Any]:
     查找顺序：
       1. item.results（task_runner 已回写）
       2. item.related_task_ids → task_store → 磁盘 JSON 文件
-    同时附带 prompt_versions 供前端展示提示词版本栈。
     """
     rec = _store.get(workspace_id)
     if rec is None:
@@ -4005,9 +4239,6 @@ def get_text_result(workspace_id: str, item_id: str) -> Dict[str, Any]:
     if has_real:
         payload = dict(results)
         payload.setdefault("source", "item_results")
-        payload["prompt_versions"] = [
-            pv.to_dict() for pv in rec.prompt_versions.get(item_id) or []
-        ]
         return payload
 
     # 回退：从 task_store + 磁盘文件读取
@@ -4021,17 +4252,11 @@ def get_text_result(workspace_id: str, item_id: str) -> Dict[str, Any]:
         if "content" in task_result and bool(task_result.get("title")):
             payload = dict(task_result)
             payload.setdefault("source", "task_result")
-            payload["prompt_versions"] = [
-                pv.to_dict() for pv in rec.prompt_versions.get(item_id) or []
-            ]
             return payload
         # 再尝试磁盘 JSON
         disk_data = _read_text_result_from_disk(task_id, project_id)
         if disk_data and "content" in disk_data:
             disk_data.setdefault("source", "disk_json")
-            disk_data["prompt_versions"] = [
-                pv.to_dict() for pv in rec.prompt_versions.get(item_id) or []
-            ]
             return disk_data
 
     raise HTTPException(
@@ -4066,31 +4291,6 @@ def update_text_content(
     return {"content": req.content, "saved_at": saved_at}
 
 
-# ── 提示词版本栈（Phase 2C.2）────────────────────────────
-
-
-@router.post("/{workspace_id}/items/{item_id}/prompts/versions")
-def add_prompt_version(
-    workspace_id: str, item_id: str, req: PromptVersionRequest
-) -> Dict[str, Any]:
-    """为指定素材追加一个提示词版本。"""
-    try:
-        pv = _store.add_prompt_version(workspace_id, item_id, req.content)
-    except KeyError as err:
-        raise HTTPException(status_code=404, detail=str(err)) from err
-    return pv.to_dict()
-
-
-@router.get("/{workspace_id}/items/{item_id}/prompts/versions")
-def list_prompt_versions(workspace_id: str, item_id: str) -> List[Dict[str, Any]]:
-    """列出指定素材的所有提示词版本。"""
-    try:
-        versions = _store.list_prompt_versions(workspace_id, item_id)
-    except KeyError as err:
-        raise HTTPException(status_code=404, detail=str(err)) from err
-    return [pv.to_dict() for pv in versions]
-
-
 # ── C-5 帧标题改名 ─────────────────────────────────────────
 
 
@@ -4119,108 +4319,6 @@ def update_frame_title(
         raise HTTPException(status_code=404, detail=str(err)) from err
 
     return {"ok": True, "frame_idx": frame_idx, "title": req.title}
-
-
-# ── C-3 复刻包导出 ─────────────────────────────────────────
-
-
-class ReproduceExportRequest(BaseModel):
-    frame_indices: List[int] = Field(..., min_length=1)
-
-
-@router.post("/{workspace_id}/items/{item_id}/reproduce/export")
-def export_reproduce_package(
-    workspace_id: str, item_id: str, req: ReproduceExportRequest
-) -> StreamingResponse:
-    """打包选中帧为复刻工作包 zip 流式返回。"""
-    rec = _store.get(workspace_id)
-    if rec is None:
-        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
-    item = _find_item(rec, item_id)
-
-    # 复用 get_item_result 的数据获取逻辑
-    v_results = dict(item.results or {})
-    v_overlay = _sync_item_with_tasks(item)
-    if v_overlay and v_overlay.get("results"):
-        v_results = dict(v_overlay.get("results", {}))
-
-    preferred_basenames: List[str] = []
-    for tid in reversed(item.related_task_ids):
-        task = _pipeline_runner.store.get(tid)
-        if task is None or task.task_type != "analyze" or task.status != TaskStatus.SUCCESS.value:
-            continue
-        preferred_basenames = list(task.payload.get("video_basenames") or [])
-        if preferred_basenames:
-            break
-    v_results = _materialize_video_results_from_analyze(v_results, preferred_basenames=preferred_basenames)
-    frames = v_results.get("frames", [])
-
-    # 过滤有效帧索引
-    valid = [i for i in req.frame_indices if 0 <= i < len(frames)]
-    if not valid:
-        raise HTTPException(status_code=400, detail="no valid frame indices")
-
-    data_root = _ROOT_DIR / "data"
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        # frames/*.jpg
-        for i in valid:
-            fr = frames[i]
-            img_path = fr.get("image_path") or fr.get("frame_image_path") or ""
-            if img_path.startswith("/static/"):
-                fs_path = data_root / img_path[len("/static/"):]
-            else:
-                fs_path = None
-            if fs_path and fs_path.is_file():
-                zf.writestr(f"frames/{i:03d}.jpg", fs_path.read_bytes())
-
-        # prompts.txt
-        lines = []
-        for i in valid:
-            fr = frames[i]
-            ts = fr.get("ts", "")
-            title = fr.get("title", "")
-            prompt = fr.get("prompt_mj") or fr.get("prompt_video") or ""
-            lines.append(f"--- Frame {i} ({ts}) {title} ---\n{prompt}\n")
-        zf.writestr("prompts.txt", "\n".join(lines))
-
-        # styles.json — 所有选中帧的 tags 汇总
-        styles = {}
-        for i in valid:
-            tags = frames[i].get("tags", {})
-            for dim, vals in tags.items():
-                if isinstance(vals, list):
-                    styles.setdefault(dim, [])
-                    for v in vals:
-                        if v not in styles[dim]:
-                            styles[dim].append(v)
-        zf.writestr("styles.json", json.dumps(styles, ensure_ascii=False, indent=2))
-
-        # manifest.json
-        manifest = {
-            "workspace_id": workspace_id,
-            "item_id": item_id,
-            "video_title": v_results.get("video", {}).get("title", ""),
-            "frame_count": len(valid),
-            "frames": [
-                {
-                    "index": i,
-                    "ts": frames[i].get("ts", ""),
-                    "title": frames[i].get("title", ""),
-                    "shot_type": frames[i].get("shot_type", ""),
-                }
-                for i in valid
-            ],
-        }
-        zf.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
-
-    buf.seek(0)
-    filename = f"reproduce_{item_id[:8]}.zip"
-    return StreamingResponse(
-        buf,
-        media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
 
 
 # ── Phase 3B.2：单工作空间语义检索 ─────────────────────────
@@ -4301,6 +4399,8 @@ def update_item_tags(
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
     _find_item(rec, item_id)
     _validate_tags(req.tags)
+    item = _find_item(rec, item_id)
+    _metadata.replace_tags(item.content_id, req.tags, "MANUAL")
     rec = _store.update_item(workspace_id, item_id, tags=req.tags)
     item = next(it for it in rec.items if it.item_id == item_id)
     return {"tags": item.tags}
@@ -4319,7 +4419,10 @@ def regenerate_item_tags(workspace_id: str, item_id: str) -> Dict[str, Any]:
         new_tags = generate_tags(item, rec, task_store=_pipeline_runner.store)
     except Exception as err:
         raise HTTPException(status_code=500, detail=str(err)) from err
-    rec = _store.update_item(workspace_id, item_id, tags=new_tags)
+    _metadata.replace_tags(item.content_id, new_tags, "AUTO")
+    manual_tags = _metadata.tags_for_content(item.content_id, "MANUAL")
+    merged_tags = {**new_tags, **manual_tags}
+    rec = _store.update_item(workspace_id, item_id, tags=merged_tags)
     item = next(it for it in rec.items if it.item_id == item_id)
     return {"tags": item.tags}
 
@@ -4393,6 +4496,9 @@ class NoteUpdateRequest(BaseModel):
     """R1.1: note.md 正文写入请求体。"""
 
     body: str = Field(..., description="正文 markdown（不含 frontmatter）")
+    version_source: Literal[
+        "USER_EDIT", "RESTORE", "ADOPT_FROM_SIBLING"
+    ] = "USER_EDIT"
 
 
 class TranslateRequest(BaseModel):
@@ -4896,6 +5002,25 @@ async def create_summary(
         )
     except Exception as err:
         raise HTTPException(status_code=500, detail=f"创建总结任务失败: {err}") from err
+
+    # 阶段 C1：把 summary task_id 关联到 item.related_task_ids，删除 item 时才能一并清理。
+    # 去重追加，不覆盖原任务 ID；关联失败则清理刚创建的任务，避免孤儿任务。
+    if task.task_id not in item.related_task_ids:
+        try:
+            _store.update_item(
+                workspace_id,
+                item_id,
+                related_task_ids=[*item.related_task_ids, task.task_id],
+            )
+        except Exception as err:
+            try:
+                _pipeline_runner.store.delete(task.task_id)
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=500, detail=f"关联总结任务失败: {err}",
+            ) from err
+
     return {
         "status": "accepted",
         "task_id": task.task_id,
@@ -5214,6 +5339,14 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
     }
 
 
+def _extract_note_body(markdown: str) -> str:
+    if markdown.startswith("---\n"):
+        parts = markdown.split("---\n", 2)
+        if len(parts) >= 3:
+            return parts[2].lstrip("\n")
+    return markdown
+
+
 @router.put("/{workspace_id}/items/{item_id}/note")
 def update_item_note(workspace_id: str, item_id: str, req: NoteUpdateRequest) -> Dict[str, Any]:
     """R1.1: 写入 note.md 正文（保留 frontmatter 机器字段）。
@@ -5232,11 +5365,13 @@ def update_item_note(workspace_id: str, item_id: str, req: NoteUpdateRequest) ->
 
     nd = note_dir(workspace_id, item_id)
     note_path = nd / "note.md"
+    previous_body: Optional[str] = None
 
     # 读取或惰性初始化 frontmatter
     frontmatter: Dict[str, Any] = {}
     if note_path.exists():
         raw = note_path.read_text(encoding="utf-8")
+        previous_body = _extract_note_body(raw)
         if raw.startswith("---\n"):
             parts = raw.split("---\n", 2)
             if len(parts) >= 3:
@@ -5276,6 +5411,9 @@ def update_item_note(workspace_id: str, item_id: str, req: NoteUpdateRequest) ->
     note_content = f"---\n{fm_yaml}---\n\n{req.body}"
     nd.mkdir(parents=True, exist_ok=True)
     note_path.write_text(note_content, encoding="utf-8")
+    if previous_body is not None:
+        _note_versions.checkpoint(item.content_id, previous_body, "BASELINE")
+    _note_versions.checkpoint(item.content_id, req.body, req.version_source)
 
     # 读取 source.md
     source_md = ""
@@ -5385,6 +5523,73 @@ def update_item_note(workspace_id: str, item_id: str, req: NoteUpdateRequest) ->
         "transcript": transcript,
         "summary_hint": summary_hint,
     }
+
+
+@router.get("/{workspace_id}/items/{item_id}/note/versions")
+def list_note_versions(workspace_id: str, item_id: str) -> List[Dict[str, Any]]:
+    item = _store.get_item(workspace_id, item_id)
+    return [
+        {key: value for key, value in version.items() if key != "body_md"}
+        for version in _note_versions.list(item.content_id)
+    ]
+
+
+@router.get("/{workspace_id}/items/{item_id}/note/versions/{version_id}")
+def get_note_version(
+    workspace_id: str, item_id: str, version_id: str,
+) -> Dict[str, Any]:
+    item = _store.get_item(workspace_id, item_id)
+    try:
+        return _note_versions.get(item.content_id, version_id)
+    except KeyError as err:
+        raise HTTPException(status_code=404, detail=str(err)) from err
+
+
+@router.post("/{workspace_id}/items/{item_id}/note/versions/{version_id}/restore")
+def restore_note_version(
+    workspace_id: str, item_id: str, version_id: str,
+) -> Dict[str, Any]:
+    item = _store.get_item(workspace_id, item_id)
+    try:
+        version = _note_versions.get(item.content_id, version_id)
+    except KeyError as err:
+        raise HTTPException(status_code=404, detail=str(err)) from err
+    return update_item_note(
+        workspace_id,
+        item_id,
+        NoteUpdateRequest(body=version["body_md"], version_source="RESTORE"),
+    )
+
+
+class AdoptSiblingRequest(BaseModel):
+    sibling_content_id: str
+
+
+@router.post("/{workspace_id}/items/{item_id}/note/adopt-sibling")
+def adopt_sibling_note(
+    workspace_id: str, item_id: str, req: AdoptSiblingRequest,
+) -> Dict[str, Any]:
+    current = _store.get_item(workspace_id, item_id)
+    sibling_location = next(
+        (
+            (record.workspace_id, sibling.item_id)
+            for record in _store.list_all(include_trashed=False)
+            for sibling in record.items
+            if sibling.content_id == req.sibling_content_id
+            and sibling.lineage_id == current.lineage_id
+            and sibling.content_id != current.content_id
+        ),
+        None,
+    )
+    if sibling_location is None:
+        raise HTTPException(status_code=404, detail="sibling content not found")
+    sibling_note = get_item_note(*sibling_location)
+    body = _extract_note_body(str(sibling_note.get("note_md") or ""))
+    return update_item_note(
+        workspace_id,
+        item_id,
+        NoteUpdateRequest(body=body, version_source="ADOPT_FROM_SIBLING"),
+    )
 
 
 @router.get("/{workspace_id}/items/{item_id}/note/export")
@@ -5574,6 +5779,59 @@ class MergeRequest(BaseModel):
     style: str = "综合大纲"  # 融合风格：综合大纲 / 知识图谱 / 精华摘要
 
 
+class MergedNoteCreateRequest(BaseModel):
+    title: str = "综合笔记"
+    content_md: str
+    item_ids: List[str] = Field(default_factory=list)
+
+
+class MergedNoteUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    content_md: Optional[str] = None
+    item_ids: Optional[List[str]] = None
+
+
+def _merged_source_snapshot(
+    rec: WorkspaceRecord,
+    item_ids: List[str],
+) -> List[Dict[str, str]]:
+    selected = set(item_ids)
+    snapshots: List[Dict[str, str]] = []
+    for item in rec.items:
+        if item.item_id not in selected:
+            continue
+        results = item.results if isinstance(item.results, dict) else {}
+        summary = str(results.get("summary") or results.get("content_md") or "")
+        snapshots.append(
+            {
+                "item_id": item.item_id,
+                "content_id": item.content_id,
+                "lineage_id": item.lineage_id,
+                "title": item.name or item.source_value or item.item_id,
+                "summary_hash": hashlib.sha256(summary.encode("utf-8")).hexdigest(),
+            }
+        )
+    return snapshots
+
+
+def _append_merged_version(
+    rec: WorkspaceRecord,
+    merged: MergedNote,
+    *,
+    content_md: str,
+    item_ids: List[str],
+    created_by: Literal["ai", "user", "restore"],
+) -> None:
+    merged.append_version(
+        content_md=content_md,
+        item_ids=item_ids,
+        source_snapshot=_merged_source_snapshot(rec, item_ids),
+        created_by=created_by,
+    )
+    _store.update(rec.workspace_id, merged_notes=rec.merged_notes)
+    invalidate_workspace_index(rec.workspace_id)
+
+
 @router.post("/{workspace_id}/merge")
 def merge_notes(workspace_id: str, req: MergeRequest) -> Dict[str, Any]:
     """融合：取选中素材的笔记 → LLM 合成综合笔记 → 存合集级 merged_notes。"""
@@ -5633,11 +5891,15 @@ def merge_notes(workspace_id: str, req: MergeRequest) -> Dict[str, Any]:
     # 存入合集级载体（不新增 item，避免污染素材网格）
     merged = MergedNote(
         title=f"{req.style} - 综合笔记",
-        item_ids=req.item_ids,
-        content_md=merged_md,
     )
     rec.merged_notes.append(merged)
-    _store.update(workspace_id, merged_notes=rec.merged_notes)
+    _append_merged_version(
+        rec,
+        merged,
+        content_md=merged_md,
+        item_ids=req.item_ids,
+        created_by="ai",
+    )
 
     return merged.to_dict()
 
@@ -5648,7 +5910,30 @@ def list_merged_notes(workspace_id: str) -> List[Dict[str, Any]]:
     rec = _store.get(workspace_id)
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
-    return [mn.to_dict() for mn in rec.merged_notes]
+    return [mn.to_dict() for mn in rec.merged_notes if not mn.deleted_at]
+
+
+@router.post("/{workspace_id}/merged-notes")
+def create_merged_note(
+    workspace_id: str,
+    req: MergedNoteCreateRequest,
+) -> Dict[str, Any]:
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    missing = [item_id for item_id in req.item_ids if not any(item.item_id == item_id for item in rec.items)]
+    if missing:
+        raise HTTPException(status_code=422, detail=f"item not found: {','.join(missing)}")
+    merged = MergedNote(title=req.title.strip() or "综合笔记")
+    rec.merged_notes.append(merged)
+    _append_merged_version(
+        rec,
+        merged,
+        content_md=req.content_md,
+        item_ids=req.item_ids,
+        created_by="user",
+    )
+    return merged.to_dict()
 
 
 @router.get("/{workspace_id}/merged-notes/{merged_id}")
@@ -5658,20 +5943,96 @@ def get_merged_note(workspace_id: str, merged_id: str) -> Dict[str, Any]:
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
     mn = next((m for m in rec.merged_notes if m.merged_id == merged_id), None)
-    if mn is None:
+    if mn is None or mn.deleted_at:
         raise HTTPException(status_code=404, detail=f"merged note not found: {merged_id}")
     return mn.to_dict()
 
 
-@router.delete("/{workspace_id}/merged-notes/{merged_id}")
-def delete_merged_note(workspace_id: str, merged_id: str) -> Dict[str, str]:
-    """删除单条融合笔记。"""
+@router.patch("/{workspace_id}/merged-notes/{merged_id}")
+def update_merged_note(
+    workspace_id: str,
+    merged_id: str,
+    req: MergedNoteUpdateRequest,
+) -> Dict[str, Any]:
     rec = _store.get(workspace_id)
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
-    before = len(rec.merged_notes)
-    rec.merged_notes = [m for m in rec.merged_notes if m.merged_id != merged_id]
-    if len(rec.merged_notes) == before:
+    merged = next(
+        (note for note in rec.merged_notes if note.merged_id == merged_id and not note.deleted_at),
+        None,
+    )
+    if merged is None:
         raise HTTPException(status_code=404, detail=f"merged note not found: {merged_id}")
+    if req.title is not None:
+        merged.title = req.title.strip() or merged.title
+    if req.content_md is not None:
+        item_ids = list(req.item_ids) if req.item_ids is not None else list(merged.item_ids)
+        _append_merged_version(
+            rec,
+            merged,
+            content_md=req.content_md,
+            item_ids=item_ids,
+            created_by="user",
+        )
+    else:
+        merged.updated_at = datetime.now(timezone.utc).isoformat()
+        _store.update(workspace_id, merged_notes=rec.merged_notes)
+    return merged.to_dict()
+
+
+@router.get("/{workspace_id}/merged-notes/{merged_id}/versions")
+def list_merged_note_versions(
+    workspace_id: str,
+    merged_id: str,
+) -> List[Dict[str, Any]]:
+    note = get_merged_note(workspace_id, merged_id)
+    return list(note["versions"])
+
+
+@router.post("/{workspace_id}/merged-notes/{merged_id}/versions/{version_id}/restore")
+def restore_merged_note_version(
+    workspace_id: str,
+    merged_id: str,
+    version_id: str,
+) -> Dict[str, Any]:
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    merged = next(
+        (note for note in rec.merged_notes if note.merged_id == merged_id and not note.deleted_at),
+        None,
+    )
+    if merged is None:
+        raise HTTPException(status_code=404, detail=f"merged note not found: {merged_id}")
+    version = next(
+        (candidate for candidate in merged.versions if candidate.version_id == version_id),
+        None,
+    )
+    if version is None:
+        raise HTTPException(status_code=404, detail=f"merged note version not found: {version_id}")
+    _append_merged_version(
+        rec,
+        merged,
+        content_md=version.content_md,
+        item_ids=list(version.item_ids),
+        created_by="restore",
+    )
+    return merged.to_dict()
+
+
+@router.delete("/{workspace_id}/merged-notes/{merged_id}")
+def delete_merged_note(workspace_id: str, merged_id: str) -> Dict[str, Any]:
+    """Soft-delete a merged note without deleting source material."""
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    merged = next(
+        (note for note in rec.merged_notes if note.merged_id == merged_id and not note.deleted_at),
+        None,
+    )
+    if merged is None:
+        raise HTTPException(status_code=404, detail=f"merged note not found: {merged_id}")
+    merged.deleted_at = datetime.now(timezone.utc).isoformat()
     _store.update(workspace_id, merged_notes=rec.merged_notes)
-    return {"msg": "deleted"}
+    invalidate_workspace_index(workspace_id)
+    return {"deleted": True, "merged_id": merged_id}

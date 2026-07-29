@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { toast } from 'sonner'
+import { Skeleton } from '@/components/ui/skeleton'
 
 import {
   getWorkspace,
@@ -18,9 +19,9 @@ import { batchDeleteItems } from '@/services/library'
 import { AddMaterialModal } from '@/components/workspace/AddMaterialModal'
 import { usePipelineTasks } from '@/hooks/usePipelineTasks'
 import { withStatusToast } from '@/lib/statusToast'
-import { isWorkspaceKindAllowed, productConfig } from '@/config/product'
 
 import type { WorkspaceItem, WorkspaceRecord } from '@/types/workspace'
+import { useTaskStore } from '@/store/taskStore'
 
 import { ChatTab } from './ChatTab'
 import { ExportTab } from './ExportTab'
@@ -29,6 +30,8 @@ import { MaterialsTab } from './MaterialsTab'
 import { BackgroundEditor } from './BackgroundEditor'
 import { TaskboardHead } from './TaskboardHead'
 import { MergeModal } from './MergeModal'
+import { MergedNotesTab } from './MergedNotesTab'
+import { BatchesTab } from './BatchesTab'
 import type { TabId } from './types'
 import './taskboard.css'
 
@@ -39,6 +42,7 @@ import './taskboard.css'
 export default function TaskboardPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [workspace, setWorkspace] = useState<WorkspaceRecord | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -53,6 +57,10 @@ export default function TaskboardPage() {
   const [mergeOpen, setMergeOpen] = useState(false)
   const [mergeLoading, setMergeLoading] = useState(false)
   const [mergedNotes, setMergedNotes] = useState<MergedNote[]>([])
+  const requestedTab = searchParams.get('tab')
+  const activeTab = requestedTab === 'merged' || requestedTab === 'batches'
+    ? requestedTab
+    : 'content'
 
 
   const abortRef = useRef<AbortController | null>(null)
@@ -74,10 +82,6 @@ export default function TaskboardPage() {
     getWorkspace(id)
       .then((data) => {
         if (!ac.signal.aborted) {
-          if (!isWorkspaceKindAllowed(data.kind)) {
-            navigate(productConfig.defaultKind === 'replica' ? '/replicas' : '/notes', { replace: true })
-            return
-          }
           setWorkspace(data)
           setLoading(false)
         }
@@ -95,7 +99,7 @@ export default function TaskboardPage() {
       .catch(() => {})
 
     return () => ac.abort()
-  }, [id, navigate])
+  }, [id])
 
   /** 「更多」菜单点击处理 */
   const handleMenuAction = (menuId: string) => {
@@ -111,6 +115,11 @@ export default function TaskboardPage() {
     getWorkspace(workspace.workspace_id).then(setWorkspace).catch(() => {})
   }
 
+  const refreshMergedNotes = async () => {
+    if (!id) return
+    setMergedNotes(await listMergedNotes(id))
+  }
+
   const handleDeleteItem = async (item: WorkspaceItem) => {
     if (!workspace) return
     const label = item.name || '未命名素材'
@@ -118,6 +127,10 @@ export default function TaskboardPage() {
     try {
       const updated = await removeWorkspaceItem(workspace.workspace_id, item.item_id)
       setWorkspace(updated)
+      // 阶段 C2：精确移除该 item 的任务，不影响同合集其它素材
+      if (item.related_task_ids.length > 0) {
+        useTaskStore.getState().removeTasks(item.related_task_ids)
+      }
       toast.success(`已删除「${label}」`)
     } catch {
       toast.error('删除失败，请重试')
@@ -128,8 +141,23 @@ export default function TaskboardPage() {
     if (!workspace || itemIds.length === 0) return
     if (!window.confirm(`确定删除选中的 ${itemIds.length} 项？此操作不可撤销。`)) return
     try {
-      await batchDeleteItems(itemIds.map((itemId) => ({ workspace_id: workspace.workspace_id, item_id: itemId })))
-      toast.success(`已删除 ${itemIds.length} 项`)
+      const result = await batchDeleteItems(itemIds.map((itemId) => ({ workspace_id: workspace.workspace_id, item_id: itemId })))
+
+      // P1 修复：只根据 removed_ids 精确移除任务，避免失败项任务被错误隐藏
+      const removedSet = new Set(result.removed_ids)
+      const taskIds = workspace.items
+        .filter((it) => removedSet.has(it.item_id))
+        .flatMap((it) => it.related_task_ids)
+      if (taskIds.length > 0) {
+        useTaskStore.getState().removeTasks(taskIds)
+      }
+
+      // 显示部分成功/失败结果
+      if (result.failed > 0) {
+        toast.warning(`已删除 ${result.removed} 项，${result.failed} 项删除失败`)
+      } else {
+        toast.success(`已删除 ${result.removed} 项`)
+      }
       refresh()
     } catch {
       toast.error('批量删除失败，请重试')
@@ -151,8 +179,16 @@ export default function TaskboardPage() {
 
   if (loading) {
     return (
-      <div className="tb-wrap" style={{ opacity: 0.5, textAlign: 'center', paddingTop: 120 }}>
-        加载中…
+      <div className="tb-wrap" role="status" aria-label="加载中">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '28px 0' }}>
+          <Skeleton className="h-7 w-64" />
+          <Skeleton className="h-4 w-40" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginTop: 12 }}>
+            <Skeleton className="h-28 rounded-lg" />
+            <Skeleton className="h-28 rounded-lg" />
+            <Skeleton className="h-28 rounded-lg" />
+          </div>
+        </div>
       </div>
     )
   }
@@ -174,7 +210,7 @@ export default function TaskboardPage() {
         items={workspace.items}
         description={workspace.background.topic || workspace.background.purpose || '合集内的笔记与素材汇总'}
         updatedAt={new Date(workspace.updated_at).toLocaleDateString('zh-CN')}
-        onBack={() => navigate(workspace.kind === 'replica' ? '/replicas' : '/notes')}
+        onBack={() => navigate('/notes')}
         onEditBackground={() => setBgOpen(true)}
         onAddMaterial={() => setAddOpen(true)}
         onExport={() => setExportOpen(true)}
@@ -185,6 +221,8 @@ export default function TaskboardPage() {
           }
           setMergeOpen(true)
         }}
+        onBatch={() => navigate(`/tasks/new?workspace_id=${encodeURIComponent(workspace.workspace_id)}`)}
+        onAsk={() => navigate(`/knowledge?workspace_ids=${encodeURIComponent(workspace.workspace_id)}&new=1`)}
         onShareMarkdown={async () => {
           if (workspace.items.length === 0) {
             toast.info('合集为空，暂无可复制的笔记')
@@ -229,59 +267,44 @@ export default function TaskboardPage() {
         onMenuAction={handleMenuAction}
       />
 
-      {/* ── 融合笔记置顶展示 ── */}
-      {mergedNotes.length > 0 && (
-        <div style={{ margin: '16px 0', border: '1px solid var(--line)', borderRadius: 10, padding: 16, background: 'var(--bg-card)' }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-1)', marginBottom: 12 }}>
-            ✨ 融合笔记（{mergedNotes.length}）
-          </div>
-          {mergedNotes.map((mn) => (
-            <details key={mn.merged_id} style={{ marginBottom: 8 }}>
-              <summary style={{ cursor: 'pointer', fontSize: 13, color: 'var(--ink-2)', padding: '6px 0' }}>
-                {mn.title}
-                <span style={{ fontSize: 11, color: 'var(--ink-4)', marginLeft: 12 }}>
-                  {mn.item_ids.length} 素材 · {new Date(mn.created_at).toLocaleString('zh-CN')}
-                </span>
-              </summary>
-              <div
-                className="tb-merged-content"
-                style={{
-                  whiteSpace: 'pre-wrap',
-                  lineHeight: 1.8,
-                  fontSize: 13,
-                  color: 'var(--ink-1)',
-                  padding: '12px 0',
-                  borderTop: '1px solid var(--line)',
-                  marginTop: 8,
-                }}
-              >
-                {mn.content_md}
-              </div>
-              <button
-                className="btn btn-sm"
-                style={{ marginTop: 8 }}
-                onClick={async () => {
-                  await navigator.clipboard.writeText(mn.content_md)
-                  toast.success('已复制到剪贴板')
-                }}
-              >
-                复制内容
-              </button>
-            </details>
-          ))}
-        </div>
-      )}
+      <nav className="my-4 flex gap-2" aria-label="合集主分区">
+        {([
+          ['content', '内容'],
+          ['merged', '融合笔记'],
+          ['batches', '批次'],
+        ] as const).map(([tab, label]) => (
+          <button
+            key={tab}
+            type="button"
+            className="btn"
+            aria-pressed={activeTab === tab}
+            onClick={() => setSearchParams(tab === 'content' ? {} : { tab })}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
 
-      {/* 素材网格 — 默认主体 */}
       <div className="tb-body">
-        <MaterialsTab
-          items={workspace.items}
-          workspaceId={workspace.workspace_id}
-          onAddMaterial={() => setAddOpen(true)}
-          onToggleFavorite={handleToggleFavorite}
-          onDelete={handleDeleteItem}
-          onDeleteSelected={handleDeleteSelectedItems}
-        />
+        {activeTab === 'content' && (
+          <MaterialsTab
+            items={workspace.items}
+            workspaceId={workspace.workspace_id}
+            onAddMaterial={() => setAddOpen(true)}
+            onToggleFavorite={handleToggleFavorite}
+            onDelete={handleDeleteItem}
+            onDeleteSelected={handleDeleteSelectedItems}
+          />
+        )}
+        {activeTab === 'merged' && (
+          <MergedNotesTab
+            workspaceId={workspace.workspace_id}
+            notes={mergedNotes}
+            items={workspace.items}
+            onRefresh={refreshMergedNotes}
+          />
+        )}
+        {activeTab === 'batches' && <BatchesTab workspaceId={workspace.workspace_id} />}
       </div>
 
       {/* ── Modal：导出 ── */}
@@ -359,7 +382,6 @@ export default function TaskboardPage() {
         workspaceIds={[workspace.workspace_id]}
         workspaceBackgrounds={{ [workspace.workspace_id]: workspace.background }}
         availableWorkspaces={[workspace]}
-        workspaceKind={workspace.kind}
         onAdded={refresh}
         onWorkspaceUpdated={setWorkspace}
       />

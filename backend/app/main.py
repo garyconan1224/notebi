@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 from contextlib import asynccontextmanager
@@ -22,8 +23,9 @@ load_dotenv(_ROOT_DIR / ".env", override=False)
 from backend.app.routes.admin import router as admin_router
 from backend.app.routes.download_config import router as download_config_router
 from backend.app.routes.export import router as export_router
+from backend.app.routes.network_config import router as network_config_router
 from backend.app.routes.pipeline import router as pipeline_router
-from backend.app.routes.prompt_formats import router as prompt_formats_router
+from backend.app.routes.task_batches import router as task_batches_router
 from backend.app.routes.providers import router as providers_router
 from backend.app.routes.rag import router as rag_router
 from backend.app.routes.search import router as search_router
@@ -33,11 +35,22 @@ from backend.app.routes.performance_tier import router as performance_tier_route
 from backend.app.routes.templates import router as templates_router
 from backend.app.routes.templates import legacy_router as templates_legacy_router
 from backend.app.routes.transcript import router as transcript_router
-from backend.app.routes.workspaces import router as workspaces_router
+from backend.app.routes.workspaces import (
+    migrate_legacy_metadata as _migrate_legacy_metadata,
+    router as workspaces_router,
+)
+from shared.config import DATA_DIR
 from backend.app.routes.chat import router as chat_router
 from backend.app.routes.link_preview import router as link_preview_router
 from backend.app.routes.knowledge import router as knowledge_router
+from backend.app.services.replica_purge import purge_legacy_replica_workspaces
+from backend.app.services.runtime_log_buffer import (
+    install as install_runtime_log_handler,
+    uninstall as uninstall_runtime_log_handler,
+)
 from shared.settings_store import ProviderProfile, load_settings, save_settings
+
+logger = logging.getLogger(__name__)
 
 # 应用启动时间（UTC 时间戳），用于计算 uptime
 _APP_START_TS: float = time.time()
@@ -76,11 +89,50 @@ def _seed_siliconflow_provider() -> None:
     print(f"✅ Seeded SiliconFlow provider (base_url={base_url})")
 
 
+def _purge_legacy_replica_data() -> None:
+    """启动期永久删除旧复刻合集，确保对外服务前没有请求能读到 replica 记录。
+
+    复用各 router 模块级 store 单例，使清理直接作用于真实内存索引。
+    清理幂等；**任何失败（异常或 errors > 0）都会阻断启动**，
+    防止残留 replica 数据在清理失败后被公开接口读取。
+    """
+    from backend.app.routes.pipeline import _store as task_store
+    from backend.app.routes.workspaces import _store as workspace_store
+
+    try:
+        result = purge_legacy_replica_workspaces(workspace_store, task_store)
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(
+            "legacy replica purge 失败，阻断启动以防止 replica 数据暴露。"
+            "请检查日志并修复后重启。"
+        ) from exc
+    if result.get("errors"):
+        raise RuntimeError(
+            f"legacy replica purge 有 {result['errors']} 个错误，阻断启动。"
+            "请检查日志并修复后重启。"
+        )
+    if result.get("workspaces_deleted"):
+        logger.info("legacy replica purge: %s", result)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """FastAPI 生命周期钩子：启动时自动 seed 默认 provider。"""
+    """FastAPI 生命周期钩子：启动时 seed 默认 provider、清理旧复刻数据并挂载运行日志 handler。"""
     _seed_siliconflow_provider()
+    _purge_legacy_replica_data()
+    _migrate_legacy_metadata()
+    # R6-A：挂载脱敏运行日志 handler（幂等，热重载/测试不重复安装），shutdown 移除
+    install_runtime_log_handler()
+    from backend.app.services.runtime_log_store import get_default_store
+
+    get_default_store().append(
+        "INFO",
+        "app",
+        "NoteBi application started",
+        stage="application_started",
+    )
     yield
+    uninstall_runtime_log_handler()
 
 
 def _build_cors_origins() -> list[str]:
@@ -106,7 +158,10 @@ def _build_cors_origins() -> list[str]:
 app = FastAPI(title="NoteBi API", version=_APP_VERSION, lifespan=lifespan)
 
 # 静态文件挂载：/static → data/ 目录（关键帧图片、项目资源等）
-app.mount("/static", StaticFiles(directory=str(_ROOT_DIR / "data")), name="static")
+# 干净 checkout 可能没有 data/（被 .gitignore 排除）；StaticFiles 默认 check_dir=True
+# 会在目录缺失时于导入期抛错。挂载前确保目录存在，使无 data/ 的全新检出也能启动与测试。
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(DATA_DIR)), name="static")
 
 # 允许前端开发服务器跨域访问；origin 列表由根 .env 中 VITE_PORT/CORS_ALLOW_ORIGINS 决定
 # 浏览器把 localhost 和 127.0.0.1 视为不同源，自动展开两种变体
@@ -124,7 +179,8 @@ app.include_router(transcript_router)
 app.include_router(transcriber_config_router)
 app.include_router(performance_tier_router)
 app.include_router(download_config_router)
-app.include_router(prompt_formats_router)
+app.include_router(network_config_router)
+app.include_router(task_batches_router)
 app.include_router(rag_router)
 app.include_router(search_router)
 app.include_router(templates_router)

@@ -9,6 +9,101 @@
   background: var(--bg);
 }
 
+/* R4-B: 独立头部，不依赖 lib-page-header */
+.fav-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.fav-header-text h2 {
+  margin: 4px 0 2px;
+  font-size: 1.35rem;
+  white-space: nowrap;
+}
+.fav-header-text p {
+  margin: 0;
+  font-size: var(--sm);
+  color: var(--fg2);
+}
+.fav-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+@media (max-width: 1024px) {
+  .fav-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .fav-header-text h2 {
+    white-space: normal;
+  }
+}
+
+/* R4-B: 取消收藏按钮 */
+.fav-unfav-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: oklch(0% 0 0 / 0.45);
+  color: #fbbf24;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.fav-unfav-btn:hover {
+  background: oklch(0% 0 0 / 0.7);
+}
+
+.fav-organizer {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(150px, auto) minmax(240px, auto);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.fav-search,
+.fav-new-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fav-organizer input,
+.fav-organizer select,
+.fav-new-group button {
+  min-height: 36px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--rs);
+  background: var(--srf);
+  color: var(--fg);
+  font: inherit;
+}
+
+.fav-organizer input { width: 100%; padding: 0 10px; }
+.fav-organizer select { padding: 0 30px 0 10px; }
+.fav-new-group button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+@media (max-width: 760px) {
+  .fav-organizer { grid-template-columns: 1fr; }
+}
+
 /* Filter tabs — 与 note-filter 一致 */
 .fav-tabs {
   display: flex;
@@ -30,7 +125,7 @@
   padding: 7px 11px;
   border-radius: var(--rf);
   font-size: var(--xs);
-  font-weight: 800;
+  font-weight: 700;
   font-family: var(--fb);
   border: 1.5px solid var(--bdr);
   background: var(--srf);

@@ -1,0 +1,295 @@
+{
+  "generated_at": "2026-07-28T16:51:50.861Z",
+  "base_url": "http://127.0.0.1:5183",
+  "head_commit": "9d8d557",
+  "summary": {
+    "total": 13,
+    "pass": 13,
+    "fail": 0,
+    "skip": 0
+  },
+  "checks": [
+    {
+      "id": "1a",
+      "item": "/knowledge 正式入口渲染 SearchPage",
+      "status": "pass",
+      "detail": "url=http://127.0.0.1:5183/knowledge；知识库语义可见"
+    },
+    {
+      "id": "1b",
+      "item": "/search?q=hello 重定向到 /knowledge?q=hello",
+      "status": "pass",
+      "detail": "最终 url=http://127.0.0.1:5183/knowledge?q=hello"
+    },
+    {
+      "id": "2",
+      "item": "合集范围选择器（全部/全选/清空）",
+      "status": "pass",
+      "detail": "全部合集=true 全选=true 清空=true"
+    },
+    {
+      "id": "3",
+      "item": "AI 回答含真实引用/相关原文",
+      "status": "pass",
+      "detail": "status.ready=true indexed=23/23；answer=true；引用chip=false；引用来源/原文=true；冷热计时与完整 answer+citations+sources 见 knowledge-scoped-cold.json/knowledge-scoped-warm.json"
+    },
+    {
+      "id": "4",
+      "item": "音视频时间点深链接跳转到 ~30s",
+      "status": "pass",
+      "detail": "独立真实媒体验收：视频/音频均跳转 30.00s，play() 被拒后保持位置且提示可见，console error=0"
+    },
+    {
+      "id": "5",
+      "item": "自动播放被拒时保留 seek 位置+提示",
+      "status": "pass",
+      "detail": "独立真实媒体验收：视频/音频均跳转 30.00s，play() 被拒后保持位置且提示可见，console error=0"
+    },
+    {
+      "id": "6",
+      "item": "收藏夹副本隔离/刷新/分组/取消",
+      "status": "pass",
+      "detail": "独立实战验收 5/5，收纳箱与普通合集并存，console error=0"
+    },
+    {
+      "id": "7",
+      "item": "/notes 渲染且 Hero 不被撑高",
+      "status": "pass",
+      "detail": "url=http://127.0.0.1:5183/notes；Hero高度=39px"
+    },
+    {
+      "id": "8",
+      "item": "/notes 无文件夹/移动/标签/整理管理功能；单一 ViewToggle",
+      "status": "pass",
+      "detail": "ViewToggle数=1；管理操作=无（“文件夹”chip与“采访整理”摘要为数据展示）"
+    },
+    {
+      "id": "9",
+      "item": "AddMaterial 高频设置同屏，无旧 action",
+      "status": "pass",
+      "detail": "同屏设置=笔记风格/说话人/补充说明；泄漏=无"
+    },
+    {
+      "id": "10",
+      "item": "Monitor 单一标准日志/暂停/过滤/脱敏",
+      "status": "pass",
+      "detail": "标准日志=true；level=true；category=true；keyword=true；暂停=true；导出=true；脱敏说明=true"
+    },
+    {
+      "id": "11",
+      "item": "五视口无横向溢出",
+      "status": "pass",
+      "detail": "视口=1440x900,1366x768,1024x768,768x1024,375x812 均 scrollWidth<=clientWidth"
+    },
+    {
+      "id": "12",
+      "item": "console error 为 0",
+      "status": "pass",
+      "detail": "全部视口/路由 console error=0"
+    }
+  ],
+  "overflow": [
+    {
+      "viewport": "1440x900",
+      "width": 1440,
+      "height": 900,
+      "routes": [
+        {
+          "route": "/knowledge",
+          "overflow": false,
+          "scrollWidth": 1440,
+          "clientWidth": 1440
+        },
+        {
+          "route": "/notes",
+          "overflow": false,
+          "scrollWidth": 1440,
+          "clientWidth": 1440
+        },
+        {
+          "route": "/favorites",
+          "overflow": false,
+          "scrollWidth": 1440,
+          "clientWidth": 1440
+        },
+        {
+          "route": "/settings/monitor",
+          "overflow": false,
+          "scrollWidth": 1440,
+          "clientWidth": 1440
+        },
+        {
+          "route": "/workspaces",
+          "overflow": false,
+          "scrollWidth": 1440,
+          "clientWidth": 1440
+        }
+      ]
+    },
+    {
+      "viewport": "1366x768",
+      "width": 1366,
+      "height": 768,
+      "routes": [
+        {
+          "route": "/knowledge",
+          "overflow": false,
+          "scrollWidth": 1366,
+          "clientWidth": 1366
+        },
+        {
+          "route": "/notes",
+          "overflow": false,
+          "scrollWidth": 1366,
+          "clientWidth": 1366
+        },
+        {
+          "route": "/favorites",
+          "overflow": false,
+          "scrollWidth": 1366,
+          "clientWidth": 1366
+        },
+        {
+          "route": "/settings/monitor",
+          "overflow": false,
+          "scrollWidth": 1366,
+          "clientWidth": 1366
+        },
+        {
+          "route": "/workspaces",
+          "overflow": false,
+          "scrollWidth": 1366,
+          "clientWidth": 1366
+        }
+      ]
+    },
+    {
+      "viewport": "1024x768",
+      "width": 1024,
+      "height": 768,
+      "routes": [
+        {
+          "route": "/knowledge",
+          "overflow": false,
+          "scrollWidth": 1024,
+          "clientWidth": 1024
+        },
+        {
+          "route": "/notes",
+          "overflow": false,
+          "scrollWidth": 1024,
+          "clientWidth": 1024
+        },
+        {
+          "route": "/favorites",
+          "overflow": false,
+          "scrollWidth": 1024,
+          "clientWidth": 1024
+        },
+        {
+          "route": "/settings/monitor",
+          "overflow": false,
+          "scrollWidth": 1024,
+          "clientWidth": 1024
+        },
+        {
+          "route": "/workspaces",
+          "overflow": false,
+          "scrollWidth": 1024,
+          "clientWidth": 1024
+        }
+      ]
+    },
+    {
+      "viewport": "768x1024",
+      "width": 768,
+      "height": 1024,
+      "routes": [
+        {
+          "route": "/knowledge",
+          "overflow": false,
+          "scrollWidth": 768,
+          "clientWidth": 768
+        },
+        {
+          "route": "/notes",
+          "overflow": false,
+          "scrollWidth": 768,
+          "clientWidth": 768
+        },
+        {
+          "route": "/favorites",
+          "overflow": false,
+          "scrollWidth": 768,
+          "clientWidth": 768
+        },
+        {
+          "route": "/settings/monitor",
+          "overflow": false,
+          "scrollWidth": 768,
+          "clientWidth": 768
+        },
+        {
+          "route": "/workspaces",
+          "overflow": false,
+          "scrollWidth": 768,
+          "clientWidth": 768
+        }
+      ]
+    },
+    {
+      "viewport": "375x812",
+      "width": 375,
+      "height": 812,
+      "routes": [
+        {
+          "route": "/knowledge",
+          "overflow": false,
+          "scrollWidth": 375,
+          "clientWidth": 375
+        },
+        {
+          "route": "/notes",
+          "overflow": false,
+          "scrollWidth": 375,
+          "clientWidth": 375
+        },
+        {
+          "route": "/favorites",
+          "overflow": false,
+          "scrollWidth": 375,
+          "clientWidth": 375
+        },
+        {
+          "route": "/settings/monitor",
+          "overflow": false,
+          "scrollWidth": 375,
+          "clientWidth": 375
+        },
+        {
+          "route": "/workspaces",
+          "overflow": false,
+          "scrollWidth": 375,
+          "clientWidth": 375
+        }
+      ]
+    }
+  ],
+  "console_errors": [],
+  "network_failures": [],
+  "ignored_network_aborts": 45,
+  "screenshots": {
+    "01-knowledge": "/Users/conan/Desktop/notebi-exec/scripts/knowledge_acceptance/evidence/s6-browser-screenshots/01-knowledge.png",
+    "02-scope-picker": "/Users/conan/Desktop/notebi-exec/scripts/knowledge_acceptance/evidence/s6-browser-screenshots/02-scope-picker.png",
+    "03-ai-answer": "/Users/conan/Desktop/notebi-exec/scripts/knowledge_acceptance/evidence/s6-browser-screenshots/03-ai-answer.png",
+    "06-favorites": "/Users/conan/Desktop/notebi-exec/scripts/knowledge_acceptance/evidence/s6-browser-screenshots/06-favorites.png",
+    "07-notes": "/Users/conan/Desktop/notebi-exec/scripts/knowledge_acceptance/evidence/s6-browser-screenshots/07-notes.png",
+    "09-addmaterial": "/Users/conan/Desktop/notebi-exec/scripts/knowledge_acceptance/evidence/s6-browser-screenshots/09-addmaterial.png",
+    "10-monitor": "/Users/conan/Desktop/notebi-exec/scripts/knowledge_acceptance/evidence/s6-browser-screenshots/10-monitor.png",
+    "11-1440x900": "/Users/conan/Desktop/notebi-exec/scripts/knowledge_acceptance/evidence/s6-browser-screenshots/11-1440x900-monitor.png",
+    "11-1366x768": "/Users/conan/Desktop/notebi-exec/scripts/knowledge_acceptance/evidence/s6-browser-screenshots/11-1366x768-monitor.png",
+    "11-1024x768": "/Users/conan/Desktop/notebi-exec/scripts/knowledge_acceptance/evidence/s6-browser-screenshots/11-1024x768-monitor.png",
+    "11-768x1024": "/Users/conan/Desktop/notebi-exec/scripts/knowledge_acceptance/evidence/s6-browser-screenshots/11-768x1024-monitor.png",
+    "11-375x812": "/Users/conan/Desktop/notebi-exec/scripts/knowledge_acceptance/evidence/s6-browser-screenshots/11-375x812-monitor.png"
+  }
+}

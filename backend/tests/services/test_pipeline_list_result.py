@@ -72,3 +72,70 @@ def test_list_tasks_full_includes_everything(tmp_path, monkeypatch):
     result = rows[0]["result"]
     assert "summary_md" in result
     assert result["video_thumbnail_url"] == "/static/x.jpg"
+
+
+# ── C4：软删除 workspace 后任务列表过滤回归 ─────────────────────
+
+
+def _seed_multi_ws_store(tmp_path: Path) -> TaskStore:
+    """三个任务：ws-active（活跃）、ws-trash（将被软删）、default_project（非 workspace）。"""
+    store = TaskStore(path=tmp_path / "backend_tasks_multi.json")
+    for tid, pid in [
+        ("t-active", "ws-active"),
+        ("t-trash", "ws-trash"),
+        ("t-default", "default_project"),
+    ]:
+        store.create(
+            TaskRecord(
+                task_id=tid,
+                project_id=pid,
+                task_type="note",
+                payload={},
+                status=TaskStatus.SUCCESS.value,
+                result={"video_title": tid},
+            )
+        )
+    return store
+
+
+def _seed_multi_workspace_store(tmp_path: Path) -> WorkspaceStore:
+    ws_tmp = tmp_path / "ws_data_multi"
+    ws_tmp.mkdir()
+    ws = WorkspaceStore(root=ws_tmp)
+    ws.create(WorkspaceRecord(workspace_id="ws-active", name="active"))
+    ws.create(WorkspaceRecord(workspace_id="ws-trash", name="trash"))
+    return ws
+
+
+def test_list_tasks_excludes_trashed_workspace(tmp_path, monkeypatch):
+    """软删除 workspace 后，全量任务列表不返回其任务；其它任务保留。"""
+    monkeypatch.setattr(pipeline, "_store", _seed_multi_ws_store(tmp_path))
+    import backend.app.routes.workspaces as ws_mod
+
+    ws_store = _seed_multi_workspace_store(tmp_path)
+    monkeypatch.setattr(ws_mod, "_store", ws_store)
+
+    # 软删除 ws-trash
+    ws_store.update("ws-trash", trashed=True)
+
+    rows = pipeline.list_tasks(include_result=True)
+    ids = {r["task_id"] for r in rows}
+    assert "t-trash" not in ids
+    assert "t-active" in ids
+    # default_project 不属于 workspace，不能被误删
+    assert "t-default" in ids
+
+
+def test_list_tasks_restores_after_workspace_restore(tmp_path, monkeypatch):
+    """workspace 恢复后，其历史任务重新可见。"""
+    monkeypatch.setattr(pipeline, "_store", _seed_multi_ws_store(tmp_path))
+    import backend.app.routes.workspaces as ws_mod
+
+    ws_store = _seed_multi_workspace_store(tmp_path)
+    monkeypatch.setattr(ws_mod, "_store", ws_store)
+
+    ws_store.update("ws-trash", trashed=True)
+    assert "t-trash" not in {r["task_id"] for r in pipeline.list_tasks(include_result=True)}
+
+    ws_store.update("ws-trash", trashed=False)
+    assert "t-trash" in {r["task_id"] for r in pipeline.list_tasks(include_result=True)}

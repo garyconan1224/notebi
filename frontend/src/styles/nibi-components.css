@@ -293,8 +293,8 @@
 .remix-modal-content {
   display: flex;
   flex-direction: column;
-  width: min(560px, calc(100vw - 32px));
-  max-height: min(92vh, 900px);
+  width: min(980px, calc(100vw - 32px));
+  max-height: calc(100dvh - 24px);
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--bdr);
@@ -304,7 +304,7 @@
 }
 
 .remix-modal-content--batch {
-  width: min(860px, calc(100vw - 32px));
+  width: min(1040px, calc(100vw - 32px));
 }
 
 .remix-modal-content .m-head {
@@ -322,6 +322,26 @@
   min-height: 0;
   overflow-y: auto;
   padding: 18px 24px;
+}
+
+/* R5-C: 双栏布局 */
+.remix-modal-content .m-body-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.remix-modal-content .m-col-left,
+.remix-modal-content .m-col-right {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.remix-modal-content .m-col-right {
+  max-height: calc(100dvh - 180px);
+  overflow-y: auto;
 }
 
 .remix-modal-content .m-section {
@@ -403,7 +423,7 @@
   overflow: hidden;
   color: var(--fg);
   font-size: var(--text-sm);
-  font-weight: 800;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -606,7 +626,7 @@
   color: var(--mut);
   font-family: var(--fm);
   font-size: var(--text-xs);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .existing-material-thumb img {
@@ -684,7 +704,7 @@
   cursor: pointer;
   font-family: var(--fb);
   font-size: var(--text-xs);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .modal-source-mode button:hover {
@@ -1091,7 +1111,7 @@
 }
 
 .ntc-l {
-  font-weight: 800;
+  font-weight: 700;
   font-size: var(--text-sm);
 }
 
@@ -1111,7 +1131,7 @@
   color: var(--fg2);
   font-family: var(--fm);
   font-size: var(--text-xs);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .gen-toggle {
@@ -1155,7 +1175,7 @@
 }
 
 .gen-card-title {
-  font-weight: 800;
+  font-weight: 700;
   font-size: var(--text-sm);
 }
 
@@ -1315,7 +1335,7 @@
   text-align: center;
   font-family: var(--fb);
   font-size: var(--text-xs);
-  font-weight: 800;
+  font-weight: 700;
   outline: none;
 }
 
@@ -1333,12 +1353,23 @@
   color: var(--acc);
   font-family: var(--fm);
   font-size: var(--text-xs);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .modal-foot-status {
   color: var(--mut);
   font-size: var(--text-xs);
+}
+
+@media (max-width: 1024px) {
+  .remix-modal-content .m-body-cols {
+    grid-template-columns: 1fr;
+  }
+
+  .remix-modal-content .m-col-right {
+    max-height: none;
+    overflow-y: visible;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1430,7 +1461,7 @@ body.nibi-sidebar-compact .note-grid:not([class*="note-grid--cols-"]) { --nibi-c
   pointer-events: none;
 }
 .note-card:hover {
-  transform: translateY(-4px) scale(1.02);
+  transform: translateY(-2px);
   box-shadow: 0 12px 28px oklch(0% 0 0 / .12);
   border-color: var(--bdrs);
 }
@@ -1475,8 +1506,8 @@ body.nibi-sidebar-compact .note-grid:not([class*="note-grid--cols-"]) { --nibi-c
   color: oklch(100% 0 0);
   font-size: 10px;
   font-family: var(--fm);
-  font-weight: 800;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   padding: 3px 7px;
 }
 
@@ -1488,7 +1519,7 @@ body.nibi-sidebar-compact .note-grid:not([class*="note-grid--cols-"]) { --nibi-c
   border-radius: var(--rs);
   font-size: 10px;
   font-family: var(--fm);
-  font-weight: 800;
+  font-weight: 700;
   padding: 3px 7px;
 }
 .status-done  { background: var(--okl); color: var(--ok); }
@@ -1525,7 +1556,7 @@ body.nibi-sidebar-compact .note-grid:not([class*="note-grid--cols-"]) { --nibi-c
   color: oklch(100% 0 0 / .78);
   font-family: var(--fm);
   font-size: 10px;
-  font-weight: 900;
+  font-weight: 700;
   letter-spacing: .08em;
 }
 
@@ -1599,7 +1630,7 @@ body.nibi-sidebar-compact .note-grid:not([class*="note-grid--cols-"]) { --nibi-c
 }
 .note-title-row h3 {
   font-size: var(--sm);
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.35;
   color: var(--fg);
   flex: 1;
@@ -1650,7 +1681,7 @@ body.nibi-sidebar-compact .note-grid:not([class*="note-grid--cols-"]) { --nibi-c
   border-radius: var(--rs);
   font-family: var(--fm);
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1;
   white-space: nowrap;
 }
@@ -1707,7 +1738,7 @@ body.nibi-sidebar-compact .note-grid:not([class*="note-grid--cols-"]) { --nibi-c
 }
 .note-card-actions span {
   font-size: var(--xs);
-  font-weight: 800;
+  font-weight: 700;
   color: var(--fg2);
 }
 
@@ -1716,7 +1747,7 @@ body.nibi-sidebar-compact .note-grid:not([class*="note-grid--cols-"]) { --nibi-c
   background: transparent;
   color: var(--acc);
   font-size: var(--xs);
-  font-weight: 900;
+  font-weight: 700;
   font-family: var(--fb);
   cursor: pointer;
 }
@@ -1772,15 +1803,6 @@ body.nibi-sidebar-compact .note-grid:not([class*="note-grid--cols-"]) { --nibi-c
   gap: 4px;
 }
 .sec-link:hover { text-decoration: underline; }
-
-/* ── Empty state ── */
-.rt-empty {
-  padding: 32px 0;
-  text-align: center;
-  color: var(--ink-4);
-  font-size: 13px;
-  font-family: var(--fm);
-}
 
 /* ── Motion & reduced-motion ── */
 @media (prefers-reduced-motion: reduce) {

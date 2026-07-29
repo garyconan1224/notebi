@@ -141,10 +141,46 @@ class PerformanceConfig:
         return "high"
 
 
+# ── NetworkConfig 网络配置 ────────────────────────────────────────────────────
+
+RoutingMode = Literal["smart", "direct", "proxy"]
+_ALLOWED_ROUTING_MODES: tuple[str, ...] = ("smart", "direct", "proxy")
+
+
+@dataclass(frozen=True)
+class NetworkConfig:
+    """网络配置：智能路由、全局代理。
+
+    routing_mode:
+    - smart: 国内直连，海外走代理
+    - direct: 全部直连
+    - proxy: 全部走代理
+    """
+
+    routing_mode: RoutingMode = "smart"
+    global_proxy: str = ""
+
+    @classmethod
+    def from_dict(cls, data: Any) -> "NetworkConfig":
+        if not isinstance(data, dict):
+            return cls()
+        raw_mode = str(data.get("routing_mode") or "smart").strip()
+        mode: RoutingMode = raw_mode if raw_mode in _ALLOWED_ROUTING_MODES else "smart"  # type: ignore[assignment]
+        return cls(
+            routing_mode=mode,
+            global_proxy=str(data.get("global_proxy") or ""),
+        )
+
+
 # ── DownloadConfig 数值字段 clamp 边界（与前端 configStore 约束一致）──────────
 _CONCURRENCY_MIN, _CONCURRENCY_MAX = 1, 8
 _RETRY_MIN, _RETRY_MAX = 0, 10
 _SOCKET_TIMEOUT_MIN, _SOCKET_TIMEOUT_MAX = 5, 300
+
+ProxyMode = Literal["inherit", "direct", "proxy"]
+CookieMode = Literal["none", "browser", "file"]
+_ALLOWED_PROXY_MODES: tuple[str, ...] = ("inherit", "direct", "proxy")
+_ALLOWED_COOKIE_MODES: tuple[str, ...] = ("none", "browser", "file")
 
 
 def _clamp_int(value: Any, default: int, lo: int, hi: int) -> int:
@@ -159,50 +195,48 @@ def _clamp_int(value: Any, default: int, lo: int, hi: int) -> int:
     return n
 
 
-def _normalize_cookie_base_dirs(raw: Any) -> tuple[str, ...]:
-    if not isinstance(raw, (list, tuple)):
-        return ()
-    out: list[str] = []
-    for item in raw:
-        s = str(item or "").strip()
-        if s and s not in out:
-            out.append(s)
-    return tuple(out)
-
-
 @dataclass(frozen=True)
 class DownloadConfig:
     """下载器偏好（跨端生效，落 AppSettings）。
 
     字段与前端 configStore 下载相关字段对齐：
     - 路径/命名：output_dir / filename_template；
-    - 网络与凭据：http_proxy / po_token / visitor_data / cookie_base_dirs；
+    - 代理策略：proxy_mode（inherit/direct/proxy）；
+    - Cookie：cookie_mode（none/browser/file）、cookie_browser、cookie_profile、cookie_file_path；
     - 高级：concurrency_limit / retry_count / socket_timeout（均含 clamp）。
+
+    已废弃字段（兼容读取但不序列化）：po_token、visitor_data、cookie_base_dirs、http_proxy。
     """
 
     output_dir: str = ""
-    filename_template: str = "%(title)s-%(id)s.%(ext)s"
-    http_proxy: str = ""
-    po_token: str = ""
-    visitor_data: str = ""
-    cookie_base_dirs: tuple[str, ...] = ()
+    filename_template: str = "%(title)s.%(ext)s"
+    proxy_mode: ProxyMode = "inherit"
+    cookie_mode: CookieMode = "browser"
+    cookie_browser: str = "chrome"
+    cookie_profile: str = ""
+    cookie_file_path: str = ""
     concurrency_limit: int = 2
-    retry_count: int = 3
+    retry_count: int = 2
     socket_timeout: int = 30
 
     @classmethod
     def from_dict(cls, data: Any) -> "DownloadConfig":
         if not isinstance(data, dict):
             return cls()
+        raw_proxy_mode = str(data.get("proxy_mode") or "inherit").strip()
+        proxy_mode: ProxyMode = raw_proxy_mode if raw_proxy_mode in _ALLOWED_PROXY_MODES else "inherit"  # type: ignore[assignment]
+        raw_cookie_mode = str(data.get("cookie_mode") or "browser").strip()
+        cookie_mode: CookieMode = raw_cookie_mode if raw_cookie_mode in _ALLOWED_COOKIE_MODES else "browser"  # type: ignore[assignment]
         return cls(
             output_dir=str(data.get("output_dir") or ""),
-            filename_template=str(data.get("filename_template") or "%(title)s-%(id)s.%(ext)s"),
-            http_proxy=str(data.get("http_proxy") or ""),
-            po_token=str(data.get("po_token") or ""),
-            visitor_data=str(data.get("visitor_data") or ""),
-            cookie_base_dirs=_normalize_cookie_base_dirs(data.get("cookie_base_dirs")),
+            filename_template=str(data.get("filename_template") or "%(title)s.%(ext)s"),
+            proxy_mode=proxy_mode,
+            cookie_mode=cookie_mode,
+            cookie_browser=str(data.get("cookie_browser") or "chrome"),
+            cookie_profile=str(data.get("cookie_profile") or ""),
+            cookie_file_path=str(data.get("cookie_file_path") or ""),
             concurrency_limit=_clamp_int(data.get("concurrency_limit"), 2, _CONCURRENCY_MIN, _CONCURRENCY_MAX),
-            retry_count=_clamp_int(data.get("retry_count"), 3, _RETRY_MIN, _RETRY_MAX),
+            retry_count=_clamp_int(data.get("retry_count"), 2, _RETRY_MIN, _RETRY_MAX),
             socket_timeout=_clamp_int(data.get("socket_timeout"), 30, _SOCKET_TIMEOUT_MIN, _SOCKET_TIMEOUT_MAX),
         )
 
@@ -259,113 +293,6 @@ class ProviderProfile:
 
 
 @dataclass(frozen=True)
-class PromptFormat:
-    """提示词格式模板（图片 / 视频两类，前端显示层用）。
-
-    Phase 1G 增强：用户可在设置页自由编辑模板，结果页按选中的 active_*_ids
-    渲染对应平台风格的提示词文本。模板内含 {placeholder}，未识别占位符前端
-    原样保留。
-    """
-
-    id: str
-    name: str
-    category: str  # "image" | "video"
-    template: str = ""
-    description: str = ""
-    is_default: bool = False
-
-    @classmethod
-    def from_dict(cls, data: Any) -> "PromptFormat":
-        if not isinstance(data, dict):
-            return cls(id="", name="", category="image")
-        cat_raw = str(data.get("category") or "image").strip().lower()
-        category = "video" if cat_raw == "video" else "image"
-        return cls(
-            id=str(data.get("id") or "").strip(),
-            name=str(data.get("name") or "").strip(),
-            category=category,
-            template=str(data.get("template") or ""),
-            description=str(data.get("description") or ""),
-            is_default=bool(data.get("is_default", False)),
-        )
-
-
-@dataclass(frozen=True)
-class PromptFormatsConfig:
-    """提示词格式模板配置。
-
-    - formats: 用户实际保存的全部模板。空 tuple 表示从未保存过 → load_settings
-      读取时旁路注入种子（不写盘，待用户首次保存才落库）。
-    - active_image_ids / active_video_ids: 结果页 tabs 选中的 ID 序列。
-      约束：图片类预期 3 个（JSON 由前端永远附加在末尾，不在此处枚举）。
-    """
-
-    formats: tuple[PromptFormat, ...] = ()
-    active_image_ids: tuple[str, ...] = ()
-    active_video_ids: tuple[str, ...] = ()
-
-    @classmethod
-    def from_dict(cls, data: Any) -> "PromptFormatsConfig":
-        if not isinstance(data, dict):
-            return cls()
-        raw_formats = data.get("formats") or []
-        formats: list[PromptFormat] = []
-        seen_ids: set[str] = set()
-        if isinstance(raw_formats, list):
-            for item in raw_formats:
-                fmt = PromptFormat.from_dict(item)
-                if not fmt.id or fmt.id in seen_ids:
-                    continue
-                seen_ids.add(fmt.id)
-                formats.append(fmt)
-        return cls(
-            formats=tuple(formats),
-            active_image_ids=_normalize_id_list(data.get("active_image_ids")),
-            active_video_ids=_normalize_id_list(data.get("active_video_ids")),
-        )
-
-
-def _normalize_id_list(raw: Any) -> tuple[str, ...]:
-    if not isinstance(raw, (list, tuple)):
-        return ()
-    out: list[str] = []
-    for item in raw:
-        s = str(item or "").strip()
-        if s and s not in out:
-            out.append(s)
-    return tuple(out)
-
-
-def _seed_prompt_formats_config() -> PromptFormatsConfig:
-    """从 prompt_format_defaults 构造首次启动的种子。
-
-    放在 settings_store 内部，避免外层依赖；用户首次 POST 保存后才落库。
-    """
-    from shared.prompt_format_defaults import (  # 局部 import 避免顶层循环
-        DEFAULT_ACTIVE_IMAGE_IDS,
-        DEFAULT_ACTIVE_VIDEO_IDS,
-        all_seed_formats,
-    )
-
-    formats = tuple(
-        PromptFormat(
-            id=s["id"],
-            name=s["name"],
-            category=s["category"],
-            template=s["template"],
-            description=s["description"],
-            is_default=s["is_default"],
-        )
-        for s in all_seed_formats()
-    )
-    return PromptFormatsConfig(
-        formats=formats,
-        active_image_ids=DEFAULT_ACTIVE_IMAGE_IDS,
-        active_video_ids=DEFAULT_ACTIVE_VIDEO_IDS,
-    )
-
-
-@dataclass(frozen=True)
 class AppSettings:
     openai_api_key: str = ""
     openai_base_url: str = ""
@@ -383,8 +310,8 @@ class AppSettings:
     default_provider_for_embedding: str = ""
     default_provider_for_rerank: str = ""
     transcriber: TranscriberConfig = field(default_factory=TranscriberConfig)
+    network: NetworkConfig = field(default_factory=NetworkConfig)
     download: DownloadConfig = field(default_factory=DownloadConfig)
-    prompt_formats: PromptFormatsConfig = field(default_factory=PromptFormatsConfig)
     performance: PerformanceConfig = field(default_factory=PerformanceConfig)
     tavily_api_key: str = ""
 
@@ -409,8 +336,8 @@ class AppSettings:
             default_provider_for_embedding=str(data.get("default_provider_for_embedding") or defaults.get("embedding") or ""),
             default_provider_for_rerank=str(data.get("default_provider_for_rerank") or defaults.get("rerank") or ""),
             transcriber=TranscriberConfig.from_dict(data.get("transcriber")),
+            network=NetworkConfig.from_dict(data.get("network")),
             download=DownloadConfig.from_dict(data.get("download")),
-            prompt_formats=PromptFormatsConfig.from_dict(data.get("prompt_formats")),
             performance=PerformanceConfig.from_dict(data.get("performance")),
             tavily_api_key=str(data.get("tavily_api_key") or ""),
         )
@@ -458,31 +385,6 @@ def delete_provider(provider_id: str) -> bool:
     new_providers = tuple(p for p in settings.providers if p.id != provider_id)
     save_settings(replace(settings, providers=new_providers))
     return True
-
-
-def load_prompt_formats_with_seed() -> PromptFormatsConfig:
-    """读取 prompt_formats；空（首次）则注入种子，但不写盘。
-
-    种子写盘的时机：用户首次 POST /prompt_formats_config 时由 save_prompt_formats 落库。
-    """
-    cfg = load_settings().prompt_formats
-    if not cfg.formats:
-        return _seed_prompt_formats_config()
-    return cfg
-
-
-def save_prompt_formats(cfg: PromptFormatsConfig) -> PromptFormatsConfig:
-    """整体覆盖写入 prompt_formats，并返回最新值。"""
-    settings = load_settings()
-    save_settings(replace(settings, prompt_formats=cfg))
-    return cfg
-
-
-def reset_prompt_formats() -> PromptFormatsConfig:
-    """恢复种子并写入；返回种子配置。"""
-    seed = _seed_prompt_formats_config()
-    save_prompt_formats(seed)
-    return seed
 
 
 def _parse_providers_with_migration(data: dict[str, Any]) -> tuple[ProviderProfile, ...]:
@@ -537,3 +439,44 @@ def _default_provider_ids_from_profiles(providers: tuple[ProviderProfile, ...]) 
                 result[cap] = p.id
                 break
     return result
+
+
+# ── SettingsStore：可隔离测试的设置存储 ──────────────────────────────────────
+
+# 序列化时排除的废弃字段
+_DEPRECATED_DOWNLOAD_FIELDS = frozenset({"po_token", "visitor_data", "cookie_base_dirs", "http_proxy"})
+
+
+class SettingsStore:
+    """可指定路径的设置存储，用于测试隔离。
+
+    生产代码继续使用模块级 load_settings / save_settings。
+    """
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+
+    def load(self) -> AppSettings:
+        if not self._path.is_file():
+            return AppSettings()
+        try:
+            raw = self._path.read_text(encoding="utf-8")
+            data = json.loads(raw)
+        except Exception:
+            return AppSettings()
+        if not isinstance(data, dict):
+            return AppSettings()
+        return AppSettings.from_dict(data)
+
+    def save(self, settings: AppSettings) -> None:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        payload = asdict(settings)
+        payload["providers"] = [asdict(p) for p in settings.providers]
+        # 移除废弃字段，不序列化到 JSON
+        if "download" in payload and isinstance(payload["download"], dict):
+            for key in _DEPRECATED_DOWNLOAD_FIELDS:
+                payload["download"].pop(key, None)
+        self._path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )

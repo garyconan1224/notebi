@@ -91,7 +91,7 @@ def test_workspace_search_happy_path(client: TestClient) -> None:
         assert k in src
     assert src["workspace_id"] == "ws_a"
     assert src["item_id"] == "it_v1"
-    assert src["jump_url"] == "/workspaces/ws_a/items/it_v1/video_result"
+    assert src["jump_url"] == "/workspaces/ws_a/items/it_v1/video_detail"
 
 
 def test_workspace_search_unknown_workspace_returns_404(client: TestClient) -> None:

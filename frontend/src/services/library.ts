@@ -1,13 +1,14 @@
 // Library 聚合端点 —— GET /workspaces/library
 import { http } from './client'
-import type { WorkspaceKind } from '@/config/product'
 import type { ItemTags } from '@/types/workspace'
 
 export interface LibraryItem {
   item_id: string
+  content_id?: string
+  lineage_id?: string
   workspace_id: string
   workspace_name: string
-  workspace_kind: 'note' | 'replica'
+  workspace_kind: 'note'
   type: 'video' | 'audio' | 'image' | 'text'
   source: 'url' | 'local'
   source_value: string
@@ -34,7 +35,7 @@ export interface LibraryItem {
 export interface LibraryWorkspace {
   workspace_id: string
   name: string
-  kind: 'note' | 'replica'
+  kind: 'note'
   items_count: number
   items_count_by_type: Record<string, number>
   cover_thumbnail: string | null
@@ -49,11 +50,9 @@ export interface LibraryResponse {
 
 export async function fetchLibrary(
   includeTrashed = false,
-  kinds?: WorkspaceKind[],
 ): Promise<LibraryResponse> {
   const params = new URLSearchParams()
   if (includeTrashed) params.set('include_trashed', 'true')
-  kinds?.forEach((kind) => params.append('kinds', kind))
   const res = await http.get<LibraryResponse>('/workspaces/library', {
     params: params.size ? params : undefined,
     timeout: 60000,  // 3-A：资料库列表是重接口，批量处理时磁盘 I/O 抢跑可能 >15s
@@ -88,6 +87,18 @@ export async function batchAddItemsToWorkspace(
   const res = await http.post('/workspaces/items/batch-add-to-workspace', {
     target_workspace_id: targetWorkspaceId,
     items,
+  })
+  return res.data
+}
+
+export async function batchOrganizeItems(
+  items: { workspace_id: string; item_id: string }[],
+  options: { tags?: Record<string, unknown>; folderId?: string },
+): Promise<{ changed: number; failed: number }> {
+  const res = await http.post('/workspaces/items/batch-organize', {
+    items,
+    tags: options.tags,
+    folder_id: options.folderId,
   })
   return res.data
 }

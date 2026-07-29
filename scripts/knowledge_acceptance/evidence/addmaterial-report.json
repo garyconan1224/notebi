@@ -1,0 +1,35 @@
+{
+  "generated_at": "2026-07-28T16:45:22.681Z",
+  "checks": [
+    {
+      "item": "五种笔记类型同屏",
+      "status": "pass",
+      "detail": "类型=自动识别/视频笔记/图文笔记/音频笔记/混合笔记"
+    },
+    {
+      "item": "四种来源流程入口",
+      "status": "pass",
+      "detail": "来源=单条内容(链接)/本地上传/批量合集/选择合集(已有内容)"
+    },
+    {
+      "item": "高频设置常驻同屏",
+      "status": "pass",
+      "detail": "设置=笔记风格/说话人/补充说明/视觉（人数/画面参数随类型上下文显示）"
+    },
+    {
+      "item": "无学习笔记/你要做什么/高级设置",
+      "status": "pass",
+      "detail": "旧 action 与折叠器均已移除"
+    },
+    {
+      "item": "五种类型均可点击切换",
+      "status": "pass",
+      "detail": "成功切换=5/5"
+    }
+  ],
+  "console_errors": [],
+  "screenshots": {
+    "open": "/Users/conan/Desktop/notebi-exec/scripts/knowledge_acceptance/evidence/addmaterial-screenshots/addmat-01-open.png",
+    "types": "/Users/conan/Desktop/notebi-exec/scripts/knowledge_acceptance/evidence/addmaterial-screenshots/addmat-02-types.png"
+  }
+}

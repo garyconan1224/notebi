@@ -4,16 +4,13 @@ import {
   Home,
   Plus,
   Sparkles,
-  Film,
   FileText,
-  Copy,
-  BookOpen,
   Star,
-  Wand2,
   Search,
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
+  ListChecks,
   type LucideIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -25,9 +22,8 @@ import { GlobalAddMaterialModal } from '@/components/workspace/GlobalAddMaterial
 import ThemeSwitcher from '@/components/ThemeSwitcher'
 import { useAddMaterialStore } from '@/store/addMaterialStore'
 import {
+  APP_NAME,
   getProductStorageItem,
-  isFeatureEnabled,
-  productConfig,
   setProductStorageItem,
 } from '@/config/product'
 
@@ -43,16 +39,13 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'home',       path: '/',           icon: Home,         label: '首页' },
-  { id: 'notes',      path: '/notes',      icon: FileText,     label: '笔记', visible: productConfig.allowedKinds.includes('note') },
-  { id: 'replicas',   path: '/replicas',   icon: Copy,         label: '复刻', visible: isFeatureEnabled('showReplica') },
-  { id: 'knowledge',  path: '/knowledge',  icon: BookOpen,     label: '知识库', visible: isFeatureEnabled('showKnowledge') },
+  { id: 'notes',      path: '/notes',      icon: FileText,     label: '笔记' },
+  { id: 'tasks',      path: '/tasks',      icon: ListChecks,   label: '任务中心' },
 ]
 
 const BOTTOM_ITEMS: NavItem[] = [
-  { id: 'storyboard',  path: '/storyboard',  icon: Film,       label: '分镜', visible: isFeatureEnabled('showStoryboard') },
   { id: 'favorites',   path: '/favorites',   icon: Star,       label: '收藏夹' },
-  { id: 'director',    path: '#',            icon: Wand2,      label: 'AI 导演',  placeholder: true, badge: 'Phase C', visible: isFeatureEnabled('showDirector') },
-  { id: 'search',      path: '/search',      icon: Search,     label: '搜索' },
+  { id: 'knowledge',   path: '/knowledge',   icon: Search,     label: '知识库' },
   { id: 'settings',    path: '/settings',    icon: Settings,   label: '设置' },
 ]
 
@@ -78,7 +71,7 @@ function SidebarBtn({ icon: Icon, label, active, badge, placeholder, collapsed, 
         title={tooltip}
         onClick={placeholder ? () => toast('该功能即将上线') : onClick}
         className={cn(
-          'relative flex size-11 items-center justify-center rounded-[14px] transition-all duration-150',
+          'relative flex size-11 items-center justify-center rounded-xl transition-all duration-150',
           placeholder
             ? 'cursor-default text-muted-foreground/50'
             : active
@@ -99,7 +92,7 @@ function SidebarBtn({ icon: Icon, label, active, badge, placeholder, collapsed, 
       title={label}
       onClick={placeholder ? () => toast('该功能即将上线') : onClick}
       className={cn(
-        'relative flex w-full items-center gap-3 rounded-[12px] px-3 py-2 text-sm transition-all duration-150',
+        'relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-150',
         placeholder
           ? 'cursor-default text-muted-foreground/50'
           : active
@@ -113,10 +106,9 @@ function SidebarBtn({ icon: Icon, label, active, badge, placeholder, collapsed, 
         <span
           className={cn(
             'ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium leading-tight',
-            badge === 'Beta'
-              ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400'
-              : 'bg-muted text-muted-foreground',
+            badge !== 'Beta' && 'bg-muted text-muted-foreground',
           )}
+          style={badge === 'Beta' ? { background: 'var(--accl)', color: 'var(--acc)' } : undefined}
         >
           {badge}
         </span>
@@ -144,14 +136,14 @@ function SidebarStatus({
         <span
           className="size-2 rounded-full"
           style={{ background: online ? 'var(--accent-green)' : 'var(--accent-pink)' }}
-          title={`后端 ${BACKEND_ADDR} · ${online ? 'online' : 'offline'}`}
+          title={`后端 ${BACKEND_ADDR} · ${online ? '在线' : '离线'}`}
         />
       </div>
     )
   }
 
   return (
-    <div className="mt-2 rounded-[14px] border border-border bg-muted/35 p-2">
+    <div className="mt-2 rounded-xl border border-border bg-muted/35 p-2">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-[11px] font-medium text-muted-foreground">状态</span>
         <ThemeSwitcher />
@@ -162,7 +154,7 @@ function SidebarStatus({
           style={{ background: online ? 'var(--accent-green)' : 'var(--accent-pink)' }}
         />
         <span className="truncate">{BACKEND_ADDR}</span>
-        <span className="ml-auto">{online ? 'online' : 'offline'}</span>
+        <span className="ml-auto">{online ? '在线' : '离线'}</span>
       </div>
       {stats?.cpu && stats?.memory && (
         <div className="mt-1 text-[11px] text-muted-foreground">
@@ -219,8 +211,6 @@ export function AppShell({ children }: AppShellProps) {
   const isActive = (item: NavItem) => {
     if (item.id === 'home') return location.pathname === '/'
     if (item.id === 'notes') return location.pathname.startsWith('/notes')
-    if (item.id === 'replicas') return location.pathname.startsWith('/replicas')
-    if (item.id === 'knowledge') return location.pathname.startsWith('/knowledge')
     return location.pathname.startsWith(item.path)
   }
 
@@ -238,16 +228,16 @@ export function AppShell({ children }: AppShellProps) {
         {collapsed ? (
           <>
             <button
-              className="mb-1 flex size-11 items-center justify-center rounded-[10px] transition-colors hover:opacity-80"
+              className="mb-1 flex size-11 items-center justify-center rounded-lg transition-colors hover:opacity-80"
               style={{ background: 'var(--accl)', color: 'var(--acc)' }}
               onClick={() => navigate('/')}
-              title={productConfig.name}
+              title={APP_NAME}
               aria-label="返回工作台"
             >
               <Sparkles size={16} />
             </button>
             <button
-              className="mb-2 flex size-8 items-center justify-center rounded-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="mb-2 flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               onClick={toggleCollapsed}
               title="展开导航"
               aria-label="展开导航"
@@ -256,25 +246,25 @@ export function AppShell({ children }: AppShellProps) {
             </button>
           </>
         ) : (
-          <div className="mb-3 flex items-center gap-2.5 rounded-[14px] px-3 py-2">
+          <div className="mb-3 flex items-center gap-2.5 rounded-xl px-3 py-2">
             <button
               className="flex items-center gap-2.5 transition-colors hover:opacity-80"
               onClick={() => navigate('/')}
-              title={productConfig.name}
+              title={APP_NAME}
               aria-label="返回工作台"
             >
               <span
-                className="flex size-8 items-center justify-center rounded-[10px] shadow-sm"
+                className="flex size-8 items-center justify-center rounded-lg shadow-sm"
                 style={{ background: 'var(--accl)', color: 'var(--acc)' }}
               >
                 <Sparkles size={16} />
               </span>
               <span className="text-sm font-semibold" style={{ fontFamily: 'var(--fd)', color: 'var(--fg)' }}>
-                {productConfig.name}
+                {APP_NAME}
               </span>
             </button>
             <button
-              className="ml-auto flex size-8 items-center justify-center rounded-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="ml-auto flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               onClick={toggleCollapsed}
               title="折叠导航"
               aria-label="折叠导航"
@@ -294,11 +284,7 @@ export function AppShell({ children }: AppShellProps) {
             background: 'var(--accl)',
             color: 'var(--acc)',
           }}
-          onClick={() => openAddMaterial(
-            productConfig.allowedKinds.length === 1
-              ? { workspaceKind: productConfig.defaultKind }
-              : undefined,
-          )}
+          onClick={() => openAddMaterial()}
           title="新建内容"
           aria-label="新建内容"
         >

@@ -272,15 +272,19 @@ class TaskStore:
         return list(self._records.values())
 
     def delete(self, task_id: str) -> bool:
-        """从持久化存储中删除一条任务记录。"""
+        """从持久化存储中删除一条任务记录。
+
+        先删文件，文件删除失败则回滚内存删除并返回 False，
+        使调用方（如 replica_purge）能感知失败并保留 workspace 记录以便重试。
+        """
         with self._lock:
             if task_id not in self._records:
                 return False
-            del self._records[task_id]
             fp = self._file_path(task_id)
             if fp.exists():
                 try:
                     fp.unlink()
                 except OSError:
-                    pass
+                    return False
+            del self._records[task_id]
             return True

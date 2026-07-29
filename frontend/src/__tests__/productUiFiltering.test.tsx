@@ -2,31 +2,6 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
-const { productConfigMock } = vi.hoisted(() => ({
-  productConfigMock: {
-    mode: 'notebi',
-    name: 'NoteBi',
-    allowedKinds: ['note'],
-    defaultKind: 'note',
-    storagePrefix: 'notebi',
-    showKnowledge: true,
-    showReplica: false,
-    showStoryboard: false,
-    showDirector: false,
-    showPromptFormat: false,
-    allowReplicaCleanup: true,
-  },
-}))
-
-vi.mock('@/config/product', () => ({
-  productConfig: productConfigMock,
-  isFeatureEnabled: (feature: keyof typeof productConfigMock) => Boolean(productConfigMock[feature]),
-  isWorkspaceKindAllowed: (kind?: string | null) => productConfigMock.allowedKinds.includes(kind ?? ''),
-  productStorageKey: (key: string) => `${productConfigMock.storagePrefix}-${key}`,
-  getProductStorageItem: vi.fn(() => null),
-  setProductStorageItem: vi.fn(),
-}))
-
 vi.mock('@/hooks/useSystemStats', () => ({
   useSystemStats: () => ({ stats: null, online: true }),
 }))
@@ -78,8 +53,8 @@ vi.mock('@/store/providerStore', () => ({
 import { AppShell } from '@/layouts/AppShell'
 import { AddMaterialModal } from '@/components/workspace/AddMaterialModal'
 
-describe('product UI filtering in NoteBi mode', () => {
-  it('filters AppShell navigation by product config', () => {
+describe('NoteBi-only UI', () => {
+  it('renders only the fixed NoteBi navigation', () => {
     render(
       <MemoryRouter>
         <AppShell>
@@ -90,13 +65,15 @@ describe('product UI filtering in NoteBi mode', () => {
 
     expect(screen.getByText('NoteBi')).toBeTruthy()
     expect(screen.getByText('笔记')).toBeTruthy()
+    // R1：智能检索已升级为正式入口“知识库”
     expect(screen.getByText('知识库')).toBeTruthy()
+    expect(screen.queryByText('智能检索')).toBeNull()
     expect(screen.queryByText('复刻')).toBeNull()
     expect(screen.queryByText('分镜')).toBeNull()
     expect(screen.queryByText('AI 导演')).toBeNull()
   })
 
-  it('hides replica action cards in AddMaterialModal', () => {
+  it('renders the note-only AddMaterialModal without the learning-note action card', () => {
     render(
       <MemoryRouter>
         <AddMaterialModal
@@ -107,7 +84,8 @@ describe('product UI filtering in NoteBi mode', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('学习笔记')).toBeTruthy()
+    // R5-A：删除“学习笔记”action 卡，固定为笔记流程
+    expect(screen.queryByText('学习笔记')).toBeNull()
     expect(screen.queryByText('逐帧复刻')).toBeNull()
     expect(screen.getByText('输入素材链接并生成笔记')).toBeTruthy()
   })

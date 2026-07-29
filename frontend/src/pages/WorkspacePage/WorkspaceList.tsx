@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Trash2, FolderOpen } from 'lucide-react'
+import { Plus, Trash2, FolderOpen, NotebookPen } from 'lucide-react'
 
 import { TagFilterBar } from '@/components/workspace/TagFilterBar'
 import { useTagFilter } from './useTagFilter'
@@ -42,6 +42,7 @@ import {
   WORKSPACE_STATUS_TEXT,
   type WorkspaceRecord,
 } from '@/types/workspace'
+import { useTaskStore } from '@/store/taskStore'
 
 /**
  * 工作空间列表页（设计文档 2.3「任务列表页」）。
@@ -63,18 +64,15 @@ export default function WorkspaceList() {
   // 新建模态状态
   const [createOpen, setCreateOpen] = useState(false)
   const [newName, setNewName] = useState('')
-  const [newKind, setNewKind] = useState<'note' | 'replica'>('note')
   const [creating, setCreating] = useState(false)
 
   // 删除确认状态
   const [deleteTarget, setDeleteTarget] = useState<WorkspaceRecord | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [contentPolicy, setContentPolicy] = useState<'keep' | 'trash'>('keep')
 
   // Phase 3C.5：tag 筛选（与 URL search params 双向同步）
   const { filter, setFilter, filterItems, hasActiveFilter } = useTagFilter()
-
-  // 合集类型筛选
-  const [kindFilter, setKindFilter] = useState<'all' | 'note' | 'replica'>('all')
 
   // 工作空间显示规则：若有 tag 筛选，仅展示「至少一个 item 命中筛选」的 workspace；
   // 同时把每个 ws 的 items 过滤一次给 WorkspaceCard 做计数；再按 kind 筛选
@@ -85,11 +83,8 @@ export default function WorkspaceList() {
         .map(ws => ({ ...ws, items: filterItems(ws.items) }))
         .filter(ws => ws.items.length > 0)
     }
-    if (kindFilter !== 'all') {
-      result = result.filter(ws => ws.kind === kindFilter)
-    }
     return result
-  }, [items, hasActiveFilter, filterItems, kindFilter])
+  }, [items, hasActiveFilter, filterItems])
 
   const refresh = async () => {
     setLoading(true)
@@ -113,10 +108,9 @@ export default function WorkspaceList() {
     if (!name) return
     setCreating(true)
     try {
-      const created = await createWorkspace({ name, kind: newKind })
+      const created = await createWorkspace({ name, kind: 'note' })
       setCreateOpen(false)
       setNewName('')
-      setNewKind('note')
       // 跳转到详情页（详情页自己会再 GET 一次，确保拿到最新数据）
       navigate(`/workspaces/${created.workspace_id}`)
     } catch (err: unknown) {
@@ -128,10 +122,18 @@ export default function WorkspaceList() {
 
   const handleDelete = async () => {
     if (!deleteTarget) return
+    if (
+      contentPolicy === 'trash'
+      && !window.confirm('危险操作：合集及其中内容都会进入垃圾桶。确认继续？')
+    ) return
     setDeleting(true)
     try {
-      await deleteWorkspace(deleteTarget.workspace_id)
+      await deleteWorkspace(deleteTarget.workspace_id, contentPolicy)
+      // 阶段 C2：软删除整个合集后即时清空其任务，与其它删除入口保持一致。
+      // 后端 list_tasks 已过滤 trashed workspace，轮询不会重新加入。
+      useTaskStore.getState().removeByProject(deleteTarget.workspace_id)
       setDeleteTarget(null)
+      setContentPolicy('keep')
       await refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '删除失败')
@@ -142,8 +144,8 @@ export default function WorkspaceList() {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 p-6">
-      {/* 顶部：标题 + 新建 */}
-      <header className="flex items-center justify-between">
+      {/* 顶部：标题 + 新建（R4-C: 窄屏上下堆叠） */}
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">合集</h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -166,22 +168,6 @@ export default function WorkspaceList() {
       {/* Phase 3C.5：tag 筛选栏 */}
       {!loading && items.length > 0 && (
         <TagFilterBar value={filter} onChange={setFilter} />
-      )}
-
-      {/* 合集类型筛选 */}
-      {!loading && items.length > 0 && (
-        <div className="flex gap-2">
-          {(['all', 'note', 'replica'] as const).map(k => (
-            <Button
-              key={k}
-              variant={kindFilter === k ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setKindFilter(k)}
-            >
-              {k === 'all' ? '全部' : k === 'note' ? '📝 笔记' : '🎬 复刻'}
-            </Button>
-          ))}
-        </div>
       )}
 
       {/* 主体：列表 / 加载 / 空态 */}
@@ -221,7 +207,10 @@ export default function WorkspaceList() {
               key={ws.workspace_id}
               workspace={ws}
               onOpen={() => navigate(`/workspaces/${ws.workspace_id}`)}
-              onDelete={() => setDeleteTarget(ws)}
+              onDelete={() => {
+                setContentPolicy('keep')
+                setDeleteTarget(ws)
+              }}
             />
           ))}
         </div>
@@ -250,25 +239,6 @@ export default function WorkspaceList() {
                 }
               }}
             />
-            <Label>合集类型</Label>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant={newKind === 'note' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setNewKind('note')}
-              >
-                📝 笔记
-              </Button>
-              <Button
-                type="button"
-                variant={newKind === 'replica' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setNewKind('replica')}
-              >
-                🎬 复刻
-              </Button>
-            </div>
           </div>
           <DialogFooter>
             <Button
@@ -294,9 +264,29 @@ export default function WorkspaceList() {
           <AlertDialogHeader>
             <AlertDialogTitle>确认删除？</AlertDialogTitle>
             <AlertDialogDescription>
-              将永久删除合集「{deleteTarget?.name}」及其内所有素材的引用。此操作不可撤销。
+              删除合集「{deleteTarget?.name}」。默认把只存在于此合集的内容保留到收纳箱。
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-2">
+            <label className="flex gap-2">
+              <input
+                type="radio"
+                name="content-policy"
+                checked={contentPolicy === 'keep'}
+                onChange={() => setContentPolicy('keep')}
+              />
+              删除合集，内容保留在收纳箱
+            </label>
+            <label className="flex gap-2 text-destructive">
+              <input
+                type="radio"
+                name="content-policy"
+                checked={contentPolicy === 'trash'}
+                onChange={() => setContentPolicy('trash')}
+              />
+              合集及其中内容移入垃圾桶
+            </label>
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>取消</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} disabled={deleting}>
@@ -330,8 +320,8 @@ function WorkspaceCard({ workspace, onOpen, onDelete }: WorkspaceCardProps) {
       <CardHeader className="flex-row items-start justify-between space-y-0">
         <div className="flex items-center gap-2">
           <CardTitle className="line-clamp-2 text-base">{workspace.name}</CardTitle>
-          <Badge variant="secondary" className={workspace.kind === 'replica' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}>
-            {workspace.kind === 'replica' ? '🎬 复刻' : '📝 笔记'}
+          <Badge variant="secondary" className="bg-primary/10 text-primary">
+            <NotebookPen className="size-3" /> 笔记
           </Badge>
         </div>
         <button

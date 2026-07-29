@@ -11,7 +11,7 @@
 
 .nibi-note-topbar {
   border-bottom: 1px solid rgba(25, 20, 16, 0.08);
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--ov-glass-72);
   backdrop-filter: blur(16px);
 }
 
@@ -90,7 +90,7 @@
   padding: 0 9px;
   border: 1px solid rgba(25, 20, 16, 0.08);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.76);
+  background: var(--ov-glass-76);
   color: var(--fg2);
   font-size: 11px;
   white-space: nowrap;
@@ -140,7 +140,7 @@
 .nibi-note-aside > .nibi-note-side-card {
   border: 1px solid rgba(25, 20, 16, 0.08) !important;
   border-radius: 8px !important;
-  background: rgba(255, 255, 255, 0.82) !important;
+  background: var(--ov-glass-82) !important;
   box-shadow: 0 18px 42px rgba(36, 28, 18, 0.08);
   overflow: hidden;
 }
@@ -162,7 +162,7 @@
   padding: 0 16px;
   flex-shrink: 0;
   border-bottom: 1px solid rgba(25, 20, 16, 0.08);
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--ov-glass-72);
 }
 
 .nibi-note-panel-head > span:first-child {
@@ -212,7 +212,7 @@
   font-family: var(--mono);
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: normal;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -276,7 +276,7 @@
 .nibi-note-shell .vm-ln-scope,
 .nibi-note-shell .vm-video-result-scope,
 .nibi-note-shell .nibi-video-result-scope {
-  background: rgba(255, 255, 255, 0.72) !important;
+  background: var(--ov-glass-72) !important;
 }
 
 .nibi-note-shell .note-milkdown,
@@ -353,7 +353,7 @@
 }
 
 .nibi-note-workbench--video .nibi-note-media-rail {
-  background: rgba(255, 255, 255, 0.72) !important;
+  background: var(--ov-glass-72) !important;
 }
 
 /* ══════════════════════════════════════════
@@ -540,7 +540,7 @@
   color: inherit;
   cursor: pointer;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .nibi-note-operation-action:hover {
@@ -755,6 +755,103 @@
   opacity: 0.55;
 }
 
+.nibi-note-export-group-label {
+  padding: 6px 10px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--mut, #7c7464);
+}
+
+.nibi-note-export-group-label:not(:first-child) {
+  margin-top: 4px;
+  border-top: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
+  padding-top: 8px;
+}
+
+.nibi-note-ai-menu {
+  position: absolute;
+  right: 0;
+  top: 38px;
+  z-index: 120;
+  width: 268px;
+  padding: 8px;
+  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
+  border-radius: 12px;
+  background: var(--bg, #fff);
+  box-shadow: var(--shadow-md);
+  display: grid;
+  gap: 2px;
+}
+
+.nibi-note-ai-action {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.nibi-note-ai-action svg {
+  margin-top: 1px;
+  color: var(--mut, #7c7464);
+  justify-self: center;
+}
+
+.nibi-note-ai-action:hover {
+  background: var(--bgalt, #f7f3ec);
+}
+
+.nibi-note-ai-action-title {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--fg, #191410);
+}
+
+.nibi-note-ai-action-desc {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--mut, #7c7464);
+}
+
+.nibi-note-ai-quick {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nibi-note-ai-quick-label {
+  width: 100%;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mut, #7c7464);
+}
+
+.nibi-note-ai-quick-chip {
+  padding: 3px 10px;
+  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg2, #3d3929);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.nibi-note-ai-quick-chip:hover {
+  background: var(--bgalt, #f7f3ec);
+  color: var(--fg, #191410);
+}
+
 .nibi-note-version-menu {
   position: absolute;
   right: 0;
@@ -837,7 +934,7 @@
   padding: 6px 8px 3px;
   color: var(--mut, #7c7464);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .nibi-note-version-row {
@@ -910,7 +1007,7 @@
   white-space: nowrap;
   color: var(--fg, #191410);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .nibi-note-immersive-body {
@@ -937,7 +1034,7 @@
   max-width: 960px;
   padding: 18px 22px;
   border-radius: 12px;
-  color: #fff;
+  color: var(--ov-ink);
   background:
     linear-gradient(90deg, rgba(17, 24, 39, 0.98), rgba(80, 84, 92, 0.9)),
     var(--fg, #191410);
@@ -967,8 +1064,8 @@
   flex-shrink: 0;
   padding: 7px 12px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
+  background: var(--ov-14);
+  color: var(--ov-ink);
   font-size: 12px;
   text-decoration: none;
 }
@@ -1061,7 +1158,7 @@
   overflow-y: auto;
   padding: 42px 18px;
   border-left: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
-  background: rgba(255, 255, 255, 0.54);
+  background: var(--ov-glass-54);
 }
 
 .nibi-note-immersive-toc .sm-toc {
@@ -1073,7 +1170,7 @@
   margin-bottom: 12px;
   color: var(--fg, #191410);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .nibi-note-immersive-toc .sm-toc-list {
@@ -1100,7 +1197,7 @@
 .nibi-note-immersive-toc .sm-toc-item[data-active] a,
 .nibi-note-immersive-toc .sm-toc-item a:hover {
   color: var(--acc, #ff8a36);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 /* ── 两栏布局：.note-page（设计稿 .note-page） ── */
@@ -1212,7 +1309,7 @@
   width: 320px;
   border-radius: 12px;
   overflow: hidden;
-  background: #000;
+  background: var(--ov-player);
   box-shadow: 0 24px 48px rgba(8, 8, 8, 0.34);
 }
 
@@ -1227,7 +1324,7 @@
   gap: 10px;
   padding: 8px 10px;
   background: rgba(10, 10, 10, 0.9);
-  color: #fff;
+  color: var(--ov-ink);
   cursor: grab;
   user-select: none;
 }
@@ -1243,8 +1340,8 @@
   min-height: 22px;
   padding: 0 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
+  background: var(--ov-14);
+  color: var(--ov-ink);
   font-family: var(--fm, monospace);
   font-size: 10px;
   font-weight: 700;
@@ -1261,10 +1358,10 @@
   height: 24px;
   min-width: 24px;
   padding: 0 8px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid var(--ov-16);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: var(--ov-08);
+  color: var(--ov-ink);
   font-size: 11px;
   font-weight: 700;
   display: inline-flex;
@@ -1276,8 +1373,8 @@
 }
 
 .note-pip-head-btn:hover {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: var(--ov-14);
+  border-color: var(--ov-30);
 }
 
 .note-pip-head-btn--danger {
@@ -1295,7 +1392,7 @@
   gap: 8px;
   padding: 7px 9px 8px;
   background: rgba(10, 10, 10, 0.92);
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid var(--ov-12);
 }
 
 .note-pip-control-btn {
@@ -1304,17 +1401,17 @@
   justify-content: center;
   width: 26px;
   height: 26px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid var(--ov-16);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--ov-10);
+  color: var(--ov-ink);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, transform 0.15s;
 }
 
 .note-pip-control-btn:hover {
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: var(--ov-18);
+  border-color: var(--ov-30);
 }
 
 .note-pip-control-btn--play {
@@ -1328,7 +1425,7 @@
   flex: 1;
   height: 5px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.24);
+  background: var(--ov-24);
   cursor: pointer;
   overflow: hidden;
 }
@@ -1442,7 +1539,7 @@
   margin: 0 0 10px;
   color: var(--fg, #191410);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .nibi-note-inline-toc .sm-toc-list {
@@ -1733,7 +1830,7 @@
   border: 1px solid transparent;
   border-radius: var(--r, 8px);
   background: var(--bgalt, #f7f3ec);
-  color: #fff;
+  color: var(--ov-ink);
   cursor: pointer;
   padding: 0;
   box-shadow: none;
@@ -1761,11 +1858,11 @@
   bottom: 4px;
   padding: 1px 5px;
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.58);
-  color: #fff;
+  background: var(--ov-scrim);
+  color: var(--ov-ink);
   font-family: var(--fm, monospace);
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.4;
 }
 
@@ -1776,14 +1873,14 @@
   height: 100vh;
   max-height: none;
   aspect-ratio: auto;
-  background: #000;
+  background: var(--ov-player);
 }
 
 .nibi-note-player-wrap:fullscreen .ln-video-panel,
 .nibi-note-player-wrap:fullscreen .ln-video-wrapper {
   width: 100%;
   height: 100%;
-  background: #000;
+  background: var(--ov-player);
 }
 
 .nibi-note-player-wrap:fullscreen .ln-video-wrapper video {
@@ -1799,7 +1896,7 @@
   justify-content: space-between;
   padding: 12px 12px 8px;
   font-size: var(--sm, 13px);
-  font-weight: 800;
+  font-weight: 700;
   color: var(--fg, #191410);
   border-bottom: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
   flex-shrink: 0;
@@ -1828,7 +1925,7 @@
 
 .nibi-note-right .note-section h3 {
   font-size: var(--lg, 18px);
-  font-weight: 800;
+  font-weight: 700;
   margin: 20px 0 8px;
   color: var(--fg, #191410);
 }
@@ -1850,7 +1947,7 @@
 
 .nibi-note-right .note-section strong {
   color: var(--fg, #191410);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .nibi-note-right .note-quote {
@@ -1954,7 +2051,7 @@
   padding: 12px;
   border: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.58);
+  background: var(--ov-glass-58);
 }
 
 .nibi-note-meta-grid {
@@ -1979,7 +2076,7 @@
 
 .nibi-note-meta-chip strong {
   color: var(--mut, #7c7464);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .nibi-note-meta-chip span {
@@ -2016,7 +2113,7 @@
   margin-right: 2px;
   color: var(--mut, #7c7464);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .nibi-audio-speaker-chip {
@@ -2030,7 +2127,7 @@
   background: var(--srf, #fff);
   color: var(--fg2, #3d3929);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -2093,9 +2190,9 @@
   border: 0;
   border-radius: 999px;
   background: var(--acc, #ff8a36);
-  color: #fff;
+  color: var(--ov-ink);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -2166,7 +2263,7 @@
   overflow: hidden;
   color: var(--ink, #1a1612);
   font-size: 16px;
-  font-weight: 900;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2174,7 +2271,7 @@
 .nibi-audio-result-kicker {
   color: var(--acc, #ff8a36);
   font-size: 10px;
-  font-weight: 900;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -2214,10 +2311,10 @@
   z-index: 500;
   width: 320px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--ov-12);
   border-radius: 12px;
   background: #11100f;
-  color: #fff;
+  color: var(--ov-ink);
   box-shadow: 0 24px 48px rgba(8, 8, 8, 0.34);
 }
 
@@ -2234,7 +2331,7 @@
 }
 
 .nibi-audio-player-shell.is-pip .note-audio-bars--bg span {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--ov-18);
 }
 
 .nibi-audio-player-shell.is-pip .note-audio-time {
@@ -2257,8 +2354,8 @@
 }
 
 .nibi-audio-player-shell.is-pip .note-audio-ctrl:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  background: var(--ov-12);
+  color: var(--ov-ink);
 }
 
 .nibi-audio-player-shell.is-pip .note-audio-play {
@@ -2273,8 +2370,8 @@
 
 .nibi-audio-player-shell.is-pip .note-audio-speed {
   margin-left: auto;
-  border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--ov-16);
+  background: var(--ov-08);
   color: rgba(255, 255, 255, 0.82);
   padding: 3px 7px;
 }
@@ -2298,14 +2395,14 @@
   min-height: 48px;
   padding: 10px;
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--ov-08);
 }
 
 .note-audio-pip-subtitle span {
   color: rgba(255, 255, 255, 0.62);
   font-family: var(--fm, monospace);
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .note-audio-pip-subtitle p {
@@ -2341,7 +2438,7 @@
   border: none;
   border-radius: 999px;
   background: var(--acc, #ff8a36);
-  color: #fff;
+  color: var(--ov-ink);
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -2461,7 +2558,7 @@
   border: none;
   border-radius: 999px;
   background: var(--ink, #1a1612);
-  color: #fff;
+  color: var(--ov-ink);
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -2541,7 +2638,7 @@
   margin-bottom: 6px;
   color: var(--ink, #1a1612);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .note-audio-chapters-head small {
@@ -2571,7 +2668,7 @@
   padding: 7px 8px;
   border: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--ov-glass-72);
   color: var(--fg2, #3d3929);
   text-align: left;
   cursor: pointer;
@@ -2585,7 +2682,7 @@
 
 .note-audio-chapter.is-active {
   border-color: var(--acc, #ff8a36);
-  background: color-mix(in oklch, var(--acc, #ff8a36) 10%, #fff);
+  background: color-mix(in oklch, var(--acc, #ff8a36) 10%, var(--srf));
 }
 
 .note-audio-chapter-time {
@@ -2595,7 +2692,7 @@
   color: var(--acc, #ff8a36);
   font-family: var(--fm, monospace);
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .note-audio-chapter strong {
@@ -2603,7 +2700,7 @@
   overflow: hidden;
   color: var(--ink, #1a1612);
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2915,4 +3012,94 @@
   .nibi-note-bar-meta {
     font-size: 10px;
   }
+}
+.note-history-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  justify-content: flex-end;
+  background: oklch(0% 0 0 / .28);
+}
+
+.note-history-panel {
+  width: min(520px, 94vw);
+  height: 100%;
+  overflow: auto;
+  padding: 20px;
+  background: var(--bg);
+  border-left: 1px solid var(--bdr);
+  box-shadow: -20px 0 60px oklch(0% 0 0 / .12);
+}
+
+.note-history-panel > header,
+.note-history-panel article,
+.note-history-panel article > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.note-history-panel > header {
+  justify-content: space-between;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--bdr);
+}
+
+.note-history-panel header div,
+.note-history-panel article > div {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+}
+
+.note-history-panel header span,
+.note-history-panel article span,
+.note-history-empty {
+  color: var(--mut);
+  font-size: 12px;
+}
+
+.note-history-panel section { margin-top: 22px; }
+.note-history-panel section h3 { margin: 0 0 10px; font-size: 13px; }
+.note-history-panel article { padding: 10px 0; border-top: 1px solid var(--bdr); }
+.note-history-panel button,
+.note-history-panel a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--acc);
+}
+
+.note-history-preview {
+  min-width: 0;
+  flex: 1;
+  display: grid !important;
+  justify-items: start;
+  text-align: left;
+  color: var(--fg) !important;
+}
+
+.note-history-preview p {
+  width: 100%;
+  margin: 4px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg2);
+}
+
+.note-history-body pre {
+  max-height: 280px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+  border-radius: var(--rs);
+  background: var(--bgalt);
+  font: 12px/1.65 var(--fm);
+}
+.nibi-note-save-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }

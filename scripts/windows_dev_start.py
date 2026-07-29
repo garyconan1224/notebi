@@ -38,7 +38,6 @@ def start(root: Path, *, backend_port: int = 8001, frontend_port: int = 5181) ->
     environment = os.environ.copy()
     environment.update(
         {
-            "VITE_PRODUCT_MODE": "notebi",
             "BACKEND_PORT": str(backend_port),
             "VITE_PORT": str(frontend_port),
             "VITE_BACKEND_PORT": str(backend_port),

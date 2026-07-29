@@ -41,6 +41,10 @@ class VideoChunk:
     published_at: str = ""
     source_url: str = ""
     time_range: str = ""
+    field: str = "content"
+    segment_id: str = ""
+    start_ms: int | None = None
+    end_ms: int | None = None
 
 
 @dataclass(frozen=True)
@@ -112,7 +116,7 @@ def _collect_keyframe_descriptions(obj: Any) -> list[str]:
                     if isinstance(item, str) and item.strip():
                         out.append(item.strip())
                     elif isinstance(item, dict):
-                        # 兼容本项目「视觉数据」JSON：frames[].description_zh / timestamp / image_prompt_en
+                        # 兼容本项目「视觉数据」JSON：frames[].description_zh / timestamp
                         desc = _first_str(
                             item,
                             (
@@ -132,9 +136,6 @@ def _collect_keyframe_descriptions(obj: Any) -> list[str]:
                             line += f"[{ts}] "
                         if desc:
                             line += desc
-                        en_hint = _first_str(item, ("image_prompt_en", "image_prompt", "prompt_en"))
-                        if en_hint and len(en_hint) > 20:
-                            line += f" | EN_Prompt摘录: {en_hint[:400]}{'…' if len(en_hint) > 400 else ''}"
                         if line.strip():
                             out.append(line.strip())
             elif isinstance(raw, str) and raw.strip():
@@ -227,7 +228,51 @@ def _build_chunk_texts_from_object(obj: dict[str, Any], source_file: str, idx: i
         published_at=str(meta["published_at"]),
         source_url=str(meta["source_url"]),
         time_range=str(meta["time_range"]),
+        field="content",
+        segment_id=f"content-{idx}",
     )
+
+
+def _build_transcript_chunks(
+    obj: dict[str, Any],
+    source_file: str,
+    start_index: int,
+) -> list[VideoChunk]:
+    raw_segments = obj.get("transcript_segments") or obj.get("segments") or []
+    if not isinstance(raw_segments, list):
+        return []
+    title = _first_str(obj, ("video_title", "title", "name", "视频标题")) or ""
+    chunks: list[VideoChunk] = []
+    for segment_index, segment in enumerate(raw_segments):
+        if not isinstance(segment, dict):
+            continue
+        text = _first_str(segment, ("text", "content", "transcript")) or ""
+        if not text:
+            continue
+        start = segment.get("start")
+        end = segment.get("end")
+        start_ms = round(float(start) * 1000) if isinstance(start, (int, float)) else None
+        end_ms = round(float(end) * 1000) if isinstance(end, (int, float)) else None
+        time_range = ""
+        if start_ms is not None:
+            time_range = f"{start_ms / 1000:.3f}"
+            if end_ms is not None:
+                time_range += f"-{end_ms / 1000:.3f}"
+        chunks.append(
+            VideoChunk(
+                source_file=source_file,
+                chunk_index=start_index + segment_index,
+                embed_text=text,
+                skeleton_text=text,
+                title=title,
+                time_range=time_range,
+                field="transcript",
+                segment_id=f"transcript-{segment_index}",
+                start_ms=start_ms,
+                end_ms=end_ms,
+            )
+        )
+    return chunks
 
 
 def _iter_video_dicts(data: Any) -> Iterator[dict[str, Any]]:
@@ -269,6 +314,7 @@ def build_video_chunks_from_file(path: Path) -> list[VideoChunk]:
         ch = _build_chunk_texts_from_object(d, str(path), i)
         if ch:
             chunks.append(ch)
+        chunks.extend(_build_transcript_chunks(d, str(path), len(chunks)))
     if not chunks:
         whole = VideoChunk(
             source_file=str(path),
@@ -354,6 +400,10 @@ def load_folder_as_knowledge(
                 published_at=c.published_at,
                 source_url=c.source_url,
                 time_range=c.time_range,
+                field=c.field,
+                segment_id=c.segment_id,
+                start_ms=c.start_ms,
+                end_ms=c.end_ms,
             )
         )
     all_chunks = trimmed_chunks
@@ -474,6 +524,10 @@ def retrieve_with_sources(
                 "published_at": c.published_at,
                 "source_url": c.source_url,
                 "time_range": c.time_range,
+                "field": c.field,
+                "segment_id": c.segment_id,
+                "start_ms": c.start_ms,
+                "end_ms": c.end_ms,
                 "score": float(r.get("relevance_score", 0.0)),
             }
         )
@@ -490,10 +544,47 @@ def retrieve_with_sources(
                     "published_at": c.published_at,
                     "source_url": c.source_url,
                     "time_range": c.time_range,
+                    "field": c.field,
+                    "segment_id": c.segment_id,
+                    "start_ms": c.start_ms,
+                    "end_ms": c.end_ms,
                     "score": 0.0,
                 }
             )
     return tuple(out)
+
+
+def retrieve_candidates_with_sources(
+    api_key: str,
+    knowledge: LongKnowledge,
+    query: str,
+    top_k: int = RAG_TOP_K,
+) -> tuple[dict[str, Any], ...]:
+    """Return vector candidates without invoking the reranker."""
+
+    assert isinstance(knowledge, LongKnowledge)
+    emb_model = getattr(knowledge, "embedding_model", None) or EMBEDDING_MODEL
+    q_vec = create_embeddings(api_key, emb_model, [query])[0]
+    idxs = _faiss_search(knowledge.index, q_vec, top_k)
+    return tuple(
+        {
+            "skeleton_text": chunk.skeleton_text,
+            "source_file": chunk.source_file,
+            "chunk_index": chunk.chunk_index,
+            "title": chunk.title,
+            "author": chunk.author,
+            "tags": list(chunk.tags),
+            "published_at": chunk.published_at,
+            "source_url": chunk.source_url,
+            "time_range": chunk.time_range,
+            "field": chunk.field,
+            "segment_id": chunk.segment_id,
+            "start_ms": chunk.start_ms,
+            "end_ms": chunk.end_ms,
+            "score": max(0.0, 1.0 - rank * 0.001),
+        }
+        for rank, chunk in enumerate(knowledge.chunks[index] for index in idxs)
+    )
 
 
 def split_three_plans(raw: str, markers: tuple[str, str, str]) -> tuple[str, str, str]:

@@ -13,7 +13,7 @@ def _write_bundle_skeleton(root: Path) -> None:
     (root / "backend" / "app" / "main.py").write_text("# test\n", encoding="utf-8")
     (root / "frontend" / "dist").mkdir(parents=True)
     (root / "frontend" / "dist" / "index.html").write_text(
-        '<meta name="notebi-product-mode" content="notebi">', encoding="utf-8"
+        '<meta name="notebi-build" content="1">', encoding="utf-8"
     )
     (root / "runtime" / "python").mkdir(parents=True)
     (root / "runtime" / "python" / "python.exe").write_bytes(b"python")
@@ -85,14 +85,14 @@ def test_model_manifest_reports_hash_mismatch(tmp_path: Path) -> None:
     assert any("sha256 mismatch" in error for error in errors)
 
 
-def test_offline_bundle_preflight_rejects_legacy_nibi_frontend(tmp_path: Path) -> None:
+def test_offline_bundle_preflight_rejects_frontend_without_notebi_marker(tmp_path: Path) -> None:
     _write_bundle_skeleton(tmp_path)
     index = tmp_path / "frontend" / "dist" / "index.html"
-    index.write_text('<meta name="notebi-product-mode" content="nibi">', encoding="utf-8")
+    index.write_text('<meta name="notebi-build" content="0">', encoding="utf-8")
 
     errors = portable_preflight.check_offline_bundle(tmp_path)
 
-    assert any("not compiled for NoteBi mode" in error for error in errors)
+    assert any("not a NoteBi build" in error for error in errors)
 
 
 def test_windows_bundle_keeps_source_but_excludes_local_runtime_data(tmp_path: Path) -> None:
@@ -101,7 +101,7 @@ def test_windows_bundle_keeps_source_but_excludes_local_runtime_data(tmp_path: P
     (source / "backend" / "app" / "main.py").write_text("# app\n", encoding="utf-8")
     (source / "frontend" / "dist").mkdir(parents=True)
     (source / "frontend" / "dist" / "index.html").write_text(
-        '<meta name="notebi-product-mode" content="notebi">', encoding="utf-8"
+        '<meta name="notebi-build" content="1">', encoding="utf-8"
     )
     (source / "frontend" / "dist" / "assets.js").write_text("assets\n", encoding="utf-8")
     (source / "scripts").mkdir()

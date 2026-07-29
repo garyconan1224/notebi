@@ -14,7 +14,6 @@ from shared.config import (
     TEXT_BACKEND_ANTHROPIC,
     TEXT_MODEL_ANALYZER,
     VISION_MODEL_ANALYZER,
-    VISION_MODEL_DEFAULT,
 )
 from shared.settings_store import AppSettings, load_settings
 from src.vidmirror.core.providers.registry import create_default_registry
@@ -129,13 +128,8 @@ def get_reranker_model_for_rag(settings: AppSettings | None = None) -> str:
     return m or RERANKER_MODEL
 
 
-def get_vision_model_for_storyboard(settings: AppSettings | None = None) -> str:
-    m = get_default_model(settings, "vision")
-    return m or VISION_MODEL_DEFAULT
-
-
 def get_openai_chat_model(settings: AppSettings | None = None) -> str:
-    """分镜在 OpenAI 兼容文本后端时使用的 chat 模型（显式找 openai_compatible 的 chat Provider）。"""
+    """OpenAI 兼容文本后端使用的 chat 模型（显式找 openai_compatible 的 chat Provider）。"""
     s = settings or load_settings()
     reg = _registry()
     for p in reg.list_profiles(s, "chat"):
@@ -144,13 +138,3 @@ def get_openai_chat_model(settings: AppSettings | None = None) -> str:
             if m:
                 return m
     return (s.text_model or "").strip() or TEXT_MODEL_ANALYZER
-
-
-def get_anthropic_model_for_storyboard(settings: AppSettings | None = None) -> str:
-    s = settings or load_settings()
-    p = _profile_for_capability(s, "chat")
-    if p is not None and p.kind == "anthropic":
-        m = (p.default_models.get("chat") or "").strip()
-        if m:
-            return m
-    return (s.anthropic_model or "").strip() or "claude-sonnet-4-20250514"

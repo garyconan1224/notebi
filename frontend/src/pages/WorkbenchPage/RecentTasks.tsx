@@ -5,7 +5,8 @@ import { useTaskStore } from '@/store/taskStore'
 import { usePipelineTasks } from '@/hooks/usePipelineTasks'
 import { isTaskTerminal, getStatusText } from '@/types/task'
 import type { TaskRecord } from '@/types/task'
-import { isWorkspaceKindAllowed, productConfig, type WorkspaceKind } from '@/config/product'
+import { APP_NAME } from '@/config/product'
+import { EmptyState } from '@/components/ui/empty-state'
 
 const STATE_PILL_CLASS: Record<string, string> = {
   done:      'status-pill status-done',
@@ -37,6 +38,12 @@ const COVER_CLASS: Record<string, string> = {
   text:  'cover-text',
 }
 
+/** 阶段 C3：首页只展示顶层素材任务。
+ * `summary` 是笔记内部的生成总结子任务（后端 create_summary 用 task_type="summary" 创建），
+ * 不应成为一张独立素材卡；其 result.summary 是完整 ItemSummary 对象，渲染会崩溃。
+ * 排除集合只列已确认的内部子任务类型，不猜测。 */
+const HIDDEN_TASK_TYPES = new Set(['summary'])
+
 function titleFromFilename(filename: unknown): string {
   const raw = typeof filename === 'string' ? filename.trim() : ''
   if (!raw) return ''
@@ -51,9 +58,15 @@ function audioThumbFromResult(result: Record<string, unknown>, audio?: Record<st
   return `/static/workspaces/${projectId}/audio/${titleFromFilename(filename)}.jpg`
 }
 
-/** 从 result 里取摘要文本，5种来源逐级 fallback */
+/** 从 result 里取摘要文本，逐级 fallback。
+ * 阶段 C3：只接受字符串值，候选不是字符串就跳过——不得用 `as string` 欺骗类型系统，
+ * 否则后端返回完整 ItemSummary 对象时会把对象交给 React 触发整页崩溃。
+ * 不回退到 video_title：那是卡片标题，重复进摘要行会让同一文本出现两次。 */
 function descFromResult(result: Record<string, unknown>): string {
-  return (result.note_summary || result.summary || result.description || result.video_title || '') as string
+  for (const value of [result.note_summary, result.summary, result.description]) {
+    if (typeof value === 'string' && value.trim()) return value
+  }
+  return ''
 }
 
 interface NoteCard {
@@ -94,8 +107,8 @@ function taskToNoteCard(t: TaskRecord): NoteCard {
   const summary = descFromResult(result)
 
   // 来源标签
-  const rawSource = (result.source_name || result.platform || payload.platform || productConfig.name) as string
-  const src = rawSource.trim().toLowerCase() === 'nibi' ? productConfig.name : rawSource
+  const rawSource = (result.source_name || result.platform || payload.platform || APP_NAME) as string
+  const src = rawSource.trim().toLowerCase() === 'nibi' ? APP_NAME : rawSource
 
   // 封面
   const resultAudio = result.audio as Record<string, unknown> | undefined
@@ -135,11 +148,6 @@ function taskToNoteCard(t: TaskRecord): NoteCard {
   return { id: t.task_id, title, summary, src, type, state, thumb, progress, lastAction, metaLabels }
 }
 
-function taskWorkspaceKind(t: TaskRecord): WorkspaceKind {
-  const payload = (t.payload ?? {}) as Record<string, unknown>
-  return payload.intent === 'replica' || t.task_type === 'replica' ? 'replica' : 'note'
-}
-
 interface RecentTasksProps {
   tasks?: TaskRecord[]
 }
@@ -149,9 +157,10 @@ export function RecentTasks({ tasks: tasksProp }: RecentTasksProps) {
   const [failedThumbs, setFailedThumbs] = useState<Set<string>>(new Set())
   usePipelineTasks({ pollInterval: 5000 })
   const storeTasks = useTaskStore((s) => s.tasks)
-  const tasks = (tasksProp ?? storeTasks).filter((task) => isWorkspaceKindAllowed(taskWorkspaceKind(task)))
+  const tasks = tasksProp ?? storeTasks
   // 过滤无意义卡：标题落到 getStatusText（无 video_title 也无 url），且无封面、无摘要
   const meaningful = tasks.filter((t) => {
+    if (HIDDEN_TASK_TYPES.has(t.task_type)) return false
     const payload = (t.payload ?? {}) as Record<string, unknown>
     const result = (t.result ?? {}) as Record<string, unknown>
     const hasTitle = !!(result.video_title || payload.video_title || payload.url)
@@ -204,7 +213,7 @@ export function RecentTasks({ tasks: tasksProp }: RecentTasksProps) {
   if (cards.length === 0) {
     return (
       <section style={{ maxWidth: 1040, margin: '0 auto', padding: '24px 32px 80px' }}>
-        <div className="rt-empty">暂无任务 — 在上方粘贴链接开始解析</div>
+        <EmptyState title="暂无任务" description="在上方粘贴链接或拖入文件开始解析" />
       </section>
     )
   }
@@ -213,7 +222,7 @@ export function RecentTasks({ tasks: tasksProp }: RecentTasksProps) {
     <section style={{ maxWidth: 1040, margin: '0 auto', padding: '24px 32px 80px' }}>
       <div className="sec-h">
         <h2 className="sec-title">最近任务</h2>
-        <button className="sec-link">
+        <button className="sec-link" onClick={() => navigate('/notes')}>
           全部 · {totalCount} <ArrowRight size={13} />
         </button>
       </div>

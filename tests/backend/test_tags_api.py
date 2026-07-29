@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -9,17 +10,21 @@ from fastapi.testclient import TestClient
 
 from backend.app.main import app
 from backend.app.models.workspace import WorkspaceItem, WorkspaceRecord
+from backend.app.services.metadata_store import MetadataStore
 from backend.app.services.workspace_store import WorkspaceStore
 
 client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
-def _fresh_store():
+def _fresh_store(tmp_path: Path):
     """每个测试用例使用干净的 WorkspaceStore。"""
-    store = WorkspaceStore()
-    store._records.clear()
-    with patch("backend.app.routes.workspaces._store", store):
+    store = WorkspaceStore(root=tmp_path / "workspaces")
+    metadata = MetadataStore(path=tmp_path / "metadata.sqlite3")
+    with (
+        patch("backend.app.routes.workspaces._store", store),
+        patch("backend.app.routes.workspaces._metadata", metadata),
+    ):
         yield store
 
 

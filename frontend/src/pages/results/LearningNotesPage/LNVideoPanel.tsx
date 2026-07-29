@@ -43,6 +43,8 @@ interface LNVideoPanelProps {
 export interface LNVideoPanelHandle {
   seekTo: (sec: number) => void
   togglePlay: () => void
+  /** 可等待的播放：返回原生 play() Promise，调用者可感知自动播放拒绝。 */
+  play: () => Promise<void>
   captureScreenshot: () => void
   readonly isPlaying: boolean
   /** 控制条和时间线的 JSX（由父组件渲染在 player-wrap 外部，避免 overflow:hidden 截断） */
@@ -458,13 +460,32 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
       seekTo(sec: number) {
         const v = videoRef.current
         if (!v) return
-        const clamped = Math.max(0, Math.min(v.duration || 0, sec))
-        v.currentTime = clamped
+        const applySeek = () => {
+          const dur = v.duration
+          // duration 非有限值或为 0 时不能钳制到 0：直接设置目标时间，
+          // 浏览器会在元数据就绪后从该位置播放。
+          v.currentTime = Number.isFinite(dur) && dur > 0 ? Math.max(0, Math.min(dur, sec)) : Math.max(0, sec)
+        }
+        if (Number.isFinite(v.duration) && v.duration > 0) {
+          applySeek()
+          return
+        }
+        // 元数据未就绪：等 loadedmetadata 后再 seek，绝不提前钳制到 0。
+        const onMeta = () => {
+          v.removeEventListener('loadedmetadata', onMeta)
+          applySeek()
+        }
+        v.addEventListener('loadedmetadata', onMeta)
       },
       captureScreenshot() {
         void handleScreenshot()
       },
       togglePlay,
+      play() {
+        const v = videoRef.current
+        if (!v) return Promise.resolve()
+        return v.play()
+      },
       get isPlaying() {
         return playing
       },

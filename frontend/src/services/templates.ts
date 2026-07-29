@@ -8,7 +8,6 @@ export type TemplateCategory =
   | 'style_video_text_only'
   | 'style_audio'
   | 'style_image_text'
-  | 'style_replica'
   | 'style_text'
 
 export interface VideoTemplateItem {

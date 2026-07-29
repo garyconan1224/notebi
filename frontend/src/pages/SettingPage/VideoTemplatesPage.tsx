@@ -5,9 +5,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useTemplateStore } from '@/store/templateStore'
 import type { VideoTemplateItem, TemplateCategory } from '@/services/templates'
-import { productConfig } from '@/config/product'
 import {
   fetchTemplates,
   createTemplate,
@@ -26,7 +26,6 @@ const CATEGORY_META: Record<TemplateCategory, { label: string; desc: string }> =
   style_video_text_only: { label: '视频笔记（不带图）', desc: '只基于视频转写生成纯文本笔记的提示词。' },
   style_audio: { label: '音频笔记', desc: '音频转写、章节整理、会议/播客等风格提示词。' },
   style_image_text: { label: '图文笔记', desc: '图片、OCR、图文内容总结的提示词。' },
-  style_replica: { label: '复刻提示词', desc: '内容复刻、结构拆解、创作参考提示词。' },
   style_text: { label: '文本 / 网页', desc: '网页、长文本、粘贴文本总结提示词。' },
 }
 
@@ -35,13 +34,10 @@ const ALL_STYLE_CATEGORIES: TemplateCategory[] = [
   'style_video_text_only',
   'style_audio',
   'style_image_text',
-  'style_replica',
   'style_text',
 ]
 
-const STYLE_CATEGORIES = ALL_STYLE_CATEGORIES.filter((cat) =>
-  productConfig.showReplica || cat !== 'style_replica',
-)
+const STYLE_CATEGORIES = ALL_STYLE_CATEGORIES
 
 export default function VideoTemplatesPage() {
   const [category, setCategory] = useState<TemplateCategory>('style_video_with_frames')
@@ -203,7 +199,11 @@ export default function VideoTemplatesPage() {
 
         <TabsContent value={category} className="flex-1 overflow-auto p-6 mt-0">
         {loading && (
-          <p className="text-sm text-muted-foreground text-center py-12">加载中…</p>
+          <div className="space-y-3 py-6" role="status" aria-label="加载中">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
         )}
         {error && (
           <p className="text-sm text-red-500 text-center py-12">{error}</p>

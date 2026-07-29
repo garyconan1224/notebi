@@ -1,5 +1,59 @@
 # AI Handoff
 
+## 当前执行指针（2026-07-28）
+
+- **当前任务**：完成批准的 NoteBi S1–S6 方案并做最终验收；基线为 `codex/design-knowledge-tasks-settings` 的 `49364c8`。
+- **当前工作分支**：`codex/complete-approved-plan`（验收证据提交为 `2c5f6df`，handoff 随后更新）；主工作树 `/Users/conan/Desktop/notebi` 未修改。
+- **验收结论**：**通过**。业务修复、全量测试、真实浏览器/媒体/知识库证据均已完成；S6 提交只增加验收脚本、证据和文档，保存条遮挡修复已单独提交 `9d8d557`。
+- **全量验证**：后端 `1218 passed, 2 skipped, 5 warnings`；前端 `53 files / 292 tests passed`；`pnpm build` 通过（2985 modules，存在 NoteShell >500KB 的既有 chunk 警告）；`compileall backend shared scripts` 与 `git diff --check` 通过。
+- **设置与日志**：网络、下载均完成保存 → GET 读回 → 刷新一致；响应不再序列化 `po_token`、`visitor_data`、`cookie_base_dirs`；`/admin/logs` 返回 `entries/latest_id/oldest_id/has_more_older`，`after_id` 与 `before_id` 互斥，标准日志默认加载最新并支持暂停/过滤/导出脱敏。
+- **任务与合集**：任务中心/批量任务统一入口；暂停不等于取消、恢复、取消、终态删除限制、失败重试均有正反例，任务生命周期定向测试 `29 passed`；合集工作台真实路由与独立副本语义通过。
+- **知识库**：`/search` 重定向至 `/knowledge`；支持单/多合集范围、AI 回答和原文来源；请求前状态 `ready=true, indexed_item_count=23/23, embedding_model=BAAI/bge-m3`；冷热请求均 HTTP 200、含完整 answer/citations/sources（冷约 29.0s，热约 91.0s，外部模型耗时不稳定）。
+- **真实媒体**：视频和音频深链接均跳转 `30.00s`；`play()` 被拒时仍停在 30.00s 并显示提示，4/4 通过、console error 0。
+- **浏览器验收**：`scripts/knowledge_acceptance/evidence/s6-browser-report.json` 为 `13 pass / 0 fail / 0 skip`；五视口 `1440x900、1366x768、1024x768、768x1024、375x812` 均无横向溢出，console error 0；设置/任务实战 `10/10`，收藏夹 `5/5`，AddMaterial `5/5`。
+- **历史与回档**：原有 `checkpoint/s1-complete` 至 `checkpoint/s6-final` 及 `feat/s1...feat/s6` 指针未移动；未 rebase/reset/amend/filter-repo/cherry-pick/push。当前修复沿现有历史向前提交，避免重写已保留历史。
+- **未验证/环境限制**：Vitest 仍提示 `KnowledgeRouteRedirect.test.tsx` 内嵌 `vi.mock` 将来会变成错误；Vite 有单个大 chunk 警告；未在真实 Windows 机器运行。浏览器报告中的 45 个 `ERR_ABORTED` 为页面切换时主动取消健康轮询，已单独计数，不属于可行动网络错误。
+- **保留边界**：不恢复 PO Token、Visitor Data 或 `cookie_base_dirs`；不恢复学习笔记选择、文件夹/移动/整理管理入口；不把 pause 实现成 cancel；不重写既有历史。
+
+---
+
+## 当前执行指针（2026-07-25）
+
+- **当前任务**：修复结果页导出菜单 / AI 工具 / 删除任务同步 / 默认模型读回（6 组问题）。
+- **已确认计划**：[`docs/plans/result-export-ai-delete-default-model-fixes-2026-07-25.md`](plans/result-export-ai-delete-default-model-fixes-2026-07-25.md)。
+- **执行分支**：`codex/exec-notebi-cleanup`；以 `git log --oneline -5` 为提交事实来源。
+- **已完成（阶段 A–F + Codex 复审 P1）**：
+  - 导出菜单：转写项不显示笔记标题（下载文件名仍带标题）、「当前正文.md」改「Markdown」、菜单外点击/Esc/焦点/互斥、「原始素材」并入导出菜单（阶段 B）。
+  - 删除任务同步（阶段 C）：后端 `batch_delete_items` 按 item 清理 `related_task_ids`；前端 `RecentTasks` 隐藏 `summary` 子任务并做类型安全 `descFromResult` 防首页崩溃；LibraryPage / WorkspaceList / TaskboardPage 各删除入口精确 `removeTasks`。
+  - 默认模型读回（阶段 D + P1）：`ProvidersAndModelsPage` 拆出 `fetchProvidersData`（纯读取、失败抛错）与 `applyProvidersData`；`handleSaveDefault` 严格校验——PUT 成功 + GET 读回成功 + 读回值与目标一致，三者都满足才提示成功并同步 configStore；清空时也按实际 PUT 的 provider 读回校验，否则提示「保存失败 / 保存未生效」。
+  - 路由错误页（阶段 E）：`RouteErrorPage` 接入 router `errorElement`。
+  - Codex 复审 P1 修复：LibraryPage 批量删除合集只清理 `fulfilledWorkspaceIds`（删除失败的合集任务保留）；新增 Taskboard / Library 部分失败回归测试与默认模型保存/读回失败/读回不一致/清空持久化测试。
+- **P2 决策（用户已确认）**：窄屏（375px）适配本轮**不做**，记录为后续 UI 任务——该问题涉及整个侧栏/AppShell，不只是导出菜单，继续修会扩大本轮范围。
+- **已验证**：前端 34 文件 / 212 tests passed、生产 build 通过；后端 1034 passed、2 skipped；F3 默认模型真实浏览器端到端（保存 → 后端持久化 → 刷新读回 → 清空恢复）通过，测试期改动的 chat 默认模型已恢复为「未设置」。
+- **下一步**：等待 Codex 最终复验；如需可补 F1/F2/F4 浏览器复验。
+- **强制停点**：实际代码、数据、接口、依赖或产品行为与计划不一致时立即停下询问；不得为过测而改产品语义、删旧功能、扩文件范围或改数据库结构。
+- **保留不动的 5 个用户文件**：`.workbuddy/memory/2026-07-21.md`、`.workbuddy/memory/MEMORY.md`、`.workbuddy/memory/2026-07-23.md`、`docs/plans/knowledge-favorites-search-research-2026-07-23.md`、`overview.md`。
+
+---
+
+## 当前执行指针（2026-07-22）
+
+- **当前任务**：将独立 NoteBi 仓库从多产品隐藏模式收敛为真正的单一 NoteBi，并物理删除复刻、AI 分镜、AI 导演和提示词生产能力。
+- **已确认计划**：[`docs/plans/notebi-single-product-cleanup-2026-07-20.md`](plans/notebi-single-product-cleanup-2026-07-20.md)。
+- **执行分支**：`codex/exec-notebi-cleanup`；以当前 `git log --oneline -5` 为提交事实来源。
+- **Git 整理**：原 `codex/feat-speaker-summary-completion` 已重命名为本地 `main`；已合并的 `codex/qa-notebi-bootstrap` 已删除；仓库无 remote，不 push。
+- **用户决策**：删除 `nibi/replicabi` 多产品模式，只保留 NoteBi；保留画面识别、关键帧、OCR、描述、标签、总结和笔记配图；删除生成提示词、提示词格式、Prompt 版本和复刻包。
+- **数据决策**：旧 `workspace.kind == "replica"` 数据永久删除，不进回收站、不转换、不备份。只读扫描显示当前本地为 29 个 note workspace、44 个 item、0 个 replica workspace、0 个 replica/storyboard task。
+- **删除范围**：复刻合集与任务分流、AI 分镜页面与 pipeline、AI 导演占位、MJ/SD/视频提示词生成、Prompt format API/设置、Prompt version、reproduce export、三产品构建脚本。
+- **保留范围**：视频/图片/音频/文字笔记、画面理解、OCR、关键帧、转写、字幕、说话人、总结版本、知识库、搜索、问 AI、正常笔记与音频导出。
+- **Windows 约束**：删除 `VITE_PRODUCT_MODE` 后，必须用固定 NoteBi build marker 替代动态模式标记；不能取消 portable preflight 对错误前端产物的拦截。
+- **当前状态**：P1–P5 删除已落地；后续收口已拒绝 `create`/`storyboard` 任务和 `replica` 创建意图，移除公开的 kind 筛选与产品开关，并删除遗留提示词展示/复刻样式。旧 replica 只保留启动期永久清除识别。
+- **已验证**：本次相关后端回归 72 passed、前端 175 tests passed、前端生产 build 与 `compileall backend/app` 通过。完整后端套件在外部依赖等待处停止，未作为通过依据。
+- **下一步**：如需最终发布验收，补真实浏览器 smoke 与 Windows 实机启动；不要恢复多产品、复刻或提示词生产入口。
+- **强制停点**：实际代码、数据、接口、依赖或产品行为与计划不一致时，必须立即停下询问；不得扩大到音频、provider、模型或总结模板。
+
+---
+
 ## 当前执行指针（2026-07-14）
 
 - **当前任务**：开源跨平台整理 + 仅 Windows 的源码可见离线懒人包。
@@ -34,7 +88,7 @@ Last updated: 2026-07-12（**当前指针，给所有 AI 工具优先读取**）
 
 - **项目位置**：`/Users/conan/Desktop/notebi`。这是从 `/Users/conan/Desktop/nibi` 拆出的 NoteBi 独立目录。
 - **当前分支**：`codex/qa-notebi-bootstrap`。本仓库由 Codex 初始化为本地接力仓库；不要把它当成原 `/Users/conan/Desktop/nibi` 的工作树。
-- **产品模式**：默认 `VITE_PRODUCT_MODE=notebi`，前端端口 `5181`，后端端口 `8001`。
+- **产品模式**：固定为 NoteBi（多产品模式已在单产品化清理中删除），前端端口 `5181`，后端端口 `8001`。
 - **启动入口**：
   - 用户双击：`启动 NoteBi.command`
   - 终端完整启动：`./start-notebi.command`

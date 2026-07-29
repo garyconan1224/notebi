@@ -41,12 +41,10 @@ set_env_value() {
 BACKEND_PORT="${BACKEND_PORT:-8001}"
 VITE_PORT="${VITE_PORT:-5181}"
 
-set_env_value "VITE_PRODUCT_MODE" "notebi"
 set_env_value "BACKEND_PORT" "$BACKEND_PORT"
 set_env_value "VITE_PORT" "$VITE_PORT"
 set_env_value "VITE_BACKEND_BASE_URL" "http://127.0.0.1:$BACKEND_PORT"
 
-export VITE_PRODUCT_MODE="notebi"
 export BACKEND_PORT
 export VITE_PORT
 export VITE_BACKEND_PORT="$BACKEND_PORT"

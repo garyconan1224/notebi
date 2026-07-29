@@ -99,7 +99,10 @@ class TaskLogEntry:
 
 @dataclass
 class TaskRecord:
-    """任务记录数据模型"""
+    """任务记录数据模型。
+
+    S3 扩展：添加批次身份字段，保持向后兼容。
+    """
     task_id: str
     project_id: str
     task_type: str
@@ -113,6 +116,10 @@ class TaskRecord:
     cancel_requested: bool = False
     created_at: str = field(default_factory=_now_iso)
     updated_at: str = field(default_factory=_now_iso)
+    # S3 批次身份字段（可选，向后兼容）
+    batch_id: str = ""
+    batch_item_id: str = ""
+    attempt_no: int = 1
 
     def to_dict(self, include_logs: bool = True, include_result: bool = True, log_tail: int = 0) -> Dict[str, Any]:
         """转换为字典格式。
@@ -162,4 +169,7 @@ class TaskRecord:
             cancel_requested=bool(data.get("cancel_requested") or False),
             created_at=str(data.get("created_at") or _now_iso()),
             updated_at=str(data.get("updated_at") or _now_iso()),
+            batch_id=str(data.get("batch_id") or ""),
+            batch_item_id=str(data.get("batch_item_id") or ""),
+            attempt_no=int(data.get("attempt_no") or 1),
         )

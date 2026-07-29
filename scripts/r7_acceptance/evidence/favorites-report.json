@@ -1,0 +1,35 @@
+{
+  "generated_at": "2026-07-27T16:24:47.402Z",
+  "checks": [
+    {
+      "item": "收藏夹渲染收藏卡片",
+      "status": "pass",
+      "detail": "卡片数=4"
+    },
+    {
+      "item": "副本隔离：收纳箱与普通合集收藏并存解析",
+      "status": "pass",
+      "detail": "来源合集=新笔记合集 | 收纳箱"
+    },
+    {
+      "item": "刷新后收藏列表保持一致",
+      "status": "pass",
+      "detail": "刷新前=4 刷新后=4"
+    },
+    {
+      "item": "分组筛选控件存在",
+      "status": "pass",
+      "detail": "分组下拉=true"
+    },
+    {
+      "item": "取消收藏即时移除卡片",
+      "status": "pass",
+      "detail": "取消前=4 取消后=3"
+    }
+  ],
+  "console_errors": [],
+  "screenshots": {
+    "initial": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/fav-01-initial.png",
+    "afterUnfavorite": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/fav-02-after-unfavorite.png"
+  }
+}

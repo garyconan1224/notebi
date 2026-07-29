@@ -26,7 +26,10 @@ export interface TaskLogEntry {
 export interface TaskRecord {
   task_id: string
   project_id: string
-  task_type: string                    // download|analyze|create|storyboard|note
+  batch_id?: string
+  batch_item_id?: string
+  attempt_no?: number
+  task_type: string                    // download|analyze|note|text|image|audio
   payload: Record<string, unknown>
   status: string                       // TaskStatus 值
   progress: number                     // 0.0 ~ 1.0
@@ -99,10 +102,7 @@ export interface AnalyzePayload {
   extras?: string
   browser?: string
   proxy?: string
-  po_token?: string
-  visitor_data?: string
   format_selector?: string
-  cookie_base_dirs?: string[]
 }
 
 /** download 任务 payload */
@@ -110,16 +110,13 @@ export interface DownloadPayload {
   url: string
   browser?: string
   proxy?: string
-  po_token?: string
-  visitor_data?: string
   format_selector?: string
-  cookie_base_dirs?: string[]
 }
 
 // 任务创建请求
 export interface TaskCreateRequest {
   project_id: string
-  task_type: 'download' | 'analyze' | 'create' | 'storyboard' | 'note' | 'text' | 'image' | 'audio'
+  task_type: 'download' | 'analyze' | 'note' | 'text' | 'image' | 'audio'
   payload: AnalyzePayload | DownloadPayload | Record<string, unknown>
   /** 可选步骤编排，仅对 note 任务生效。默认全量执行。 */
   steps?: string[]

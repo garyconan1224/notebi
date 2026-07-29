@@ -11,7 +11,6 @@ import { SortMenu } from './SortMenu'
 import { ViewToggle } from './ViewToggle'
 import { ItemCard } from './ItemCard'
 import { WorkspaceCard } from './WorkspaceCard'
-import { productConfig, type WorkspaceKind } from '@/config/product'
 import {
   STATE_ORDER,
   primaryStatusToState,
@@ -155,7 +154,7 @@ function sortLibraryEntries(entries: LibraryEntry[], sortBy: SortBy): LibraryEnt
   }
 }
 
-export default function LibraryPage({ kind }: { kind?: 'note' | 'replica' } = {}) {
+export default function LibraryPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const intentFilter = searchParams.get('intent') || ''
@@ -175,14 +174,6 @@ export default function LibraryPage({ kind }: { kind?: 'note' | 'replica' } = {}
   const sortBy = useLibraryStore((s) => s.sortBy)
   const viewMode = useLibraryStore((s) => s.viewMode)
   const cardColumns = useLibraryStore((s) => s.cardColumns)
-  const effectiveKind = kind ?? (
-    productConfig.allowedKinds.length === 1 ? productConfig.defaultKind : undefined
-  )
-  const requestKinds = useMemo<WorkspaceKind[]>(
-    () => (kind ? [kind] : productConfig.allowedKinds),
-    [kind],
-  )
-
   const selectionKey = (wsId: string, itemId: string) => `${wsId}:${itemId}`
 
   const toggleSelect = useCallback((itemId: string, wsId: string) => {
@@ -219,14 +210,14 @@ export default function LibraryPage({ kind }: { kind?: 'note' | 'replica' } = {}
     setLoading(true)
     setError(null)
     try {
-      const res = await fetchLibrary(false, requestKinds)
+      const res = await fetchLibrary(false)
       setData(res)
     } catch {
       setError('加载资料库失败，请确认后端已启动')
     } finally {
       setLoading(false)
     }
-  }, [requestKinds])
+  }, [])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -243,15 +234,15 @@ export default function LibraryPage({ kind }: { kind?: 'note' | 'replica' } = {}
 
   const scopedItems = useMemo(() => {
     if (!data) return []
-    let items = kind ? data.items.filter((it) => it.workspace_kind === kind) : data.items
+    let items = data.items
     if (intentFilter) items = items.filter((it) => it.preflight?.intent === intentFilter)
     return items
-  }, [data, kind, intentFilter])
+  }, [data, intentFilter])
 
   const scopedWorkspaces = useMemo(() => {
     if (!data) return []
-    return kind ? data.workspaces.filter((ws) => ws.kind === kind) : data.workspaces
-  }, [data, kind])
+    return data.workspaces
+  }, [data])
 
   const itemsByWorkspace = useMemo(() => {
     const map = new Map<string, LibraryItem[]>()
@@ -373,8 +364,10 @@ export default function LibraryPage({ kind }: { kind?: 'note' | 'replica' } = {}
     if (!ok) return
     try {
       await deleteItem(item.workspace_id, item.item_id)
-      // 1-C：即时移除该 workspace 关联的任务，不等轮询
-      useTaskStore.getState().removeByProject(item.workspace_id)
+      // 阶段 C2：只精确移除该 item 的 related_task_ids，不清掉同合集其它素材的任务。
+      // related_task_ids 缺失时不兜底 removeByProject——后端已删任务，下一轮轮询会同步掉。
+      const tids = item.related_task_ids ?? []
+      if (tids.length > 0) useTaskStore.getState().removeTasks(tids)
       toast.success(`已删除「${label}」`)
       load()
     } catch {
@@ -414,19 +407,47 @@ export default function LibraryPage({ kind }: { kind?: 'note' | 'replica' } = {}
           items.push({ workspace_id: ws, item_id: rest.join(':') })
         }
       })
+      let removedCount = 0
+      let failedCount = 0
+      const removedItemIds = new Set<string>()
+      const fulfilledWorkspaceIds = new Set<string>()
       if (items.length > 0) {
-        await batchDeleteItems(items)
+        const result = await batchDeleteItems(items)
+        removedCount += result.removed
+        failedCount += result.failed
+        result.removed_ids.forEach((id) => removedItemIds.add(id))
       }
       if (wsIds.length > 0) {
-        await Promise.all(wsIds.map((id) => deleteWorkspace(id)))
+        // 合集逐个删除，用 allSettled 汇总，避免单个失败吞掉整体结果
+        const settled = await Promise.allSettled(wsIds.map((id) => deleteWorkspace(id)))
+        settled.forEach((r, i) => {
+          if (r.status === 'fulfilled') {
+            removedCount += 1
+            fulfilledWorkspaceIds.add(wsIds[i])
+          } else {
+            failedCount += 1
+          }
+        })
       }
-      // 1-C：批量删除后即时清理 taskStore
-      const affectedProjectIds = new Set([
-        ...wsIds,
-        ...items.map((it) => it.workspace_id),
-      ])
-      affectedProjectIds.forEach((pid) => useTaskStore.getState().removeByProject(pid))
-      toast.success(`已删除 ${selectedSet.size} 项`)
+      // P1 修复：
+      // - 删除单个 item：只根据 removed_ids 精确移除关联任务，失败项任务保留，
+      //   避免失败素材的任务被错误隐藏、刷新后又重新出现。
+      // - 软删除整个合集：只对实际删除成功的合集用 removeByProject
+      //   （后端 list_tasks 已过滤 trashed workspace）；删除失败的合集任务必须保留。
+      const store = useTaskStore.getState()
+      const itemTaskIds = items
+        .filter((it) => removedItemIds.has(it.item_id))
+        .flatMap((it) => {
+          const found = itemsByWorkspace.get(it.workspace_id)?.find((x) => x.item_id === it.item_id)
+          return found?.related_task_ids ?? []
+        })
+      if (itemTaskIds.length > 0) store.removeTasks(itemTaskIds)
+      fulfilledWorkspaceIds.forEach((pid) => store.removeByProject(pid))
+      if (failedCount > 0) {
+        toast.warning(`已删除 ${removedCount} 项，${failedCount} 项删除失败`)
+      } else {
+        toast.success(`已删除 ${removedCount} 项`)
+      }
       setSelectedSet(new Set())
       load()
     } catch {
@@ -434,7 +455,7 @@ export default function LibraryPage({ kind }: { kind?: 'note' | 'replica' } = {}
     } finally {
       setDeleting(false)
     }
-  }, [selectedSet, load])
+  }, [selectedSet, load, itemsByWorkspace])
 
   const handleBatchAddToCollection = useCallback(async () => {
     if (!collectionTargetId) {
@@ -442,7 +463,7 @@ export default function LibraryPage({ kind }: { kind?: 'note' | 'replica' } = {}
       return
     }
     if (selectedItemRefs.length === 0) {
-      toast.error('请选择要加入合集的内容')
+      toast.error('请选择要复制到合集的内容')
       return
     }
     setAddingToCollection(true)
@@ -450,40 +471,39 @@ export default function LibraryPage({ kind }: { kind?: 'note' | 'replica' } = {}
     try {
       const res = await batchAddItemsToWorkspace(collectionTargetId, selectedItemRefs)
       if (res.added > 0) {
-        toast.success(`已加入 ${res.added} 项到「${targetName}」${res.skipped ? `，${res.skipped} 项已存在` : ''}`)
+        toast.success(`已复制 ${res.added} 项到「${targetName}」${res.skipped ? `，${res.skipped} 项已存在` : ''}`)
         setSelectedSet(new Set())
         setSelecting(false)
       } else if (res.skipped > 0) {
         toast.info(`选中内容已在「${targetName}」中`)
       } else {
-        toast.error('没有内容被加入合集')
+        toast.error('没有内容被复制到合集')
       }
       if (res.failed > 0) {
         toast.error(`${res.failed} 项加入失败，请检查目标合集类型`)
       }
       await load()
     } catch {
-      toast.error('加入合集失败，请重试')
+      toast.error('复制到合集失败，请重试')
     } finally {
       setAddingToCollection(false)
     }
   }, [collectionTargetId, selectedItemRefs, collectionWorkspaces, load])
 
   const handleCreateCollection = useCallback(async () => {
-    if (!effectiveKind) return
     setCreatingWorkspace(true)
     try {
-      const name = effectiveKind === 'replica' ? '新复刻合集' : '新笔记合集'
-      await createWorkspace({ name, kind: effectiveKind })
+      const name = '新笔记合集'
+      await createWorkspace({ name })
       setSelectedFilters(['collection'])
-      toast.success(`已创建${effectiveKind === 'replica' ? '复刻' : '笔记'}合集`)
+      toast.success('已创建笔记合集')
       await load()
     } catch {
       toast.error('创建合集失败，请重试')
     } finally {
       setCreatingWorkspace(false)
     }
-  }, [effectiveKind, load, setSelectedFilters])
+  }, [load, setSelectedFilters])
 
   const handleRenameWorkspace = useCallback(async (workspaceId: string, name: string) => {
     try {
@@ -502,7 +522,7 @@ export default function LibraryPage({ kind }: { kind?: 'note' | 'replica' } = {}
         toast.success('已取消收藏')
       } else {
         await favoriteItem(item.workspace_id, item.item_id)
-        toast.success(`已加入${item.workspace_kind === 'replica' ? '复刻' : '笔记'}收藏`)
+        toast.success('已加入笔记收藏')
       }
       await load()
     } catch {
@@ -526,126 +546,100 @@ export default function LibraryPage({ kind }: { kind?: 'note' | 'replica' } = {}
     }
   }, [data, scopedItems, collectionWorkspaces, collectionWorkspaceIds, itemsByWorkspace])
 
-  const emptyTitle = effectiveKind === 'note'
-    ? '暂无笔记'
-    : effectiveKind === 'replica'
-      ? '暂无复刻'
-      : '暂无笔记'
-  const emptyDesc = effectiveKind === 'note'
-    ? '去工作台添加学习素材，或粘贴一个链接开始吧'
-    : effectiveKind === 'replica'
-      ? '去工作台添加复刻素材，开始创作吧'
-      : '去工作台添加笔记，或粘贴一个链接开始吧'
+  const emptyTitle = '暂无笔记'
+  const emptyDesc = '去工作台添加学习素材，或粘贴一个链接开始吧'
 
-  const pageTone = effectiveKind === 'replica' ? 'replica' : effectiveKind === 'note' ? 'note' : 'library'
-  const pageKicker = effectiveKind === 'replica'
-    ? 'REPLICA LIBRARY'
-    : effectiveKind === 'note'
-      ? 'NOTE LIBRARY'
-      : 'MATERIAL LIBRARY'
+  const pageTone = 'note'
+  const pageKicker = 'NOTE LIBRARY'
 
   return (
     <div className={`lib-page lib-page--${pageTone}`}>
-      {/* ── Hero ── */}
+      {/* ── Hero：只保留标题、说明、导入内容、新建合集 ── */}
       <div className="lib-page-header">
         <div>
           <div className="lib-kicker">{pageKicker} · LOCAL</div>
           <h2>
-            {effectiveKind === 'note'
-              ? '所有做过的笔记，都在这里汇总。'
-              : effectiveKind === 'replica'
-                ? '逐帧复刻，画面里的每个细节。'
-                : '所有参考资料，一键检索引用。'}
+            所有做过的笔记，都在这里汇总。
           </h2>
           <p>
-            {effectiveKind === 'note'
-              ? '视频、音频、图片和文本都保留各自入口，只把最需要的操作放在第一层。'
-              : effectiveKind === 'replica'
-                ? '对视频和图片进行逐帧拆解与结构分析，沉淀可复用的视觉参考和分镜脚本。'
-                : '导入 PDF、论文、网页和文档，AI 自动建立知识图谱并在笔记和分镜中关联引用。'}
+            视频、音频、图片和文本都保留各自入口，只把最需要的操作放在第一层。
           </p>
           <div className="lib-hero-actions">
             <button className="lib-cta lib-cta-primary" onClick={() => navigate('/')}>
               <Plus size={15} />
-              {effectiveKind === 'note' || effectiveKind === 'replica' ? '导入内容' : '上传资料'}
+              导入内容
             </button>
-            {effectiveKind && (
-              <button
-                className="lib-cta lib-cta-secondary"
-                onClick={handleCreateCollection}
-                disabled={creatingWorkspace}
-              >
-                <FolderPlus size={15} />
-                {creatingWorkspace ? '创建中…' : '新建合集'}
-              </button>
-            )}
+            <button
+              className="lib-cta lib-cta-secondary"
+              onClick={handleCreateCollection}
+              disabled={creatingWorkspace}
+            >
+              <FolderPlus size={15} />
+              {creatingWorkspace ? '创建中…' : '新建合集'}
+            </button>
           </div>
-        </div>
-          <div className="lib-actions">
-          {hasVisibleEntries && (
-            <>
-              {selectMode ? (
-                <>
-                  <button className="btn btn-sm" onClick={selectAll}>全选</button>
-                  <button className="btn btn-sm" onClick={clearSelection}>取消</button>
-                  <button
-                    className={`btn btn-sm${selectedSet.size > 0 ? ' btn-danger' : ''}`}
-                    disabled={deleting || selectedSet.size === 0}
-                    onClick={handleBatchDelete}
-                  >
-                    <Trash2 size={13} />
-                    删除 {selectedSet.size > 0 ? `(${selectedSet.size})` : ''}
-                  </button>
-                  {kind && collectionWorkspaces.length > 0 && (
-                    <div className="batch-collection-control">
-                      <select
-                        value={collectionTargetId}
-                        onChange={(event) => setCollectionTargetId(event.target.value)}
-                        title="选择目标合集"
-                      >
-                        {collectionWorkspaces.map((ws) => (
-                          <option key={ws.workspace_id} value={ws.workspace_id}>
-                            {ws.name}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        className={`btn btn-sm${selectedItemRefs.length > 0 ? ' btn-secondary' : ''}`}
-                        disabled={addingToCollection || selectedItemRefs.length === 0 || !collectionTargetId}
-                        onClick={handleBatchAddToCollection}
-                      >
-                        <FolderInput size={13} />
-                        {addingToCollection ? '加入中…' : `加入合集${selectedItemRefs.length > 0 ? ` (${selectedItemRefs.length})` : ''}`}
-                      </button>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <button className="btn btn-sm" onClick={enterSelectMode}>选择</button>
-              )}
-            </>
-          )}
-          <SortMenu />
-          <ViewToggle />
         </div>
       </div>
 
-      {/* ── Toolbar ── */}
-      <div className="lib-toolbar">
-        <FilterChips counts={chipCounts} />
-        <div className="lib-search">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-          </svg>
-          <input
-            type="text"
-            placeholder="搜索标题、来源、摘要..."
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
+      {/* ── 工具栏 / 批量栏 ── */}
+      {selectMode ? (
+        <div className="lib-toolbar lib-toolbar--batch">
+          <span className="batch-count">已选 {selectedItemRefs.length} 项</span>
+          <button className="btn btn-sm" onClick={selectAll}>全选</button>
+          <button className="btn btn-sm" onClick={clearSelection}>取消</button>
+          {collectionWorkspaces.length > 0 && (
+            <div className="batch-collection-control">
+              <select
+                value={collectionTargetId}
+                onChange={(event) => setCollectionTargetId(event.target.value)}
+                title="选择目标合集"
+              >
+                {collectionWorkspaces.map((ws) => (
+                  <option key={ws.workspace_id} value={ws.workspace_id}>
+                    {ws.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                className={`btn btn-sm${selectedItemRefs.length > 0 ? ' btn-secondary' : ''}`}
+                disabled={addingToCollection || selectedItemRefs.length === 0 || !collectionTargetId}
+                onClick={handleBatchAddToCollection}
+              >
+                <FolderInput size={13} />
+                {addingToCollection ? '复制中…' : '复制到合集'}
+              </button>
+            </div>
+          )}
+          <button
+            className={`btn btn-sm${selectedSet.size > 0 ? ' btn-danger' : ''}`}
+            disabled={deleting || selectedSet.size === 0}
+            onClick={handleBatchDelete}
+          >
+            <Trash2 size={13} />
+            删除{selectedSet.size > 0 ? ` (${selectedSet.size})` : ''}
+          </button>
         </div>
-        <ViewToggle />
-      </div>
+      ) : (
+        <div className="lib-toolbar">
+          <FilterChips counts={chipCounts} />
+          <div className="lib-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+            </svg>
+            <input
+              type="text"
+              placeholder="搜索标题、来源、摘要..."
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </div>
+          <SortMenu />
+          {hasVisibleEntries && (
+            <button className="btn btn-sm" onClick={enterSelectMode}>选择</button>
+          )}
+          <ViewToggle />
+        </div>
+      )}
 
       {/* ── 内容区 ── */}
       {loading && (

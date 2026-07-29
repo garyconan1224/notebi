@@ -120,7 +120,6 @@ def start(root: Path, *, backend_port: int, frontend_port: int, open_browser: bo
     environment.update(
         {
             "NOTEBI_ROOT": str(root),
-            "VITE_PRODUCT_MODE": "notebi",
             "BACKEND_PORT": str(backend_port),
             "VITE_PORT": str(frontend_port),
             "VITE_BACKEND_PORT": str(backend_port),

@@ -282,14 +282,17 @@ describe('NoteShell summary switching', () => {
     await screen.findByText('尚未生成总结')
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
 
-    expect(screen.getByRole('button', { name: '测试音频 · 转写文本' })).not.toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '测试音频 · 转写文本（区分说话人）' }))
+    // 新契约：菜单项不带笔记标题
+    expect(screen.getByRole('button', { name: '转写文本' })).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '转写文本（区分说话人）' }))
 
     await waitFor(() => {
+      // downloadTranscript 现在接收标题作为第 4 个参数，用于 fallback 文件名
       expect(mocks.downloadTranscript).toHaveBeenCalledWith(
         'ws-1',
         'item-1',
         'speaker_grouped',
+        '测试音频',
       )
     })
   })

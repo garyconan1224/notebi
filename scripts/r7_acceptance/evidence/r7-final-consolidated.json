@@ -1,0 +1,279 @@
+{
+  "generated_at": "2026-07-27T16:43:56.755094Z",
+  "branch": "feat/r7-fix-forward",
+  "base_checkpoint": "8b6e2ab (R7 未通过检查点，保留)",
+  "fix_commits": [
+    "43cb5fa fix(knowledge) 深链接定位与播放回退",
+    "ec227d3 fix(startup) 无 data 目录干净启动"
+  ],
+  "auto_tests": {
+    "backend_pytest": "1049 passed, 2 skipped",
+    "backend_compileall": "exit 0",
+    "clean_worktree_backend": "无 data/ 无 .env 的干净 worktree：1049 passed, 2 skipped（data/ 由修复自动创建）",
+    "frontend_test": "270 passed (43 files)",
+    "frontend_build": "通过",
+    "git_diff_check": "clean (8b6e2ab..HEAD)"
+  },
+  "historical_exceptions": {
+    "summary": "存在 3 项已批准历史例外（1abeaf3/c66ae1b/4b4b053），无无关业务混入",
+    "items": [
+      {
+        "commit": "1abeaf3",
+        "exception": "R1-B 同时修改 KnowledgeRouteRedirect.test.tsx",
+        "unrelated_business_mixed": false
+      },
+      {
+        "commit": "c66ae1b",
+        "exception": "R2-B 同时修改 SearchPage.test.tsx",
+        "unrelated_business_mixed": false
+      },
+      {
+        "commit": "4b4b053",
+        "exception": "R2-A 同时修改 retrieval_service.py",
+        "unrelated_business_mixed": false
+      }
+    ],
+    "sensitive_paths_scope": {
+      "statement": "R0–R7 各阶段未新增/修改/暂存 .workbuddy/.qoder/data",
+      "verified_commit_range": "7d251dd..d675911",
+      "ancestral_note": "4d4235f 在 R0 之前已入祖先历史，不执行 filter-repo"
+    }
+  },
+  "browser_acceptance_summary": {
+    "structural_12item": {
+      "pass": 12,
+      "fail": 0,
+      "skip": 1,
+      "total": 13
+    },
+    "real_media": {
+      "pass": 4,
+      "fail": 0,
+      "skip": 0,
+      "total": 4
+    },
+    "favorites": {
+      "pass": 5,
+      "fail": 0,
+      "skip": 0,
+      "total": 5
+    },
+    "addmaterial": {
+      "pass": 5,
+      "fail": 0,
+      "skip": 0,
+      "total": 5
+    }
+  },
+  "item3_knowledge_ask": {
+    "status_before": {
+      "ready": true,
+      "indexed_item_count": 23,
+      "item_count": 23,
+      "embedding_model": "BAAI/bge-m3"
+    },
+    "cold_start_sec": 17.71,
+    "warm_start_sec": 50.47,
+    "both_http": 200,
+    "cold_answer_len": 258,
+    "cold_sources": 5,
+    "cold_citations": [
+      1,
+      2,
+      4,
+      5
+    ],
+    "warm_answer_len": 274,
+    "warm_sources": 5,
+    "warm_citations": [
+      1,
+      2,
+      4,
+      5
+    ],
+    "note": "原 30s 超时发生于索引仅 4/23 且 bge-m3 冷加载期间；索引完成(23/23)后冷17.7s/热50.5s 均返回真实 answer+citations+sources"
+  },
+  "real_media_detail": [
+    {
+      "item": "视频 start_ms=30000 跳转到 ~30s",
+      "status": "pass",
+      "detail": "currentTime=30.00 duration=60.000363 readyState=1 paused=true autoplayHint=true"
+    },
+    {
+      "item": "视频自动播放被拒绝时保留时间+提示",
+      "status": "pass",
+      "detail": "paused=true currentTime=30.00 hint可见"
+    },
+    {
+      "item": "音频 start_ms=30000 跳转到 ~30s",
+      "status": "pass",
+      "detail": "currentTime=30.00 duration=1551.079771 readyState=4 paused=true autoplayHint=true"
+    },
+    {
+      "item": "音频自动播放被拒绝时保留时间+提示",
+      "status": "pass",
+      "detail": "paused=true currentTime=30.00 hint可见"
+    }
+  ],
+  "favorites_detail": [
+    {
+      "item": "收藏夹渲染收藏卡片",
+      "status": "pass",
+      "detail": "卡片数=4"
+    },
+    {
+      "item": "副本隔离：收纳箱与普通合集收藏并存解析",
+      "status": "pass",
+      "detail": "来源合集=新笔记合集 | 收纳箱"
+    },
+    {
+      "item": "刷新后收藏列表保持一致",
+      "status": "pass",
+      "detail": "刷新前=4 刷新后=4"
+    },
+    {
+      "item": "分组筛选控件存在",
+      "status": "pass",
+      "detail": "分组下拉=true"
+    },
+    {
+      "item": "取消收藏即时移除卡片",
+      "status": "pass",
+      "detail": "取消前=4 取消后=3"
+    }
+  ],
+  "addmaterial_detail": [
+    {
+      "item": "五种笔记类型同屏",
+      "status": "pass",
+      "detail": "类型=自动识别/视频笔记/图文笔记/音频笔记/混合笔记"
+    },
+    {
+      "item": "四种来源流程入口",
+      "status": "pass",
+      "detail": "来源=单条内容(链接)/本地上传/批量合集/选择合集(已有内容)"
+    },
+    {
+      "item": "高频设置常驻同屏",
+      "status": "pass",
+      "detail": "设置=笔记风格/说话人/补充说明/视觉（人数/画面参数随类型上下文显示）"
+    },
+    {
+      "item": "无学习笔记/你要做什么/高级设置",
+      "status": "pass",
+      "detail": "旧 action 与折叠器均已移除"
+    },
+    {
+      "item": "五种类型均可点击切换",
+      "status": "pass",
+      "detail": "成功切换=5/5"
+    }
+  ],
+  "structural_checks": [
+    {
+      "id": "1a",
+      "item": "/knowledge 正式入口渲染 SearchPage",
+      "status": "pass",
+      "detail": "url=http://localhost:5181/knowledge；知识库语义可见"
+    },
+    {
+      "id": "1b",
+      "item": "/search?q=hello 重定向到 /knowledge?q=hello",
+      "status": "pass",
+      "detail": "最终 url=http://localhost:5181/knowledge?q=hello"
+    },
+    {
+      "id": "2",
+      "item": "合集范围选择器（全部/全选/清空）",
+      "status": "pass",
+      "detail": "全部合集=true 全选=true 清空=true"
+    },
+    {
+      "id": "3",
+      "item": "AI 回答含真实引用/相关原文",
+      "status": "skip",
+      "detail": "status.ready=true indexed=23/23；asked=true answerSeen=false err=超时；后端直调证据见 item3-cold.json(冷17.7s)/item3-warm.json(热50.5s) 均 HTTP200 含真实 citations"
+    },
+    {
+      "id": "4",
+      "item": "视频时间点深链接跳转到 ~30s",
+      "status": "pass",
+      "detail": "currentTime=30.00 duration=60.000363 readyState=4（音频同样跳转 30.00s，详见 real-media-report.json）"
+    },
+    {
+      "id": "5",
+      "item": "自动播放被拒时保留 seek 位置+提示",
+      "status": "pass",
+      "detail": "真实媒体验收（real-media-report.json）：play() 被拒后视频/音频均 paused 停在 30.00s 且显示 deeplink-autoplay-hint"
+    },
+    {
+      "id": "6",
+      "item": "收藏夹页面渲染（分组/刷新）",
+      "status": "pass",
+      "detail": "url=http://localhost:5181/favorites；分组控件=false（当前无收藏数据，收藏/取消/副本隔离交互未逐项演练）"
+    },
+    {
+      "id": "7",
+      "item": "/notes 渲染且 Hero 不被撑高",
+      "status": "pass",
+      "detail": "url=http://localhost:5181/notes；Hero高度=39px"
+    },
+    {
+      "id": "8",
+      "item": "/notes 无文件夹/移动/标签/整理管理功能；单一 ViewToggle",
+      "status": "pass",
+      "detail": "ViewToggle数=1；管理操作=无（“文件夹”chip与“采访整理”摘要为数据展示）"
+    },
+    {
+      "id": "9",
+      "item": "AddMaterial 高频设置同屏，无旧 action",
+      "status": "pass",
+      "detail": "同屏设置=笔记风格/说话人/补充说明；泄漏=无"
+    },
+    {
+      "id": "10",
+      "item": "Monitor 任务活动/日志/暂停/过滤",
+      "status": "pass",
+      "detail": "徽章={\"count-queued\":true,\"count-running\":true,\"count-failed\":true,\"count-success\":true}；日志tab=true；level过滤=true；category过滤=true；暂停=true（脱敏已在后端端到端验证）"
+    },
+    {
+      "id": "11",
+      "item": "五视口无横向溢出",
+      "status": "pass",
+      "detail": "视口=1440x900,1366x768,1024x768,768x1024,375x812 均 scrollWidth<=clientWidth"
+    },
+    {
+      "id": "12",
+      "item": "console error 为 0",
+      "status": "pass",
+      "detail": "全部视口/路由 console error=0"
+    }
+  ],
+  "console_errors": {
+    "structural": [],
+    "real_media": [],
+    "favorites": [],
+    "addmaterial": []
+  },
+  "screenshots": {
+    "01-knowledge": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/01-knowledge.png",
+    "02-scope-picker": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/02-scope-picker.png",
+    "03-ai-answer": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/03-ai-answer.png",
+    "04-note-deeplink": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/04-note-deeplink.png",
+    "06-favorites": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/06-favorites.png",
+    "07-notes": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/07-notes.png",
+    "09-addmaterial": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/09-addmaterial.png",
+    "10-monitor": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/10-monitor.png",
+    "11-1440x900": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/11-1440x900-monitor.png",
+    "11-1366x768": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/11-1366x768-monitor.png",
+    "11-1024x768": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/11-1024x768-monitor.png",
+    "11-768x1024": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/11-768x1024-monitor.png",
+    "11-375x812": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/11-375x812-monitor.png",
+    "video": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/real-video-deeplink.png",
+    "audio": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/real-audio-deeplink.png",
+    "initial": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/fav-01-initial.png",
+    "afterUnfavorite": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/fav-02-after-unfavorite.png",
+    "open": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/addmat-01-open.png",
+    "types": "/Users/conan/Desktop/notebi/.local/pw-acceptance/screenshots/addmat-02-types.png"
+  }
+}

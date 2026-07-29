@@ -1,0 +1,352 @@
+"""S3 Task 7: 批次 API 测试。"""
+
+from __future__ import annotations
+
+import threading
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+
+@pytest.fixture()
+def client(tmp_path: Path, monkeypatch):
+    """创建隔离的测试客户端。"""
+    from backend.app.services.task_batch_service import TaskBatchService
+    from backend.app.services.task_batch_store import TaskBatchStore
+    from backend.app.services.task_runner import TaskRunner
+    from backend.app.services.task_store import TaskStore
+    from backend.app.services.workspace_store import WorkspaceStore
+    from backend.app.models.workspace import WorkspaceRecord
+
+    store = TaskBatchStore(tmp_path / "batch-data")
+    task_store = TaskStore(tmp_path / "backend_tasks.json")
+    runner = TaskRunner(task_store, max_workers=1)
+    release = threading.Event()
+    runner.register("note", lambda _record, _runner: (release.wait(timeout=2), {})[1])
+    service = TaskBatchService(
+        batch_store=store,
+        runner=runner,
+        concurrency_limit=lambda: 1,
+    )
+    workspace_store = WorkspaceStore(tmp_path / "workspaces")
+    for workspace_id in ("ws-1", "ws-a", "ws-b", "target-ws"):
+        workspace_store.create(
+            WorkspaceRecord(workspace_id=workspace_id, name=workspace_id)
+        )
+    monkeypatch.setattr(
+        "backend.app.routes.task_batches.get_default_batch_store",
+        lambda: store,
+    )
+    monkeypatch.setattr(
+        "backend.app.routes.task_batches.get_batch_service",
+        lambda: service,
+    )
+    monkeypatch.setattr(
+        "backend.app.routes.task_batches.get_workspace_store",
+        lambda: workspace_store,
+    )
+
+    from backend.app.main import app
+
+    with TestClient(app) as test_client:
+        yield test_client
+    release.set()
+    runner._executor.shutdown(wait=True)
+
+
+# ── 预览 ─────────────────────────────────────────────────────────────────────
+
+
+def test_preview_returns_items(client: TestClient) -> None:
+    """预览返回项。"""
+    resp = client.post(
+        "/pipeline/batches/preview",
+        json={"urls": ["https://example.com/1", "https://example.com/2"]},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 2
+    assert len(data["items"]) == 2
+
+
+def test_preview_ids_are_stable_and_input_duplicates_are_collapsed(client: TestClient) -> None:
+    payload = {
+        "source_type": "urls",
+        "urls": [
+            "https://example.com/video/?utm_source=share",
+            "https://example.com/video",
+        ],
+    }
+    first = client.post("/pipeline/batches/preview", json=payload).json()
+    second = client.post("/pipeline/batches/preview", json=payload).json()
+    assert first == second
+    assert first["total"] == 1
+
+
+@pytest.mark.parametrize(
+    "source_type",
+    [
+        "urls",
+        "local_files",
+        "bilibili_collection",
+        "bilibili_favorites",
+        "bilibili_uploader",
+        "bilibili_parts",
+        "youtube_playlist",
+    ],
+)
+def test_preview_accepts_all_approved_source_types(
+    client: TestClient,
+    monkeypatch,
+    source_type: str,
+) -> None:
+    monkeypatch.setattr(
+        "backend.app.routes.task_batches.resolve_batch_sources",
+        lambda **_kwargs: [
+            {
+                "source_url": f"https://example.com/{source_type}",
+                "source_title": source_type,
+                "external_id": f"id-{source_type}",
+            }
+        ],
+    )
+    response = client.post(
+        "/pipeline/batches/preview",
+        json={
+            "source_type": source_type,
+            "urls": ["https://example.com/source"],
+            "local_files": ["/tmp/example.mp4"] if source_type == "local_files" else [],
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["items"][0]["source_title"] == source_type
+
+
+def test_preview_marks_existing_item_and_offers_copy(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    from backend.app.models.workspace import WorkspaceItem, WorkspaceRecord
+    from backend.app.routes import task_batches
+
+    store = task_batches.get_workspace_store()
+    store.create(
+        WorkspaceRecord(
+            workspace_id="source-ws",
+            name="source",
+            items=[
+                WorkspaceItem(
+                    item_id="existing-item",
+                    type="video",
+                    source="url",
+                    source_value="https://example.com/video",
+                    lineage_id="lineage-1",
+                )
+            ],
+        )
+    )
+    response = client.post(
+        "/pipeline/batches/preview",
+        json={
+            "source_type": "urls",
+            "urls": ["https://example.com/video?utm_source=share"],
+            "workspace_id": "target-ws",
+        },
+    )
+    row = response.json()["items"][0]
+    assert row["status"] == "exists_elsewhere"
+    assert row["existing_workspace_id"] == "source-ws"
+    assert row["existing_item_id"] == "existing-item"
+    assert row["suggested_action"] == "copy"
+    assert set(row["allowed_actions"]) == {"skip", "copy", "process"}
+
+
+# ── 创建 ─────────────────────────────────────────────────────────────────────
+
+
+def test_create_batch(client: TestClient) -> None:
+    """创建批次。"""
+    resp = client.post(
+        "/pipeline/batches",
+        json={
+            "name": "test batch",
+            "items": [
+                {"batch_item_id": "i1", "source_url": "https://example.com/1"},
+                {"batch_item_id": "i2", "source_url": "https://example.com/2"},
+            ],
+            "workspace_id": "ws-1",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["name"] == "test batch"
+    assert data["status"] in {"queued", "running"}
+    assert len(data["items"]) == 2
+    assert data["settings_snapshot"]["task_type"] == "note"
+    assert data["settings_snapshot"]["note_style"] == "standard"
+    assert data["settings_snapshot"]["note_type"] == "auto"
+    assert data["settings_snapshot"]["diarize"] is False
+    assert data["settings_snapshot"]["frame_analysis"] is True
+    assert data["target_workspace_id"]
+
+
+def test_create_batch_idempotent(client: TestClient) -> None:
+    """幂等键重复返回原批次。"""
+    payload = {
+        "name": "idempotent",
+        "items": [{"batch_item_id": "i1", "source_url": "https://example.com/1"}],
+        "idempotency_key": "key-123",
+    }
+    resp1 = client.post("/pipeline/batches", json=payload)
+    resp2 = client.post("/pipeline/batches", json=payload)
+    assert resp1.json()["batch_id"] == resp2.json()["batch_id"]
+
+
+# ── 列表 ─────────────────────────────────────────────────────────────────────
+
+
+def test_list_batches(client: TestClient) -> None:
+    """列出批次。"""
+    client.post("/pipeline/batches", json={"name": "b1", "items": []})
+    client.post("/pipeline/batches", json={"name": "b2", "items": []})
+
+    resp = client.get("/pipeline/batches")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 2
+
+
+def test_list_filters_apply_to_rows_and_total(client: TestClient) -> None:
+    client.post(
+        "/pipeline/batches",
+        json={
+            "name": "Bilibili Course",
+            "source_type": "bilibili_collection",
+            "workspace_id": "ws-a",
+            "items": [],
+        },
+    )
+    client.post(
+        "/pipeline/batches",
+        json={
+            "name": "YouTube Playlist",
+            "source_type": "youtube_playlist",
+            "workspace_id": "ws-b",
+            "items": [],
+        },
+    )
+    response = client.get(
+        "/pipeline/batches",
+        params={"source": "youtube_playlist", "workspace_id": "ws-b", "keyword": "playlist"},
+    )
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+    assert response.json()["batches"][0]["name"] == "YouTube Playlist"
+
+
+# ── 详情 ─────────────────────────────────────────────────────────────────────
+
+
+def test_get_batch(client: TestClient) -> None:
+    """获取批次详情。"""
+    create_resp = client.post("/pipeline/batches", json={"name": "detail", "items": []})
+    batch_id = create_resp.json()["batch_id"]
+
+    resp = client.get(f"/pipeline/batches/{batch_id}")
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "detail"
+
+
+def test_get_batch_not_found(client: TestClient) -> None:
+    """批次不存在返回 404。"""
+    resp = client.get("/pipeline/batches/nonexistent")
+    assert resp.status_code == 404
+
+
+# ── 暂停/恢复 ────────────────────────────────────────────────────────────────
+
+
+def test_pause_and_resume(client: TestClient) -> None:
+    """暂停和恢复。"""
+    create_resp = client.post(
+        "/pipeline/batches",
+        json={"name": "pause-test", "items": [{"batch_item_id": "i1", "source_url": "x"}]},
+    )
+    batch_id = create_resp.json()["batch_id"]
+
+    # 暂停
+    pause_resp = client.post(f"/pipeline/batches/{batch_id}/pause")
+    assert pause_resp.status_code == 200
+    assert pause_resp.json()["status"] == "paused"
+
+    # 恢复
+    resume_resp = client.post(f"/pipeline/batches/{batch_id}/resume")
+    assert resume_resp.status_code == 200
+    assert resume_resp.json()["status"] in {"queued", "running"}
+
+
+def test_pause_is_not_cancel(client: TestClient) -> None:
+    """暂停不等于取消。"""
+    create_resp = client.post(
+        "/pipeline/batches",
+        json={"name": "p", "items": [{"batch_item_id": "i1", "source_url": "x"}]},
+    )
+    batch_id = create_resp.json()["batch_id"]
+
+    client.post(f"/pipeline/batches/{batch_id}/pause")
+    resp = client.get(f"/pipeline/batches/{batch_id}")
+    # 暂停只阻止后续调度；已经启动的项允许完成当前阶段，但绝不能被当作取消。
+    assert resp.json()["items"][0]["status"] in {"pending", "running"}
+    assert resp.json()["items"][0]["status"] != "cancelled"
+
+
+# ── 取消 ─────────────────────────────────────────────────────────────────────
+
+
+def test_cancel_batch(client: TestClient) -> None:
+    """取消批次。"""
+    create_resp = client.post(
+        "/pipeline/batches",
+        json={"name": "cancel-test", "items": [{"batch_item_id": "i1", "source_url": "x"}]},
+    )
+    batch_id = create_resp.json()["batch_id"]
+
+    cancel_resp = client.post(f"/pipeline/batches/{batch_id}/cancel")
+    assert cancel_resp.status_code == 200
+    assert cancel_resp.json()["status"] == "cancelled"
+
+
+# ── 删除 ─────────────────────────────────────────────────────────────────────
+
+
+def test_delete_terminal_batch(client: TestClient) -> None:
+    """删除终态批次。"""
+    create_resp = client.post(
+        "/pipeline/batches",
+        json={"name": "del-test", "items": [{"batch_item_id": "i1", "source_url": "x"}]},
+    )
+    batch_id = create_resp.json()["batch_id"]
+
+    # 先取消变成终态
+    client.post(f"/pipeline/batches/{batch_id}/cancel")
+
+    # 删除
+    del_resp = client.delete(f"/pipeline/batches/{batch_id}")
+    assert del_resp.status_code == 200
+
+    # 确认已删除
+    get_resp = client.get(f"/pipeline/batches/{batch_id}")
+    assert get_resp.status_code == 404
+
+
+def test_delete_running_batch_fails(client: TestClient) -> None:
+    """运行中批次不能删除。"""
+    create_resp = client.post(
+        "/pipeline/batches",
+        json={"name": "running", "items": [{"batch_item_id": "i1", "source_url": "x"}]},
+    )
+    batch_id = create_resp.json()["batch_id"]
+
+    del_resp = client.delete(f"/pipeline/batches/{batch_id}")
+    assert del_resp.status_code == 409

@@ -7,28 +7,56 @@
 // 共用返回 { answer: string, sources: SearchSource[] }
 
 import { http } from './client'
-import type { WorkspaceKind } from '@/config/product'
 
 export interface SearchSource {
+  source_id: string
+  content_id?: string
+  lineage_id?: string
   workspace_id: string
   workspace_name: string
   item_id: string
   item_type: 'video' | 'image' | 'audio' | 'text'
+  source_type?: 'transcript' | 'summary' | 'ocr' | 'merged_note' | 'content'
   item_title: string
   chunk_excerpt: string
+  excerpt: string
+  field: string
+  segment_id: string
+  segment?: string | number
+  start_ms: number | null
+  end_ms: number | null
   score: number
+  fusion_score?: number
+  retrieval_channels?: ('semantic' | 'exact')[]
   jump_url: string
+}
+
+export interface SearchCitation {
+  number: number
+  source_id: string
 }
 
 export interface SearchResponse {
   answer: string
   sources: SearchSource[]
+  citations?: SearchCitation[]
+  mode?: 'smart' | 'exact' | 'hybrid'
+  status?: import('./knowledge').KnowledgeStatus
+  answer_status?: 'complete' | 'insufficient_evidence' | 'generation_failed'
+  evidence_status?: {
+    sufficient: boolean
+    threshold: number
+    best_score: number | null
+  }
+  warnings?: string[]
 }
 
 export interface GlobalSearchOptions {
   topK?: number
   workspaceIds?: string[]
-  kinds?: WorkspaceKind[]
+  mode?: 'smart' | 'exact' | 'hybrid'
+  itemTypes?: string[]
+  tags?: string[]
 }
 
 /** POST /search — 跨工作空间 */
@@ -36,14 +64,23 @@ export async function searchGlobal(
   query: string,
   opts: GlobalSearchOptions = {},
 ): Promise<SearchResponse> {
-  const body: Record<string, unknown> = { query }
+  const body: Record<string, unknown> = { query, mode: opts.mode ?? 'smart' }
   if (opts.topK != null) body.top_k = opts.topK
   if (opts.workspaceIds && opts.workspaceIds.length > 0)
     body.workspace_ids = opts.workspaceIds
-  if (opts.kinds && opts.kinds.length > 0)
-    body.kinds = opts.kinds
+  if (opts.itemTypes?.length) body.item_types = opts.itemTypes
+  if (opts.tags?.length) body.tags = opts.tags
   const res = await http.post<SearchResponse>('/search', body, { timeout: 60000 })
   return res.data
+}
+
+export async function getSearchSuggestions(
+  query: string,
+): Promise<string[]> {
+  const res = await http.get<{ suggestions: string[] }>('/search/suggestions', {
+    params: { q: query, limit: 8 },
+  })
+  return res.data.suggestions
 }
 
 /** POST /workspaces/{wid}/search — 单工作空间 */

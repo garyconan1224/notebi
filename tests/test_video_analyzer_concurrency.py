@@ -236,7 +236,6 @@ def test_batch_api_returns_aligned_list(monkeypatch: pytest.MonkeyPatch) -> None
     assert len(result) == n
     for i, item in enumerate(result):
         assert item["description_zh"] == f"desc{i+1}"
-        assert item["image_prompt_en"] == f"prompt{i+1}"
 
 
 def test_batch_count_mismatch_raises(monkeypatch: pytest.MonkeyPatch) -> None:

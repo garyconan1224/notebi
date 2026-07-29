@@ -7,36 +7,49 @@ POST /search
   返回：{answer, sources[]}
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.app.routes.pipeline import _runner as _pipeline_runner
-from backend.app.services.workspace_search_service import search_across_workspaces
+from backend.app.services.retrieval_service import RetrievalService
 
 router = APIRouter(tags=["search"])
 
 
 class GlobalSearchRequest(BaseModel):
     query: str = Field(..., min_length=1)
+    mode: Literal["smart", "exact", "hybrid"] = "smart"
     top_k: int = Field(default=10, ge=1, le=30)
     workspace_ids: Optional[List[str]] = None
-    kinds: Optional[List[str]] = None
+    item_types: Optional[List[str]] = None
+    tags: Optional[List[str]] = None
 
 
 @router.post("/search")
 def global_search(req: GlobalSearchRequest) -> Dict[str, Any]:
     """跨工作空间检索；workspace_ids 为空 = 全部。"""
     try:
-        return search_across_workspaces(
+        service = RetrievalService(task_store=_pipeline_runner.store)
+        return service.search(
             query=req.query,
+            mode=req.mode,
             top_k=req.top_k,
             workspace_ids=req.workspace_ids,
-            kinds=req.kinds,
-            task_store=_pipeline_runner.store,
+            item_types=req.item_types,
+            tags=req.tags,
         )
     except KeyError as err:
         raise HTTPException(status_code=404, detail=str(err)) from err
     except ValueError as err:
         raise HTTPException(status_code=400, detail=str(err)) from err
+
+
+@router.get("/search/suggestions")
+def search_suggestions(
+    q: str = Query(default="", max_length=200),
+    limit: int = Query(default=8, ge=1, le=20),
+) -> Dict[str, List[str]]:
+    service = RetrievalService(task_store=_pipeline_runner.store)
+    return {"suggestions": service.exact_service.suggest(q, limit)}

@@ -25,7 +25,6 @@ from shared.config import (
     get_workspace_videos_dir,
 )
 from shared.settings_store import load_settings
-from shared.storyboard_generator import run_storyboard_generation
 from shared.text_loader import TextDocument, TextLoaderError, load_auto, load_url
 from shared.audio_analyzer import (
     DiarizationError,
@@ -270,13 +269,6 @@ def _get_video_model_prompt(intent: str) -> str:
             + base
             + "4. 重点提取知识点、公式、定义、示例\n"
             + "5. summary 按「主题 → 核心要点 → 关键结论」组织\n"
-        )
-    if intent == "replica":
-        return (
-            "你是一个视频拆片/翻拍分析专家。\n"
-            + base
-            + "4. 标注镜头切换、转场、画面构图变化\n"
-            + "5. summary 按「结构 → 每段作用 → 拍摄手法」组织\n"
         )
     return base
 
@@ -562,17 +554,7 @@ def _build_video_summary_prompt(
 
 
 def _resolve_download_kwargs(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """合并 payload 与 AppSettings.download 作为 run_ytdlp_download 的 kwargs。
-
-    规则（M3)：
-    - 字符串字段（proxy / po_token / visitor_data) 与 format_selector：payload 非空时用 payload，
-      否则回落到 ``AppSettings.download``；
-    - cookie_base_dirs：payload 提供非空 list 时用 payload，否则落 settings.cookie_base_dirs；
-    - filename_template / retry_count / socket_timeout / concurrent_fragment_downloads：
-      payload 不出现 (legacy 链路从不下发) 时直接取 settings；
-    - 所有 settings 读取均用 ``isinstance`` 守卫，避免被 MagicMock 覆写时把非预期对象
-      透传给 yt-dlp（保持现有 test_pipeline_tasks.py mock 的行为不变）。
-    """
+    """把后端持久化配置解析为 downloader 的唯一有效参数。"""
     try:
         settings = load_settings()
         dl = getattr(settings, "download", None)
@@ -587,39 +569,23 @@ def _resolve_download_kwargs(payload: Dict[str, Any]) -> Dict[str, Any]:
         v = getattr(dl, name, None) if dl is not None else None
         return v if isinstance(v, int) and not isinstance(v, bool) else None
 
-    def _dirs() -> Optional[List[str]]:
-        v = getattr(dl, "cookie_base_dirs", None) if dl is not None else None
-        if isinstance(v, (list, tuple)) and v:
-            cleaned = [str(x) for x in v if isinstance(x, str) and x.strip()]
-            return cleaned or None
-        return None
-
-    # 字符串字段：payload 非空优先，否则回落 settings
-    proxy = str(payload.get("proxy") or "") or _s("http_proxy")
-    po_token = str(payload.get("po_token") or "") or _s("po_token")
-    visitor_data = str(payload.get("visitor_data") or "") or _s("visitor_data")
     format_selector = str(payload.get("format_selector") or "") or "best"
 
-    # cookie_base_dirs：payload 的 list 优先
-    raw_dirs = payload.get("cookie_base_dirs")
-    cookie_dirs: Optional[List[str]] = None
-    if isinstance(raw_dirs, list) and raw_dirs:
-        cookie_dirs = [str(x) for x in raw_dirs]
-    else:
-        cookie_dirs = _dirs()
+    filename_template = _s("filename_template") or "%(title)s.%(ext)s"
+    cookie_options: Dict[str, Any] = {}
+    if dl is not None:
+        from backend.app.services.cookie_config import build_ytdlp_cookie_args
 
-    # filename_template：空串也视为"未提供"（避免前端误传空串）
-    filename_template = str(payload.get("filename_template") or "") or _s("filename_template")
+        cookie_options = build_ytdlp_cookie_args(
+            _s("cookie_mode"),
+            _s("cookie_browser") or "chrome",
+            _s("cookie_profile"),
+        )
 
     return {
-        "browser": str(payload.get("browser") or "chrome"),
-        "proxy": proxy,
-        "po_token": po_token,
-        "visitor_data": visitor_data,
         "format_selector": format_selector,
-        "cookie_base_dirs_list": cookie_dirs,
-        # 仅在有具体值时传入，避免空串污染 _build_attempts 的默认模板兜底
-        **({"filename_template": filename_template} if filename_template else {}),
+        "cookie_options": cookie_options,
+        "filename_template": filename_template,
         "retry_count": _i_or_none("retry_count"),
         "socket_timeout": _i_or_none("socket_timeout"),
         "concurrent_fragment_downloads": _i_or_none("concurrency_limit"),
@@ -632,10 +598,30 @@ def handle_download_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, An
     url = str(record.payload.get("url") or "").strip()
     if not url:
         raise ValueError("download payload.url is required")
-    project_video_dir = get_workspace_videos_dir(record.project_id)
-    project_video_dir.mkdir(parents=True, exist_ok=True)
+    settings = load_settings()
+    from shared.download_helpers import (
+        ensure_directory_exists,
+        resolve_workspace_media_dir,
+    )
+    from shared.network_routing import resolve_proxy
 
+    if settings.download.output_dir:
+        project_video_dir = resolve_workspace_media_dir(
+            settings.download,
+            record.project_id,
+        )
+    else:
+        project_video_dir = get_workspace_videos_dir(record.project_id)
+    directory_ok, directory_error = ensure_directory_exists(project_video_dir)
+    if not directory_ok:
+        runner.append_log(record.task_id, directory_error)
+        raise RuntimeError(directory_error)
     dl_kwargs = _resolve_download_kwargs(record.payload)
+    dl_kwargs["proxy"] = resolve_proxy(
+        url,
+        settings.network,
+        settings.download.proxy_mode,
+    ) or ""
     out = run_ytdlp_download(
         url=url,
         output_dir=str(project_video_dir),
@@ -742,12 +728,18 @@ def _try_cc_subtitle(
 
         # 复用 pipeline 的下载上下文（cookie/extras），B站 412 必需
         dl_kwargs = _resolve_download_kwargs(payload)
+        settings = load_settings()
+        from shared.network_routing import resolve_proxy
+
+        subtitle_proxy = resolve_proxy(
+            video_url,
+            settings.network,
+            settings.download.proxy_mode,
+        )
         result = fetch_best_subtitle(
             video_url,
-            proxy=dl_kwargs.get('proxy'),
-            po_token=dl_kwargs.get('po_token'),
-            visitor_data=dl_kwargs.get('visitor_data'),
-            cookie_base_dirs=dl_kwargs.get('cookie_base_dirs_list'),
+            proxy=subtitle_proxy,
+            cookie_options=dl_kwargs.get('cookie_options'),
         )
 
         if not result:
@@ -1411,72 +1403,6 @@ def handle_analyze_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any
         result["summary_path"] = "visual_only"
 
     runner.set_progress(record.task_id, 1.0, "Analysis finished")
-    return result
-
-
-def handle_create_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
-    """处理创意内容生成任务"""
-    payload = record.payload
-    query = str(payload.get("prompt") or "").strip()
-    if not query:
-        raise ValueError("create payload.prompt is required")
-
-    settings = load_settings()
-    registry = create_default_registry()
-    profile = registry.resolve_default_profile(settings, "chat")
-    provider = registry.build(profile)
-    model = str(payload.get("model") or profile.default_models.get("chat") or settings.text_model or "").strip()
-    if not model:
-        raise ValueError("create task model is required")
-
-    runner.set_progress(record.task_id, 0.2, f"Generating via {profile.name}")
-    content = provider.chat(
-        ChatRequest(
-            model=model,
-            messages=[
-                {"role": "system", "content": "You are a creative storyboard writer."},
-                {"role": "user", "content": query},
-            ],
-            temperature=float(payload.get("temperature") or 0.7),
-            max_tokens=int(payload.get("max_tokens") or 2048),
-        )
-    )
-    runner.set_progress(record.task_id, 1.0, "Creative generation finished")
-
-    runtime_dir = get_workspace_json_dir(record.project_id).parent / "runtime"
-    runtime_dir.mkdir(parents=True, exist_ok=True)
-    out_file = runtime_dir / f"{record.task_id}.md"
-    out_file.write_text(content, encoding="utf-8")
-    return {"content": content, "artifact_path": str(out_file)}
-
-
-def handle_storyboard_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
-    payload = record.payload
-    runner.set_progress(record.task_id, 0.02, "Storyboard pipeline starting")
-    raw_paths = payload.get("image_paths") or []
-    image_paths = [str(x) for x in raw_paths] if isinstance(raw_paths, list) else []
-    raw_bn = payload.get("rag_json_basenames")
-    rag_basenames = [str(x) for x in raw_bn] if isinstance(raw_bn, list) else None
-    rag_kpid = str(payload.get("rag_knowledge_project_id") or "").strip() or None
-
-    result = run_storyboard_generation(
-        project_id=record.project_id,
-        product_name=str(payload.get("product_name") or ""),
-        core_features=str(payload.get("core_features") or ""),
-        web_enrichment_md=str(payload.get("web_enrichment_md") or ""),
-        api_key=str(payload.get("api_key") or "").strip() or load_settings().openai_api_key,
-        anthropic_key=str(payload.get("anthropic_key") or "").strip() or load_settings().anthropic_api_key,
-        vision_model=str(payload.get("vision_model") or ""),
-        text_model=str(payload.get("text_model") or ""),
-        embedding_model=str(payload.get("embedding_model") or ""),
-        text_backend=str(payload.get("text_backend") or ""),
-        anthropic_model=str(payload.get("anthropic_model") or ""),
-        image_paths=image_paths,
-        rag_knowledge_project_id=rag_kpid,
-        rag_json_basenames=rag_basenames,
-        log=lambda m: runner.append_log(record.task_id, m),
-    )
-    runner.set_progress(record.task_id, 1.0, "Storyboard finished")
     return result
 
 
@@ -2661,9 +2587,6 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
 
     # ── 0. 解析步骤列表 ────────────────────────────────────────
     steps: List[str] = payload.get("steps") or ["download", "transcribe", "analyze", "note"]
-    # 复刻提示词：只跑下载+截帧，跳过 transcribe 和 note 总结
-    if str(payload.get("intent") or "") == "replica" and str(payload.get("replica_kind") or "prompt") == "prompt":
-        steps = ["download", "analyze"]
     completed_steps: List[str] = []
 
     # ── 1. 取 payload 字段 ─────────────────────────────────────
@@ -2761,18 +2684,13 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         images_from_download = probe["images"] or images_from_download
         background_context = probe["background_context"]
         steps = probe["steps"]
-        # 复刻提示词：PROBE 可能覆盖 steps，需重新裁剪
-        if str(payload.get("intent") or "") == "replica" and str(payload.get("replica_kind") or "prompt") == "prompt":
-            steps = ["download", "analyze"]
         _source_title = str((dl_result or {}).get("title") or "").strip()
         if not _source_title:
             _source_title = str(probe.get("source_title") or "").strip()
 
         # R4.7: 配图关闭时跳过截帧+VLM（省掉重 API 调用），笔记只用转写文本
-        # replica prompt 必须保留 analyze（画面分析是复刻的核心），不受 embed_frames 控制
         _pf = payload.get("preflight") or {}
-        _is_replica_prompt = str(payload.get("intent") or "") == "replica" and str(payload.get("replica_kind") or "prompt") == "prompt"
-        if not _is_replica_prompt and not _pf.get("embed_frames", True) and "analyze" in steps:
+        if not _pf.get("embed_frames", True) and "analyze" in steps:
             steps = [s for s in steps if s != "analyze"]
             runner.append_log(task_id, "⏭️ embed_frames=False → 跳过截帧分析")
 
@@ -3322,12 +3240,6 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         )
     else:
         json_paths = sorted(project_json_dir.glob("*_视觉数据.json"))
-
-    # ── 6.7 复刻提示词边界检查：analyze 必须产出帧 ───────────
-    if str(payload.get("intent") or "") == "replica" and str(payload.get("replica_kind") or "prompt") == "prompt":
-        _has_frames = bool(json_paths) or bool(analysis_text)
-        if not _has_frames:
-            raise RuntimeError("复刻提示词失败：视频截帧未产出任何画面（可能是纯音频或视频损坏）")
 
     # ── 6.8. R3.5: 自动生成总结，作为 note.md 默认正文 ──────
     # R3.11: 读取嵌图配置
@@ -4104,8 +4016,6 @@ def handle_image_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
     assoc_params = payload.get("assoc") or {}
     assoc_enabled = isinstance(assoc_params, dict) and assoc_params.get("enabled", False)
     assoc_directions = assoc_params.get("directions", ["usage"]) if assoc_enabled else []
-    fp_params = payload.get("prompt") or {}
-    prompt_format = fp_params.get("format", "mj") if isinstance(fp_params, dict) else "mj"
 
     from shared.config import get_workspace_root
 
@@ -4275,28 +4185,10 @@ def handle_image_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         "" if ocr_text
         else '"ocr_text": "图中可见文字（无则空字符串）",\n'
     )
-    # N9: 根据 prompt_format 调整提示词部分
-    if prompt_format == "sd":
-        prompt_block = (
-            '"prompts": {\n'
-            '   "sd": {"positive": "Stable Diffusion 正向提示词（英文）", "negative": "负向提示词"}\n'
-            ' }'
-        )
-    elif prompt_format == "json":
-        prompt_block = '"prompts": {\n   "json": "结构化场景描述（英文 JSON 字符串）"\n }'
-    else:
-        prompt_block = (
-            '"prompts": {\n'
-            '   "mj": "Midjourney 提示词（英文，50-80词）",\n'
-            '   "sd": {"positive": "Stable Diffusion 正向提示词（英文）", "negative": "负向提示词"},\n'
-            '   "json": "结构化场景描述（英文 JSON 字符串）"\n'
-            ' }'
-        )
 
     if not api_key:
         log("⚠️  未提供 api_key，跳过视觉分析")
         description = ""
-        prompts: Dict[str, Any] = {"mj": "", "sd": {"positive": "", "negative": ""}, "json": ""}
         tags: Dict[str, List[str]] = {}
     else:
         registry = create_default_registry()
@@ -4310,7 +4202,6 @@ def handle_image_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         if not vision_model:
             log("⚠️  未配置 vision_model，跳过视觉分析")
             description = ""
-            prompts = {"mj": "", "sd": {"positive": "", "negative": ""}, "json": ""}
             tags = {}
         else:
             log(f"🔍 调用 vision model={vision_model}")
@@ -4319,7 +4210,6 @@ def handle_image_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
                 "JSON 结构如下：\n"
                 '{"description": "中文详细描述（100-200字）",\n'
                 f' {ocr_json_line}'
-                f' {prompt_block},\n'
                 ' "tags": {"subject": [], "scene": [], "style": [], "lighting": [], "color": [], "composition": []}}'
             )
             try:
@@ -4347,7 +4237,6 @@ def handle_image_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
             # PaddleOCR 优先；仅当 PaddleOCR 无结果时用 VLM 的 ocr_text
             if not ocr_text:
                 ocr_text = str(parsed.get("ocr_text") or "")
-            prompts = parsed.get("prompts") or {"mj": "", "sd": {"positive": "", "negative": ""}, "json": ""}
             tags = parsed.get("tags") or {}
 
     log(f"📊 分析完成 | description={description[:40]}...")
@@ -4403,7 +4292,6 @@ def handle_image_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         "source_type": source_type,
         "description": description,
         "ocr_text": ocr_text,
-        "prompts": prompts,
         "tags": tags,
     }
     if exif_data:
@@ -5847,8 +5735,6 @@ def handle_av_synthesis_task(record: TaskRecord, runner: TaskRunner) -> Dict[str
 def register_pipeline_handlers(runner: TaskRunner) -> None:
     runner.register("download",  handle_download_task)
     runner.register("analyze",   handle_analyze_task)
-    runner.register("create",    handle_create_task)
-    runner.register("storyboard", handle_storyboard_task)
     runner.register("note",      handle_note_task)
     runner.register("text",      handle_text_task)
     runner.register("image",     handle_image_task)

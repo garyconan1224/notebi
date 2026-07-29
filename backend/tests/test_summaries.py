@@ -134,6 +134,61 @@ class TestCreateSummary:
         assert captured["template"] == "concise"
         assert captured["background_for_summary"] == "背景信息"
 
+    def test_create_appends_task_id_to_item_related_task_ids(
+        self, monkeypatch: pytest.MonkeyPatch, _patch_store: WorkspaceStore,
+    ) -> None:
+        """创建 summary task 后，task_id 必须立即写入 item.related_task_ids。
+
+        否则删除 item 时无法通过 related_task_ids 清理该 summary task，
+        它会成为孤儿任务，仍被任务列表返回并在首页渲染成对象导致崩溃。
+        """
+        import backend.app.routes.workspaces as ws_module
+
+        task = _fake_summary_task("summary-task-link")
+        monkeypatch.setattr(ws_module._pipeline_runner, "create_task", lambda *a, **k: task)
+
+        resp = client.post("/workspaces/ws-1/items/item-1/summaries", json={"template": "concise"})
+        assert resp.status_code == 201
+
+        item = _patch_store.get_item("ws-1", "item-1")
+        assert "summary-task-link" in item.related_task_ids
+
+    def test_create_appends_without_duplicating_existing_task_ids(
+        self, monkeypatch: pytest.MonkeyPatch, _patch_store: WorkspaceStore,
+    ) -> None:
+        """追加 task_id 不能覆盖或重复已有的 related_task_ids。"""
+        import backend.app.routes.workspaces as ws_module
+
+        # 预置一个已有关联任务
+        _patch_store.update_item("ws-1", "item-1", related_task_ids=["existing-task"])
+        task = _fake_summary_task("summary-task-new")
+        monkeypatch.setattr(ws_module._pipeline_runner, "create_task", lambda *a, **k: task)
+
+        resp = client.post("/workspaces/ws-1/items/item-1/summaries", json={"template": "concise"})
+        assert resp.status_code == 201
+
+        item = _patch_store.get_item("ws-1", "item-1")
+        assert item.related_task_ids == ["existing-task", "summary-task-new"]
+
+    def test_create_cleans_up_task_when_link_fails(
+        self, monkeypatch: pytest.MonkeyPatch, _patch_store: WorkspaceStore,
+    ) -> None:
+        """创建 task 成功但关联 item 失败时，必须清理刚创建的任务，不留孤儿。"""
+        import backend.app.routes.workspaces as ws_module
+
+        task = _fake_summary_task("summary-task-orphan")
+        monkeypatch.setattr(ws_module._pipeline_runner, "create_task", lambda *a, **k: task)
+        # 让关联写入失败
+        def boom(*a, **k):
+            raise RuntimeError("store write failed")
+        monkeypatch.setattr(_patch_store, "update_item", boom)
+        deleted: list[str] = []
+        monkeypatch.setattr(ws_module._pipeline_runner.store, "delete", lambda tid: deleted.append(tid))
+
+        resp = client.post("/workspaces/ws-1/items/item-1/summaries", json={"template": "concise"})
+        assert resp.status_code == 500
+        assert "summary-task-orphan" in deleted
+
     def test_create_version_increment_is_deferred_to_task_handler(
         self, monkeypatch: pytest.MonkeyPatch, _patch_store: WorkspaceStore,
     ) -> None:

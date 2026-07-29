@@ -16,6 +16,7 @@ interface TaskStoreState {
   setTasks: (tasks: TaskRecord[]) => void
   addTask: (task: TaskRecord) => void
   removeTask: (taskId: string) => void
+  removeTasks: (taskIds: string[]) => void
   removeByProject: (projectId: string) => void
   updateTask: (taskId: string, task: Partial<TaskRecord>) => void
   setCurrentTask: (taskId: string | null) => void
@@ -119,6 +120,22 @@ export const useTaskStore = create<TaskStoreState>()(
             : [...state.hiddenTaskIds, taskId],
           tasks: state.tasks.filter((t) => t.task_id !== taskId),
         })),
+
+      // 阶段 C2：按 task ID 精确批量移除。
+      // 用于删除单个/多个 item 时，只清理这些 item 的 related_task_ids，
+      // 不影响同 workspace 其它素材的任务。被删任务进入 hiddenTaskIds，
+      // 防止飞行中的旧轮询响应把它们短暂复活。
+      removeTasks: (taskIds) =>
+        set((state) => {
+          if (taskIds.length === 0) return state
+          const idSet = new Set(taskIds)
+          const hiddenSet = new Set(state.hiddenTaskIds)
+          for (const id of taskIds) hiddenSet.add(id)
+          return {
+            hiddenTaskIds: [...hiddenSet],
+            tasks: state.tasks.filter((t) => !idSet.has(t.task_id)),
+          }
+        }),
 
       // 1-C：删除合集/笔记后即时清空该 project 关联的所有任务，不等 5s 轮询
       removeByProject: (projectId) =>
