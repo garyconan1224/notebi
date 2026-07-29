@@ -103,7 +103,7 @@ export default function TaskboardPage() {
 
   /** 「更多」菜单点击处理 */
   const handleMenuAction = (menuId: string) => {
-    const validIds: TabId[] = ['favs', 'chat', 'style']
+    const validIds: TabId[] = ['favs', 'chat']
     if (validIds.includes(menuId as TabId)) {
       setMorePanelId(menuId as TabId)
     }
@@ -319,7 +319,7 @@ export default function TaskboardPage() {
         </div>
       )}
 
-      {/* ── Modal：更多功能面板（收藏/AI对话/风格报告） ── */}
+      {/* ── Modal：更多功能面板（收藏/AI 对话） ── */}
       {morePanelId && (
         <div className="tb-modal-overlay" onClick={() => setMorePanelId(null)}>
           <div
@@ -337,9 +337,6 @@ export default function TaskboardPage() {
               />
             )}
             {morePanelId === 'chat' && <ChatTab workspace={workspace} />}
-            {morePanelId === 'style' && (
-              <div className="tb-placeholder">Phase [C] 开放</div>
-            )}
           </div>
         </div>
       )}

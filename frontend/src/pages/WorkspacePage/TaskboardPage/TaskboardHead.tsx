@@ -20,8 +20,6 @@ export interface MoreMenuItem {
   id: string
   label: string
   icon: React.ElementType
-  disabled?: boolean
-  disabledHint?: string
 }
 
 interface TaskboardHeadProps {
@@ -84,7 +82,6 @@ function getCoverSlots(items: WorkspaceItem[] = []): Array<WorkspaceItem | null>
 const MORE_ITEMS: MoreMenuItem[] = [
   { id: 'favs', label: '收藏夹', icon: Star },
   { id: 'chat', label: 'AI 对话', icon: MessageCircle },
-  { id: 'style', label: '风格报告', icon: Sparkles, disabled: true, disabledHint: 'Phase [C]' },
 ]
 
 /**
@@ -243,8 +240,6 @@ export function TaskboardHead({
                     <button
                       key={item.id}
                       className="tb-head-more-item"
-                      disabled={item.disabled}
-                      title={item.disabled ? item.disabledHint : undefined}
                       onClick={() => {
                         setMoreOpen(false)
                         onMenuAction?.(item.id)

@@ -101,7 +101,6 @@ cd frontend && pnpm build       # tsc -b && vite build
   - `knowledge_base.py`（RAG 索引）
   - `video_analyzer.py`（视频分析编排）
   - `video_download_ytdlp.py`（yt-dlp 封装）
-  - `storyboard_generator.py`
   - `web_enrich.py`
 
 ### 2.3 前端（`frontend/src/`）
