@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ def client(tmp_path: Path, monkeypatch):
     from backend.app.services.task_store import TaskStore
     from backend.app.services.workspace_store import WorkspaceStore
     from backend.app.models.workspace import WorkspaceRecord
+    from backend.app.routes import task_batches
 
     store = TaskBatchStore(tmp_path / "batch-data")
     task_store = TaskStore(tmp_path / "backend_tasks.json")
@@ -28,6 +30,7 @@ def client(tmp_path: Path, monkeypatch):
         batch_store=store,
         runner=runner,
         concurrency_limit=lambda: 1,
+        task_created=task_batches._link_created_task_to_workspace,
     )
     workspace_store = WorkspaceStore(tmp_path / "workspaces")
     for workspace_id in ("ws-1", "ws-a", "ws-b", "target-ws"):
@@ -50,6 +53,9 @@ def client(tmp_path: Path, monkeypatch):
     from backend.app.main import app
 
     with TestClient(app) as test_client:
+        test_client.app.state.batch_release = release
+        test_client.app.state.batch_task_store = task_store
+        test_client.app.state.batch_workspace_store = workspace_store
         yield test_client
     release.set()
     runner._executor.shutdown(wait=True)
@@ -201,6 +207,101 @@ def test_create_batch_idempotent(client: TestClient) -> None:
     resp1 = client.post("/pipeline/batches", json=payload)
     resp2 = client.post("/pipeline/batches", json=payload)
     assert resp1.json()["batch_id"] == resp2.json()["batch_id"]
+
+
+def test_create_batch_rejects_invalid_settings_before_mutating_workspace(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/pipeline/batches",
+        json={
+            "name": "invalid settings",
+            "workspace_id": "ws-1",
+            "settings": {"frame_interval": "not-a-number"},
+            "items": [
+                {"source_url": "https://example.com/1", "action": "process"},
+            ],
+        },
+    )
+
+    assert response.status_code == 422
+    workspace = client.app.state.batch_workspace_store.get("ws-1")
+    assert workspace is not None
+    assert workspace.items == []
+
+
+def test_create_batch_validates_all_actions_before_mutating_workspace(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/pipeline/batches",
+        json={
+            "name": "invalid action",
+            "workspace_id": "ws-1",
+            "items": [
+                {"source_url": "https://example.com/1", "action": "process"},
+                {"source_url": "https://example.com/2", "action": "unknown"},
+            ],
+        },
+    )
+
+    assert response.status_code == 422
+    workspace = client.app.state.batch_workspace_store.get("ws-1")
+    assert workspace is not None
+    assert workspace.items == []
+
+
+def test_batch_tasks_complete_and_stay_linked_to_workspace_items(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/pipeline/batches",
+        json={
+            "name": "linked batch",
+            "workspace_id": "ws-1",
+            "items": [
+                {
+                    "batch_item_id": "i1",
+                    "source_url": "https://example.com/1",
+                    "source_title": "第一条",
+                },
+                {
+                    "batch_item_id": "i2",
+                    "source_url": "https://example.com/2",
+                    "source_title": "第二条",
+                },
+            ],
+        },
+    )
+    assert response.status_code == 200
+    batch_id = response.json()["batch_id"]
+    client.app.state.batch_release.set()
+
+    deadline = time.monotonic() + 3
+    current = response.json()
+    while time.monotonic() < deadline:
+        current = client.get(f"/pipeline/batches/{batch_id}").json()
+        if current["status"] == "completed":
+            break
+        time.sleep(0.01)
+
+    assert current["status"] == "completed"
+    assert current["completed_count"] == 2
+    tasks = client.app.state.batch_task_store.list_all()
+    assert len(tasks) == 2
+    assert all(task.batch_id == batch_id for task in tasks)
+    assert all(task.batch_item_id for task in tasks)
+    assert all(task.payload.get("item_id") for task in tasks)
+    assert len({task.payload["item_id"] for task in tasks}) == 2
+
+    workspace = client.app.state.batch_workspace_store.get("ws-1")
+    assert workspace is not None
+    assert len(workspace.items) == 2
+    assert {
+        task_id
+        for item in workspace.items
+        for task_id in item.related_task_ids
+    } == {task.task_id for task in tasks}
 
 
 # ── 列表 ─────────────────────────────────────────────────────────────────────

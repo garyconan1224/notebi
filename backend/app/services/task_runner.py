@@ -14,6 +14,7 @@ TaskHandler = Callable[[TaskRecord, "TaskRunner"], Dict[str, Any]]
 SuccessCallback = Callable[[TaskRecord, "TaskRunner"], None]
 PartialCallback = Callable[[TaskRecord, "TaskRunner"], None]
 CompletionCallback = Callable[[TaskRecord, "TaskRunner"], None]
+TaskCreatedCallback = Callable[[TaskRecord], None]
 
 
 class TaskEventSink(Protocol):
@@ -164,6 +165,7 @@ class TaskRunner:
         batch_id: str = "",
         batch_item_id: str = "",
         attempt_no: int = 1,
+        on_created: TaskCreatedCallback | None = None,
     ) -> TaskRecord:
         # 防止同 URL 的重复下载任务
         if not retry_of:
@@ -185,6 +187,21 @@ class TaskRunner:
         self.store.create(rec)
         self.store.append_log(rec.task_id, "Task accepted")
         self._emit_task_event(rec, "created", "任务已创建")
+        if on_created is not None:
+            try:
+                on_created(rec)
+            except Exception as error:
+                self.store.update(
+                    rec.task_id,
+                    status=TaskStatus.FAILED.value,
+                    error=f"task creation hook failed: {error}",
+                )
+                self.store.append_log(
+                    rec.task_id,
+                    f"Task creation hook failed: {error}",
+                    level="error",
+                )
+                raise
         self._executor.submit(self._run, rec.task_id)
         return rec
 

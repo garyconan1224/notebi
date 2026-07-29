@@ -9,6 +9,14 @@ import {
 } from '@/services/taskBatches'
 import type { TaskBatch } from '@/types/taskBatch'
 
+const TERMINAL_BATCH_STATUSES = new Set<TaskBatch['status']>([
+  'completed',
+  'partial',
+  'failed',
+  'cancelled',
+  'partial_cancelled',
+])
+
 export default function BatchDetailPage() {
   const { batchId = '' } = useParams()
   const [batch, setBatch] = useState<TaskBatch | null>(null)
@@ -25,6 +33,16 @@ export default function BatchDetailPage() {
   useEffect(() => {
     getTaskBatch(batchId).then(setBatch).catch((reason) => setError(String(reason)))
   }, [batchId])
+
+  useEffect(() => {
+    if (!batch || TERMINAL_BATCH_STATUSES.has(batch.status)) return
+    const timer = window.setInterval(() => {
+      getTaskBatch(batchId).then(setBatch).catch(() => {
+        // 保留上一次可用结果；下一轮继续刷新，避免瞬时网络错误清空详情页。
+      })
+    }, 2_000)
+    return () => window.clearInterval(timer)
+  }, [batchId, batch?.status])
 
   if (error) return <main className="p-6" role="alert">{error}</main>
   if (!batch) return <main className="p-6" role="status">正在加载批次…</main>

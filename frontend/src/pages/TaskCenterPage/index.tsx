@@ -15,6 +15,8 @@ export default function TaskCenterPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [keyword, setKeyword] = useState('')
+  const [batchStatus, setBatchStatus] = useState('')
+  const [batchSource, setBatchSource] = useState('')
 
   useEffect(() => {
     Promise.all([listTaskBatches(), listPipelineTasks({ limit: 200 })])
@@ -27,8 +29,12 @@ export default function TaskCenterPage() {
   }, [])
 
   const visibleBatches = useMemo(
-    () => batches.filter((batch) => !keyword || batch.name.toLowerCase().includes(keyword.toLowerCase())),
-    [batches, keyword],
+    () => batches.filter((batch) => (
+      (!keyword || batch.name.toLowerCase().includes(keyword.toLowerCase()))
+      && (!batchStatus || batch.status === batchStatus)
+      && (!batchSource || batch.source_type === batchSource)
+    )),
+    [batches, keyword, batchStatus, batchSource],
   )
   const visibleTasks = useMemo(() => {
     const source = view === 'failures' ? tasks.filter((task) => task.status === 'FAILED') : tasks
@@ -67,6 +73,41 @@ export default function TaskCenterPage() {
               {label}
             </button>
           ))}
+          {view === 'batches' && (
+            <>
+              <select
+                aria-label="批次状态"
+                className="rounded-md border px-3 py-2 text-sm"
+                value={batchStatus}
+                onChange={(event) => setBatchStatus(event.target.value)}
+              >
+                <option value="">全部状态</option>
+                <option value="queued">排队中</option>
+                <option value="running">运行中</option>
+                <option value="paused">已暂停</option>
+                <option value="completed">已完成</option>
+                <option value="partial">部分完成</option>
+                <option value="failed">失败</option>
+                <option value="cancelled">已取消</option>
+                <option value="partial_cancelled">部分取消</option>
+              </select>
+              <select
+                aria-label="批次来源"
+                className="rounded-md border px-3 py-2 text-sm"
+                value={batchSource}
+                onChange={(event) => setBatchSource(event.target.value)}
+              >
+                <option value="">全部来源</option>
+                <option value="urls">多链接</option>
+                <option value="local_files">本地文件</option>
+                <option value="bilibili_collection">B 站合集</option>
+                <option value="bilibili_favorites">B 站收藏夹</option>
+                <option value="bilibili_uploader">B 站 UP 主</option>
+                <option value="bilibili_parts">B 站分 P</option>
+                <option value="youtube_playlist">YouTube 播放列表</option>
+              </select>
+            </>
+          )}
           <input
             aria-label="搜索任务"
             className="ml-auto min-w-52 rounded-md border px-3 py-2 text-sm"

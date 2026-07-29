@@ -64,6 +64,20 @@ def test_batch_status_all_pending() -> None:
     assert batch.recompute_status() == BatchStatus.QUEUED.value
 
 
+def test_batch_status_all_skipped_is_completed() -> None:
+    batch = TaskBatch(
+        batch_id="b-skipped",
+        name="skipped",
+        items=[
+            BatchItem(batch_item_id="i1", action="skip", status="skipped"),
+            BatchItem(batch_item_id="i2", action="skip", status="skipped"),
+        ],
+    )
+
+    assert batch.recompute_status() == BatchStatus.COMPLETED.value
+    assert batch.skipped_count == 2
+
+
 def test_batch_status_any_running() -> None:
     """任意运行 → RUNNING。"""
     batch = TaskBatch(

@@ -15,12 +15,19 @@ vi.mock('@/services/pipeline', () => ({ listPipelineTasks: listTasksMock }))
 describe('TaskCenterPage', () => {
   beforeEach(() => {
     listBatchesMock.mockResolvedValue({
-      batches: [{
-        batch_id: 'b1', name: '测试批次', status: 'running',
-        target_workspace_id: 'ws1', total_count: 2, completed_count: 1,
-        failed_count: 0, items: [],
-      }],
-      total: 1,
+      batches: [
+        {
+          batch_id: 'b1', name: '测试批次', status: 'running', source_type: 'urls',
+          target_workspace_id: 'ws1', total_count: 2, completed_count: 1,
+          failed_count: 0, items: [],
+        },
+        {
+          batch_id: 'b2', name: '已完成播放列表', status: 'completed', source_type: 'youtube_playlist',
+          target_workspace_id: 'ws2', total_count: 3, completed_count: 3,
+          failed_count: 0, items: [],
+        },
+      ],
+      total: 2,
     })
     listTasksMock.mockResolvedValue([{
       task_id: 't1', project_id: 'ws1', task_type: 'note', status: 'FAILED',
@@ -45,5 +52,19 @@ describe('TaskCenterPage', () => {
     render(<MemoryRouter><TaskCenterPage /></MemoryRouter>)
     expect(await screen.findByRole('link', { name: '新建批量任务' })).toHaveAttribute('href', '/tasks/new')
     expect(screen.getByLabelText('搜索任务')).toBeInTheDocument()
+  })
+
+  it('按批次状态和来源过滤', async () => {
+    render(<MemoryRouter><TaskCenterPage /></MemoryRouter>)
+    expect(await screen.findByText('测试批次')).toBeInTheDocument()
+    expect(screen.getByText('已完成播放列表')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('批次状态'), { target: { value: 'completed' } })
+    expect(screen.queryByText('测试批次')).not.toBeInTheDocument()
+    expect(screen.getByText('已完成播放列表')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('批次来源'), { target: { value: 'urls' } })
+    expect(screen.queryByText('已完成播放列表')).not.toBeInTheDocument()
+    expect(screen.getByText('暂无批次')).toBeInTheDocument()
   })
 })

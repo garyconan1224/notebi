@@ -1357,6 +1357,53 @@ def _validate_batch_network_url(raw: str) -> str:
     return clean
 
 
+def _batch_proxy(url: str) -> str:
+    """批量来源解析只服从网络设置，显式禁用环境代理回退。"""
+    try:
+        from shared.network_routing import resolve_proxy
+
+        settings = load_settings()
+        return resolve_proxy(url, settings.network) or ""
+    except Exception:
+        return ""
+
+
+def _batch_http_client(
+    url: str,
+    *,
+    timeout: float,
+) -> httpx.Client:
+    kwargs: Dict[str, Any] = {
+        "timeout": timeout,
+        "headers": _BATCH_HTTP_HEADERS,
+        "follow_redirects": True,
+        "trust_env": False,
+    }
+    proxy = _batch_proxy(url)
+    if proxy:
+        kwargs["proxy"] = proxy
+    return httpx.Client(**kwargs)
+
+
+def _batch_ytdlp_options(url: str) -> Dict[str, Any]:
+    """读取用户明确保存的 Cookie 模式和网络设置。"""
+    from backend.app.services.cookie_config import build_ytdlp_cookie_args
+
+    options: Dict[str, Any] = {"proxy": _batch_proxy(url)}
+    try:
+        download = load_settings().download
+        options.update(
+            build_ytdlp_cookie_args(
+                str(download.cookie_mode or "none"),
+                str(download.cookie_browser or "chrome"),
+                str(download.cookie_profile or ""),
+            )
+        )
+    except Exception:
+        pass
+    return options
+
+
 def _batch_bvid_from_url(url: str) -> str:
     match = _BATCH_BVID_RE.search(url or "")
     return match.group(1) if match else ""
@@ -1371,7 +1418,7 @@ def _expand_b23_url(url: str) -> str:
     if "b23.tv" not in (url or "").lower():
         return url
     try:
-        with httpx.Client(timeout=10.0, headers=_BATCH_HTTP_HEADERS, follow_redirects=True) as client:
+        with _batch_http_client(url, timeout=10.0) as client:
             resp = client.get(url)
             resp.raise_for_status()
             return str(resp.url)
@@ -1385,7 +1432,7 @@ def _resolve_bilibili_multipart_source(url: str) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="未识别到 B 站 BV 号")
     api_url = "https://api.bilibili.com/x/web-interface/view"
     try:
-        with httpx.Client(timeout=12.0, headers=_BATCH_HTTP_HEADERS, follow_redirects=True) as client:
+        with _batch_http_client(api_url, timeout=12.0) as client:
             resp = client.get(api_url, params={"bvid": bvid})
             resp.raise_for_status()
             payload = resp.json()
@@ -1512,6 +1559,7 @@ def _resolve_youtube_playlist_source(url: str) -> Dict[str, Any]:
         "skip_download": True,
         "ignoreerrors": True,
         "nocheckcertificate": True,
+        **_batch_ytdlp_options(url),
     }
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
@@ -1583,6 +1631,7 @@ def _resolve_ytdlp_collection_source(url: str, *, source_type: str, platform: st
         "ignoreerrors": True,
         "nocheckcertificate": True,
         "playlistend": _BATCH_SOURCE_MAX_ITEMS,
+        **_batch_ytdlp_options(url),
     }
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
@@ -1598,7 +1647,7 @@ def _resolve_ytdlp_collection_source(url: str, *, source_type: str, platform: st
     bili_client: Optional[httpx.Client] = None
     bili_brief_cache: Dict[str, Dict[str, Any]] = {}
     if platform == "bilibili":
-        bili_client = httpx.Client(timeout=5.0, headers=_BATCH_HTTP_HEADERS, follow_redirects=True)
+        bili_client = _batch_http_client(url, timeout=5.0)
     try:
         for idx, entry in enumerate(entries[:_BATCH_SOURCE_MAX_ITEMS], start=1):
             source_url = _flat_entry_url(entry, platform)
@@ -1709,67 +1758,6 @@ def _resolve_batch_source(source: str) -> Dict[str, Any]:
     if platform == "bilibili" and _batch_bvid_from_url(url):
         return _resolve_bilibili_multipart_source(url)
     return _resolve_multi_url_source([url])
-
-
-def _inject_active_chat_provider(payload: Dict[str, Any]) -> None:
-    try:
-        settings = load_settings()
-        for provider in settings.providers:
-            if not provider.enabled or not provider.api_key.strip():
-                continue
-            if "chat" in provider.capabilities:
-                payload["api_key"] = provider.api_key
-                if hasattr(provider, "default_models") and provider.default_models:
-                    payload["text_model"] = provider.default_models.get("chat", "")
-                break
-    except Exception:
-        pass
-
-
-def _create_batch_note_task(
-    workspace_id: str,
-    item: WorkspaceItem,
-    req: BatchSourceImportRequest,
-) -> TaskRecord:
-    batch_meta = (item.results or {}).get("batch_source") if isinstance(item.results, dict) else {}
-    batch_meta = batch_meta if isinstance(batch_meta, dict) else {}
-    payload: Dict[str, Any] = {
-        "url": item.source_value,
-        "title": item.name,
-        "video_title": item.name,
-        "workspace_id": workspace_id,
-        "item_id": item.item_id,
-        "preflight": {
-            "embed_frames": req.embed_frames,
-            "image_mode": req.image_mode,
-            "frame_prompt": {
-                "mode": "interval",
-                "interval_sec": req.frame_interval,
-            },
-            "intent": req.intent or "note",
-        },
-        "intent": req.intent or "note",
-        "note_media_kind": req.note_media_kind or "video",
-        "source_type": "link",
-        "kind_hint": item.type,
-        "summary_template": req.summary_template or "standard",
-        "diarize": req.diarize,
-        "summary_mode": req.summary_mode,
-        "speaker_count": req.speaker_count,
-        "batch_source": {
-            "source_type": req.source_type,
-            "source_url": req.source_url,
-            "workspace_id": workspace_id,
-            "index": batch_meta.get("index"),
-            "total": len(req.items),
-        },
-    }
-    if req.vision_model.strip():
-        payload["vision_model"] = req.vision_model.strip()
-    if req.user_notes.strip():
-        payload["user_notes"] = req.user_notes.strip()
-    _inject_active_chat_provider(payload)
-    return _pipeline_runner.create_task(workspace_id, "note", payload)
 
 
 @router.post("/auto-create")
@@ -2381,13 +2369,12 @@ def resolve_batch_source(req: BatchSourceResolveRequest) -> Dict[str, Any]:
 
 @router.post("/batch-sources/import")
 def import_batch_source(req: BatchSourceImportRequest) -> Dict[str, Any]:
-    """把解析后的批量来源导入为新合集，并可立即启动每条笔记任务。"""
+    """兼容入口：把旧请求转换后委托统一批次 API。"""
     if not req.items:
         raise HTTPException(status_code=400, detail="items 不能为空")
     if len(req.items) > _BATCH_SOURCE_MAX_ITEMS:
         raise HTTPException(status_code=400, detail=f"一次最多导入 {_BATCH_SOURCE_MAX_ITEMS} 条")
 
-    now = datetime.now(timezone.utc).isoformat()
     first_title = (req.items[0].title or "").strip()
     workspace_name = (
         req.workspace_name.strip()
@@ -2396,92 +2383,71 @@ def import_batch_source(req: BatchSourceImportRequest) -> Dict[str, Any]:
     )
     if len(workspace_name) > 120:
         workspace_name = workspace_name[:120].rstrip()
-    workspace_id = str(uuid.uuid4())
-    items: List[WorkspaceItem] = []
-    intent = req.intent or "note"
+    from backend.app.routes import task_batches
 
-    for idx, entry in enumerate(req.items, start=1):
-        url = _validate_batch_network_url(entry.source_url)
-        title = (entry.title or "").strip() or _derive_item_name(url)
-        thumb = (entry.thumbnail or "").strip() or None
-        platform = (entry.platform or "").strip() or _platform_prefix_from_url(url)
-        item = WorkspaceItem(
-            item_id=str(uuid.uuid4()),
-            type=ItemType.VIDEO.value,
-            source="url",
-            source_value=url,
-            name=title,
-            status=ItemStatus.PENDING.value,
-            preflight=PreflightConfig(
-                intent=intent,
-                tasks={
-                    "summary": {
-                        "embed_frames": req.embed_frames,
-                        "summary_template": req.summary_template,
-                        "diarize": req.diarize,
-                    },
-                },
-            ),
-            results={
-                "video_title": title,
-                "video_thumbnail_url": thumb,
-                "cover_thumbnail": thumb,
-                "duration_sec": entry.duration_seconds,
-                "default_summary_template": req.summary_template,
-                "batch_source": {
-                    "source_type": req.source_type,
-                    "source_url": req.source_url,
-                    "platform": platform,
-                    "index": entry.index or idx,
+    source_type = {
+        "multi_url": "urls",
+        "bilibili_multipart": "bilibili_parts",
+    }.get(req.source_type, req.source_type)
+    batch_data = task_batches.create_batch(
+        task_batches.BatchCreateRequest(
+            name=workspace_name,
+            source_type=source_type,
+            start=req.start,
+            items=[
+                {
+                    "source_url": _validate_batch_network_url(entry.source_url),
+                    "source_title": (entry.title or "").strip()
+                    or _derive_item_name(entry.source_url),
                     "external_id": entry.external_id,
-                },
-            },
-            tags={
-                "custom_tags": [tag for tag in ["批量导入", platform, "视频合集"] if tag],
+                    "platform": (entry.platform or "").strip()
+                    or _platform_prefix_from_url(entry.source_url),
+                    "index": entry.index or index,
+                    "duration_seconds": entry.duration_seconds,
+                    "thumbnail": (entry.thumbnail or "").strip() or None,
+                    "action": "process",
+                }
+                for index, entry in enumerate(req.items, start=1)
+            ],
+            settings={
+                "note_style": req.summary_template or "standard",
+                "note_type": req.note_media_kind or "video",
+                "diarize": req.diarize,
+                "frame_analysis": req.embed_frames,
+                "frame_interval": req.frame_interval,
+                "vision_model": req.vision_model.strip(),
+                "summary_mode": req.summary_mode,
+                "speaker_count": req.speaker_count,
+                "user_notes": req.user_notes.strip(),
             },
         )
-        items.append(item)
-
-    rec = WorkspaceRecord(
-        workspace_id=workspace_id,
-        name=workspace_name,
-        status=WorkspaceStatus.PROCESSING.value if req.start else WorkspaceStatus.ACTIVE.value,
-        kind=req.kind,
-        source=req.source_type,
-        source_meta={
-            "source_type": req.source_type,
-            "source_url": req.source_url,
-            "items_total": len(items),
-            "imported_at": now,
-        },
-        items=items,
     )
-    rec = _store.create(rec)
-
+    workspace_id = str(batch_data.get("target_workspace_id") or "")
+    latest = _store.get(workspace_id)
+    if latest is None:
+        raise HTTPException(status_code=500, detail="批次已创建，但目标合集不存在")
+    item_payloads = (
+        batch_data.get("settings_snapshot", {}).get("item_payloads", {})
+        if isinstance(batch_data.get("settings_snapshot"), dict)
+        else {}
+    )
     tasks: List[Dict[str, Any]] = []
-    if req.start:
-        for item in list(rec.items):
-            try:
-                task_rec = _create_batch_note_task(rec.workspace_id, item, req)
-            except ValueError as err:
-                raise HTTPException(status_code=409, detail=str(err)) from err
-            rec = _store.update_item(
-                rec.workspace_id,
-                item.item_id,
-                related_task_ids=list(item.related_task_ids) + [task_rec.task_id],
-                status=ItemStatus.PROCESSING.value,
-            )
-            tasks.append({
-                "task_id": task_rec.task_id,
-                "item_id": item.item_id,
-                "item_type": item.type,
-            })
-
-    latest = _store.get(rec.workspace_id) or rec
+    for batch_item in batch_data.get("items") or []:
+        if not isinstance(batch_item, dict) or not batch_item.get("task_id"):
+            continue
+        payload = item_payloads.get(batch_item.get("batch_item_id"), {})
+        tasks.append(
+            {
+                "task_id": batch_item["task_id"],
+                "item_id": str(payload.get("item_id") or ""),
+                "item_type": ItemType.VIDEO.value,
+            }
+        )
     return {
         "workspace": _enrich_workspace(latest),
-        "items_added": len(items),
+        "items_added": len(req.items),
         "tasks": tasks,
+        "batch_id": batch_data.get("batch_id"),
     }
 
 

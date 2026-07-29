@@ -144,16 +144,20 @@ class TaskBatch:
         if not self.items:
             return BatchStatus.QUEUED.value
 
+        self.total_count = len(self.items)
+        self.skipped_count = sum(
+            1
+            for item in self.items
+            if item.action == "skip" or item.status == "skipped"
+        )
         statuses = [item.status for item in self.items if item.action != "skip"]
         if not statuses:
-            return BatchStatus.QUEUED.value
+            return BatchStatus.COMPLETED.value
 
         # 更新计数
-        self.total_count = len(self.items)
         self.completed_count = sum(1 for s in statuses if s == "completed")
         self.failed_count = sum(1 for s in statuses if s == "failed")
         self.cancelled_count = sum(1 for s in statuses if s == "cancelled")
-        self.skipped_count = sum(1 for item in self.items if item.action == "skip" or item.status == "skipped")
 
         # 推导状态
         if self.cancel_requested:

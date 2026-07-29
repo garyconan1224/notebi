@@ -15,7 +15,7 @@ import {
   createWorkspace as createWorkspaceSvc,
   ensureInbox,
   generateNote,
-  importBatchSource,
+  getWorkspace,
   probeDuration,
   probeItemMedia,
   resolveBatchSource,
@@ -24,6 +24,7 @@ import {
   startItemPipeline,
   updateWorkspace as updateWorkspaceSvc,
 } from '@/services/workspaces'
+import { createTaskBatch } from '@/services/taskBatches'
 import { fetchLinkPreview } from '@/services/linkPreview'
 import { batchAddItemsToWorkspace, fetchLibrary, type LibraryItem } from '@/services/library'
 import { fetchTemplates, type TemplateCategory, type VideoTemplateItem } from '@/services/templates'
@@ -766,35 +767,47 @@ export function AddMaterialModal({
       const resolvedNoteKind = selectedNoteType === 'auto' ? 'video' : selectedNoteType === 'mixed' ? 'mixed' : selectedNoteType
       const effInterval = captureMode === 'auto' ? computeAutoInterval(videoDuration) : frameInterval
       const effVisionModel = selectedVisionModel === '__default__' ? '' : selectedVisionModel
-      const result = await importBatchSource({
-        workspace_name: batchResult.title || '批量导入合集',
-        kind: 'note',
-        source_type: batchResult.source_type,
-        source_url: batchResult.source_url,
-        items: selectedBatchItems,
+      const batch = await createTaskBatch({
+        name: batchResult.title || '批量导入合集',
+        source_type: batchResult.source_type === 'multi_url'
+          ? 'urls'
+          : batchResult.source_type === 'bilibili_multipart'
+            ? 'bilibili_parts'
+            : batchResult.source_type,
+        idempotency_key: crypto.randomUUID(),
         start: true,
-        embed_frames: resolvedNoteKind === 'video' ? embedFrames : false,
-        image_mode: 'vision',
-        frame_interval: effInterval,
-        vision_model: effVisionModel,
-        intent: 'note',
-        note_media_kind: resolvedNoteKind,
-        summary_template: noteStyle,
-        diarize: diarizeOn,
-        ...(selectedSpeakerCount ? { speaker_count: selectedSpeakerCount } : {}),
-        ...(speakerAwareMedia ? { summary_mode: 'speaker_aware' as const } : {}),
-        user_notes: userNotes,
-      })
-      toast.success('批量合集已创建', { description: `${result.items_added} 条内容已加入任务队列` })
-      onWorkspaceUpdated?.(result.workspace)
-      onAdded?.()
-      onOpenChange(false)
-      navigate(`/processing/batch/${result.workspace.workspace_id}`, {
-        state: {
-          workspace: result.workspace,
-          taskIds: result.tasks.map((task) => task.task_id),
+        items: selectedBatchItems.map((item) => ({
+          source_url: item.source_url,
+          source_title: item.title,
+          external_id: item.external_id,
+          platform: item.platform,
+          index: item.index,
+          duration_seconds: item.duration_seconds,
+          thumbnail: item.thumbnail,
+          action: 'process',
+        })),
+        settings: {
+          note_style: noteStyle,
+          note_type: resolvedNoteKind,
+          diarize: diarizeOn,
+          frame_analysis: resolvedNoteKind === 'video' ? embedFrames : false,
+          frame_interval: effInterval,
+          vision_model: effVisionModel,
+          ...(selectedSpeakerCount ? { speaker_count: selectedSpeakerCount } : {}),
+          ...(speakerAwareMedia ? { summary_mode: 'speaker_aware' as const } : {}),
+          user_notes: userNotes,
         },
       })
+      toast.success('批量合集已创建', { description: `${selectedBatchItems.length} 条内容已加入任务队列` })
+      try {
+        const workspace = await getWorkspace(batch.target_workspace_id)
+        onWorkspaceUpdated?.(workspace)
+      } catch {
+        toast.warning('批次已创建，合集列表稍后会自动刷新')
+      }
+      onAdded?.()
+      onOpenChange(false)
+      navigate(`/tasks/batches/${batch.batch_id}`)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '批量导入失败'
       setError(msg)

@@ -8,7 +8,9 @@ from __future__ import annotations
 """
 
 import io
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -35,15 +37,35 @@ def client(tmp_path: Path):
     # mock pipeline runner：store.get 全返回 None（无活跃任务）
     mock_runner = MagicMock()
     mock_runner.store.get.return_value = None
+    from backend.app.routes import task_batches
+    from backend.app.services.task_batch_service import TaskBatchService
+    from backend.app.services.task_batch_store import TaskBatchStore
+    from backend.app.services.task_runner import TaskRunner
+    from backend.app.services.task_store import TaskStore
+
+    batch_store = TaskBatchStore(tmp_path / "batches")
+    batch_task_store = TaskStore(tmp_path / "batch_tasks.json")
+    batch_runner = TaskRunner(batch_task_store, max_workers=1)
+    batch_runner.register("note", lambda _record, _runner: {})
+    batch_service = TaskBatchService(
+        batch_store=batch_store,
+        runner=batch_runner,
+        concurrency_limit=lambda: 1,
+        task_created=task_batches._link_created_task_to_workspace,
+    )
 
     app = FastAPI()
     with (
         patch.object(ws_module, "_store", isolated_store),
         patch.object(ws_module, "_pipeline_runner", mock_runner),
+        patch.object(task_batches, "get_workspace_store", lambda: isolated_store),
+        patch.object(task_batches, "get_default_batch_store", lambda: batch_store),
+        patch.object(task_batches, "get_batch_service", lambda: batch_service),
     ):
         app.include_router(ws_module.router)
         with TestClient(app) as c:
             yield c
+    batch_runner._executor.shutdown(wait=True)
 
 
 # ── Happy path ────────────────────────────────────────────────────────────────
@@ -156,6 +178,103 @@ def test_import_batch_source_creates_workspace_cover(client: TestClient) -> None
     assert workspace["name"] == "批量测试合集"
     assert workspace["cover_thumbnail"] == thumb
     assert workspace["items"][0]["thumbnail"] == thumb
+
+
+def test_batch_source_import_delegates_task_creation_to_canonical_batch_api(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from backend.app.routes import task_batches
+
+    delegated = MagicMock(
+        return_value={
+            "batch_id": "batch-1",
+            "target_workspace_id": "workspace-1",
+            "items": [],
+        }
+    )
+    monkeypatch.setattr(task_batches, "create_batch", delegated)
+    ws_module._store.create(
+        WorkspaceRecord(workspace_id="workspace-1", name="统一批次")
+    )
+    ws_module._pipeline_runner.create_task.return_value = TaskRecord(
+        task_id="legacy-task",
+        project_id="legacy-workspace",
+        task_type="note",
+        payload={},
+    )
+    response = client.post(
+        "/workspaces/batch-sources/import",
+        json={
+            "workspace_name": "统一批次",
+            "source_type": "multi_url",
+            "start": True,
+            "items": [
+                {
+                    "source_url": "https://example.com/1",
+                    "title": "第一条",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert delegated.call_count == 1
+    assert ws_module._pipeline_runner.create_task.call_count == 0
+
+
+def test_playlist_resolver_obeys_saved_cookie_and_network_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeYoutubeDL:
+        def __init__(self, options):
+            captured.update(options)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def extract_info(self, _url, download=False):
+            assert download is False
+            return {
+                "id": "playlist",
+                "title": "playlist",
+                "entries": [{"id": "video-1", "title": "video"}],
+            }
+
+    monkeypatch.setitem(sys.modules, "yt_dlp", SimpleNamespace(YoutubeDL=FakeYoutubeDL))
+    monkeypatch.setattr(
+        ws_module,
+        "load_settings",
+        lambda: SimpleNamespace(
+            download=SimpleNamespace(
+                cookie_mode="browser",
+                cookie_browser="firefox",
+                cookie_profile="profile-a",
+            ),
+            network=SimpleNamespace(
+                routing_mode="proxy",
+                global_proxy="http://127.0.0.1:7890",
+            ),
+        ),
+    )
+
+    result = ws_module._resolve_youtube_playlist_source(
+        "https://www.youtube.com/playlist?list=playlist"
+    )
+
+    assert result["items"][0]["external_id"] == "video-1"
+    assert captured["cookiesfrombrowser"] == (
+        "firefox",
+        "profile-a",
+        None,
+        None,
+    )
+    assert captured["proxy"] == "http://127.0.0.1:7890"
 
 
 def test_items_count_by_type_after_adding_items(client: TestClient) -> None:

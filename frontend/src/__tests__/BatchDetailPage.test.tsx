@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import BatchDetailPage from '@/pages/TaskCenterPage/BatchDetailPage'
@@ -105,5 +105,54 @@ describe('BatchDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '取消' }))
     await waitFor(() => expect(cancelMock).toHaveBeenCalledWith('batch-1'))
     confirm.mockRestore()
+  })
+
+  it('失败项重试后使用接口返回值刷新汇总', async () => {
+    retryMock.mockResolvedValue({
+      ...batch,
+      status: 'running',
+      completed_count: 1,
+      failed_count: 0,
+    })
+    renderPage()
+    await screen.findByText('测试批次')
+
+    fireEvent.click(screen.getByRole('button', { name: '重试失败项' }))
+
+    await waitFor(() => expect(retryMock).toHaveBeenCalledWith('batch-1'))
+    expect(screen.getByText('1/2 完成 · 0 失败 · running')).toBeInTheDocument()
+  })
+
+  it('运行中的批次自动刷新计数，完成后停止轮询', async () => {
+    vi.useFakeTimers()
+    try {
+      getMock
+        .mockResolvedValueOnce({ ...batch, completed_count: 0, failed_count: 0 })
+        .mockResolvedValueOnce({
+          ...batch,
+          status: 'completed',
+          completed_count: 2,
+          failed_count: 0,
+        })
+
+      renderPage()
+      await act(async () => {
+        await Promise.resolve()
+      })
+      expect(screen.getByText('0/2 完成 · 0 失败 · running')).toBeInTheDocument()
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000)
+      })
+      expect(screen.getByText('2/2 完成 · 0 失败 · completed')).toBeInTheDocument()
+      expect(getMock).toHaveBeenCalledTimes(2)
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4_000)
+      })
+      expect(getMock).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

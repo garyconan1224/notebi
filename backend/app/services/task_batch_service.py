@@ -21,12 +21,14 @@ class TaskBatchService:
         runner: TaskRunner,
         concurrency_limit: Callable[[], int],
         copy_item: Callable[[str, str, str], Any] | None = None,
+        task_created: Callable[[TaskBatch, BatchItem, TaskRecord], Any] | None = None,
         event_sink: Any | None = None,
     ) -> None:
         self.batch_store = batch_store
         self.runner = runner
         self.concurrency_limit = concurrency_limit
         self.copy_item = copy_item
+        self.task_created = task_created
         self.event_sink = event_sink
         self._lock = threading.RLock()
         self._batch_order: list[str] = []
@@ -52,7 +54,10 @@ class TaskBatchService:
                     if item.status != "running":
                         continue
                     task = self.runner.store.get(item.task_id) if item.task_id else None
-                    if task is not None and task.status == TaskStatus.SUCCESS.value:
+                    if task is not None and task.status in {
+                        TaskStatus.SUCCESS.value,
+                        TaskStatus.PARTIAL.value,
+                    }:
                         item.status = "completed"
                         item.error = ""
                     elif task is not None and task.status == TaskStatus.CANCELLED.value:
@@ -117,6 +122,11 @@ class TaskBatchService:
             index, batch, item = selected
             self._cursor = (index + 1) % count
             payload = dict(batch.settings_snapshot)
+            item_payloads = payload.pop("item_payloads", {})
+            if isinstance(item_payloads, dict):
+                item_payload = item_payloads.get(item.batch_item_id)
+                if isinstance(item_payload, dict):
+                    payload.update(item_payload)
             payload["url"] = item.source_url
             task_type = str(payload.pop("task_type", "note") or "note")
             retry_of = item.task_ids[-1] if item.task_ids else ""
@@ -134,6 +144,19 @@ class TaskBatchService:
                         if value:
                             payload[key] = value
                     payload["_resume_from_task_id"] = previous.task_id
+
+            def link_task_before_worker(task: TaskRecord) -> None:
+                item.task_id = task.task_id
+                if task.task_id not in item.task_ids:
+                    item.task_ids.append(task.task_id)
+                item.status = "running"
+                if not batch.started_at:
+                    batch.started_at = task.created_at
+                batch.update_status()
+                self.batch_store.save(batch)
+                if self.task_created is not None:
+                    self.task_created(batch, item, task)
+
             try:
                 task = self.runner.create_task(
                     batch.target_workspace_id,
@@ -143,6 +166,7 @@ class TaskBatchService:
                     batch_id=batch.batch_id,
                     batch_item_id=item.batch_item_id,
                     attempt_no=item.attempt_no,
+                    on_created=link_task_before_worker,
                 )
             except Exception as error:  # noqa: BLE001
                 item.status = "failed"
@@ -151,19 +175,11 @@ class TaskBatchService:
                 self.batch_store.save(batch)
                 continue
 
-            item.task_id = task.task_id
-            if task.task_id not in item.task_ids:
-                item.task_ids.append(task.task_id)
-            item.status = "running"
             if retry_of:
                 self.runner.append_log(
                     task.task_id,
                     f"批次失败重试：从任务 {retry_of} 的可验证产物继续",
                 )
-            if not batch.started_at:
-                batch.started_at = task.created_at
-            batch.update_status()
-            self.batch_store.save(batch)
 
     def _on_task_completed(self, task: TaskRecord, _runner: TaskRunner) -> None:
         if not task.batch_id or not task.batch_item_id:
@@ -179,7 +195,10 @@ class TaskBatchService:
             if item is None or item.task_id != task.task_id:
                 return
 
-            if task.status == TaskStatus.SUCCESS.value:
+            if task.status in {
+                TaskStatus.SUCCESS.value,
+                TaskStatus.PARTIAL.value,
+            }:
                 item.status = "completed"
                 item.error = ""
             elif task.status == TaskStatus.CANCELLED.value:
@@ -199,6 +218,7 @@ class TaskBatchService:
         items: list[BatchItem],
         settings_snapshot: dict[str, Any],
         source_type: str = "urls",
+        start_paused: bool = False,
     ) -> TaskBatch:
         with self._lock:
             batch_id = str(uuid.uuid4())
@@ -233,6 +253,7 @@ class TaskBatchService:
                 items=normalized_items,
                 settings_snapshot=dict(settings_snapshot),
                 total_count=len(normalized_items),
+                pause_requested=start_paused,
             )
             batch.update_status()
             self.batch_store.save(batch)

@@ -13,6 +13,10 @@ const {
   savePreflightMock,
   startItemPipelineMock,
   updateWorkspaceMock,
+  resolveBatchSourceMock,
+  importBatchSourceMock,
+  createTaskBatchMock,
+  getWorkspaceMock,
   fetchLinkPreviewMock,
   fetchTemplatesMock,
 } = vi.hoisted(() => ({
@@ -26,6 +30,10 @@ const {
   savePreflightMock: vi.fn(),
   startItemPipelineMock: vi.fn(),
   updateWorkspaceMock: vi.fn(),
+  resolveBatchSourceMock: vi.fn(),
+  importBatchSourceMock: vi.fn(),
+  createTaskBatchMock: vi.fn(),
+  getWorkspaceMock: vi.fn(),
   fetchLinkPreviewMock: vi.fn(),
   fetchTemplatesMock: vi.fn(),
 }))
@@ -44,6 +52,13 @@ vi.mock('@/services/workspaces', () => ({
   startItemPipeline: startItemPipelineMock,
   generateNote: generateNoteMock,
   updateWorkspace: updateWorkspaceMock,
+  resolveBatchSource: resolveBatchSourceMock,
+  importBatchSource: importBatchSourceMock,
+  getWorkspace: getWorkspaceMock,
+}))
+
+vi.mock('@/services/taskBatches', () => ({
+  createTaskBatch: createTaskBatchMock,
 }))
 
 vi.mock('@/services/linkPreview', () => ({
@@ -75,6 +90,10 @@ describe('AddMaterialModal', () => {
     savePreflightMock.mockReset()
     startItemPipelineMock.mockReset()
     updateWorkspaceMock.mockReset()
+    resolveBatchSourceMock.mockReset()
+    importBatchSourceMock.mockReset()
+    createTaskBatchMock.mockReset()
+    getWorkspaceMock.mockReset()
     fetchLinkPreviewMock.mockReset()
     fetchTemplatesMock.mockReset()
     fetchTemplatesMock.mockResolvedValue([])
@@ -86,6 +105,33 @@ describe('AddMaterialModal', () => {
       item_type: 'video',
       item_id: 'item-1',
       workspace: {},
+    })
+    resolveBatchSourceMock.mockResolvedValue({
+      source_type: 'multi_url',
+      source_url: '',
+      title: '批量合集',
+      items: [{
+        source_url: 'https://example.com/1',
+        title: '第一条',
+        platform: 'youtube',
+        index: 1,
+        external_id: 'video-1',
+      }],
+    })
+    importBatchSourceMock.mockResolvedValue({
+      workspace: { workspace_id: 'legacy-ws' },
+      items_added: 1,
+      tasks: [{ task_id: 'legacy-task' }],
+    })
+    createTaskBatchMock.mockResolvedValue({
+      batch_id: 'batch-1',
+      target_workspace_id: 'workspace-1',
+      items: [],
+    })
+    getWorkspaceMock.mockResolvedValue({
+      workspace_id: 'workspace-1',
+      name: '批量合集',
+      items: [],
     })
   })
 
@@ -388,6 +434,38 @@ describe('AddMaterialModal', () => {
         { diarize: false, summary_template: 'standard', user_notes: '' },
       )
     })
+  })
+
+  it('批量提交使用统一批次 API 并进入批次详情', async () => {
+    const onWorkspaceUpdated = vi.fn()
+    render(
+      <AddMaterialModal
+        open={true}
+        onOpenChange={vi.fn()}
+        workspaceIds={[]}
+        urlValue={'https://example.com/1\nhttps://example.com/2'}
+        onWorkspaceUpdated={onWorkspaceUpdated}
+      />,
+    )
+
+    fireEvent.click(screen.getByTitle('解析批量来源'))
+    await waitFor(() => expect(resolveBatchSourceMock).toHaveBeenCalled())
+    expect(await screen.findByText(/第一条/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /提交批量/ }))
+
+    await waitFor(() => expect(createTaskBatchMock).toHaveBeenCalledTimes(1))
+    expect(importBatchSourceMock).not.toHaveBeenCalled()
+    expect(createTaskBatchMock).toHaveBeenCalledWith(expect.objectContaining({
+      name: '批量合集',
+      source_type: 'urls',
+      items: [expect.objectContaining({
+        source_url: 'https://example.com/1',
+        action: 'process',
+      })],
+    }))
+    expect(getWorkspaceMock).toHaveBeenCalledWith('workspace-1')
+    expect(onWorkspaceUpdated).toHaveBeenCalled()
+    expect(navigateMock).toHaveBeenCalledWith('/tasks/batches/batch-1')
   })
 
   it('没有工作空间时落入收纳箱，再生成笔记', async () => {

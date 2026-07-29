@@ -51,6 +51,36 @@ def batch_system(tmp_path: Path):
     runner._executor.shutdown(wait=True)
 
 
+def test_fast_task_cannot_finish_before_batch_item_is_linked(tmp_path: Path) -> None:
+    task_store = TaskStore(tmp_path / "tasks.json")
+    batch_store = TaskBatchStore(tmp_path / "batches")
+    runner = TaskRunner(task_store, max_workers=1)
+    runner.register("note", lambda record, _runner: {"item": record.batch_item_id})
+    runner._executor.submit = (  # type: ignore[method-assign]
+        lambda callback, *args, **_kwargs: callback(*args)
+    )
+    service = TaskBatchService(
+        batch_store=batch_store,
+        runner=runner,
+        concurrency_limit=lambda: 1,
+    )
+
+    batch = service.create_batch(
+        name="fast",
+        target_workspace_id="ws-1",
+        items=[BatchItem(batch_item_id="i1", source_url="https://example.com/1")],
+        settings_snapshot={},
+    )
+
+    current = batch_store.get(batch.batch_id)
+    assert current is not None
+    assert current.status == "completed"
+    assert current.items[0].status == "completed"
+    assert current.items[0].task_id
+    assert current.items[0].task_ids == [current.items[0].task_id]
+    runner._executor.shutdown(wait=True)
+
+
 def test_pause_stops_new_items_without_cancelling_running_task(batch_system) -> None:
     service, batch_store, task_store, releases, started = batch_system
     batch = service.create_batch(
@@ -280,3 +310,32 @@ def test_retry_carries_forward_verified_workspace_item(batch_system) -> None:
     assert retry.payload["video_path"] == "/tmp/media.mp4"
     assert retry.payload["_resume_from_task_id"] == first.task_id
     releases["i1"].set()
+
+
+def test_partial_task_counts_as_completed_batch_item(tmp_path: Path) -> None:
+    task_store = TaskStore(tmp_path / "tasks.json")
+    batch_store = TaskBatchStore(tmp_path / "batches")
+    runner = TaskRunner(task_store, max_workers=1)
+
+    def handle_partial(record, current_runner):
+        current_runner.store.update(record.task_id, status="PARTIAL")
+        return {"usable": True}
+
+    runner.register("audio", handle_partial)
+    service = TaskBatchService(
+        batch_store=batch_store,
+        runner=runner,
+        concurrency_limit=lambda: 1,
+    )
+    batch = service.create_batch(
+        name="partial",
+        target_workspace_id="ws",
+        items=[BatchItem(batch_item_id="i1", source_url="/tmp/audio.mp3")],
+        settings_snapshot={"task_type": "audio"},
+    )
+
+    _wait_until(lambda: batch_store.get(batch.batch_id).items[0].status != "running")
+    current = batch_store.get(batch.batch_id)
+    assert current.items[0].status == "completed"
+    assert current.status == "completed"
+    runner._executor.shutdown(wait=True)

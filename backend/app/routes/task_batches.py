@@ -21,7 +21,14 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.app.models.task_batch import BatchItem
-from backend.app.models.workspace import WorkspaceRecord
+from backend.app.models.tasks import TaskRecord
+from backend.app.models.workspace import (
+    ItemStatus,
+    ItemType,
+    PreflightConfig,
+    WorkspaceItem,
+    WorkspaceRecord,
+)
 from backend.app.services.batch_source_resolver import (
     normalize_batch_source,
     resolve_batch_sources,
@@ -72,6 +79,34 @@ def _copy_existing_item(
         raise ValueError(str(reason))
 
 
+def _link_created_task_to_workspace(
+    _batch,
+    _batch_item,
+    task: TaskRecord,
+) -> None:
+    """在 worker 启动前把真实 task_id 关联到目标素材。"""
+    workspace_id = str(task.payload.get("workspace_id") or task.project_id)
+    item_id = str(task.payload.get("item_id") or "")
+    if not workspace_id or not item_id:
+        return
+    store = get_workspace_store()
+    workspace = store.get(workspace_id)
+    if workspace is None:
+        raise KeyError(f"workspace not found: {workspace_id}")
+    item = next((candidate for candidate in workspace.items if candidate.item_id == item_id), None)
+    if item is None:
+        raise KeyError(f"item not found: {item_id}")
+    related_task_ids = list(item.related_task_ids)
+    if task.task_id not in related_task_ids:
+        related_task_ids.append(task.task_id)
+    store.update_item(
+        workspace_id,
+        item_id,
+        related_task_ids=related_task_ids,
+        status=ItemStatus.PROCESSING.value,
+    )
+
+
 def get_batch_service() -> TaskBatchService:
     """返回与当前批次 store 绑定的生命周期服务。"""
     store = get_default_batch_store()
@@ -86,6 +121,7 @@ def get_batch_service() -> TaskBatchService:
             runner=_runner,
             concurrency_limit=lambda: load_settings().download.concurrency_limit,
             copy_item=_copy_existing_item,
+            task_created=_link_created_task_to_workspace,
             event_sink=get_default_store(),
         )
         _services[key] = service
@@ -135,6 +171,7 @@ class BatchCreateRequest(BaseModel):
     source_type: str = "urls"
     settings: Dict[str, Any] = Field(default_factory=dict)
     idempotency_key: str = ""
+    start: bool = True
 
 
 class BatchResponse(BaseModel):
@@ -246,6 +283,17 @@ def create_batch(req: BatchCreateRequest) -> Dict[str, Any]:
     if req.source_type not in _APPROVED_SOURCE_TYPES:
         raise HTTPException(status_code=422, detail="不支持的批量来源类型")
 
+    for item in req.items:
+        action = str(item.get("action") or "process")
+        if action not in {"process", "skip", "copy"}:
+            raise HTTPException(status_code=422, detail=f"不支持的批次动作: {action}")
+    try:
+        frame_interval = int(req.settings.get("frame_interval") or 5)
+    except (TypeError, ValueError) as error:
+        raise HTTPException(status_code=422, detail="frame_interval 必须是整数") from error
+    if not 1 <= frame_interval <= 3600:
+        raise HTTPException(status_code=422, detail="frame_interval 必须在 1 到 3600 秒之间")
+
     workspace_store = get_workspace_store()
     target_workspace_id = req.workspace_id.strip()
     if not target_workspace_id:
@@ -269,19 +317,93 @@ def create_batch(req: BatchCreateRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="目标合集不存在")
 
     items: list[BatchItem] = []
+    item_payloads: dict[str, dict[str, Any]] = {}
     for item in req.items:
         action = str(item.get("action") or "process")
-        if action not in {"process", "skip", "copy"}:
-            raise HTTPException(status_code=422, detail=f"不支持的批次动作: {action}")
+        batch_item_id = str(
+            item.get("batch_item_id")
+            or stable_batch_item_id(
+                str(item.get("source_url") or ""),
+                str(item.get("external_id") or ""),
+            )
+        )
+        if action == "process":
+            source_url = str(item.get("source_url") or "")
+            workspace_item_id = str(uuid.uuid4())
+            source_title = str(item.get("source_title") or "").strip() or source_url
+            frame_analysis = bool(req.settings.get("frame_analysis", True))
+            summary_template = str(req.settings.get("note_style") or "standard")
+            note_type = str(req.settings.get("note_type") or "auto")
+            diarize = bool(req.settings.get("diarize", False))
+            summary_mode = str(req.settings.get("summary_mode") or "general")
+            preflight = {
+                "embed_frames": frame_analysis,
+                "image_mode": "vision",
+                "frame_prompt": {
+                    "mode": "interval",
+                    "interval_sec": frame_interval,
+                },
+                "intent": "note",
+            }
+            workspace_item_kwargs: dict[str, Any] = {}
+            lineage_id = str(item.get("lineage_id") or "")
+            if lineage_id:
+                workspace_item_kwargs["lineage_id"] = lineage_id
+            workspace_store.add_item(
+                target_workspace_id,
+                WorkspaceItem(
+                    item_id=workspace_item_id,
+                    type=ItemType.VIDEO.value,
+                    source="local" if req.source_type == "local_files" else "url",
+                    source_value=source_url,
+                    name=source_title,
+                    status=ItemStatus.PENDING.value,
+                    preflight=PreflightConfig(
+                        intent="note",
+                        tasks={
+                            "summary": {
+                                "embed_frames": frame_analysis,
+                                "summary_template": summary_template,
+                                "diarize": diarize,
+                            }
+                        },
+                    ),
+                    results={
+                        "video_title": source_title,
+                        "video_thumbnail_url": item.get("thumbnail"),
+                        "cover_thumbnail": item.get("thumbnail"),
+                        "duration_sec": item.get("duration_seconds"),
+                        "batch_source": {
+                            "source_type": req.source_type,
+                            "platform": str(item.get("platform") or ""),
+                            "index": item.get("index"),
+                            "external_id": str(item.get("external_id") or ""),
+                        },
+                    },
+                    tags={"custom_tags": ["批量导入"]},
+                    **workspace_item_kwargs,
+                ),
+            )
+            item_payloads[batch_item_id] = {
+                "workspace_id": target_workspace_id,
+                "item_id": workspace_item_id,
+                "title": source_title,
+                "video_title": source_title,
+                "preflight": preflight,
+                "intent": "note",
+                "note_media_kind": note_type,
+                "source_type": "local" if req.source_type == "local_files" else "link",
+                "kind_hint": ItemType.VIDEO.value,
+                "summary_template": summary_template,
+                "diarize": diarize,
+                "summary_mode": summary_mode,
+                "speaker_count": req.settings.get("speaker_count"),
+                "vision_model": str(req.settings.get("vision_model") or ""),
+                "user_notes": str(req.settings.get("user_notes") or ""),
+            }
         items.append(
             BatchItem(
-                batch_item_id=str(
-                    item.get("batch_item_id")
-                    or stable_batch_item_id(
-                        str(item.get("source_url") or ""),
-                        str(item.get("external_id") or ""),
-                    )
-                ),
+                batch_item_id=batch_item_id,
                 source_url=str(item.get("source_url") or ""),
                 source_title=str(item.get("source_title") or ""),
                 external_id=str(item.get("external_id") or ""),
@@ -301,6 +423,7 @@ def create_batch(req: BatchCreateRequest) -> Dict[str, Any]:
         **req.settings,
         "task_type": "note",
         "idempotency_key": req.idempotency_key,
+        "item_payloads": item_payloads,
     }
 
     batch = get_batch_service().create_batch(
@@ -309,6 +432,7 @@ def create_batch(req: BatchCreateRequest) -> Dict[str, Any]:
         items=items,
         settings_snapshot=settings_snapshot,
         source_type=req.source_type,
+        start_paused=not req.start,
     )
 
     return batch.to_dict()
