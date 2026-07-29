@@ -477,6 +477,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [editorPrefs, setEditorPrefs] = useState<NoteEditorPrefs>(readEditorPrefs)
   const pipelineTasks = useTaskStore((state) => state.tasks)
   const addPipelineTask = useTaskStore((state) => state.addTask)
+  const editorFormatting = useLnEditorStore((state) => state.formattingState)
+  const applyEditorFormat = useLnEditorStore((state) => state.applyFormat)
 
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [savedAt, setSavedAt] = useState<string>('')
@@ -1380,6 +1382,19 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const handleApplyBold = useCallback(() => {
     handleWrapSelection('**', '**', '加粗')
   }, [handleWrapSelection])
+
+  const handleToolbarMouseDown = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
+    // 工具栏拿到焦点会清掉 Milkdown 选区；阻止默认聚焦后再执行命令。
+    event.preventDefault()
+  }, [])
+
+  const handleApplyEditorFormat = useCallback((
+    format: Parameters<typeof applyEditorFormat>[0],
+  ) => {
+    if (!applyEditorFormat(format)) {
+      toast.error('当前选区无法应用该格式')
+    }
+  }, [applyEditorFormat])
 
   // ─── loading / error ───
   if (loading) {
@@ -2551,16 +2566,65 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
 
           {/* ── 左栏：工具栏 + 编辑器 ── */}
           <div className="nibi-note-left nibi-text-left">
-            <div className="nibi-text-toolbar">
-              {/* TODO Stage 4: 核对 Milkdown 已支持的命令，对齐设计稿工具栏 */}
-              <button className="btn-ghost" disabled title="加粗（Milkdown 已支持，待接入）">B</button>
-              <button className="btn-ghost" disabled title="斜体（Milkdown 已支持，待接入）">I</button>
-              <button className="btn-ghost" disabled title="标题（Milkdown 已支持，待接入）">H</button>
-              <button className="btn-ghost" disabled title="列表（Milkdown 已支持，待接入）">•</button>
+            <div className="nibi-text-toolbar" role="toolbar" aria-label="正文格式">
+              <button
+                className="btn-ghost"
+                type="button"
+                aria-label="加粗"
+                aria-pressed={editorFormatting.bold}
+                disabled={!editorFormatting.canBold}
+                title="加粗"
+                onMouseDown={handleToolbarMouseDown}
+                onClick={() => handleApplyEditorFormat('bold')}
+              >
+                <Bold size={14} aria-hidden="true" />
+              </button>
+              <button
+                className="btn-ghost"
+                type="button"
+                aria-label="斜体"
+                aria-pressed={editorFormatting.italic}
+                disabled={!editorFormatting.canItalic}
+                title="斜体"
+                onMouseDown={handleToolbarMouseDown}
+                onClick={() => handleApplyEditorFormat('italic')}
+              >
+                <Italic size={14} aria-hidden="true" />
+              </button>
+              <button
+                className="btn-ghost"
+                type="button"
+                aria-label="二级标题"
+                aria-pressed={editorFormatting.heading}
+                disabled={!editorFormatting.canHeading}
+                title="二级标题"
+                onMouseDown={handleToolbarMouseDown}
+                onClick={() => handleApplyEditorFormat('heading')}
+              >
+                H2
+              </button>
+              <button
+                className="btn-ghost"
+                type="button"
+                aria-label="无序列表"
+                aria-pressed={editorFormatting.bulletList}
+                disabled={!editorFormatting.canBulletList}
+                title="无序列表"
+                onMouseDown={handleToolbarMouseDown}
+                onClick={() => handleApplyEditorFormat('bulletList')}
+              >
+                <List size={14} aria-hidden="true" />
+              </button>
             </div>
             <div className="nibi-text-editor-content">
               <div className="nibi-note-editor-panel">
-                <MilkdownEditor key={milkdownKey} markdown={editingBody} onMarkdownChange={handleEditorChange} onSeek={handleSeek} />
+                <MilkdownEditor
+                  key={milkdownKey}
+                  markdown={editingBody}
+                  onMarkdownChange={handleEditorChange}
+                  onSeek={handleSeek}
+                  registerCommands
+                />
               </div>
             </div>
           </div>
@@ -2612,7 +2676,13 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 {/* 正文 */}
                 <div className="note-section" style={{ marginTop: summaries.length > 0 ? 0 : 16 }}>
                   <div className="nibi-note-editor-panel">
-                    <MilkdownEditor key={milkdownKey} markdown={editingBody} onMarkdownChange={handleEditorChange} onSeek={handleSeek} />
+                    <MilkdownEditor
+                      key={milkdownKey}
+                      markdown={editingBody}
+                      onMarkdownChange={handleEditorChange}
+                      onSeek={handleSeek}
+                      registerCommands={false}
+                    />
                   </div>
                 </div>
                 {/* 保存状态 */}

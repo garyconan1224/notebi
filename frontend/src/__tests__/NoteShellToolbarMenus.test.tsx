@@ -1,8 +1,10 @@
+import '@testing-library/jest-dom'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import NoteShell from '@/pages/result/NoteShell'
+import { useLnEditorStore } from '@/store/lnEditorStore'
 import type { ItemNote } from '@/types/workspace'
 
 const mocks = vi.hoisted(() => ({
@@ -54,8 +56,16 @@ vi.mock('sonner', () => ({
 }))
 
 vi.mock('@/pages/result/NoteShell/MilkdownEditor', () => ({
-  default: ({ markdown }: { markdown: string }) => (
-    <div data-testid="note-editor">{markdown}</div>
+  default: ({
+    markdown,
+    registerCommands,
+  }: {
+    markdown: string
+    registerCommands?: boolean
+  }) => (
+    <div data-testid="note-editor" data-register-commands={String(registerCommands)}>
+      {markdown}
+    </div>
   ),
 }))
 
@@ -81,6 +91,18 @@ const AUDIO_NOTE: ItemNote = {
   transcript: [{ t_sec: 0, t_str: '00:00', text: '转写内容' }],
 }
 
+const TEXT_NOTE: ItemNote = {
+  ...AUDIO_NOTE,
+  frontmatter: {
+    ...AUDIO_NOTE.frontmatter,
+    title: '测试文本',
+    type: 'text',
+  },
+  note_md: '---\ntitle: 测试文本\ntype: text\nversion: 1\n---\n\n文本正文',
+  media: {},
+  transcript: [],
+}
+
 async function renderNoteShell(note: ItemNote = AUDIO_NOTE) {
   mocks.getItemNote.mockResolvedValue(note)
   mocks.listSummaries.mockResolvedValue([])
@@ -90,13 +112,14 @@ async function renderNoteShell(note: ItemNote = AUDIO_NOTE) {
       <NoteShell workspaceId="ws-1" itemId="item-1" />
     </MemoryRouter>,
   )
-  await screen.findByTestId('note-editor')
+  await screen.findAllByTestId('note-editor')
 }
 
 describe('NoteShell 导出菜单信息架构（阶段 A1）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.downloadTranscript.mockResolvedValue(undefined)
+    useLnEditorStore.getState().resetFormatting()
   })
 
   it('导出菜单显示 Markdown，不显示 当前正文.md', async () => {
@@ -133,6 +156,46 @@ describe('NoteShell 导出菜单信息架构（阶段 A1）', () => {
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
     const exportMenu = document.querySelector('.nibi-note-export-menu')
     expect(exportMenu?.textContent).toContain('原始素材')
+  })
+})
+
+describe('NoteShell 文本编辑器工具栏（S4）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useLnEditorStore.getState().resetFormatting()
+  })
+
+  it('提供四个可访问的可执行格式按钮并反映选中状态', async () => {
+    const runFormat = vi.fn(() => true)
+    useLnEditorStore.getState().setFormatFn(runFormat)
+    useLnEditorStore.getState().setFormattingState({
+      bold: true,
+      italic: false,
+      heading: false,
+      bulletList: false,
+      canBold: true,
+      canItalic: true,
+      canHeading: true,
+      canBulletList: true,
+    })
+
+    await renderNoteShell(TEXT_NOTE)
+
+    const bold = screen.getByRole('button', { name: '加粗' })
+    expect(bold).not.toBeDisabled()
+    expect(bold).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '斜体' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: '二级标题' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: '无序列表' })).not.toBeDisabled()
+    expect(
+      screen.getAllByTestId('note-editor').map(
+        (editor) => editor.getAttribute('data-register-commands'),
+      ),
+    ).toEqual(['true', 'false'])
+
+    fireEvent.mouseDown(screen.getByRole('button', { name: '无序列表' }))
+    fireEvent.click(screen.getByRole('button', { name: '无序列表' }))
+    expect(runFormat).toHaveBeenCalledWith('bulletList')
   })
 })
 

@@ -10,7 +10,7 @@
  */
 import { useEffect, useRef } from 'react'
 import { Editor, rootCtx, defaultValueCtx, prosePluginsCtx, editorViewCtx } from '@milkdown/core'
-import { TextSelection } from '@milkdown/prose/state'
+import { Plugin, TextSelection } from '@milkdown/prose/state'
 import { Milkdown, MilkdownProvider, useEditor, useInstance } from '@milkdown/react'
 import { commonmark } from '@milkdown/preset-commonmark'
 import { gfm } from '@milkdown/preset-gfm'
@@ -20,17 +20,23 @@ import { nord } from '@milkdown/theme-nord'
 import '@milkdown/theme-nord/style.css'
 import { timestampPlugin, unescapeNoteTimestamps } from './milkdownTimestamp'
 import { useLnEditorStore } from '@/store/lnEditorStore'
+import {
+  getEditorFormattingState,
+  runEditorFormat,
+} from './editorFormatting'
 
 interface MilkdownEditorProps {
   markdown: string
   onMarkdownChange: (md: string) => void
   onSeek?: (sec: number) => void
+  registerCommands?: boolean
 }
 
 function MilkdownEditorInner({
   markdown,
   onMarkdownChange,
   onSeek,
+  registerCommands = true,
 }: MilkdownEditorProps) {
   // 记住挂载时的初始内容：seed 触发的 markdownUpdated（md 等于初值）跳过，
   // 用户真实编辑（md 已变）才上抛保存。避免「首次编辑被吞」（旧 skipFirstRef 的坑）。
@@ -55,10 +61,27 @@ function MilkdownEditorInner({
           })
           // 注册时间码 decoration 插件
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ctx.update(prosePluginsCtx, (ps: any) => [
-            ...ps,
-            timestampPlugin(() => onSeekRef.current ?? (() => {})),
-          ])
+          ctx.update(prosePluginsCtx, (ps: any) => {
+            const formattingPlugin = new Plugin({
+              view: (view) => {
+                useLnEditorStore.getState().setFormattingState(
+                  getEditorFormattingState(view.state),
+                )
+                return {
+                  update: (nextView) => {
+                    useLnEditorStore.getState().setFormattingState(
+                      getEditorFormattingState(nextView.state),
+                    )
+                  },
+                }
+              },
+            })
+            return [
+              ...ps,
+              timestampPlugin(() => onSeekRef.current ?? (() => {})),
+              ...(registerCommands ? [formattingPlugin] : []),
+            ]
+          })
         })
       // @ts-expect-error Milkdown 7.x TS overload 不精确，TestEditorPage 同款写法，运行时正常
       return editor.use(nord).use(commonmark).use(gfm).use(prism).use(listener)
@@ -69,6 +92,7 @@ function MilkdownEditorInner({
   // 向 lnEditorStore 注册 Milkdown 插入函数，供截图按钮调用
   const [, getEditor] = useInstance()
   useEffect(() => {
+    if (!registerCommands) return
     useLnEditorStore.getState().setInsertFn((text) => {
       const editor = getEditor()
       if (!editor) return false
@@ -115,11 +139,24 @@ function MilkdownEditorInner({
       })
       return true
     })
+    const formatFn = (format: Parameters<typeof runEditorFormat>[1]) => {
+      const editor = getEditor()
+      if (!editor) return false
+      let applied = false
+      editor.action((ctx: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+        applied = runEditorFormat(ctx.get(editorViewCtx), format)
+      })
+      return applied
+    }
+    useLnEditorStore.getState().setFormatFn(formatFn)
     return () => {
       useLnEditorStore.getState().setInsertFn(null)
       useLnEditorStore.getState().setWrapSelectionFn(null)
+      if (useLnEditorStore.getState().formatFn === formatFn) {
+        useLnEditorStore.getState().resetFormatting()
+      }
     }
-  }, [getEditor])
+  }, [getEditor, registerCommands])
 
   return <Milkdown />
 }
@@ -128,6 +165,7 @@ export default function MilkdownEditor({
   markdown,
   onMarkdownChange,
   onSeek,
+  registerCommands = true,
 }: MilkdownEditorProps) {
   return (
     <div className="note-milkdown">
@@ -194,6 +232,7 @@ export default function MilkdownEditor({
           markdown={markdown}
           onMarkdownChange={onMarkdownChange}
           onSeek={onSeek}
+          registerCommands={registerCommands}
         />
       </MilkdownProvider>
     </div>
