@@ -6,4 +6,10 @@
 
 任务完成并合入后，从当前树删除对应计划；历史通过 Git 提交或清理前标签恢复，不在仓库里长期堆积已完成提示词和截图。
 
-当前没有正式的短期或长期产品计划。项目清理完成后，先做功能盘点与产品访谈，再分别建立短期计划和长期路线图。
+## 当前计划
+
+- [`2026-07-29-feature-completion-short-term.md`](2026-07-29-feature-completion-short-term.md)：当前唯一执行计划。先关闭批次、导出、设置和编辑器缺口，再做 macOS/Linux 验收。
+- [`2026-07-29-product-roadmap.md`](2026-07-29-product-roadmap.md)：长期阶段门槛。Windows 与整合包不得提前和当前功能开发混做。
+
+若两份计划与代码状态冲突，以当前 Git、运行结果和
+[`../PRODUCT_DECISIONS.md`](../PRODUCT_DECISIONS.md) 为准，先更新计划再继续。
