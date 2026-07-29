@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import asdict, replace
 from typing import Any, Dict, Literal, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from shared.settings_store import (
@@ -26,6 +26,7 @@ from backend.app.services.asr_fast_whisper import (
     _scan_model_cache_bytes,
     is_model_cached,
 )
+from backend.app.services.local_model_manager import list_local_models, start_local_model_download
 
 router = APIRouter(tags=["transcriber"])
 
@@ -158,3 +159,21 @@ def get_whisper_models_status() -> Dict[str, Any]:
             }
         )
     return {"cache_dir": str(_hf_hub_cache_dir()), "models": models}
+
+
+@router.get("/local_models")
+def get_local_models() -> Dict[str, Any]:
+    """List every NoteBi runtime model that may download weights locally.
+
+    Listing is read-only.  Downloads always require the explicit POST below.
+    """
+    return {"models": list_local_models()}
+
+
+@router.post("/local_models/{model_id:path}/download", status_code=202)
+def download_local_model(model_id: str) -> Dict[str, Any]:
+    try:
+        job = start_local_model_download(model_id)
+    except KeyError as err:
+        raise HTTPException(status_code=404, detail="未知本地模型") from err
+    return {"status": "accepted", "model_id": model_id, "job": job}

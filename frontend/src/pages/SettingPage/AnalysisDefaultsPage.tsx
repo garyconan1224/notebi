@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import ScreenshotPage from './ScreenshotPage'
 import TranscriberPage from './TranscriberPage'
 import PerformanceTierPage from './PerformanceTierPage'
+import LocalModelsPanel from './LocalModelsPanel'
 import { useSettingsShellStore } from '@/store/settingsShellStore'
 import { CARD_COLUMN_OPTIONS, useLibraryStore, type CardColumns } from '@/store/libraryStore'
 import { AUDIO_ERROR_GUIDANCE } from '@/lib/errorCategories'
@@ -13,7 +14,7 @@ import {
   type TaskDefaults,
 } from '@/services/taskDefaults'
 
-type TabKey = 'performance' | 'display' | 'screenshot' | 'transcriber' | 'defaults' | 'audio-errors'
+type TabKey = 'performance' | 'display' | 'screenshot' | 'transcriber' | 'local-models' | 'defaults' | 'audio-errors'
 
 /**
  * 分析默认偏好（SPEC §3.5 第 4 页）。
@@ -96,6 +97,12 @@ export default function AnalysisDefaultsPage() {
           {t('layout.menu.transcriber', '转写设置')}
         </TabBtn>
         <TabBtn
+          active={tab === 'local-models'}
+          onClick={() => setTab('local-models')}
+        >
+          本地模型
+        </TabBtn>
+        <TabBtn
           active={tab === 'defaults'}
           onClick={() => setTab('defaults')}
         >
@@ -115,6 +122,7 @@ export default function AnalysisDefaultsPage() {
         {tab === 'display' && <DisplayDefaultsPanel />}
         {tab === 'screenshot' && <ScreenshotPage />}
         {tab === 'transcriber' && <TranscriberPage />}
+        {tab === 'local-models' && <LocalModelsPanel />}
         {tab === 'defaults' && <TaskDefaultsPanel />}
         {tab === 'audio-errors' && <AudioErrorGuidancePanel />}
       </div>

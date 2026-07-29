@@ -289,6 +289,34 @@
   justify-content: flex-end;
 }
 
+.local-model-family + .local-model-family {
+  border-top: 1px solid var(--bdr);
+}
+
+.local-model-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 0;
+}
+
+.local-model-row strong { color: var(--fg); font-size: var(--sm); }
+.local-model-row p { margin: 4px 0; color: var(--mut); font-size: var(--xs); line-height: 1.5; }
+.local-model-row small { display: block; color: var(--mut); font-family: var(--fm); font-size: 10px; overflow-wrap: anywhere; }
+.local-model-actions { display: grid; justify-items: end; gap: 7px; white-space: nowrap; }
+.local-model-actions > span { color: var(--mut); font-size: var(--xs); }
+.local-model-actions > span[data-status='ready'] { color: var(--ok); }
+.local-model-actions > span[data-status='failed'] { color: var(--err); }
+.local-model-progress { height: 5px; margin-top: 8px; overflow: hidden; border-radius: 999px; background: var(--bgalt); }
+.local-model-progress span { display: block; height: 100%; border-radius: inherit; background: var(--acc); transition: width .2s; }
+.local-model-error { margin-top: 5px; color: var(--err) !important; }
+
+@media (max-width: 640px) {
+  .local-model-row { grid-template-columns: 1fr; }
+  .local-model-actions { justify-items: start; }
+}
+
 /* ── 统一 input / select 控件 ── */
 .settings-input,
 .settings-select,
