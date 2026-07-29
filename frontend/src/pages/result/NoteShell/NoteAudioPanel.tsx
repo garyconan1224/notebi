@@ -263,7 +263,7 @@ const NoteAudioPanel = forwardRef<NoteAudioPanelHandle, NoteAudioPanelProps>(
       return () => window.removeEventListener('keydown', handleKey)
     }, [])
 
-    const transportJsx = (
+    const transportJsx = useMemo(() => (
       <>
         {/* 波形 + 进度 */}
         <div ref={waveformRef} className="note-audio-waveform" style={{ '--audio-progress': `${progress * 100}%` } as React.CSSProperties}>
@@ -337,7 +337,26 @@ const NoteAudioPanel = forwardRef<NoteAudioPanelHandle, NoteAudioPanelProps>(
           </div>
         </div>
       </>
-    )
+    ), [
+      cycleSpeed,
+      duration,
+      isPipActive,
+      loop,
+      muted,
+      onProgressClick,
+      onProgressPointerDown,
+      onTogglePip,
+      onVolumeMouseDown,
+      playing,
+      progress,
+      skip,
+      speed,
+      toggleLoop,
+      toggleMute,
+      togglePlay,
+      visibleWaveform,
+      volume,
+    ])
 
     /* ── expose handle ── */
     useImperativeHandle(ref, () => ({

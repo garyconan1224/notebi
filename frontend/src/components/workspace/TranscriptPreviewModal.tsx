@@ -28,7 +28,7 @@ export function TranscriptPreviewModal({ open, sourceUrl, onClose }: TranscriptP
   useEffect(() => {
     if (!open) return
     let cancelled = false
-    setLoading(true) // eslint-disable-line react-hooks/set-state-in-effect
+    setLoading(true)
     setError(null)
     setResult(null)
 

@@ -34,7 +34,6 @@ export function BackgroundEditor({
 
   useEffect(() => {
     if (open) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Form reset on open
       setName(initialName)
       setContentType(initial.content_type ?? '')
       setParticipants(initial.participants?.join('、') ?? '')

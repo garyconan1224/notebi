@@ -110,10 +110,10 @@ describe('taskStore smoke tests', () => {
       }),
     )
     // 构造一条没有 result / log 字段的 incoming 记录
-    const lite = makeTask({ task_id: 't-nofield', status: 'ASR' })
-    delete (lite as any).result
-    delete (lite as any).log
-    useTaskStore.getState().setTasks([lite])
+    const lite: Partial<TaskRecord> = makeTask({ task_id: 't-nofield', status: 'ASR' })
+    delete lite.result
+    delete lite.log
+    useTaskStore.getState().setTasks([lite as TaskRecord])
     const t = useTaskStore.getState().getTask('t-nofield')!
     expect(t.result.video_title).toBe('keep-me')
     expect(t.log).toHaveLength(1)

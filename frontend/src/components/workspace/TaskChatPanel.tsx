@@ -49,7 +49,7 @@ const ITEM_TYPE_ICON: Record<ItemType, typeof FileVideo> = {
  * 旧浮动 ChatSidebar 不动，作为「无上下文」快速入口保留。
  */
 export function TaskChatPanel({ workspace, autoSelectAll }: TaskChatPanelProps) {
-  const items = workspace.items ?? []
+  const items = useMemo(() => workspace.items ?? [], [workspace.items])
   const workspaceId = workspace.workspace_id
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())

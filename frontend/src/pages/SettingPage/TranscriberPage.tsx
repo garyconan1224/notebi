@@ -305,7 +305,9 @@ const TranscriberPage = () => {
                 id="whisper-model-size"
                 className={nativeSelectClassName}
                 value={draft.whisper_model_size}
-                onChange={(e) => patch({ whisper_model_size: e.target.value as any })}
+                onChange={(e) => patch({
+                  whisper_model_size: e.target.value as TranscriberConfigPayload['whisper_model_size'],
+                })}
               >
                 {getWhisperModelSizes().map((size) => {
                   const status = modelStatuses.find((m) => m.name === size)
@@ -407,7 +409,9 @@ const TranscriberPage = () => {
               id="device"
               className={nativeSelectClassName}
               value={draft.device}
-              onChange={(e) => patch({ device: e.target.value as any })}
+              onChange={(e) => patch({
+                device: e.target.value as TranscriberConfigPayload['device'],
+              })}
             >
               {getDeviceOptions(draft.type).map((opt) => (
                 <option key={opt.value} value={opt.value}>

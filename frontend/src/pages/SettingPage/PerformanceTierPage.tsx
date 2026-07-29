@@ -37,7 +37,7 @@ export default function PerformanceTierPage() {
         setConfig({ performanceTier: res.tier })
       })
       .catch(() => {})
-  }, [])
+  }, [setConfig])
 
   const handleSave = useCallback(async () => {
     setIsSaving(true)

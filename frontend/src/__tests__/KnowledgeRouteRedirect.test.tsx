@@ -19,6 +19,28 @@ vi.mock('@/components/RouteErrorPage', () => ({ default: () => <div>Error</div> 
 vi.mock('@/components/ui/skeleton', () => ({
   Skeleton: ({ className }: { className?: string }) => <div className={className} />,
 }))
+vi.mock('@/hooks/useSystemStats', () => ({
+  useSystemStats: () => ({ stats: null }),
+}))
+vi.mock('@/hooks/useHealthPulse', () => ({
+  useHealthPulse: () => ({ online: true, data: null, lastCheckedAt: null }),
+}))
+vi.mock('@/components/FloatingTaskQueue', () => ({
+  FloatingTaskQueue: () => null,
+}))
+vi.mock('@/components/workspace/GlobalAddMaterialModal', () => ({
+  GlobalAddMaterialModal: () => null,
+}))
+vi.mock('@/components/ThemeSwitcher', () => ({ default: () => null }))
+vi.mock('@/store/addMaterialStore', () => ({
+  useAddMaterialStore: (selector: (s: { openAddMaterial: () => void }) => unknown) =>
+    selector({ openAddMaterial: vi.fn() }),
+}))
+vi.mock('@/config/product', () => ({
+  APP_NAME: 'NoteBi',
+  getProductStorageItem: () => null,
+  setProductStorageItem: vi.fn(),
+}))
 
 // We need to import the router AFTER mocks are set up
 // Instead, test the route config directly by re-creating the relevant routes
@@ -92,30 +114,6 @@ describe('R1-A: Knowledge route redirect', () => {
 
 describe('R1-A: Sidebar navigation', () => {
   it('AppShell sidebar shows 知识库 linking to /knowledge', async () => {
-    // Import AppShell with mocked dependencies
-    vi.mock('@/hooks/useSystemStats', () => ({
-      useSystemStats: () => ({ stats: null }),
-    }))
-    vi.mock('@/hooks/useHealthPulse', () => ({
-      useHealthPulse: () => ({ online: true, data: null, lastCheckedAt: null }),
-    }))
-    vi.mock('@/components/FloatingTaskQueue', () => ({
-      FloatingTaskQueue: () => null,
-    }))
-    vi.mock('@/components/workspace/GlobalAddMaterialModal', () => ({
-      GlobalAddMaterialModal: () => null,
-    }))
-    vi.mock('@/components/ThemeSwitcher', () => ({ default: () => null }))
-    vi.mock('@/store/addMaterialStore', () => ({
-      useAddMaterialStore: (selector: (s: { openAddMaterial: () => void }) => unknown) =>
-        selector({ openAddMaterial: vi.fn() }),
-    }))
-    vi.mock('@/config/product', () => ({
-      APP_NAME: 'NoteBi',
-      getProductStorageItem: () => null,
-      setProductStorageItem: vi.fn(),
-    }))
-
     const { AppShell } = await import('@/layouts/AppShell')
     const { MemoryRouter } = await import('react-router-dom')
 

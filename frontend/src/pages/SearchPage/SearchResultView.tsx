@@ -37,7 +37,7 @@ export function SearchResultView({ result, workspaces, onWorkspaceChange }: Prop
   const [saving, setSaving] = useState<string | null>(null)
   const [showRelated, setShowRelated] = useState(false)
 
-  const citations = result.citations ?? []
+  const citations = useMemo(() => result.citations ?? [], [result.citations])
 
   // Split sources into cited and related
   const { citedSources, relatedSources } = useMemo(() => {
@@ -131,9 +131,8 @@ export function SearchResultView({ result, workspaces, onWorkspaceChange }: Prop
               className="search-expand-btn"
               onClick={() => setExpanded(previous => {
                 const next = new Set(previous)
-                next.has(source.source_id)
-                  ? next.delete(source.source_id)
-                  : next.add(source.source_id)
+                if (next.has(source.source_id)) next.delete(source.source_id)
+                else next.add(source.source_id)
                 return next
               })}
             >

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { AlertCircle, Loader2, RefreshCw, Search } from 'lucide-react'
@@ -90,13 +90,13 @@ const ModelManagementPage = () => {
     : { providerId: rerankProviderId, modelId: rerankModelId }
 
   /* ── 加载提供商列表 ── */
-  const fetchProviders = async () => {
+  const fetchProviders = useCallback(async () => {
     try {
       setListLoading(true)
-      const res = await http.get('/providers')
-      const payload: any = res.data
+      const res = await http.get<{ data?: ProviderSummary[] } | ProviderSummary[]>('/providers')
+      const payload = res.data
       // /providers now returns { data: [...], default_provider_for_chat: "...", ... }
-      const list: ProviderSummary[] = Array.isArray(payload) ? payload : (payload?.data ?? [])
+      const list = Array.isArray(payload) ? payload : (payload.data ?? [])
       setProviders(list.map(p => ({
         ...p,
         models: [],
@@ -112,9 +112,9 @@ const ModelManagementPage = () => {
     } finally {
       setListLoading(false)
     }
-  }
+  }, [t])
 
-  useEffect(() => { fetchProviders() }, [])
+  useEffect(() => { void fetchProviders() }, [fetchProviders])
 
   /* ── 展开/收起并加载模型 ── */
   const fetchProviderModels = async (id: string) => {

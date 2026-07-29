@@ -83,7 +83,7 @@ export function getAvailableTranscriberTypes() {
 /**
  * 获取 Whisper 模型大小选项
  */
-export function getWhisperModelSizes() {
+export function getWhisperModelSizes(): WhisperModelSize[] {
   return ['tiny', 'base', 'small', 'medium', 'large-v3', 'large-v3-turbo']
 }
 
@@ -119,8 +119,10 @@ export async function fetchWhisperModelsStatus(): Promise<WhisperModelsStatusRes
 /**
  * 获取设备选项
  */
-export function getDeviceOptions(engineType?: string) {
-  const opts = [
+export function getDeviceOptions(
+  engineType?: string,
+): Array<{ value: TranscriberConfigPayload['device']; label: string }> {
+  const opts: Array<{ value: TranscriberConfigPayload['device']; label: string }> = [
     { value: 'cpu', label: 'CPU' },
     { value: 'cuda', label: 'NVIDIA CUDA' },
   ]
@@ -143,4 +145,3 @@ export function getLanguageOptions() {
     { value: 'auto', label: 'Auto Detect' },
   ]
 }
-

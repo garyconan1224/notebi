@@ -90,7 +90,7 @@ export function ItemCard({ item, selected, selectMode, onToggleSelect, onDelete,
   }
 
   const hasThumb = !!item.thumbnail
-  const coverClass = hasThumb ? '' : `cover-${item.type}` || 'cover-video'
+  const coverClass = hasThumb ? '' : `cover-${item.type}`
   const statusClass = isDone ? 'note-inline-chip note-inline-chip--done'
     : isRunning ? 'note-inline-chip note-inline-chip--run'
     : isError ? 'note-inline-chip note-inline-chip--error'

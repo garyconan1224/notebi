@@ -13,6 +13,7 @@ import {
   Send,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { isAxiosError } from 'axios'
 
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -222,8 +223,8 @@ export default function KnowledgePage() {
       }
       setMessages((prev) => [...prev, assistantMessage])
       if (res.status) setStatus(res.status)
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail
+    } catch (err: unknown) {
+      const detail = isAxiosError(err) ? err.response?.data?.detail : undefined
       const msg = typeof detail === 'string' ? detail : err instanceof Error ? err.message : '提问失败'
       toast.error(msg)
       setMessages((prev) => prev.filter((m) => m.id !== userMessage.id))

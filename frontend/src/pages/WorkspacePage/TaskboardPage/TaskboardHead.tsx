@@ -91,7 +91,6 @@ const MORE_ITEMS: MoreMenuItem[] = [
 export function TaskboardHead({
   name,
   materialCount,
-  background: _background,
   items = [],
   description,
   updatedAt,

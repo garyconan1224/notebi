@@ -1,4 +1,3 @@
-// @ts-nocheck — repository-shape invariant runs in Vitest's Node environment.
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'

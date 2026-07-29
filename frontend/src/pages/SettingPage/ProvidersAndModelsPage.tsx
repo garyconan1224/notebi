@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Check, ChevronDown } from 'lucide-react'
@@ -110,9 +110,42 @@ interface ProviderOption {
   defaultModels: Record<string, string>
 }
 
+interface ProviderApiOption {
+  id: string
+  name: string
+  kind: string
+  enabled: boolean
+  capabilities?: string[]
+  default_models?: Record<string, string>
+}
+
 interface ModelChoice {
   providerId: string
   modelId: string
+}
+
+interface ProviderModelOption {
+  id: string
+  name?: string
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function providerListFromPayload(payload: unknown): ProviderApiOption[] {
+  if (Array.isArray(payload)) return payload as ProviderApiOption[]
+  if (isRecord(payload) && Array.isArray(payload.data)) return payload.data as ProviderApiOption[]
+  return []
+}
+
+function modelListFromPayload(payload: unknown): ProviderModelOption[] {
+  if (!isRecord(payload)) return []
+  if (Array.isArray(payload.models)) return payload.models as ProviderModelOption[]
+  if (isRecord(payload.data) && Array.isArray(payload.data.models)) {
+    return payload.data.models as ProviderModelOption[]
+  }
+  return []
 }
 
 function DefaultModelsSection() {
@@ -123,20 +156,20 @@ function DefaultModelsSection() {
 
   // 拉取并解析 /providers 的权威数据。纯读取：只返回解析结果、不做 setState，
   // 网络或解析失败时向上抛出，供「保存后读回校验」严格使用。
-  const fetchProvidersData = async (): Promise<{
+  const fetchProvidersData = useCallback(async (): Promise<{
     providers: ProviderOption[]
     defaultProviderFor: Record<string, string>
   }> => {
     const res = await http.get('/providers')
     const payload = res.data
-    const list: any[] = Array.isArray(payload) ? payload : (payload?.data ?? [])
+    const list = providerListFromPayload(payload)
     const result: ProviderOption[] = []
     for (const p of list) {
       const models: string[] = []
       const modelNames: Record<string, string> = {}
       try {
         const mRes = await http.get(`/providers/${p.id}/models`)
-        const mList: any[] = mRes.data.data?.models ?? mRes.data?.models ?? []
+        const mList = modelListFromPayload(mRes.data)
         for (const m of mList) {
           models.push(m.id)
           modelNames[m.id] = m.name ?? m.id
@@ -154,10 +187,13 @@ function DefaultModelsSection() {
       })
     }
     // 兼容两种结构：平铺（payload.default_provider_for_*）或嵌套（payload.data.default_provider_for_*）
-    const dpf = (role: string) =>
-      (payload as any)?.[`default_provider_for_${role}`] ??
-      (payload as any)?.data?.[`default_provider_for_${role}`] ??
-      ''
+    const payloadRecord = isRecord(payload) ? payload : {}
+    const nestedRecord = isRecord(payloadRecord.data) ? payloadRecord.data : {}
+    const dpf = (role: string) => {
+      const key = `default_provider_for_${role}`
+      const value = payloadRecord[key] ?? nestedRecord[key]
+      return typeof value === 'string' ? value : ''
+    }
     return {
       providers: result,
       defaultProviderFor: {
@@ -167,23 +203,23 @@ function DefaultModelsSection() {
         rerank: dpf('rerank'),
       },
     }
-  }
+  }, [])
 
   // 把解析结果写入本地状态
-  const applyProvidersData = (data: {
+  const applyProvidersData = useCallback((data: {
     providers: ProviderOption[]
     defaultProviderFor: Record<string, string>
   }) => {
     setProviders(data.providers)
     setDefaultProviderFor(data.defaultProviderFor)
-  }
+  }, [])
 
   // 阶段 D：初始加载 / 刷新。读回失败时静默（页面保持可用），不阻断渲染。
-  const loadProviders = async () => {
+  const loadProviders = useCallback(async () => {
     try {
       applyProvidersData(await fetchProvidersData())
     } catch { /* 静默 */ }
-  }
+  }, [applyProvidersData, fetchProvidersData])
 
   // 合并 defaultProviderFor（后端权威）+ provider.defaultModels + configStore fallback
   const defaults: Record<string, ModelChoice> = useMemo(() => {
@@ -212,18 +248,32 @@ function DefaultModelsSection() {
       if (merged[role]) continue
 
       // 3) configStore fallback
-      const storeKey = role === 'chat' ? 'text' : role
-      merged[role] = {
-        providerId: String((configStore as any)[`${storeKey}ProviderId`] ?? ''),
-        modelId: String((configStore as any)[`${storeKey}ModelId`] ?? ''),
+      const fallbackByRole: Record<typeof role, ModelChoice> = {
+        chat: {
+          providerId: configStore.textProviderId,
+          modelId: configStore.textModelId,
+        },
+        vision: {
+          providerId: configStore.visionProviderId,
+          modelId: configStore.visionModelId,
+        },
+        embedding: {
+          providerId: configStore.embeddingProviderId,
+          modelId: configStore.embeddingModelId,
+        },
+        rerank: {
+          providerId: configStore.rerankProviderId,
+          modelId: configStore.rerankModelId,
+        },
       }
+      merged[role] = fallbackByRole[role]
     }
     return merged
   }, [providers, defaultProviderFor, configStore])
 
   useEffect(() => {
     loadProviders().finally(() => setLoading(false))
-  }, [])
+  }, [loadProviders])
 
   const handleSaveDefault = async (
     role: 'chat' | 'vision' | 'embedding' | 'rerank',

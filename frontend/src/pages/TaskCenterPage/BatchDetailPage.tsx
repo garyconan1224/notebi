@@ -21,6 +21,7 @@ export default function BatchDetailPage() {
   const { batchId = '' } = useParams()
   const [batch, setBatch] = useState<TaskBatch | null>(null)
   const [error, setError] = useState('')
+  const batchStatus = batch?.status
 
   const run = async (action: (id: string) => Promise<TaskBatch>) => {
     try {
@@ -35,14 +36,14 @@ export default function BatchDetailPage() {
   }, [batchId])
 
   useEffect(() => {
-    if (!batch || TERMINAL_BATCH_STATUSES.has(batch.status)) return
+    if (!batchStatus || TERMINAL_BATCH_STATUSES.has(batchStatus)) return
     const timer = window.setInterval(() => {
       getTaskBatch(batchId).then(setBatch).catch(() => {
         // 保留上一次可用结果；下一轮继续刷新，避免瞬时网络错误清空详情页。
       })
     }, 2_000)
     return () => window.clearInterval(timer)
-  }, [batchId, batch?.status])
+  }, [batchId, batchStatus])
 
   if (error) return <main className="p-6" role="alert">{error}</main>
   if (!batch) return <main className="p-6" role="status">正在加载批次…</main>

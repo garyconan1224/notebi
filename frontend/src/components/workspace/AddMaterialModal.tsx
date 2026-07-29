@@ -286,6 +286,10 @@ export function AddMaterialModal({
       .map(m => ({ providerId: p.id, providerName: p.name, modelId: m.id, modelName: m.name }))
     )
   const hasVisionModel = visionModels.length > 0
+  const hasVisionModelRef = useRef(hasVisionModel)
+  useEffect(() => {
+    hasVisionModelRef.current = hasVisionModel
+  }, [hasVisionModel])
 
   const workspaceLookup = useMemo(
     () => new Map((availableWorkspaces ?? []).map((ws) => [ws.workspace_id, ws])),
@@ -526,14 +530,14 @@ export function AddMaterialModal({
     taskDefaultsEditedRef.current = false
     savedEmbedFramesRef.current = null
     // 每次重开恢复到当前 provider 能力下的默认值，避免上次展开/切换残留到这次弹框。
-    setEmbedFrames(hasVisionModel)
+    setEmbedFrames(hasVisionModelRef.current)
     let cancelled = false
     getTaskDefaults()
       .then((defaults) => {
         if (cancelled || taskDefaultsEditedRef.current) return
         savedEmbedFramesRef.current = defaults.video_frame_analysis
         setNoteStyle(defaults.summary_template)
-        setEmbedFrames(defaults.video_frame_analysis && hasVisionModel)
+        setEmbedFrames(defaults.video_frame_analysis && hasVisionModelRef.current)
         setCaptureMode('manual')
         setFrameInterval(defaults.frame_interval_sec)
         setDiarizeOn(defaults.diarize)
@@ -547,7 +551,7 @@ export function AddMaterialModal({
     return () => {
       cancelled = true
     }
-  }, [open, urlValue, sourceText])
+  }, [open, sourceText, urlValue])
 
   useEffect(() => {
     if (!open || !urlValue?.trim()) return

@@ -132,7 +132,7 @@ export default function VideoResultPage() {
         setFetchState({ kind: 'error', message })
       })
     return () => { cancelled = true }
-  }, [workspaceId, itemId])
+  }, [itemId, navigate, workspaceId])
 
   const result = fetchState.kind === 'ready' ? fetchState.data : null
   const frames = useMemo(() => (result?.is_demo ? [] : result?.frames ?? []), [result])

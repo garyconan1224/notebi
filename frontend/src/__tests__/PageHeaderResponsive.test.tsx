@@ -1,4 +1,3 @@
-// @ts-nocheck — vitest node 环境，无需浏览器 TS 类型
 import fs from 'fs'
 import path from 'path'
 import { describe, expect, it, vi } from 'vitest'

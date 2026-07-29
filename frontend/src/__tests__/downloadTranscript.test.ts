@@ -25,7 +25,7 @@ beforeEach(() => {
     download: '',
     click: mockClick,
     remove: mockRemove,
-  } as any)
+  } as unknown as HTMLAnchorElement)
   vi.spyOn(document.body, 'appendChild').mockImplementation(mockAppendChild)
 })
 
@@ -42,7 +42,7 @@ describe('downloadTranscript fallback filename', () => {
 
     // 验证创建了 <a> 并设置了 download 属性
     expect(document.createElement).toHaveBeenCalledWith('a')
-    const anchor = vi.mocked(document.createElement).mock.results[0].value as any
+    const anchor = vi.mocked(document.createElement).mock.results[0].value as HTMLAnchorElement
     expect(anchor.download).toContain(title)
     expect(anchor.download).toContain('转写文本')
     expect(anchor.download).not.toBe('转写文本（无时间轴）.txt') // 不能退回无标题通用名
@@ -58,7 +58,7 @@ describe('downloadTranscript fallback filename', () => {
 
     await downloadTranscript('ws-1', 'item-1', mode, title)
 
-    const anchor = vi.mocked(document.createElement).mock.results[0].value as any
+    const anchor = vi.mocked(document.createElement).mock.results[0].value as HTMLAnchorElement
     expect(anchor.download).toContain(title)
     expect(anchor.download).toContain('区分说话人')
   })
@@ -74,7 +74,7 @@ describe('downloadTranscript fallback filename', () => {
 
     await downloadTranscript('ws-1', 'item-1', 'article', 'ignored-title')
 
-    const anchor = vi.mocked(document.createElement).mock.results[0].value as any
+    const anchor = vi.mocked(document.createElement).mock.results[0].value as HTMLAnchorElement
     expect(anchor.download).toBe(backendFilename)
   })
 })

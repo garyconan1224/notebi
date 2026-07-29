@@ -67,6 +67,16 @@ export default defineConfig(({ mode }) => {
                 priority: 90,
               },
               {
+                name: 'milkdown-vendor',
+                test: /[\\/]node_modules[\\/]@milkdown[\\/]/,
+                priority: 83,
+              },
+              {
+                name: 'editor-core-vendor',
+                test: /[\\/]node_modules[\\/](@codemirror|@lezer|prosemirror-[^\\/]+|crelt|style-mod|w3c-keyname|orderedmap|rope-sequence)[\\/]/,
+                priority: 84,
+              },
+              {
                 name: 'd3-vendor',
                 test: /[\\/]node_modules[\\/]d3(-[^\\/]+)?[\\/]/,
                 priority: 80,

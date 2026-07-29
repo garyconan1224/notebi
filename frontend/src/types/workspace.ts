@@ -91,7 +91,7 @@ export interface WorkspaceRecord {
   updated_at: string
   kind: 'note'
   source: string
-  source_meta?: Record<string, any>
+  source_meta?: Record<string, unknown>
 }
 
 /** 创建工作空间请求体 */
@@ -100,7 +100,7 @@ export interface WorkspaceCreateRequest {
   background?: Partial<WorkspaceBackground>
   kind?: 'note'
   source?: string
-  source_meta?: Record<string, any>
+  source_meta?: Record<string, unknown>
 }
 
 /** 更新工作空间请求体（所有字段可选） */
