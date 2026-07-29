@@ -1,12 +1,12 @@
 # AI Handoff
 
-## 当前执行指针（2026-07-29，S0 已完成）
+## 当前执行指针（2026-07-29，S1 已完成）
 
-- **当前任务**：S0 已在 `codex/s0-contract-style-cleanup` 的 `ad29776` 完成；下一步按 [`plans/2026-07-29-feature-completion-short-term.md`](plans/2026-07-29-feature-completion-short-term.md) 执行 S1 批次生命周期闭环。
+- **当前任务**：S1 已在 `codex/s1-batch-lifecycle` 的 `d277157` 完成；下一步按 [`plans/2026-07-29-feature-completion-short-term.md`](plans/2026-07-29-feature-completion-short-term.md) 执行 S2 多选导出。
 - **长期路线**：见 [`plans/2026-07-29-product-roadmap.md`](plans/2026-07-29-product-roadmap.md)；Windows 实机适配和整合包必须等待 macOS/Linux 功能完成门槛。
 - **Git 基线**：清理和音乐分析退役提交为 `4bbe6a8`，已快进合入 `main`；最终恢复点为 `checkpoint/project-clean-final-20260729`。
 - **未完成功能**：批量添加来源、Cookie 和任务中心相关改动保存在 `codex/wip-batch-settings-cleanup` 的 `e90785b`，没有合入 `main`。
-- **已知阻断问题**：批次记录可能一直停在 `running 0/2`，子任务缺少 `batch_id` / `batch_item_id` 关联；修复前不能把 WIP 合入主线。
+- **S1 已关闭问题**：统一批次服务会在 worker 启动前持久化 `batch_id`、`batch_item_id`、`attempt_no` 和 workspace item 关联；快速任务竞态、部分成功、全跳过、暂停/恢复、取消、失败重试和重启恢复均有回归测试。
 - **已确认交互**：
   - 任务浮窗只在有运行中任务时显示；排队、失败和完成状态不单独常驻浮窗。
   - 代理设置只保留在“网络设置”页，下载设置页不再维护第二份代理入口。
@@ -23,16 +23,18 @@
 - **密钥决定**：历史提交 `33c5cf3` 中的 `SILICONFLOW_API_KEY` 按用户要求保留，不重写历史；当前跟踪文件仍只含占位符，本地 `.env` 继续承载开发配置且不纳入 Git。
 - **音乐分析已退役**：视频预检入口、旧配置回写、BPM/风格/情绪等声学分析、音乐教学接口和 Suno / Udio 输出均已删除；旧 `confirm-music` 只保留 410 拒绝行为。
 - **S0 验证结果**：前端 `55` 个测试文件、`297` 项测试和生产构建通过；退役能力扫描与 `git diff --check` 通过。
+- **S1 验证结果**：后端批次窄回归 `94 passed`，后端全套 `814 passed, 2 skipped`；前端 `55` 个测试文件、`301` 项测试、类型检查和生产构建通过；真实浏览器确认任务中心过滤、批次详情 `2/2 completed`、真实任务 ID 和零 console error。
 - **清理基线历史验证**：后端 `1215 passed, 2 skipped`；Python 编译和 `pip check` 通过。本次 S0 未改后端，未重复运行后端全套测试。
 - **已知质量债**：前端完整 lint 当前为 `101` 个错误、`8` 个警告，广泛存在于本轮未修改文件；不要当作本次清理回归，也不要在功能提交中顺手批量修复。
 
 ## 当前执行顺序
 
 1. S0 已完成：规则契约已修正，“风格报告”入口与类型分支已删除。
-2. 当前执行 S1：重新实现批次生命周期；不得合并或 cherry-pick 整个 WIP 分支。
-3. S2–S5 依次完成批量导出、任务默认勾选、文本编辑器工具栏和可见占位清零。
-4. S6 收敛前端质量债并完成 macOS/Linux 真实验收。
-5. 达到长期路线图 Gate B 后，再单独启动 Windows 与整合包阶段。
+2. S1 已完成：所有批量入口统一到真实 `TaskBatchService` 生命周期。
+3. 当前执行 S2：修复多选导出，确保 ZIP 内容、清单和部分失败反馈准确。
+4. S3–S5 依次完成任务默认勾选、文本编辑器工具栏和可见占位清零。
+5. S6 收敛前端质量债并完成 macOS/Linux 真实验收。
+6. 达到长期路线图 Gate B 后，再单独启动 Windows 与整合包阶段。
 
 ## 启动检查
 
