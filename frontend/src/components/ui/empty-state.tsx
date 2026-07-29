@@ -30,16 +30,16 @@ function EmptyState({
       data-slot="empty-state"
       role="status"
       className={cn(
-        'flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-zinc-200 bg-zinc-50/40 px-6 py-10 text-center',
+        'flex flex-col items-center justify-center gap-3 rounded-[var(--rl)] border border-dashed border-[var(--bdrs)] bg-[var(--bgalt)] px-6 py-10 text-center',
         className,
       )}
       {...rest}
     >
-      <div className="flex size-14 items-center justify-center rounded-full bg-white text-zinc-400 shadow-sm">
+      <div className="flex size-14 items-center justify-center rounded-full bg-[var(--srf)] text-[var(--mut)] shadow-[var(--sh1)]">
         {illustration ?? <Inbox className="size-6" />}
       </div>
       <div className="space-y-1">
-        <h3 className="text-sm font-semibold text-zinc-700">{title}</h3>
+        <h3 className="text-sm font-semibold text-[var(--fg)]">{title}</h3>
         {description ? (
           <p className="text-xs text-muted-foreground">{description}</p>
         ) : null}
@@ -50,4 +50,3 @@ function EmptyState({
 }
 
 export { EmptyState }
-

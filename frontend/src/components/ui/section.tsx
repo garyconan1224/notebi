@@ -5,8 +5,7 @@ import { cn } from '@/lib/utils'
 /**
  * 配置区块容器（DESIGN_NOTES_SETTINGS.md §4.1 / §4.4）。
  *
- * - 左竖线 `border-l-2 border-primary/40` + 可选 icon + 标题 + 可选描述；
- * - 首行保留 2rem 呼吸；
+ * - 使用统一表面、边框、圆角与短 token；
  * - 支持 `collapsible` 折叠（默认展开）。
  *
  * 仅做"容器 + 可折叠"，不内嵌业务字段（字段由 <FieldRow /> 组合）。
@@ -79,7 +78,7 @@ function Section({
     <section
       data-slot="section"
       className={cn(
-        'border-l-2 border-primary/40 pl-4 pt-2',
+        'rounded-[var(--rl)] border border-[var(--bdr)] bg-[var(--srf)] p-5 shadow-[var(--sh1)]',
         className,
       )}
       {...rest}
@@ -93,4 +92,3 @@ function Section({
 }
 
 export { Section }
-
