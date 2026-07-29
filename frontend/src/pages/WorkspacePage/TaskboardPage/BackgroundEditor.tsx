@@ -172,7 +172,7 @@ export function BackgroundEditor({
               <input
                 value={purpose}
                 onChange={(e) => setPurpose(e.target.value)}
-                placeholder="例：复刻参考、竞品分析"
+                placeholder="例：内容学习、竞品分析"
               />
             </div>
           </section>

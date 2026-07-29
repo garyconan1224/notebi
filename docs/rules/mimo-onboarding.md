@@ -18,7 +18,7 @@ git status --short --branch && git log --oneline -10
 
 # B. 读最关键的「当前指针」（小文件，全文 OK）
 sed -n '1,30p' docs/AI_HANDOFF.md         # 当前阶段 + 立即下一步
-sed -n '1,40p' docs/EXECUTION_PLAN.md     # 当前执行入口
+sed -n '1,80p' docs/AI_HANDOFF.md         # 当前执行入口
 
 # C. 看用户给我的本会话 plan（如果路径里提了某个 docs/plans/<X>.md）
 # → 用 sed -n 读 1-50 行先看 frontmatter（status / depends_on / commits）
@@ -28,8 +28,8 @@ sed -n '1,40p' docs/EXECUTION_PLAN.md     # 当前执行入口
 
 **禁止动作**：
 
-- ❌ 启动时 `Read docs/ROADMAP.md`（300+ 行，浪费 token）→ 用 `rg -n "^#" docs/ROADMAP.md` 看目录，再 sed 读片段
-- ❌ 启动时 `Read docs/SPEC.md`（索引文件，按需读模块） → 改 phase 才读相关 `docs/spec/*.md`
+- ❌ 启动时通读历史计划 → 只读 `docs/AI_HANDOFF.md` 前 80 行和当前点名计划
+- ❌ 根据旧规格猜产品方向 → 产品边界按需读 `docs/PRODUCT_DECISIONS.md`
 - ❌ 启动时 `Read CLAUDE.md`（system context 已经注入了）→ 不重复读
 - ❌ 启动时一次性 read 5+ 文档 → 信息过载，反而想不清楚
 
@@ -92,7 +92,7 @@ mimo 遇到任何不确定（字段名、行号漂移、API 路径），按顺�
 1. `rg` 一次（关键词或符号定位）
 2. codegraph 查符号
 3. 读 `docs/AI_CODE_INDEX.md` 找入口
-4. 读 `docs/SPEC.md` → 对应 `docs/spec/<模块>.md`
+4. 涉及产品取舍时读 `docs/PRODUCT_DECISIONS.md`
 5. **停下来问用户**（按 CLAUDE.md §4 风险求证模板）
 
 按记忆 [[feedback-no-guessing]]：**任何不明确细节必须停下问，不凭直觉决定**。

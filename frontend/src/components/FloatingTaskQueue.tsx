@@ -279,6 +279,9 @@ export function FloatingTaskQueue() {
   const activeRows = rows.filter((r) => !isTaskTerminal(r.status))
   const erroredRows = rows.filter((r) => r.status === 'FAILED')
 
+  // 浮窗只承担“正在运行”的即时进度提示；排队、失败和完成状态统一去任务中心查看。
+  if (running === 0) return null
+
   return (
     <>
       {/* ───── Collapsed FAB ───── */}

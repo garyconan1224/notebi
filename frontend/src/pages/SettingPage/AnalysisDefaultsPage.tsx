@@ -150,7 +150,7 @@ function DisplayDefaultsPanel() {
         <div className="settings-row">
           <div>
             <div className="settings-row-label">资料库卡片密度</div>
-            <div className="settings-row-hint">控制笔记页和复刻页网格视图默认每行显示几个卡片。</div>
+            <div className="settings-row-hint">控制笔记页和资料库网格视图默认每行显示几个卡片。</div>
           </div>
         </div>
         <label className="settings-inline-field">

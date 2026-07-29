@@ -16,7 +16,7 @@ Follow [`CLAUDE.md` §2 Startup Reading](CLAUDE.md#2-每次启动先做). Codex 
 
 **Deprecated, do not read for current decisions**: `docs/archive/*`, `docs/conversation-inputs/*`.
 
-Do not read `docs/ROADMAP.md`, `docs/SPEC.md`, or the full `docs/EXECUTION_PLAN.md` unless the user explicitly asks for long-term planning or the current pointer conflicts with git.
+Read `docs/PRODUCT_DECISIONS.md` only when product boundaries matter. Historical plans are not startup material.
 
 **Startup Reconciliation (Iron Rule)**: Run `git status --short --branch` and `git log --oneline -5`, then reconcile with the top of `AI_HANDOFF.md`. `git log` is the source of truth; historical docs can lag. See [`CLAUDE.md` §2](CLAUDE.md#2-每次启动先做).
 
@@ -31,7 +31,7 @@ Do not read `docs/ROADMAP.md`, `docs/SPEC.md`, or the full `docs/EXECUTION_PLAN.
 - Run tests: `pytest tests/backend -q`, `cd frontend && pnpm test`
 - Compare branch diffs: `git diff main..<branch>` with textual review
 - Lint and build checks: `pnpm lint`, `pnpm build`
-- Read `docs/AI_HANDOFF.md`, `docs/OUTSTANDING_TASKS.md` and suggest next steps
+- Read `docs/AI_HANDOFF.md`, `docs/PRODUCT_DECISIONS.md`, and the current named plan to suggest next steps
 - Find and report potential issues (bugs, type errors, missing tests) — **but do not auto-fix**
 - Compare multiple agent branches, point out differences, let the user decide which to adopt
 

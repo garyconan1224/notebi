@@ -282,7 +282,7 @@ def update_provider(provider_id: str, req: ProviderUpdateRequest) -> Dict[str, A
 def delete_provider(provider_id: str) -> Dict[str, Any]:
     """删除指定提供商（幂等）。
 
-    契约（SETTINGS_REPLICA_PLAN.md §3.2 M1）：
+    契约：
     - 成功删除 → ``{"code": 0}``；
     - provider 不存在 → 同样返回 ``{"code": 0}``（幂等），避免前端重复点击/并发时的 404 抖动。
     """

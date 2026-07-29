@@ -1,4 +1,4 @@
-# Nibi Token Quick Reference
+# NoteBi Token Quick Reference
 
 > 事实源：`frontend/src/styles/nibi-tokens.css`。
 > 本文件只做速查，不重复维护完整 CSS。
@@ -57,7 +57,7 @@
 
 ## 过渡 alias
 
-为了降低迁移风险，部分旧 token 仍映射到 Nibi：
+为了降低迁移风险，部分旧 token 仍映射到当前内部 token：
 
 - `--display`、`--sans`、`--mono`
 - `--bg-elev`、`--bg-sunken`、`--ink-*`、`--line`

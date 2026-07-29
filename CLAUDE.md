@@ -32,7 +32,7 @@ git branch --show-current
 
 `git log` 是事实来源。若 `AI_HANDOFF.md` 顶部与最近 commit 冲突，先报告漂移并请求确认，不要按旧文档继续。
 
-不要默认读取 `docs/ROADMAP.md`、`docs/SPEC.md`、完整 `docs/EXECUTION_PLAN.md` 或 `docs/design/`。只有用户明确问长期规划、规格仲裁、设计落地，或当前指针与 git 冲突时，才先 `rg -n "^##|关键词"` 定位，再 `sed -n` 读相关段落。
+不要默认读取历史计划或 `docs/design/`。产品边界按需读取 `docs/PRODUCT_DECISIONS.md`，当前状态只看 `docs/AI_HANDOFF.md` 顶部和 Git。
 
 ---
 
@@ -44,9 +44,9 @@ git branch --show-current
 2. Claude Code 终端 + 小米 v2.5pro：实际改代码、跑测试、commit。
 3. Codex：默认验收审查，判断通过 / 不通过 / 需要补充验证。
 
-本轮用户已明确授权 Codex 直接执行“音频统一笔记页 / 区分说话人总结”任务。该授权只覆盖本计划明确列出的文件、接口、测试和用户决策，不改变 Codex 的默认职责，也不扩展到其它产品功能。
+用户在当前任务中的执行授权以 `docs/AI_HANDOFF.md` 顶部和当前对话为准，不把临时授权长期写死在规则文件中。
 
-执行类任务的详细计划落地为 `docs/plans/*.md`（背景 / 根因 / 修复方案 / 涉及文件 / 验收 / 给小米的执行须知与红线）；小米读该 md 执行，Codex 审查。NoteBi 当前拆分主计划是 `docs/plans/NoteBi_Phase1.md`。
+执行类任务的详细计划落地为 `docs/plans/*.md`（背景 / 根因 / 修复方案 / 涉及文件 / 验收 / 给小米的执行须知与红线）；完成并合入后删除计划文件，历史从 Git 标签或提交读取。
 
 调研与计划按难度分层：**复杂 / 大方向 / 需多处判断**的根因分析与方案设计归 Claude（必要时 Codex 审）——Claude 自己跑代码、看数据定位，不把实测甩给用户；**简单 / 单点 / 根因已明确**的可交小米出计划 + 执行。小米做调研或计划时**必须附上自己跑出的数据证据，不许只看代码猜**；遇到需判断、与现状不符处回报 Claude。**产品决策（功能取舍 / 交互方案）一律由用户拍板**，Claude 与小米只列选项。
 
@@ -117,15 +117,15 @@ Claude 桌面版默认不做执行者工作：
 
 ## 7. 计划和规格只按需读
 
-不要把 `docs/EXECUTION_PLAN.md` 当作每次启动必读。只有用户明确要求推进 phase、维护计划、更新完成记录时，才读取对应片段，并按已有计划执行。
+当前事实和产品仲裁优先级：
 
-规格仲裁优先级：
+1. 当前代码、运行结果和 `git log`。
+2. `docs/AI_HANDOFF.md` 顶部当前指针。
+3. `docs/PRODUCT_DECISIONS.md` 中已确认的产品边界。
+4. 当前任务明确点名的 `docs/plans/*.md`。
+5. `docs/design/` + `docs/DESIGN_TOKENS.md`，仅用于 UI 设计落地。
 
-1. `docs/AI_HANDOFF.md` 顶部当前指针，用于当前状态和下一步。
-2. `docs/SPEC.md` + `docs/spec/`，用于产品规格冲突。
-3. `docs/EXECUTION_PLAN.md`，用于工程 phase 推进。
-4. `docs/design/` + `docs/DESIGN_TOKENS.md`，用于 UI 设计落地。
-5. 当前代码和 git log；当文档与代码冲突时，先报告冲突。
+文档与代码冲突时先报告，不按历史文档继续。
 
 ---
 
@@ -146,7 +146,7 @@ Claude 桌面版默认不做执行者工作：
 
 产物目录约定：
 
-- `docs/plans/`：当前可执行的详细计划（给小米执行）。
+- `docs/plans/`：仅存放尚未完成的可执行计划；完成后从当前树删除。
 - `docs/test-reports/`：手测 / E2E 报告；截图在 `frontend/test-results/`（gitignore，不进 git）。
 
 ---

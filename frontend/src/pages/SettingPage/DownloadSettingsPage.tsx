@@ -231,35 +231,7 @@ const DownloadSettingsPage = () => {
         </div>
       </div>
 
-      {/* ── Section B · 代理策略 ── */}
-      <div className="settings-section">
-        <div className="settings-section-title">代理策略</div>
-        <div className="settings-card">
-          <div className="px-6 py-4 space-y-3">
-            {([
-              { value: 'inherit', label: '继承网络设置', desc: '使用网络页的全局代理策略' },
-              { value: 'direct', label: '强制直连', desc: '下载时不使用任何代理' },
-              { value: 'proxy', label: '强制代理', desc: '下载时使用全局代理' },
-            ] as const).map((mode) => (
-              <label key={mode.value} className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="radio"
-                  name="proxy_mode"
-                  checked={draft.proxy_mode === mode.value}
-                  onChange={() => setDraft((prev) => ({ ...prev, proxy_mode: mode.value }))}
-                  className="mt-1"
-                />
-                <div>
-                  <div className="font-medium">{mode.label}</div>
-                  <div className="text-sm text-muted-foreground">{mode.desc}</div>
-                </div>
-              </label>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Section C · Cookie 设置 ── */}
+      {/* ── Section B · Cookie 设置 ── */}
       <div className="settings-section">
         <div className="settings-section-title">Cookie 设置</div>
         <div className="settings-card">
@@ -345,7 +317,7 @@ const DownloadSettingsPage = () => {
         </div>
       </div>
 
-      {/* ── Section D · 高级参数 ── */}
+      {/* ── Section C · 高级参数 ── */}
       <div className="settings-section">
         <div className="settings-section-title">高级参数</div>
         <div className="settings-card">

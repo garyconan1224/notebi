@@ -1,10 +1,11 @@
 
 __pycache__/
-!.env.example
 .claude/
 .claude/current-task.md
 .claude/worktrees/
 .codegraph/
+.qoder/
+.workbuddy/
 .DS_Store
 .env
 .env.*
@@ -20,6 +21,8 @@ __pycache__/
 *.swp
 *.zip
 **/.env
+!.env.example
+!**/.env.example
 test-results/
 # CodeGraph Index
 # Design source archives (already extracted to docs/design/)
@@ -29,7 +32,9 @@ test-results/
 data/*.db
 data/chats/
 data/cookies/
+data/batches/
 data/json_data/
+data/logs/
 data/projects/
 data/videos/
 data/workspaces/

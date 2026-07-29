@@ -1,4 +1,4 @@
-# Nibi Design System
+# NoteBi Design System
 
 > 当前 UI 真相源：`frontend/src/styles/nibi-tokens.css`、`frontend/src/styles/nibi-components.css`。
 > Open Design 原型来源：`nibi-all-pages.html`。
@@ -6,7 +6,7 @@
 
 ## 1. 设计基调
 
-Nibi 是本地优先的多媒体内容分析与创作蓝图工具。界面应保持工作台气质：暖中性背景、清晰信息层级、克制动效和高密度但可扫描的布局。
+NoteBi 是本地优先的多媒体内容笔记工具。界面应保持工作台气质：暖中性背景、清晰信息层级、克制动效和高密度但可扫描的布局。
 
 - 主背景使用暖中性 `--bg`，卡片和弹层使用 `--srf`。
 - 主强调色使用琥珀橙 `--acc`，不要回退到旧粉紫蓝主调。
@@ -60,8 +60,8 @@ Nibi 是本地优先的多媒体内容分析与创作蓝图工具。界面应保
 - 不再引入旧 token 文件。
 - 不新增旧 display 字体、旧粉紫蓝硬编码色值或负字间距。
 - 不把页面 section 做成嵌套卡片。卡片只用于重复项目、弹层和明确工具容器。
-- 运行态色彩必须来自 Nibi token；报告模板等独立 HTML 可使用 Nibi 色值的静态降级。
-- 旧文件、旧包名和兼容环境变量可以保留，但用户可见品牌应使用 Nibi。
+- 运行态色彩必须来自现有 token；报告模板等独立 HTML 可使用同色值的静态降级。
+- `nibi-*` 文件名、CSS 类和存储键是内部兼容标识，可以保留；用户可见品牌必须使用 NoteBi。
 
 ## 5. 验收
 

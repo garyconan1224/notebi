@@ -208,7 +208,7 @@ class WorkspaceStore:
             rec.items = [it for it in rec.items if it.item_id != item_id]
             if len(rec.items) == before:
                 raise KeyError(f"item not found: {item_id}")
-            # 同步从复刻收藏夹移除
+            # 同步从收藏夹移除
             rec.favorites = [fid for fid in rec.favorites if fid != item_id]
             self._save(rec)
             return rec

@@ -1,6 +1,6 @@
 """
 硅基流动统一 HTTP 客户端：Embedding、Rerank、Chat（含多模态）、视频帧分析。
-整合自 AI 导演编剧工作台/siliconflow_client.py，并新增视频帧分析接口。
+NoteBi 的 SiliconFlow 客户端，包含视频帧分析接口。
 """
 
 from __future__ import annotations

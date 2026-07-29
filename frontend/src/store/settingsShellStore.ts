@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { SaveBarState } from '@/layouts/SettingsShell'
 
 /**
- * 设置页通用 Shell 的状态桥（SETTINGS_REPLICA_PLAN.md §3.1 M0）。
+ * 设置页通用 Shell 的状态桥。
  *
  * 用途：在 `<SettingsShell />` 的粘性 SaveBar 与各个子页面编辑草稿之间建立单向数据流——
  * 子页面在 `useEffect` 中调用 `setSaveBar({...})` 推送脏计数与保存/重置回调，
@@ -23,4 +23,3 @@ export const useSettingsShellStore = create<SettingsShellStore>((set) => ({
   setSaveBar: (state) => set({ saveBarState: state }),
   resetSaveBar: () => set({ saveBarState: DEFAULT_SAVE_BAR_STATE }),
 }))
-

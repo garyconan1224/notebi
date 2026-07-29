@@ -66,6 +66,13 @@ const makeTask = (overrides: Partial<TaskRecord> = {}): TaskRecord => ({
   ...overrides,
 })
 
+const makeRunningAnchor = (): TaskRecord => makeTask({
+  task_id: 'running-anchor',
+  project_id: 'workspace-running',
+  status: 'DOWNLOAD',
+  payload: { title: 'Running anchor' },
+})
+
 describe('FloatingTaskQueue v2', () => {
   beforeEach(() => {
     routeState.pathname = '/'
@@ -91,6 +98,7 @@ describe('FloatingTaskQueue v2', () => {
   it('隐藏 SUCCESS/CANCELLED，只保留活跃任务和 FAILED 任务', () => {
     useTaskStore.setState({
       tasks: [
+        makeRunningAnchor(),
         makeTask({ task_id: 'done', status: 'SUCCESS', payload: { title: 'Done task' } }),
         makeTask({ task_id: 'cancelled', status: 'CANCELLED', payload: { title: 'Cancelled task' } }),
         makeTask({ task_id: 'failed', status: 'FAILED', payload: { title: 'Failed task' } }),
@@ -108,6 +116,7 @@ describe('FloatingTaskQueue v2', () => {
   it('PARTIAL 任务保留在队列并显示部分完成', () => {
     useTaskStore.setState({
       tasks: [
+        makeRunningAnchor(),
         makeTask({
           task_id: 'partial',
           status: 'PARTIAL',
@@ -127,6 +136,7 @@ describe('FloatingTaskQueue v2', () => {
   it('摘要阶段 PARTIAL 显示仅重试摘要，并允许单独清除任务', async () => {
     useTaskStore.setState({
       tasks: [
+        makeRunningAnchor(),
         makeTask({
           task_id: 'partial-summary',
           status: 'PARTIAL',
@@ -153,6 +163,7 @@ describe('FloatingTaskQueue v2', () => {
   it('F3.2: 失败任务用 errorCategories 友好文案展示（限流），原始错误走 title', () => {
     useTaskStore.setState({
       tasks: [
+        makeRunningAnchor(),
         makeTask({
           task_id: 'rate-limited',
           status: 'FAILED',
@@ -176,6 +187,7 @@ describe('FloatingTaskQueue v2', () => {
   it('服务重启中断显示明确错误文案', () => {
     useTaskStore.setState({
       tasks: [
+        makeRunningAnchor(),
         makeTask({
           task_id: 'interrupted',
           status: 'FAILED',
@@ -253,7 +265,10 @@ describe('FloatingTaskQueue v2', () => {
 
   it('FAILED 任务支持重试和后端清除', async () => {
     useTaskStore.setState({
-      tasks: [makeTask({ task_id: 'task-failed', status: 'FAILED', payload: { title: 'Failed task' } })],
+      tasks: [
+        makeRunningAnchor(),
+        makeTask({ task_id: 'task-failed', status: 'FAILED', payload: { title: 'Failed task' } }),
+      ],
     })
 
     render(<FloatingTaskQueue />)
@@ -271,6 +286,7 @@ describe('FloatingTaskQueue v2', () => {
   it('清除 FAILED 分组时会删除同一行里的所有失败任务', async () => {
     useTaskStore.setState({
       tasks: [
+        makeRunningAnchor(),
         makeTask({
           task_id: 'note-failed-a',
           project_id: 'workspace-1',
@@ -293,11 +309,26 @@ describe('FloatingTaskQueue v2', () => {
     fireEvent.click(screen.getByRole('button', { name: /任务/ }))
     fireEvent.click(screen.getByRole('button', { name: '清除失败任务 Failed group' }))
 
-    expect(useTaskStore.getState().tasks).toHaveLength(0)
+    expect(useTaskStore.getState().tasks).toHaveLength(1)
+    expect(useTaskStore.getState().tasks[0].task_id).toBe('running-anchor')
     await waitFor(() => {
       expect(deleteMock).toHaveBeenCalledWith('note-failed-a')
       expect(deleteMock).toHaveBeenCalledWith('note-failed-b')
     })
+  })
+
+  it('没有运行中任务时不显示浮窗，状态改由任务中心承载', () => {
+    useTaskStore.setState({
+      tasks: [
+        makeTask({ task_id: 'queued', status: 'PENDING' }),
+        makeTask({ task_id: 'failed', status: 'FAILED' }),
+        makeTask({ task_id: 'partial', status: 'PARTIAL' }),
+      ],
+    })
+
+    render(<FloatingTaskQueue />)
+
+    expect(screen.queryByRole('button', { name: /任务/ })).toBeNull()
   })
 
   it('当前 processing 路由任务显示查看中标记', () => {

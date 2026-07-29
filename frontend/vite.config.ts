@@ -102,11 +102,6 @@ export default defineConfig(({ mode }) => {
                 priority: 50,
               },
               {
-                name: 'form-vendor',
-                test: /[\\/]node_modules[\\/](react-hook-form|@hookform[\\/]resolvers|zod)[\\/]/,
-                priority: 50,
-              },
-              {
                 name: 'i18n-vendor',
                 test: /[\\/]node_modules[\\/](i18next|react-i18next)[\\/]/,
                 priority: 50,
@@ -114,11 +109,6 @@ export default defineConfig(({ mode }) => {
               {
                 name: 'router-vendor',
                 test: /[\\/]node_modules[\\/](react-router|react-router-dom)[\\/]/,
-                priority: 50,
-              },
-              {
-                name: 'export-vendor',
-                test: /[\\/]node_modules[\\/](html-to-image|react-to-print)[\\/]/,
                 priority: 50,
               },
               {

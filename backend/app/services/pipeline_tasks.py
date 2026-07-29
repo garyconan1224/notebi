@@ -617,11 +617,8 @@ def handle_download_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, An
         runner.append_log(record.task_id, directory_error)
         raise RuntimeError(directory_error)
     dl_kwargs = _resolve_download_kwargs(record.payload)
-    dl_kwargs["proxy"] = resolve_proxy(
-        url,
-        settings.network,
-        settings.download.proxy_mode,
-    ) or ""
+    # 代理只有一个事实来源：网络设置。download.proxy_mode 仅保留旧配置兼容读取。
+    dl_kwargs["proxy"] = resolve_proxy(url, settings.network) or ""
     out = run_ytdlp_download(
         url=url,
         output_dir=str(project_video_dir),
@@ -731,11 +728,7 @@ def _try_cc_subtitle(
         settings = load_settings()
         from shared.network_routing import resolve_proxy
 
-        subtitle_proxy = resolve_proxy(
-            video_url,
-            settings.network,
-            settings.download.proxy_mode,
-        )
+        subtitle_proxy = resolve_proxy(video_url, settings.network)
         result = fetch_best_subtitle(
             video_url,
             proxy=subtitle_proxy,

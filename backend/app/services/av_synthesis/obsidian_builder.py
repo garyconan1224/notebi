@@ -28,7 +28,7 @@ def _build_obsidian_md(notes: Any) -> str:
     else:
         lines.append(f"created: {date.today().isoformat()}")
     lines.append("tags:")
-    lines.append("  - nibi")
+    lines.append("  - notebi")
     lines.append("  - av-synthesis")
     if notes.platform:
         lines.append(f"  - {notes.platform}")

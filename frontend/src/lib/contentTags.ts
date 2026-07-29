@@ -32,7 +32,7 @@ const CONTENT_TAG_RULES: Array<[string, RegExp]> = [
   ['论文', /论文|paper|arxiv|research|研究/i],
   ['会议', /会议|纪要|meeting|待办|action item/i],
   ['播客', /播客|podcast|shownotes/i],
-  ['复刻', /复刻|拆解|分镜|镜头|运镜|画面分析/i],
+  ['画面分析', /复刻|拆解|分镜|镜头|运镜|画面分析/i],
 ]
 
 function flattenTagInput(parts: unknown[]): string {

@@ -1,6 +1,6 @@
 """
 统一配置：硅基流动 API、共享路径、RAG 阈值与默认模型名称。
-整合自 AI 导演编剧工作台/config.py 与 video-analyzer-new/analyze_videos.py 配置区。
+NoteBi 共享配置与视频分析参数。
 """
 
 from __future__ import annotations
@@ -215,7 +215,7 @@ MAX_IMAGE_SIDE: int = 1280
 VISION_MODEL_ANALYZER: str = "Qwen/Qwen2.5-VL-72B-Instruct"
 TEXT_MODEL_ANALYZER: str = "deepseek-ai/DeepSeek-V3"
 
-# ── RAG 阈值（原 AI 导演编剧工作台/config.py） ────────────────
+# ── RAG 阈值 ────────────────────────────────────────────────
 
 # 总字符数低于该阈值时走「短文本直灌」模式，不建向量索引
 SHORT_MODE_MAX_CHARS: int = 20_000

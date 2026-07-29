@@ -115,7 +115,7 @@
   background: none;
 }
 
-/* ── 学习/复刻 toggle ──────────────────────────── */
+/* ── 笔记视图 toggle ───────────────────────────── */
 .vm-ln-scope .ln-mode-toggle {
   display: flex;
   align-items: center;

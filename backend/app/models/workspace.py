@@ -234,7 +234,7 @@ class WorkspaceBackground:
     participants: List[str] = field(default_factory=list)
     topic: str = ""  # 主题背景
     glossary: List[str] = field(default_factory=list)  # 专有名词
-    purpose: str = ""  # 复刻参考 / 竞品分析 / 内容学习 ...
+    purpose: str = ""  # 内容学习 / 竞品分析 / 知识整理 ...
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -392,7 +392,7 @@ class WorkspaceRecord:
     trashed: bool = False
     background: WorkspaceBackground = field(default_factory=WorkspaceBackground)
     items: List[WorkspaceItem] = field(default_factory=list)
-    favorites: List[str] = field(default_factory=list)  # item_id 列表，复刻清单
+    favorites: List[str] = field(default_factory=list)  # item_id 收藏列表
     created_at: str = field(default_factory=_now_iso)
     updated_at: str = field(default_factory=_now_iso)
     # 运行期只创建 note；replica 仅用于启动期识别并清除历史数据。

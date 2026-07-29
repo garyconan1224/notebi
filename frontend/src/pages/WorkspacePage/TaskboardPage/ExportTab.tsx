@@ -25,7 +25,7 @@ interface ExportTabProps {
 }
 
 /**
- * Export tab — 导出工作包，按素材粒度选中后打包 zip。
+ * Export tab — 导出 NoteBi 素材包，按素材粒度选中后打包 zip。
  * 设计稿来源：taskboard.jsx TBExport。
  */
 export function ExportTab({ items, workspaceId }: ExportTabProps) {
@@ -80,7 +80,7 @@ export function ExportTab({ items, workspaceId }: ExportTabProps) {
               color: 'var(--ink-3)',
             }}
           >
-            复刻工作包 · LOCAL ONLY · .zip
+            NoteBi 素材包 · LOCAL ONLY · .zip
           </div>
           <h2 className="display" style={{ fontSize: 28, margin: '4px 0 0' }}>
             导出工作包 · Export

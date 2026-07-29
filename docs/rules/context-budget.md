@@ -11,7 +11,7 @@
 ## 1. 文件读取
 
 1. **先用 `rg -n` / heading 搜索定位**，再读必要片段。
-2. `docs/ROADMAP.md`、`docs/AI_HANDOFF.md`、大 TSX 文件不要默认整文件读取；`docs/SPEC.md` 只读入口索引，细节按需读 `docs/spec/*.md` 对应模块。
+2. `docs/AI_HANDOFF.md`、历史计划和大 TSX 文件不要默认整文件读取；产品边界按需读精简的 `docs/PRODUCT_DECISIONS.md`。
 3. compact/resume 后**不要重复读 unchanged 文件**；先看 `git diff -- <file>` 或用 `rg` 找刚改过的函数/组件。
 4. 流程图先读 `docs/flows/README.md` 和对应 `docs/flows/<track>.md`。源 PNG 只在 Markdown 缺失、hash 过期、需求冲突，或必须判断视觉布局/颜色/层级时读取；读取前先裁剪相关区域。
 5. 代码入口先看 `docs/AI_CODE_INDEX.md`。它是低 token 路线图，只给入口和关键词；真正修改前仍以实际代码为准。
@@ -35,7 +35,7 @@
 ## 3. Skill 使用
 
 - Skill 是**能力入口，不是默认流程**。需要浏览器、测试、设计、PDF 等专门流程时可以用 skill，但**每个任务只调用一个最相关的 skill**。
-- Nibi 本地页面 QA 优先使用 `scripts/browser_smoke.py`；脚本覆盖不了的真实交互，再调用 `webapp-testing` 或 `playwright`。
+- NoteBi 本地页面 QA 优先使用 `scripts/browser_smoke.py`；脚本覆盖不了的真实交互，再调用 `webapp-testing` 或 `playwright`。
 - **不要同时加载两个重叠 skill**。
 
 ---
@@ -78,7 +78,7 @@ checkpoint 保持短小，只写：
 
 1. 先跑 git 状态检查
 2. 再读 `CLAUDE.md` 和 `.claude/current-task.md`
-3. **不要重新全量读取** `docs/AI_HANDOFF.md`、`docs/ROADMAP.md`、大 TSX 文件或源 PNG
+3. **不要重新全量读取** `docs/AI_HANDOFF.md`、历史计划、大 TSX 文件或源 PNG
 
 ---
 

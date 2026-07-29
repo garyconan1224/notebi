@@ -79,7 +79,7 @@
 
 ## Phase 启动速查
 
-开工前对照 `docs/EXECUTION_PLAN.md` + 本文件四档决策：
+开工前对照 `docs/AI_HANDOFF.md`、当前任务计划 + 本文件四档决策：
 
 - **当前阶段（2026-05-29）**：R21.P3.S3 followup 已 merge 进 main；下一步**音频 + 视频端到端闭环打通**（用户 5/29 决议）。
 - **可选下一步**：N7b 路径3 视频大模型（Gemini，待 API）/ N8b librosa 后端 / R20 笔记多格式导出 / R22 并行 / R23 性能档位 / [C] AI 导演 / [D] 开源。

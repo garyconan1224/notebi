@@ -133,7 +133,7 @@ export function TagsTab({ items, workspaceId, onTagsChanged }: TagsTabProps) {
               color: 'var(--ink-3)',
             }}
           >
-            提示词维度 · {SYSTEM_TAG_DIMENSIONS.length}类 · 共 {totalTags} 个标签
+            标签维度 · {SYSTEM_TAG_DIMENSIONS.length}类 · 共 {totalTags} 个标签
           </div>
           <h2 className="display" style={{ fontSize: 28, margin: '4px 0 0' }}>
             标签库 · Tag Library

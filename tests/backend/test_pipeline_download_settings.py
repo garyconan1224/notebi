@@ -15,7 +15,7 @@ class _Runner:
         return None
 
 
-def test_download_task_consumes_only_persisted_network_download_and_cookie_settings(
+def test_download_task_uses_network_proxy_and_ignores_legacy_download_override(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -28,7 +28,8 @@ def test_download_task_consumes_only_persisted_network_download_and_cookie_setti
         download=DownloadConfig(
             output_dir=str(tmp_path / "downloads"),
             filename_template="%(title)s-%(id)s.%(ext)s",
-            proxy_mode="inherit",
+            # 旧字段仍可读，但下载任务必须只服从 network 设置。
+            proxy_mode="direct",
             cookie_mode="browser",
             cookie_browser="firefox",
             cookie_profile="profile-a",

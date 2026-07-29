@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
 import type { ProviderItem } from '@/store/providerStore'
 
 /**
- * Master-Detail 左侧列表（SETTINGS_REPLICA_PLAN.md §3.2 M1）。
+ * Provider 管理页的 Master-Detail 左侧列表。
  *
  * - 顶部：搜索框 + 新增按钮；
  * - 中段：可滚动的 Provider 列表，active 项高亮，脏项挂 DirtyDot；
@@ -170,4 +170,3 @@ export function ProviderList({
 }
 
 export default ProviderList
-

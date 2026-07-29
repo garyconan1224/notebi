@@ -21,10 +21,10 @@
 
 ---
 
-## 3. 前端 UI 与设计规范（Nibi 版 · 唯一真相源）
+## 3. 前端 UI 与设计规范（NoteBi）
 
 > **铁律：写任何 UI 之前先读 [`docs/DESIGN_TOKENS.md`](../DESIGN_TOKENS.md)。**
-> 当前 token 和通用 class 以 `frontend/src/styles/nibi-tokens.css`、`frontend/src/styles/nibi-components.css` 为准。
+> 当前 token 和通用 class 仍沿用 `nibi-*` 内部兼容命名，以 `frontend/src/styles/nibi-tokens.css`、`frontend/src/styles/nibi-components.css` 为准；用户可见品牌统一为 NoteBi。
 > `docs/design/` 是旧设计快照，只在追溯历史交互时参考。
 
 ### 3.1 3 个权威路径（按使用频率）
@@ -80,4 +80,4 @@
 
 ### 5.3 手动冒烟测试 URL 清单
 
-`docs/test-urls.md` —— 覆盖 Bilibili / YouTube / 小红书 / 抖音 / 微信公众号 / 本地文件，共 10 条，验证 pipeline 和结果展示时直接用。
+真实平台素材属于可能失效或涉及隐私的运行输入，不再固化在仓库文档中；验收时使用测试夹具或用户当次明确提供的素材。

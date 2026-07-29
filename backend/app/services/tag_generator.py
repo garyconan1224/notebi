@@ -117,7 +117,7 @@ def _build_prompt(item_summary: str, workspace: Optional[WorkspaceRecord]) -> st
         + "\n- custom_tags：4~8 个自由文本标签的数组（字符串数组），每个不超过 8 字；"
         + "必须优先提取内容本身的主题、工具、模型、平台、人物/项目、任务意图和输出形态，"
         + "可覆盖多个维度，例如 AI、大模型、知识库、Codex、Claude、GPT、DeepSeek、Gemini、Qwen、Kimi、Cursor、MCP、"
-        + "Obsidian、Notion、B站、YouTube、小红书、开源、编程、自动化、提示词、工具评测、知识管理、效率工具、教程、会议、播客、复刻。"
+        + "Obsidian、Notion、B站、YouTube、小红书、开源、编程、自动化、提示词、工具评测、知识管理、效率工具、教程、会议、播客、画面分析。"
         + "不要重复系统维度的泛化词，例如 视频、音频、文本、学习、待处理。\n"
         + workspace_ctx
         + "\n素材信息：\n"

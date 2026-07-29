@@ -57,7 +57,7 @@ describe('DownloadSettingsPage', () => {
     expect(getMock).toHaveBeenCalledTimes(2)
   })
 
-  it('常用设置和用途说明常驻，不显示 PO Token/Visitor Data', async () => {
+  it('常用设置和用途说明常驻，代理只在网络设置页维护', async () => {
     render(<DownloadSettingsPage />)
     await screen.findByText('下载配置')
     for (const label of [
@@ -66,11 +66,11 @@ describe('DownloadSettingsPage', () => {
       '并发下载数',
       '重试次数',
       '连接超时（秒）',
-      '代理策略',
       'Cookie 设置',
     ]) {
       expect(screen.getByText(label)).toBeInTheDocument()
     }
+    expect(screen.queryByText('代理策略')).not.toBeInTheDocument()
     expect(screen.getByText(/关闭浏览器后再测试/)).toBeInTheDocument()
     expect(screen.getByText(/Netscape 格式/)).toBeInTheDocument()
     expect(screen.queryByText(/PO Token|Visitor Data/)).not.toBeInTheDocument()

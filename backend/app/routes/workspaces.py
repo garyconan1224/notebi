@@ -2804,7 +2804,7 @@ def remove_item(workspace_id: str, item_id: str) -> Dict[str, Any]:
     return rec.to_dict()
 
 
-# ── Favorites（复刻收藏夹）──────────────────────────────
+# ── Favorites（笔记收藏）────────────────────────────────
 
 
 @router.post("/{workspace_id}/favorites/{item_id}")
@@ -3375,7 +3375,7 @@ def generate_note(workspace_id: str, req: GenerateNoteRequest) -> Dict[str, Any]
     except KeyError as err:
         raise HTTPException(status_code=404, detail=str(err)) from err
 
-    # 2.1 将 intent 写入 item preflight（复刻页 / get_item_result 依赖此字段）
+    # 2.1 将 intent 写入 item preflight（结果页 / get_item_result 依赖此字段）
     _intent = req.intent or "note"
     item.preflight = PreflightConfig(intent=_intent)
     _store.update_item(workspace_id, item.item_id, preflight=item.preflight)
