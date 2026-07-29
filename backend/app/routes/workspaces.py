@@ -1123,6 +1123,10 @@ def _sync_item_with_tasks(item: WorkspaceItem) -> Optional[Dict[str, Any]]:
         task = _pipeline_runner.store.get(tid)
         if task is None:
             continue
+        # 总结是已有笔记上的派生产物。它失败或运行中不能反向改变素材笔记
+        # 的可阅读状态，也不能用 ItemSummary 对象覆盖素材结果。
+        if task.task_type == "summary":
+            continue
         if latest is None or task.updated_at > latest.updated_at:
             latest = task
         if task.status in (TaskStatus.SUCCESS.value, TaskStatus.PARTIAL.value) and (
@@ -2057,13 +2061,15 @@ def _item_card_description(item: WorkspaceItem, results: dict) -> str:
 
 
 def _item_primary_task_status(item: WorkspaceItem) -> Optional[str]:
-    """返回 item.related_task_ids 里最新 task 的 status。"""
+    """返回最新素材任务状态；总结子任务不参与笔记可用性判断。"""
     if not item.related_task_ids:
         return None
     latest = None
     for tid in item.related_task_ids:
         task = _pipeline_runner.store.get(tid)
         if task is None:
+            continue
+        if task.task_type == "summary":
             continue
         if latest is None or task.updated_at > latest.updated_at:
             latest = task
@@ -2163,6 +2169,7 @@ def get_library(
                     "has_transcript": bool(results.get("transcript")),
                 },
                 "primary_task_status": _item_primary_task_status(item),
+                "related_task_ids": list(item.related_task_ids),
                 "preflight": item.preflight.to_dict() if hasattr(item, 'preflight') else {},
                 "tags": item.tags or {},
                 "uploader": str(results.get("video_uploader") or "") or None,

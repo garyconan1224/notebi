@@ -881,6 +881,7 @@ def test_library_with_data(client: TestClient) -> None:
         "item_id", "workspace_id", "workspace_name", "type", "source",
         "source_value", "name", "status", "created_at", "updated_at",
         "duration_seconds", "thumbnail", "results_summary", "primary_task_status",
+        "related_task_ids",
     }
     for it in body["items"]:
         assert required_keys.issubset(it.keys()), f"缺字段: {required_keys - set(it.keys())}"
@@ -1000,6 +1001,60 @@ def test_library_uses_task_overlay_for_duration_and_thumbnail(
     assert item_out["thumbnail"] == "/static/videos/cover.jpg"
     assert item_out["results_summary"]["has_summary"] is True
     assert item_out["primary_task_status"] == TaskStatus.SUCCESS.value
+    assert item_out["related_task_ids"] == ["download-task", "analyze-task"]
+
+
+def test_library_summary_failure_does_not_hide_existing_note(
+    client: TestClient,
+) -> None:
+    """总结子任务失败只影响活动，不得把已经完成的素材笔记标成失败。"""
+    ws = client.post("/workspaces", json={"name": "已有笔记"}).json()
+    ws_id = ws["workspace_id"]
+    item = client.post(
+        f"/workspaces/{ws_id}/items",
+        json={
+            "type": "video",
+            "source": "url",
+            "source_value": "https://example.com/v.mp4",
+            "name": "可阅读笔记",
+        },
+    ).json()["items"][0]
+    item_id = item["item_id"]
+
+    related_ids = ["pipeline-task", "summary-task"]
+    ws_module._store.update_item(
+        ws_id,
+        item_id,
+        related_task_ids=related_ids,
+    )
+    tasks = {
+        "pipeline-task": TaskRecord(
+            task_id="pipeline-task",
+            project_id=ws_id,
+            task_type="video",
+            payload={},
+            status=TaskStatus.SUCCESS.value,
+            result={"summary": "已有总结"},
+            updated_at="2026-01-01T00:00:00+00:00",
+        ),
+        "summary-task": TaskRecord(
+            task_id="summary-task",
+            project_id=ws_id,
+            task_type="summary",
+            payload={},
+            status=TaskStatus.FAILED.value,
+            result={},
+            updated_at="2026-01-02T00:00:00+00:00",
+        ),
+    }
+    ws_module._pipeline_runner.store.get.side_effect = lambda task_id: tasks.get(task_id)
+
+    resp = client.get("/workspaces/library")
+    assert resp.status_code == 200
+    item_out = resp.json()["items"][0]
+    assert item_out["status"] == "done"
+    assert item_out["primary_task_status"] == TaskStatus.SUCCESS.value
+    assert item_out["related_task_ids"] == related_ids
 
 
 def test_library_task_overlay_enriches_existing_item_results(client: TestClient) -> None:
