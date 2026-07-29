@@ -1237,7 +1237,11 @@ def test_bridge_local_video_preflight_reaches_note_payload() -> None:
         source_value="/tmp/demo.mp4",
         name="demo.mp4",
         preflight=PreflightConfig(
-            background_overrides={"frame_interval_sec": 7},
+            background_overrides={
+                "frame_interval_sec": 7,
+                # S5: historical clients may still send this unsupported field.
+                "quality": "slow",
+            },
             models={"vision": "vision-model", "text": "text-model"},
             tasks={
                 "summary": {
@@ -1264,6 +1268,7 @@ def test_bridge_local_video_preflight_reaches_note_payload() -> None:
         "mode": "interval",
         "interval_sec": 7,
     }
+    assert "quality" not in payload
 
 
 # ── _video_result_has_real_data 新路径 ──────────────────────────────────────

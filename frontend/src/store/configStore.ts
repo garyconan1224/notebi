@@ -8,23 +8,6 @@ import {
   type DownloadConfigPatchPayload,
 } from '@/services/download'
 
-/** 笔记生成质量：fast=快速 / medium=平衡 / slow=精细 */
-export type Quality = 'fast' | 'medium' | 'slow'
-
-/** 笔记格式：可多选 */
-export type NoteFormat =
-  | 'bulleted'
-  | 'mindmap'
-  | 'quiz'
-  | 'summary'
-  | 'key_points'
-
-/** 笔记风格 */
-export type NoteStyle = 'academic' | 'minimalist' | 'creative'
-
-/** 下载策略预设（由前端映射到下载引擎的 format selector） */
-export type DownloadMode = 'balanced' | 'speed' | 'quality' | 'audio'
-
 /** 音频转写引擎类型 */
 export type TranscriberType = 'fast-whisper' | 'bcut' | 'kuaishou' | 'groq' | 'mlx-whisper'
 
@@ -95,13 +78,6 @@ export interface ScreenshotConfig {
 
 /** 用户偏好配置（全部持久化到 localStorage） */
 export interface ConfigState {
-  /** 默认质量 */
-  defaultQuality: Quality
-  /** 默认格式（多选） */
-  defaultFormats: NoteFormat[]
-  /** 默认风格 */
-  defaultStyle: NoteStyle
-
   /** 是否插入截图 */
   screenshot: boolean
   /** 是否保留原始链接 */
@@ -141,8 +117,6 @@ export interface ConfigState {
   /** 性能档位 */
   performanceTier: PerformanceTier
 
-  /** 下载策略预设（均衡/优先速度/优先画质/仅提取音频） */
-  downloadMode: DownloadMode
   /** Tavily 联网搜索 API Key */
   tavilyApiKey: string
   /** 总结弹窗上次选择的 provider_id（记忆用） */
@@ -200,10 +174,6 @@ const DEFAULT_DOWNLOAD_CONFIG: DownloadConfig = {
 
 /** 初始默认值（setConfig/resetConfig 共用同一份） */
 const DEFAULT_CONFIG: Omit<ConfigState, ConfigStateActionKey> = {
-  defaultQuality: 'medium',
-  defaultFormats: ['bulleted', 'summary'],
-  defaultStyle: 'academic',
-
   screenshot: false,
   link: false,
   video_understanding: false,
@@ -246,8 +216,6 @@ const DEFAULT_CONFIG: Omit<ConfigState, ConfigStateActionKey> = {
   // 性能档位（默认中配）
   performanceTier: 'medium',
 
-  // 下载偏好（默认均衡；高级字段留空，仅在用户显式填写后生效）
-  downloadMode: 'balanced',
   // Tavily 联网搜索 + 总结弹窗模型记忆
   tavilyApiKey: '',
   summaryProviderId: '',
@@ -321,7 +289,7 @@ export const useConfigStore = create<ConfigState>()(
     }),
     {
       name: 'config-storage',
-      version: 1,
+      version: 2,
       migrate: (persisted: unknown, fromVersion: number) => {
         // v0 → v1：字段 videoModelId 改名为 visionModelId（命名修正）
         if (fromVersion < 1 && persisted && typeof persisted === 'object') {
@@ -330,6 +298,13 @@ export const useConfigStore = create<ConfigState>()(
             obj.visionModelId = obj.videoModelId
             delete obj.videoModelId
           }
+        }
+        if (fromVersion < 2 && persisted && typeof persisted === 'object') {
+          const obj = persisted as Record<string, unknown>
+          delete obj.defaultQuality
+          delete obj.defaultFormats
+          delete obj.defaultStyle
+          delete obj.downloadMode
         }
         return persisted as ConfigState
       },

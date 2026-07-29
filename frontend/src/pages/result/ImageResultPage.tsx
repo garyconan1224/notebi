@@ -141,7 +141,7 @@ export default function ImageResultPage() {
             onClick={() => navigate(`/workspaces/${workspaceId}/items/${itemId}/note`)}
             title="打开统一笔记（NoteShell）"
           >
-            <FileText size={12} /> 统一笔记 <span style={{ fontSize: 9, opacity: 0.6 }}>beta</span>
+            <FileText size={12} /> 统一笔记
           </button>
           {result.source === 'demo_fixture' && (
             <span className="mono" style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, background: 'var(--wrn)', color: '#fff', fontWeight: 600 }} title="demo fixture">DEMO</span>

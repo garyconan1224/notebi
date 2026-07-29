@@ -416,7 +416,7 @@ export default function TextResultPage() {
             onClick={() => navigate(`/workspaces/${workspaceId}/items/${itemId}/note`)}
             title="打开统一笔记（NoteShell）"
           >
-            <FileText size={12} /> 统一笔记 <span style={{ fontSize: 9, opacity: 0.6 }}>beta</span>
+            <FileText size={12} /> 统一笔记
           </button>
           <div style={{ flex: 1 }} />
           {/* M5: 导出菜单 */}
@@ -708,7 +708,7 @@ function TextCompareContent({ data }: { data: TextCompareResult }) {
 
   return (
     <div>
-      {/* LLM 对比总结（与 CompareTab 对齐：表格上方 + sunken 背景） */}
+      {/* LLM 对比总结：表格上方 + sunken 背景 */}
       {data.llm_summary && (
         <div
           style={{
@@ -728,7 +728,7 @@ function TextCompareContent({ data }: { data: TextCompareResult }) {
         </div>
       )}
 
-      {/* 对比表格（与 CompareTab 对齐：素材/摘要/内容预览/字数） */}
+      {/* 对比表格：素材/摘要/内容预览/字数 */}
       <table className="tx-compare-table">
         <thead>
           <tr>

@@ -13,7 +13,6 @@ import {
   ListChecks,
   type LucideIcon,
 } from 'lucide-react'
-import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useSystemStats } from '@/hooks/useSystemStats'
 import { useHealthPulse } from '@/hooks/useHealthPulse'
@@ -32,9 +31,6 @@ interface NavItem {
   path: string
   icon: LucideIcon
   label: string
-  visible?: boolean
-  badge?: string
-  placeholder?: boolean
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -49,38 +45,29 @@ const BOTTOM_ITEMS: NavItem[] = [
   { id: 'settings',    path: '/settings',    icon: Settings,   label: '设置' },
 ]
 
-const VISIBLE_NAV_ITEMS = NAV_ITEMS.filter((item) => item.visible !== false)
-const VISIBLE_BOTTOM_ITEMS = BOTTOM_ITEMS.filter((item) => item.visible !== false)
-
 interface SidebarBtnProps {
   icon: LucideIcon
   label: string
   active: boolean
-  badge?: string
-  placeholder?: boolean
   collapsed: boolean
   onClick: () => void
 }
 
-function SidebarBtn({ icon: Icon, label, active, badge, placeholder, collapsed, onClick }: SidebarBtnProps) {
-  const tooltip = [label, badge, placeholder ? '即将上线' : undefined].filter(Boolean).join(' · ')
-
+function SidebarBtn({ icon: Icon, label, active, collapsed, onClick }: SidebarBtnProps) {
   if (collapsed) {
     return (
       <button
-        title={tooltip}
-        onClick={placeholder ? () => toast('该功能即将上线') : onClick}
+        title={label}
+        onClick={onClick}
         className={cn(
           'relative flex size-11 items-center justify-center rounded-xl transition-all duration-150',
-          placeholder
-            ? 'cursor-default text-muted-foreground/50'
-            : active
-              ? 'bg-accent text-foreground shadow-sm'
-              : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+          active
+            ? 'bg-accent text-foreground shadow-sm'
+            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
         )}
       >
         <Icon size={20} />
-        {active && !placeholder && (
+        {active && (
           <span className="absolute -left-2 top-2 bottom-2 w-[3px] rounded-full bg-foreground" />
         )}
       </button>
@@ -90,30 +77,17 @@ function SidebarBtn({ icon: Icon, label, active, badge, placeholder, collapsed, 
   return (
     <button
       title={label}
-      onClick={placeholder ? () => toast('该功能即将上线') : onClick}
+      onClick={onClick}
       className={cn(
         'relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-150',
-        placeholder
-          ? 'cursor-default text-muted-foreground/50'
-          : active
-            ? 'bg-accent text-foreground shadow-sm'
-            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+        active
+          ? 'bg-accent text-foreground shadow-sm'
+          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
       )}
     >
       <Icon size={18} className="shrink-0" />
       <span className="truncate">{label}</span>
-      {badge && (
-        <span
-          className={cn(
-            'ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium leading-tight',
-            badge !== 'Beta' && 'bg-muted text-muted-foreground',
-          )}
-          style={badge === 'Beta' ? { background: 'var(--accl)', color: 'var(--acc)' } : undefined}
-        >
-          {badge}
-        </span>
-      )}
-      {active && !placeholder && (
+      {active && (
         <span className="absolute -left-2 top-2 bottom-2 w-[3px] rounded-full bg-foreground" />
       )}
     </button>
@@ -296,14 +270,12 @@ export function AppShell({ children }: AppShellProps) {
         <div className={cn('my-2 h-px bg-border', collapsed ? 'mx-3 w-6' : 'mx-2')} />
 
         {/* Main nav */}
-        {VISIBLE_NAV_ITEMS.map((item) => (
+        {NAV_ITEMS.map((item) => (
           <SidebarBtn
             key={item.id}
             icon={item.icon}
             label={item.label}
             active={isActive(item)}
-            badge={item.badge}
-            placeholder={item.placeholder}
             collapsed={collapsed}
             onClick={() => navigate(item.path)}
           />
@@ -316,7 +288,7 @@ export function AppShell({ children }: AppShellProps) {
         <div className="flex-1" />
 
         {/* Bottom nav (search, settings) */}
-        {VISIBLE_BOTTOM_ITEMS.map((item) => (
+        {BOTTOM_ITEMS.map((item) => (
           <SidebarBtn
             key={item.id}
             icon={item.icon}

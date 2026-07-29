@@ -12,7 +12,9 @@
 import '@testing-library/jest-dom'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import DeployMonitorPage from '@/pages/SettingPage/DeployMonitorPage'
+import DeployMonitorPage, {
+  mergeLogEntries,
+} from '@/pages/SettingPage/DeployMonitorPage'
 
 const { httpGetMock } = vi.hoisted(() => ({
   httpGetMock: vi.fn(),
@@ -175,5 +177,23 @@ describe('DeployMonitorPage 标准日志', () => {
     render(<DeployMonitorPage />)
     expect(await screen.findByRole('button', { name: '导出诊断' })).toBeInTheDocument()
     expect(screen.getByText(/已自动脱敏，不包含 API 密钥和 Cookie/)).toBeInTheDocument()
+  })
+
+  it('初始加载与增量轮询重叠时按日志 id 去重', () => {
+    const timestamp = new Date().toISOString()
+    const initial = [
+      { id: 455, timestamp, level: 'INFO', category: 'app', message: 'first' },
+      { id: 456, timestamp, level: 'INFO', category: 'app', message: 'initial' },
+    ]
+    const polled = [
+      { id: 456, timestamp, level: 'INFO', category: 'app', message: 'updated' },
+      { id: 457, timestamp, level: 'INFO', category: 'app', message: 'next' },
+    ]
+
+    expect(mergeLogEntries(initial, polled).map((entry) => [entry.id, entry.message])).toEqual([
+      [455, 'first'],
+      [456, 'updated'],
+      [457, 'next'],
+    ])
   })
 })

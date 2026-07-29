@@ -44,6 +44,15 @@ interface LogsResponse {
   has_more_older: boolean
 }
 
+/** 合并初始页、增量轮询和向前翻页结果，避免并发响应重复插入同一日志。 */
+export function mergeLogEntries(...groups: LogEntry[][]): LogEntry[] {
+  const byId = new Map<number, LogEntry>()
+  for (const entries of groups) {
+    for (const entry of entries) byId.set(entry.id, entry)
+  }
+  return [...byId.values()].sort((left, right) => left.id - right.id)
+}
+
 function formatBytes(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -147,9 +156,11 @@ export default function DeployMonitorPage() {
     const loadInitial = async () => {
       try {
         const res = await http.get<LogsResponse>('/admin/logs', { params: { limit: 200 } })
-        setLogs(res.data.entries)
-        latestIdRef.current = res.data.latest_id
-        oldestIdRef.current = res.data.oldest_id
+        setLogs((prev) => mergeLogEntries(prev, res.data.entries))
+        latestIdRef.current = Math.max(latestIdRef.current, res.data.latest_id)
+        oldestIdRef.current = oldestIdRef.current
+          ? Math.min(oldestIdRef.current, res.data.oldest_id)
+          : res.data.oldest_id
         setHasMore(res.data.has_more_older)
         window.requestAnimationFrame(() => scrollElementIntoView(logEndRef.current))
       } catch {
@@ -169,8 +180,8 @@ export default function DeployMonitorPage() {
           params: { after_id: latestIdRef.current, limit: 100 },
         })
         if (!cancelled && res.data.entries.length > 0) {
-          setLogs((prev) => [...prev, ...res.data.entries])
-          latestIdRef.current = res.data.latest_id
+          setLogs((prev) => mergeLogEntries(prev, res.data.entries))
+          latestIdRef.current = Math.max(latestIdRef.current, res.data.latest_id)
           if (autoFollow) {
             scrollElementIntoView(logEndRef.current, { behavior: 'smooth' })
           }
@@ -196,8 +207,8 @@ export default function DeployMonitorPage() {
         params: { before_id: oldestIdRef.current, limit: 100 },
       })
       if (res.data.entries.length > 0) {
-        setLogs((prev) => [...res.data.entries, ...prev])
-        oldestIdRef.current = res.data.oldest_id
+        setLogs((prev) => mergeLogEntries(res.data.entries, prev))
+        oldestIdRef.current = Math.min(oldestIdRef.current, res.data.oldest_id)
         setHasMore(res.data.has_more_older)
         window.requestAnimationFrame(() => {
           if (container) container.scrollTop += container.scrollHeight - priorHeight

@@ -3000,12 +3000,7 @@ def _bridge_to_pipeline_payload(
 ) -> tuple[str, Dict[str, Any]]:
     """把 workspace item + preflight 翻译成现有 pipeline task 的 (task_type, payload)。
 
-    当前只处理 video 分支（MVP 范围）：
-      - source=url  → task_type='download'
-      - source=local→ task_type='analyze'（视频已在本地）
-
-    audio / image / text 分支需对应的 pipeline handler，后续阶段实现，
-    目前抛 501 让前端展示「即将上线」提示。
+    当前覆盖 text / image / audio / video；video 统一进入 note pipeline。
     """
     if item.type == ItemType.TEXT.value:
         payload: Dict[str, Any] = {
@@ -3136,12 +3131,7 @@ def _bridge_to_pipeline_payload(
             "source_type": "link",
             "kind_hint": item.type,  # "video"|"audio"|"image"|"text"
         }
-        # TODO: quality 等高级参数目前 _resolve_download_kwargs 不消费，
-        # 等 download handler 支持 format_selector 映射后再启用。
         bg = item.preflight.background_overrides or {}
-        for k in ("quality", "frame_mode", "frame_interval_sec", "max_frames", "enabled_steps", "prompt_style"):
-            if k in bg:
-                payload[k] = bg[k]
         # R21.P3.S1: 透传 preflight 新字段（intent / background_for_recognition）
         # 优先读 item.preflight.intent（前端 savePreflight 存在顶层），
         # 兜底读 tasks.preflight.intent（旧路径兼容）。
@@ -3191,9 +3181,6 @@ def _bridge_to_pipeline_payload(
     }
     # 复用上方 url 分支同款 preflight 透传（保持一致）
     bg = item.preflight.background_overrides or {}
-    for k in ("quality", "frame_mode", "frame_interval_sec", "max_frames", "enabled_steps", "prompt_style"):
-        if k in bg:
-            payload[k] = bg[k]
     tasks = item.preflight.tasks or {}
     _preflight = tasks.get("preflight")
     if isinstance(_preflight, dict):

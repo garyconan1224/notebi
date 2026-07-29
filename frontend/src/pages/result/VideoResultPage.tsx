@@ -486,7 +486,7 @@ export default function VideoResultPage() {
             onClick={() => navigate(`/workspaces/${workspaceId}/items/${itemId}/note`)}
             title="打开统一笔记（NoteShell）"
           >
-            <FileText size={12} /> 统一笔记 <span style={{ fontSize: 9, opacity: 0.6 }}>beta</span>
+            <FileText size={12} /> 统一笔记
           </button>
           <div style={{ marginLeft: 'auto' }} />
           {result.video.url && (
@@ -687,7 +687,7 @@ export default function VideoResultPage() {
             onClick={() => navigate(`/workspaces/${workspaceId}/items/${itemId}/note`)}
             title="打开统一笔记（NoteShell）"
           >
-            <FileText size={12} /> 统一笔记 <span className="vd-beta">beta</span>
+            <FileText size={12} /> 统一笔记
           </button>
           <div className="vd-nav-spacer" />
           {result.video.url && (
