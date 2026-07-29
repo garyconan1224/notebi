@@ -1,8 +1,8 @@
 # AI Handoff
 
-## 当前执行指针（2026-07-29，S2 已完成）
+## 当前执行指针（2026-07-29，S3 已完成）
 
-- **当前任务**：S2 已在 `codex/s2-batch-export` 的 `622ae63` 完成；下一步按 [`plans/2026-07-29-feature-completion-short-term.md`](plans/2026-07-29-feature-completion-short-term.md) 执行 S3 任务默认勾选。
+- **当前任务**：S3 已在 `codex/s3-task-defaults` 的 `2e9af28` 完成；下一步按 [`plans/2026-07-29-feature-completion-short-term.md`](plans/2026-07-29-feature-completion-short-term.md) 执行 S4 文本编辑器工具栏。
 - **长期路线**：见 [`plans/2026-07-29-product-roadmap.md`](plans/2026-07-29-product-roadmap.md)；Windows 实机适配和整合包必须等待 macOS/Linux 功能完成门槛。
 - **Git 基线**：清理和音乐分析退役提交为 `4bbe6a8`，已快进合入 `main`；最终恢复点为 `checkpoint/project-clean-final-20260729`。
 - **未完成功能**：批量添加来源、Cookie 和任务中心相关改动保存在 `codex/wip-batch-settings-cleanup` 的 `e90785b`，没有合入 `main`。
@@ -25,6 +25,7 @@
 - **S0 验证结果**：前端 `55` 个测试文件、`297` 项测试和生产构建通过；退役能力扫描与 `git diff --check` 通过。
 - **S1 验证结果**：后端批次窄回归 `94 passed`，后端全套 `814 passed, 2 skipped`；前端 `55` 个测试文件、`301` 项测试、类型检查和生产构建通过；真实浏览器确认任务中心过滤、批次详情 `2/2 completed`、真实任务 ID 和零 console error。
 - **S2 验证结果**：批量导出 API `22 passed`，后端全套 `817 passed, 2 skipped`；前端 `56` 个测试文件、`305` 项测试、类型检查和生产构建通过。ZIP 已覆盖四种素材、manifest、重名安全目录、缺失/无结果跳过、失败计数和失败项原子写入。
+- **S3 验证结果**：任务默认值相关后端 `60 passed`，仓库后端全套 `1301 passed, 2 skipped`；前端 `57` 个测试文件、`310` 项测试、类型检查和生产构建通过。真实浏览器确认设置保存后 GET 读回一致，刷新后值不丢失，`/tasks/new` 消费同一组默认值；单条与批量任务的显式字段继续优先于保存值。
 - **清理基线历史验证**：后端 `1215 passed, 2 skipped`；Python 编译和 `pip check` 通过。本次 S0 未改后端，未重复运行后端全套测试。
 - **已知质量债**：前端完整 lint 当前为 `101` 个错误、`8` 个警告，广泛存在于本轮未修改文件；不要当作本次清理回归，也不要在功能提交中顺手批量修复。
 
@@ -33,9 +34,10 @@
 1. S0 已完成：规则契约已修正，“风格报告”入口与类型分支已删除。
 2. S1 已完成：所有批量入口统一到真实 `TaskBatchService` 生命周期。
 3. S2 已完成：多选导出使用单个 ZIP，内容、清单和部分失败反馈准确。
-4. 当前执行 S3；随后完成 S4 文本编辑器工具栏和 S5 可见占位清零。
-5. S6 收敛前端质量债并完成 macOS/Linux 真实验收。
-6. 达到长期路线图 Gate B 后，再单独启动 Windows 与整合包阶段。
+4. S3 已完成：无音乐项的任务默认值可持久化、读回并由单条与批量入口实际消费。
+5. 当前执行 S4 文本编辑器工具栏；随后完成 S5 可见占位清零。
+6. S6 收敛前端质量债并完成 macOS/Linux 真实验收。
+7. 达到长期路线图 Gate B 后，再单独启动 Windows 与整合包阶段。
 
 ## 启动检查
 
