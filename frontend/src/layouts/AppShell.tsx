@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Home,
   Plus,
-  Sparkles,
   FileText,
   Star,
   Search,
@@ -17,6 +16,8 @@ import { cn } from '@/lib/utils'
 import { useSystemStats } from '@/hooks/useSystemStats'
 import { useHealthPulse } from '@/hooks/useHealthPulse'
 import { FloatingTaskQueue } from '@/components/FloatingTaskQueue'
+import { PageTitle } from '@/components/PageTitle'
+import { BrandLockup, BrandMark } from '@/components/brand/Brand'
 import { GlobalAddMaterialModal } from '@/components/workspace/GlobalAddMaterialModal'
 import ThemeSwitcher from '@/components/ThemeSwitcher'
 import { useAddMaterialStore } from '@/store/addMaterialStore'
@@ -153,6 +154,17 @@ function formatBytes(bytes: number): string {
 /** 后端地址（与 .env 默认一致） */
 const BACKEND_ADDR = `127.0.0.1:${import.meta.env.VITE_BACKEND_PORT ?? '8001'}`
 
+function pageTitleForPath(pathname: string): string | undefined {
+  if (pathname === '/') return '工作台'
+  if (pathname.startsWith('/notes')) return '笔记'
+  if (pathname.startsWith('/tasks')) return '任务中心'
+  if (pathname.startsWith('/collections') || pathname.startsWith('/workspaces')) return '合集'
+  if (pathname.startsWith('/knowledge') || pathname.startsWith('/search')) return '知识库'
+  if (pathname.startsWith('/favorites')) return '收藏夹'
+  if (pathname.startsWith('/settings')) return '设置'
+  return undefined
+}
+
 export function AppShell({ children }: AppShellProps) {
   const location = useLocation()
   const navigate = useNavigate()
@@ -190,6 +202,7 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden print:block print:h-auto print:overflow-visible">
+      <PageTitle title={pageTitleForPath(location.pathname)} />
       {/* ── Sidebar ── */}
       <nav
         aria-label="主导航"
@@ -203,12 +216,11 @@ export function AppShell({ children }: AppShellProps) {
           <>
             <button
               className="mb-1 flex size-11 items-center justify-center rounded-lg transition-colors hover:opacity-80"
-              style={{ background: 'var(--accl)', color: 'var(--acc)' }}
               onClick={() => navigate('/')}
               title={APP_NAME}
               aria-label="返回工作台"
             >
-              <Sparkles size={16} />
+              <BrandMark size={32} />
             </button>
             <button
               className="mb-2 flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
@@ -227,15 +239,7 @@ export function AppShell({ children }: AppShellProps) {
               title={APP_NAME}
               aria-label="返回工作台"
             >
-              <span
-                className="flex size-8 items-center justify-center rounded-lg shadow-sm"
-                style={{ background: 'var(--accl)', color: 'var(--acc)' }}
-              >
-                <Sparkles size={16} />
-              </span>
-              <span className="text-sm font-semibold" style={{ fontFamily: 'var(--fd)', color: 'var(--fg)' }}>
-                {APP_NAME}
-              </span>
+              <BrandLockup />
             </button>
             <button
               className="ml-auto flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"

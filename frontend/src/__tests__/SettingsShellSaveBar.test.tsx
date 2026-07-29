@@ -41,4 +41,16 @@ it('renders child settings save and reset actions in the shared shell', () => {
 
   expect(onSave).toHaveBeenCalledOnce()
   expect(onReset).toHaveBeenCalledOnce()
+
+  for (const group of [
+    '常规与外观',
+    'AI 与模型',
+    '分析与生成',
+    '导入与网络',
+    '笔记与数据',
+    '诊断与关于',
+  ]) {
+    expect(screen.getByText(group)).toBeInTheDocument()
+  }
+  expect(screen.queryByText('SETTINGS · LOCAL · NOTEBI')).not.toBeInTheDocument()
 })

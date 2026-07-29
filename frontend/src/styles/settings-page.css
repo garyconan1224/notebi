@@ -73,8 +73,20 @@
 .settings-nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 12px;
   flex: 1;
+}
+.settings-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-nav-group-label {
+  padding: 0 10px 4px;
+  color: var(--mut);
+  font-family: var(--fm);
+  font-size: 10px;
+  letter-spacing: 0.04em;
 }
 .sn-item {
   display: flex;

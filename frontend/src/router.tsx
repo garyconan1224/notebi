@@ -7,6 +7,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 // 按路由做代码分割：每个页面组件通过动态 import 拆成独立 chunk
 const SettingPage = lazy(() => import('@/pages/SettingPage/index'))
+const GeneralSettingsPage = lazy(
+  () => import('@/pages/SettingPage/GeneralSettingsPage'),
+)
 const ProvidersAndModelsPage = lazy(
   () => import('@/pages/SettingPage/ProvidersAndModelsPage'),
 )
@@ -143,7 +146,8 @@ export const router = createBrowserRouter([
         path: 'settings',
         element: withSuspense(<SettingPage />),
         children: [
-          { index: true, element: <Navigate to="/settings/providers-models" replace /> },
+          { index: true, element: <Navigate to="/settings/general" replace /> },
+          { path: 'general', element: withSuspense(<GeneralSettingsPage />) },
           // N3 合并页
           { path: 'providers-models', element: withSuspense(<ProvidersAndModelsPage />) },
           { path: 'analysis-defaults', element: withSuspense(<AnalysisDefaultsPage />) },

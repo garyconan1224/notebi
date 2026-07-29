@@ -55,6 +55,7 @@ import { AddMaterialModal } from '@/components/workspace/AddMaterialModal'
 
 describe('NoteBi-only UI', () => {
   it('renders only the fixed NoteBi navigation', () => {
+    document.title = 'NoteBi'
     render(
       <MemoryRouter>
         <AppShell>
@@ -63,7 +64,11 @@ describe('NoteBi-only UI', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('NoteBi')).toBeTruthy()
+    expect(screen.getByTestId('brand-wordmark').textContent).toBe('NoteBi')
+    expect(
+      screen.getByRole('img', { name: 'NoteBi' }).getAttribute('data-brand-mark'),
+    ).toBe('note-timeline')
+    expect(document.title).toBe('工作台 · NoteBi')
     expect(screen.getByText('笔记')).toBeTruthy()
     // R1：智能检索已升级为正式入口“知识库”
     expect(screen.getByText('知识库')).toBeTruthy()

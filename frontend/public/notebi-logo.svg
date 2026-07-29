@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 42" role="img" aria-labelledby="title desc">
+  <title id="title">NoteBi</title>
+  <desc id="desc">折页与记录点组成的 NoteBi 标志</desc>
+  <rect width="32" height="32" x="4" y="5" rx="7" fill="#151311"/>
+  <path d="M12 25V12h4.5l7.5 8.1V12H28v13h-4.3l-7.7-8.2V25H12Z" fill="#faf8f3"/>
+  <circle cx="30" cy="8" r="3" fill="#c66a2b"/>
+  <text x="48" y="28" fill="#151311" font-family="Georgia,serif" font-size="25" letter-spacing="-1.1">NoteBi</text>
+</svg>

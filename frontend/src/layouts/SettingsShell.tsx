@@ -9,13 +9,10 @@ import {
   Trash2,
   Palette,
   Info,
-  ArrowLeft,
+  Languages,
 } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
-import { LangSwitcher } from '@/components/LangSwitcher'
 import { cn } from '@/lib/utils'
 import { useHealthPulse } from '@/hooks/useHealthPulse'
-import { APP_NAME } from '@/config/product'
 import { useSettingsShellStore } from '@/store/settingsShellStore'
 
 /** SaveBar 状态类型（保留向后兼容，Step 2+ 逐步移入各 panel 内） */
@@ -36,6 +33,11 @@ interface NavItem {
   label: string
 }
 
+interface NavGroup {
+  label: string
+  items: NavItem[]
+}
+
 /**
  * 设置页通用布局 — 对齐设计稿 pg-settings。
  *
@@ -47,7 +49,6 @@ interface NavItem {
  * 导航项按照现有 router 子页组织，不强行凑设计稿数量。
  */
 export function SettingsShell() {
-  const { t } = useTranslation('settings')
   const health = useHealthPulse(0)
   const version = health.data?.version ?? 'v0.4.0'
   const location = useLocation()
@@ -56,38 +57,55 @@ export function SettingsShell() {
   const saving = saveBar.saving ?? false
   const childOwnsSaveBar = location.pathname === '/settings/analysis-defaults'
 
-  const navItems: NavItem[] = [
-    { path: '/settings/providers-models', icon: <Cpu size={16} />, label: '模型与渠道' },
-    { path: '/settings/analysis-defaults', icon: <Sliders size={16} />, label: '分析默认偏好' },
-    { path: '/settings/download', icon: <IcDownload size={16} />, label: t('layout.menu.download') },
-    { path: '/settings/network', icon: <Wifi size={16} />, label: t('layout.menu.network') },
-    { path: '/settings/monitor', icon: <Monitor size={16} />, label: t('layout.menu.monitor') },
-    { path: '/settings/trash', icon: <Trash2 size={16} />, label: '垃圾桶' },
-    { path: '/settings/style-templates', icon: <Palette size={16} />, label: '风格模板' },
-    { path: '/settings/about', icon: <Info size={16} />, label: t('layout.menu.about') },
+  const navGroups: NavGroup[] = [
+    {
+      label: '常规与外观',
+      items: [
+        { path: '/settings/general', icon: <Languages size={16} />, label: '界面与语言' },
+      ],
+    },
+    {
+      label: 'AI 与模型',
+      items: [
+        { path: '/settings/providers-models', icon: <Cpu size={16} />, label: '服务渠道与模型' },
+      ],
+    },
+    {
+      label: '分析与生成',
+      items: [
+        { path: '/settings/analysis-defaults', icon: <Sliders size={16} />, label: '分析默认偏好' },
+      ],
+    },
+    {
+      label: '导入与网络',
+      items: [
+        { path: '/settings/download', icon: <IcDownload size={16} />, label: '下载与存储路径' },
+        { path: '/settings/network', icon: <Wifi size={16} />, label: '网络与代理' },
+      ],
+    },
+    {
+      label: '笔记与数据',
+      items: [
+        { path: '/settings/style-templates', icon: <Palette size={16} />, label: '笔记模板' },
+        { path: '/settings/trash', icon: <Trash2 size={16} />, label: '垃圾桶' },
+      ],
+    },
+    {
+      label: '诊断与关于',
+      items: [
+        { path: '/settings/monitor', icon: <Monitor size={16} />, label: '运行监控' },
+        { path: '/settings/about', icon: <Info size={16} />, label: '关于 NoteBi' },
+      ],
+    },
   ]
 
   return (
     <div className="settings-wrap">
-      {/* ── 顶部头部 ── */}
+      {/* 设置页只保留一个紧凑页面头；全局品牌与返回路径由 AppShell 负责。 */}
       <div className="settings-head">
-        <div className="flex items-center gap-3 mb-2">
-          <Link
-            to="/"
-            className="inline-flex items-center gap-1.5 text-sm text-[var(--mut)] hover:text-[var(--fg)] transition-colors"
-          >
-            <ArrowLeft size={14} />
-            <span style={{ fontFamily: 'var(--fd)' }} className="text-base font-semibold text-[var(--fg)]">
-              {APP_NAME}
-            </span>
-          </Link>
-          <span className="text-[var(--mut)] text-xs">/</span>
-          <LangSwitcher />
-        </div>
-        <div className="eyebrow">SETTINGS · LOCAL · {APP_NAME.toUpperCase()}</div>
         <h1>设置</h1>
         <p>
-          模型、API 密钥、下载路径、分析默认偏好。所有设置本地存储，不上传到服务器。
+          管理界面、模型、分析、下载与诊断。每项变更会在保存后读回确认。
         </p>
       </div>
 
@@ -97,21 +115,26 @@ export function SettingsShell() {
         <aside className="settings-sidebar">
           <div className="settings-nav-title">设置分类</div>
           <nav className="settings-nav" role="navigation" aria-label="settings-navigation">
-            {navItems.map((item) => {
-              const active = location.pathname === item.path
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={cn('sn-item')}
-                  data-active={active}
-                  aria-current={active ? 'page' : undefined}
-                >
-                  <span className="sn-icon">{item.icon}</span>
-                  <span>{item.label}</span>
-                </Link>
-              )
-            })}
+            {navGroups.map((group) => (
+              <div className="settings-nav-group" key={group.label}>
+                <div className="settings-nav-group-label">{group.label}</div>
+                {group.items.map((item) => {
+                  const active = location.pathname === item.path
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={cn('sn-item')}
+                      data-active={active}
+                      aria-current={active ? 'page' : undefined}
+                    >
+                      <span className="sn-icon">{item.icon}</span>
+                      <span>{item.label}</span>
+                    </Link>
+                  )
+                })}
+              </div>
+            ))}
           </nav>
 
           {/* Build 信息 */}

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="NoteBi">
+  <rect width="512" height="512" fill="#faf8f3"/>
+  <rect x="76" y="76" width="360" height="360" rx="84" fill="#151311"/>
+  <path d="M160 358V154h64l108 119V154h61v204h-66L222 240v118h-62Z" fill="#faf8f3"/>
+  <circle cx="393" cy="126" r="34" fill="#c66a2b"/>
+</svg>
