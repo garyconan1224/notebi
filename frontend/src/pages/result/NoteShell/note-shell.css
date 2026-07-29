@@ -9,6 +9,10 @@
     linear-gradient(180deg, #fbf8f3 0%, #f7f3ec 100%);
 }
 
+.nibi-note-shell.is-ai-docked {
+  padding-right: var(--note-ai-dock-offset, 400px);
+}
+
 .nibi-note-topbar {
   border-bottom: 1px solid rgba(25, 20, 16, 0.08);
   background: var(--ov-glass-72);
@@ -767,6 +771,26 @@
   margin-top: 4px;
   border-top: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
   padding-top: 8px;
+}
+
+.nibi-note-export-back {
+  min-height: 32px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--mut, #7c7464);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.nibi-note-export-back:hover {
+  background: var(--bgalt, #f7f3ec);
+  color: var(--fg, #191410);
 }
 
 .nibi-note-ai-menu {
@@ -2771,6 +2795,8 @@
   padding: 8px 12px;
   border-bottom: 1px solid var(--bdr, #e8e3db);
   background: var(--bgalt, #f7f4ee);
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .nibi-text-toolbar button {
@@ -2797,6 +2823,18 @@
 .nibi-text-toolbar button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.nibi-text-toolbar-divider {
+  width: 1px;
+  height: 20px;
+  flex: 0 0 auto;
+  background: var(--bdr, #e8e3db);
+}
+
+.nibi-note-page .note-copy,
+.nibi-note-page .note-milkdown .ProseMirror {
+  text-align: var(--note-copy-text-align, left);
 }
 
 /* 编辑器内容区 */
@@ -3017,6 +3055,12 @@
 
   .nibi-note-bar-meta {
     font-size: 10px;
+  }
+}
+
+@media (max-width: 720px) {
+  .nibi-note-shell.is-ai-docked {
+    padding-right: 0;
   }
 }
 .note-history-backdrop {

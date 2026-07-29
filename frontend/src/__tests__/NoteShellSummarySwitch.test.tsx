@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import NoteShell from '@/pages/result/NoteShell'
 import type { ItemSummary } from '@/services/summaries'
+import { useTaskStore } from '@/store/taskStore'
 import type { ItemNote } from '@/types/workspace'
 
 const mocks = vi.hoisted(() => ({
@@ -148,6 +149,12 @@ describe('NoteShell summary switching', () => {
     })
     mocks.downloadTranscript.mockResolvedValue(undefined)
     mocks.retryPipelineTask.mockResolvedValue({ task_id: 'audio-summary-retry' })
+    useTaskStore.setState({
+      tasks: [],
+      hiddenTaskIds: [],
+      currentTaskId: null,
+      isPolling: false,
+    })
   })
 
   it('点击总结版本只切换正文，不写回主笔记', async () => {
@@ -285,6 +292,7 @@ describe('NoteShell summary switching', () => {
     // 新契约：菜单项不带笔记标题
     expect(screen.getByRole('button', { name: '转写文本' })).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '转写文本（区分说话人）' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Markdown' }))
 
     await waitFor(() => {
       // downloadTranscript 现在接收标题作为第 4 个参数，用于 fallback 文件名
@@ -294,6 +302,79 @@ describe('NoteShell summary switching', () => {
         'speaker_grouped',
         '测试音频',
       )
+    })
+  })
+
+  it('新总结完成后自动切到服务端返回的新版本', async () => {
+    const newSummary = {
+      ...SUMMARY_V0,
+      summary_id: 'summary-v1',
+      version: 1,
+      content_md: '# 标准总结 v1\n\n最新总结正文',
+    }
+    mocks.createSummary.mockResolvedValue({ task_id: 'summary-task-1' })
+    mocks.listSummaries.mockResolvedValue([SUMMARY_V0, newSummary])
+
+    render(
+      <MemoryRouter>
+        <NoteShell workspaceId="ws-1" itemId="item-1" />
+      </MemoryRouter>,
+    )
+
+    await screen.findByRole('button', { name: /主笔记 v1/ })
+    fireEvent.click(screen.getByRole('button', { name: '新建总结' }))
+    fireEvent.click(screen.getByRole('button', { name: '生成' }))
+    await waitFor(() => expect(mocks.createSummary).toHaveBeenCalled())
+
+    useTaskStore.getState().updateTask('summary-task-1', {
+      status: 'SUCCESS',
+      progress: 1,
+      result: { summary: newSummary },
+      updated_at: '2026-07-01T00:20:00Z',
+    })
+
+    await screen.findByText('V1 总结生成完成')
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /标准总结 · V1/ })).not.toBeNull()
+      expectAnyEditorToContain('最新总结正文')
+    })
+  })
+
+  it('生成期间用户主动切换版本时不抢回新总结', async () => {
+    const newSummary = {
+      ...SUMMARY_V0,
+      summary_id: 'summary-v1',
+      version: 1,
+      content_md: '# 标准总结 v1\n\n最新总结正文',
+    }
+    mocks.createSummary.mockResolvedValue({ task_id: 'summary-task-2' })
+    mocks.listSummaries.mockResolvedValue([SUMMARY_V0, newSummary])
+
+    render(
+      <MemoryRouter>
+        <NoteShell workspaceId="ws-1" itemId="item-1" />
+      </MemoryRouter>,
+    )
+
+    await screen.findByRole('button', { name: /主笔记 v1/ })
+    fireEvent.click(screen.getByRole('button', { name: '新建总结' }))
+    fireEvent.click(screen.getByRole('button', { name: '生成' }))
+    await waitFor(() => expect(mocks.createSummary).toHaveBeenCalled())
+
+    fireEvent.click(screen.getByRole('button', { name: /主笔记 v1/ }))
+    fireEvent.click(screen.getByRole('button', { name: /V0/ }))
+
+    useTaskStore.getState().updateTask('summary-task-2', {
+      status: 'SUCCESS',
+      progress: 1,
+      result: { summary: newSummary },
+      updated_at: '2026-07-01T00:20:00Z',
+    })
+
+    await screen.findByText('V1 总结生成完成')
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /标准总结 · V0/ })).not.toBeNull()
+      expectAnyEditorToContain('总结正文')
     })
   })
 

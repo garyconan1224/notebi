@@ -112,6 +112,31 @@ function formatTime(value?: string) {
   }).format(date)
 }
 
+function publicTaskStage(task: TaskRecord): string {
+  const last = task.log?.at(-1)?.message?.trim()
+  if (last) return last
+  if (task.task_type === 'summary') return '正在准备总结材料'
+  return getStatusText(task.status)
+}
+
+function completedSummaryPreview(task: TaskRecord): string {
+  const summary = task.result?.summary
+  if (!summary || typeof summary !== 'object') return ''
+  const content = (summary as Record<string, unknown>).content_md
+  if (typeof content !== 'string') return ''
+  return content.replace(/[#*_`>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 360)
+}
+
+function taskNotePath(task: TaskRecord): string {
+  const payload = task.payload ?? {}
+  const result = task.result ?? {}
+  const workspaceId = payload.workspace_id ?? result.workspace_id
+  const itemId = payload.item_id ?? result.item_id
+  return typeof workspaceId === 'string' && typeof itemId === 'string'
+    ? `/workspaces/${workspaceId}/items/${itemId}/note`
+    : ''
+}
+
 export default function TaskCenterPage() {
   const navigate = useNavigate()
   const [view, setView] = useState<View>('batches')
@@ -401,6 +426,20 @@ export default function TaskCenterPage() {
                       <span style={{ width: `${Math.round((task.progress || 0) * 100)}%` }} />
                     </div>
                   </div>
+                  <section className="task-public-progress" aria-label={`${taskTitle(task)}处理说明`}>
+                    <div>
+                      <span>当前环节</span>
+                      <strong>{publicTaskStage(task)}</strong>
+                    </div>
+                    <p>显示的是处理阶段与可见产出，不展示模型的内部思维过程。</p>
+                    {completedSummaryPreview(task) && (
+                      <div className="task-summary-preview">
+                        <span>总结预览</span>
+                        <p>{completedSummaryPreview(task)}{completedSummaryPreview(task).length >= 360 ? '…' : ''}</p>
+                        {taskNotePath(task) && <Link to={taskNotePath(task)}>打开完整总结</Link>}
+                      </div>
+                    )}
+                  </section>
                   <details className="task-diagnostics">
                     <summary>诊断信息</summary>
                     <dl>

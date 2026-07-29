@@ -1,7 +1,13 @@
-import { useState } from 'react'
+import {
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import { MessageCircle, X } from 'lucide-react'
 
 import NoteChatDrawer from '@/components/NoteChatDrawer'
+
+import './floating-ask-ai.css'
 
 interface FloatingAskAiProps {
   workspaceId: string
@@ -10,13 +16,13 @@ interface FloatingAskAiProps {
   scopeHint: string
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  onWidthChange?: (width: number) => void
   hideTrigger?: boolean
 }
 
-/**
- * 问 AI 悬浮泡泡 — 仿 FloatingTaskQueue（fixed right:24 bottom:24）。
- * 收起时显示胶囊按钮，展开时 popover 内嵌 NoteChatDrawer。
- */
+const MIN_WIDTH = 340
+const MAX_WIDTH = 620
+
 export function FloatingAskAi({
   workspaceId,
   systemPrompt,
@@ -24,89 +30,82 @@ export function FloatingAskAi({
   scopeHint,
   open: controlledOpen,
   onOpenChange,
+  onWidthChange,
   hideTrigger = false,
 }: FloatingAskAiProps) {
   const [internalOpen, setInternalOpen] = useState(false)
+  const [width, setWidth] = useState(400)
   const open = controlledOpen ?? internalOpen
   const setOpen = onOpenChange ?? setInternalOpen
+
+  const handleResizeStart = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const startX = event.clientX
+    const startWidth = width
+    const handleMove = (moveEvent: PointerEvent) => {
+      const nextWidth = Math.min(
+        MAX_WIDTH,
+        Math.max(MIN_WIDTH, startWidth + startX - moveEvent.clientX),
+      )
+      setWidth(nextWidth)
+      onWidthChange?.(nextWidth)
+    }
+    const cleanup = () => {
+      window.removeEventListener('pointermove', handleMove)
+      window.removeEventListener('pointerup', cleanup)
+      window.removeEventListener('pointercancel', cleanup)
+    }
+    window.addEventListener('pointermove', handleMove)
+    window.addEventListener('pointerup', cleanup)
+    window.addEventListener('pointercancel', cleanup)
+  }
 
   if (!open && hideTrigger) return null
 
   return (
     <>
-      {/* ── 收起态：胶囊按钮 ── */}
       {!open && (
         <button
+          type="button"
+          className="note-ai-trigger"
           onClick={() => setOpen(true)}
-          style={{
-            position: 'fixed', right: 24, bottom: 80, zIndex: 38,
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '10px 16px',
-            background: 'var(--acc)', color: '#fff',
-            borderRadius: 99, border: 'none', cursor: 'pointer',
-            boxShadow: 'var(--shadow-lg)',
-            fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 600,
-            transition: 'transform 160ms ease, box-shadow 160ms ease',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.transform = 'none' }}
         >
           <MessageCircle size={16} />
           <span>问 AI</span>
         </button>
       )}
 
-      {/* ── 展开态：popover 内嵌 NoteChatDrawer ── */}
       {open && (
-        <div
-          style={{
-            position: 'fixed', right: 24, bottom: 24, zIndex: 38,
-            width: 'min(440px, calc(100vw - 32px))', height: 'min(680px, calc(100vh - 88px))',
-            background: 'var(--srf)', border: '1px solid var(--bdr)',
-            borderRadius: 12, boxShadow: 'var(--shadow-lg)',
-            display: 'flex', flexDirection: 'column', overflow: 'hidden',
-          }}
+        <aside
+          className="note-ai-dock"
+          role="complementary"
+          aria-label="问 AI"
+          style={{ '--note-ai-width': `${width}px` } as CSSProperties}
         >
-          {/* Header */}
           <div
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '10px 16px',
-              borderBottom: '1px solid var(--bdr)',
-              flexShrink: 0,
-            }}
-          >
-            <div style={{ minWidth: 0 }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: 'var(--acc)' }}>
-                <MessageCircle size={14} /> 问 AI
-              </span>
-              <div style={{
-                maxWidth: 340,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                marginTop: 3,
-                color: 'var(--mut)',
-                fontSize: 11,
-              }}>
-                {scopeHint}
-              </div>
+            className="note-ai-resizer"
+            role="separator"
+            aria-label="调整问 AI 宽度"
+            aria-orientation="vertical"
+            aria-valuemin={MIN_WIDTH}
+            aria-valuemax={MAX_WIDTH}
+            aria-valuenow={width}
+            onPointerDown={handleResizeStart}
+          />
+          <header className="note-ai-dock-header">
+            <div>
+              <strong><MessageCircle size={14} /> 问 AI</strong>
+              <span>{scopeHint}</span>
             </div>
             <button
+              type="button"
+              aria-label="关闭问 AI"
               onClick={() => setOpen(false)}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                width: 26, height: 26,
-                borderRadius: 8, border: 'none', background: 'none',
-                cursor: 'pointer', color: 'var(--mut)',
-              }}
             >
-              <X size={14} />
+              <X size={15} />
             </button>
-          </div>
-
-          {/* NoteChatDrawer (inline mode) */}
-          <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+          </header>
+          <div className="note-ai-dock-body">
             <NoteChatDrawer
               workspaceId={workspaceId}
               systemPrompt={systemPrompt}
@@ -115,7 +114,7 @@ export function FloatingAskAi({
               mode="inline"
             />
           </div>
-        </div>
+        </aside>
       )}
     </>
   )

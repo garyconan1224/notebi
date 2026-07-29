@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Bold, BookOpenCheck, Brain, Camera, Check, ChevronDown, Code2, Download, ExternalLink, FileDown, FileText, FileType, History, Image, Italic, List, MessageCircle, Minus, Pause, Pencil, Play, Plus, Presentation, Sparkles, Strikethrough, Subtitles, Trash2, Type, Underline, X } from 'lucide-react'
+import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Bold, BookOpenCheck, Brain, Camera, Check, ChevronDown, Code2, Download, ExternalLink, FileDown, FileText, FileType, History, Image, Italic, Link, List, ListOrdered, ListTodo, MessageCircle, Minus, Pause, Pencil, Play, Plus, Presentation, Quote, Sparkles, Strikethrough, Subtitles, Trash2, Type, Underline, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -37,6 +37,8 @@ import './note-shell.css'
 import { NewSummaryModal } from '@/components/NewSummaryModal'
 import NoteChatDrawer from '@/components/NoteChatDrawer'
 import { FloatingAskAi } from './FloatingAskAi'
+import { AiArtifactPanel } from './AiArtifactPanel'
+import type { NoteArtifactKind } from '@/services/noteArtifacts'
 import { useLnEditorStore } from '@/store/lnEditorStore'
 import { useTaskStore } from '@/store/taskStore'
 import type { TaskRecord } from '@/types/task'
@@ -45,6 +47,7 @@ import { withStatusToast } from '@/lib/statusToast'
 import { categorizeError } from '@/lib/errorCategories'
 
 type NoteExportBusy = ItemNoteExportFormat | 'markdown' | 'obsidian' | 'transcript_article' | 'transcript_speakers' | 'source_md'
+type NoteExportSource = 'current' | 'main' | 'transcript' | 'speaker_transcript' | 'source'
 type OperationNoticeTone = 'loading' | 'success' | 'error' | 'info'
 type OperationNotice = {
   id: number
@@ -125,6 +128,7 @@ type NoteEditorPrefs = {
   lineHeight: 1.6 | 1.8 | 2
   textTone: 'ink' | 'muted' | 'soft'
   fontWeight: 'regular' | 'medium' | 'bold'
+  textAlign: 'left' | 'center' | 'right'
 }
 
 const DEFAULT_EDITOR_PREFS: NoteEditorPrefs = {
@@ -133,6 +137,7 @@ const DEFAULT_EDITOR_PREFS: NoteEditorPrefs = {
   lineHeight: 1.8,
   textTone: 'ink',
   fontWeight: 'medium',
+  textAlign: 'left',
 }
 
 const FONT_FAMILY_VALUE: Record<NoteEditorPrefs['fontFamily'], string> = {
@@ -181,6 +186,7 @@ function readEditorPrefs(): NoteEditorPrefs {
       lineHeight: parsed.lineHeight === 1.6 || parsed.lineHeight === 2 ? parsed.lineHeight : 1.8,
       textTone: parsed.textTone === 'muted' || parsed.textTone === 'soft' ? parsed.textTone : 'ink',
       fontWeight: parsed.fontWeight === 'regular' || parsed.fontWeight === 'bold' ? parsed.fontWeight : 'medium',
+      textAlign: parsed.textAlign === 'center' || parsed.textAlign === 'right' ? parsed.textAlign : 'left',
     }
   } catch {
     return DEFAULT_EDITOR_PREFS
@@ -331,6 +337,27 @@ function downloadMarkdownFile(markdown: string, title: string): void {
   URL.revokeObjectURL(url)
 }
 
+function downloadHtmlFile(
+  markdown: string,
+  title: string,
+  textAlign: NoteEditorPrefs['textAlign'] = 'left',
+): void {
+  const escaped = markdown
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+  const html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>${safeFilename(title)}</title><style>body{max-width:800px;margin:40px auto;padding:0 24px;font:16px/1.8 system-ui;color:#191410}pre{white-space:pre-wrap;font:inherit;text-align:${textAlign}}</style></head><body><pre>${escaped}</pre></body></html>`
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${safeFilename(title)}.html`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 function extensionForExport(format: ItemNoteExportFormat): string {
   const map: Record<ItemNoteExportFormat, string> = {
     md: 'md',
@@ -452,13 +479,16 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [error, setError] = useState<string | null>(null)
   const [chatOpen] = useState(false)
   const [askAiOpen, setAskAiOpen] = useState(false)
+  const [askAiWidth, setAskAiWidth] = useState(400)
   const [exportOpen, setExportOpen] = useState(false)
+  const [exportSource, setExportSource] = useState<NoteExportSource | null>(null)
   const [exportBusy, setExportBusy] = useState<NoteExportBusy | null>(null)
   const [immersiveOpen, setImmersiveOpen] = useState(false)
   const [sourceMdOpen, setSourceMdOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   // VN4.3 AI 工具下拉
   const [aiToolsOpen, setAiToolsOpen] = useState(false)
+  const [artifactTool, setArtifactTool] = useState<NoteArtifactKind | null>(null)
   const aiToolsDropRef = useRef<HTMLDivElement>(null)
   const exportDropRef = useRef<HTMLDivElement>(null)
   const exportAbortRef = useRef<AbortController | null>(null)
@@ -531,6 +561,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const handleAudioDurationChange = useCallback((d: number) => setAudioDuration(d), [])
 
   const [activeSummaryId, setActiveSummaryId] = useState<string | undefined>(undefined)
+  const summarySelectionEpochRef = useRef(0)
+  const summaryCreationEpochRef = useRef<number | null>(null)
   // VN4.1 版本下拉 + 风格/版本两层
   const [summaries, setSummaries] = useState<ItemSummary[]>([])
   const [summariesVersion, setSummariesVersion] = useState(0)
@@ -664,7 +696,13 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
       const raw = (creatingSummaryTask.result as Record<string, unknown>)?.summary
       const summary = raw && typeof raw === 'object' ? raw as ItemSummary : null
       showOperationNotice(summary ? `V${summary.version} 总结生成完成` : '总结生成完成', 'success')
-      if (summary && typeof summary.summary_id === 'string') setActiveSummaryId(summary.summary_id)
+      if (
+        summary
+        && typeof summary.summary_id === 'string'
+        && summaryCreationEpochRef.current === summarySelectionEpochRef.current
+      ) {
+        setActiveSummaryId(summary.summary_id)
+      }
       refreshSummaries()
     } else {
       showOperationNotice(
@@ -674,6 +712,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     }
     setCreatingSummary(false)
     setCreatingSummaryTaskId(null)
+    summaryCreationEpochRef.current = null
   }, [creatingSummaryTask, creatingSummaryTaskId, refreshSummaries, showOperationNotice])
 
   const notePageStyle = useMemo<CSSProperties>(
@@ -684,6 +723,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
       '--note-copy-line-height': String(editorPrefs.lineHeight),
       '--note-copy-color': TEXT_TONE_VALUE[editorPrefs.textTone],
       '--note-copy-font-weight': String(FONT_WEIGHT_VALUE[editorPrefs.fontWeight]),
+      '--note-copy-text-align': editorPrefs.textAlign,
     } as CSSProperties),
     [noteLeftPct, editorPrefs],
   )
@@ -1067,11 +1107,13 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
 
   const handleSelectMainNote = useCallback(() => {
     if (!note) return
+    summarySelectionEpochRef.current += 1
     setActiveSummaryId(undefined)
     switchEditorBody(extractEditableBody(note.note_md, String(note.frontmatter?.type ?? '')))
   }, [note, switchEditorBody])
 
   const handleSelectSummary = useCallback((summary: ItemSummary) => {
+    summarySelectionEpochRef.current += 1
     setActiveSummaryId(summary.summary_id)
     switchEditorBody(summary.content_md)
   }, [switchEditorBody])
@@ -1130,6 +1172,28 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
       setExportBusy(null)
     }
   }, [currentBody, note])
+
+  const handleExportCurrentHtml = useCallback(async () => {
+    if (!note) return
+    const title = String((note.frontmatter as Record<string, unknown>)?.title ?? 'note')
+    setExportBusy('html')
+    try {
+      await withStatusToast(
+        async () => downloadHtmlFile(currentBody, `${title}-当前显示内容`, editorPrefs.textAlign),
+        {
+          id: 'note-export-current-html',
+          loading: '正在导出当前显示内容…',
+          success: 'HTML 已开始下载',
+          error: 'HTML 导出失败，请重试',
+        },
+      )
+      setExportOpen(false)
+    } catch (err) {
+      console.error('当前显示内容 HTML 导出失败:', err)
+    } finally {
+      setExportBusy(null)
+    }
+  }, [currentBody, editorPrefs.textAlign, note])
 
   const handleExportObsidian = useCallback(async () => {
     const controller = new AbortController()
@@ -1262,12 +1326,45 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     }
   }, [note])
 
+  const handleSelectedExportFormat = useCallback((format: ItemNoteExportFormat) => {
+    if (!exportSource) return
+    if (exportSource === 'current') {
+      if (format === 'md') void handleExportMarkdown()
+      if (format === 'html') void handleExportCurrentHtml()
+      return
+    }
+    if (exportSource === 'main') {
+      if (format === 'obsidian') void handleExportObsidian()
+      else void handleDownloadNoteExport(format)
+      return
+    }
+    if (exportSource === 'transcript') {
+      void handleExportTranscript('article')
+      return
+    }
+    if (exportSource === 'speaker_transcript') {
+      void handleExportTranscript('speaker_grouped')
+      return
+    }
+    setExportOpen(false)
+    setSourceMdOpen(true)
+  }, [
+    exportSource,
+    handleDownloadNoteExport,
+    handleExportCurrentHtml,
+    handleExportMarkdown,
+    handleExportObsidian,
+    handleExportTranscript,
+  ])
+
   // VN4.3 新建总结（从 AI 工具菜单触发，复用 NewSummaryModal）
   const handleCreateSummary = useCallback(async (opts: {
     template: string; background: string; providerId: string; model: string; searchWeb: boolean
     summaryMode: 'general' | 'speaker_aware'
+    summaryLanguage: string; summaryLanguageCustom: string
   }) => {
     const templateName = tl(opts.template)
+    summaryCreationEpochRef.current = summarySelectionEpochRef.current
     setCreatingSummary(true)
     setShowNewSummaryModal(false)
     showOperationNotice(`正在生成${templateName}…`, 'loading')
@@ -1277,6 +1374,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         model: opts.model,
         search_web: opts.searchWeb,
         summary_mode: opts.summaryMode,
+        summary_language: opts.summaryLanguage,
+        summary_language_custom: opts.summaryLanguageCustom,
       })
       setCreatingSummaryTaskId(accepted.task_id)
       const now = new Date().toISOString()
@@ -1299,6 +1398,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         } satisfies TaskRecord)
       }
     } catch (err: unknown) {
+      summaryCreationEpochRef.current = null
       const axiosData = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       if (axiosData && axiosData.includes('chat model')) {
         showOperationNotice('请先在设置中配置 LLM 模型', 'error', {
@@ -1390,11 +1490,21 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
 
   const handleApplyEditorFormat = useCallback((
     format: Parameters<typeof applyEditorFormat>[0],
+    value?: string,
   ) => {
-    if (!applyEditorFormat(format)) {
+    const applied = value === undefined
+      ? applyEditorFormat(format)
+      : applyEditorFormat(format, value)
+    if (!applied) {
       toast.error('当前选区无法应用该格式')
     }
   }, [applyEditorFormat])
+
+  const handleApplyLink = useCallback(() => {
+    const url = window.prompt('输入链接地址', 'https://')
+    if (!url?.trim()) return
+    handleApplyEditorFormat('link', url.trim())
+  }, [handleApplyEditorFormat])
 
   // ─── loading / error ───
   if (loading) {
@@ -1559,7 +1669,10 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   )
 
   return (
-    <div className={`nibi-note-shell nibi-note-shell--${itemType}`}>
+    <div
+      className={`nibi-note-shell nibi-note-shell--${itemType}${askAiOpen ? ' is-ai-docked' : ''}`}
+      style={{ '--note-ai-dock-offset': `${askAiWidth}px` } as CSSProperties}
+    >
       {/* R2-D: 自动播放被拒绝时保留目标时间并提示点击播放 */}
       {autoplayBlocked && (
         <button
@@ -1799,6 +1912,24 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                     </button>
                   </div>
                 </div>
+                <div className="nibi-note-pref-group">
+                  <span className="nibi-note-pref-label">段落对齐</span>
+                  <div className="nibi-note-pref-segment">
+                    {([
+                      { key: 'left', label: '左对齐' },
+                      { key: 'center', label: '居中' },
+                      { key: 'right', label: '右对齐' },
+                    ] as const).map((option) => (
+                      <button
+                        key={option.key}
+                        className={`nibi-note-pref-chip${editorPrefs.textAlign === option.key ? ' is-active' : ''}`}
+                        onClick={() => updateEditorPrefs({ textAlign: option.key })}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="nibi-note-pref-actions">
                   <button className="nibi-note-pref-ghost" onClick={handleResetEditorPrefs}>重置</button>
                 </div>
@@ -1815,6 +1946,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
               className="nibi-note-bar-btn nibi-note-bar-btn--label"
               onClick={() => {
                 setAiToolsOpen(false)
+                setExportSource(null)
                 setExportOpen((v) => !v)
               }}
               title="导出"
@@ -1823,64 +1955,68 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
             </button>
             {exportOpen && (
               <div className="nibi-note-export-menu">
-                {/* 组一：笔记正文 */}
-                <div className="nibi-note-export-group-label">笔记正文</div>
-                <button className="nibi-note-export-item" onClick={handleExportMarkdown} disabled={!!exportBusy}>
-                  <FileText size={15} />
-                  <span>{exportBusy === 'markdown' ? '导出中…' : 'Markdown'}</span>
-                </button>
-                <button className="nibi-note-export-item" onClick={() => handleDownloadNoteExport('html')} disabled={!!exportBusy}>
-                  <FileText size={15} />
-                  <span>{exportBusy === 'html' ? '导出中…' : 'HTML'}</span>
-                </button>
-
-                {/* 组二：转录与原始内容 */}
-                <div className="nibi-note-export-group-label">转录与原始内容</div>
-                {(isVideoNote || isAudioNote) && (
-                  <button className="nibi-note-export-item" onClick={() => handleExportTranscript('article')} disabled={!!exportBusy}>
-                    <Subtitles size={15} />
-                    <span>{exportBusy === 'transcript_article' ? '导出中…' : '转写文本'}</span>
-                  </button>
+                {!exportSource ? (
+                  <>
+                    <div className="nibi-note-export-group-label">选择内容</div>
+                    <button className="nibi-note-export-item" onClick={() => setExportSource('current')} disabled={!!exportBusy}>
+                      <FileText size={15} />
+                      <span>当前显示内容{activeSummaryId ? '（AI 总结）' : ''}</span>
+                    </button>
+                    <button className="nibi-note-export-item" onClick={() => setExportSource('main')} disabled={!!exportBusy}>
+                      <BookOpenCheck size={15} />
+                      <span>主笔记</span>
+                    </button>
+                    {(isVideoNote || isAudioNote) && (
+                      <button className="nibi-note-export-item" onClick={() => setExportSource('transcript')} disabled={!!exportBusy}>
+                        <Subtitles size={15} />
+                        <span>转写文本</span>
+                      </button>
+                    )}
+                    {(isVideoNote || isAudioNote) && (
+                      <button className="nibi-note-export-item" onClick={() => setExportSource('speaker_transcript')} disabled={!!exportBusy}>
+                        <Subtitles size={15} />
+                        <span>转写文本（区分说话人）</span>
+                      </button>
+                    )}
+                    {note.source_md && (
+                      <button className="nibi-note-export-item" onClick={() => setExportSource('source')} disabled={!!exportBusy}>
+                        <FileText size={15} />
+                        <span>原始素材</span>
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <button className="nibi-note-export-back" onClick={() => setExportSource(null)}>
+                      <ArrowLeft size={13} /> 返回内容选择
+                    </button>
+                    <div className="nibi-note-export-group-label">选择格式</div>
+                    {(exportSource === 'current' ? [
+                      { icon: <FileText size={15} />, label: 'Markdown', format: 'md' as const },
+                      { icon: <FileText size={15} />, label: 'HTML', format: 'html' as const },
+                    ] : exportSource === 'main' ? [
+                      { icon: <FileText size={15} />, label: 'Markdown', format: 'md' as const },
+                      { icon: <FileText size={15} />, label: 'HTML', format: 'html' as const },
+                      { icon: <FileDown size={15} />, label: 'PDF', format: 'pdf' as const },
+                      { icon: <FileType size={15} />, label: 'Word', format: 'docx' as const },
+                      { icon: <Image size={15} />, label: '长图', format: 'long_image' as const },
+                      { icon: <Presentation size={15} />, label: 'PPT', format: 'pptx' as const },
+                      { icon: <BookOpenCheck size={15} />, label: 'Obsidian 包', format: 'obsidian' as const },
+                    ] : [
+                      { icon: <FileText size={15} />, label: 'Markdown', format: 'md' as const },
+                    ]).map((item) => (
+                      <button
+                        key={item.label}
+                        className="nibi-note-export-item"
+                        onClick={() => handleSelectedExportFormat(item.format)}
+                        disabled={!!exportBusy}
+                      >
+                        {item.icon}
+                        <span>{exportBusy === item.format ? '导出中…' : item.label}</span>
+                      </button>
+                    ))}
+                  </>
                 )}
-                {(isVideoNote || isAudioNote) && (
-                  <button className="nibi-note-export-item" onClick={() => handleExportTranscript('speaker_grouped')} disabled={!!exportBusy}>
-                    <Subtitles size={15} />
-                    <span>{exportBusy === 'transcript_speakers' ? '导出中…' : '转写文本（区分说话人）'}</span>
-                  </button>
-                )}
-                {note.source_md && (
-                  <button
-                    className="nibi-note-export-item"
-                    onClick={() => {
-                      setExportOpen(false)
-                      setSourceMdOpen(true)
-                    }}
-                    disabled={!!exportBusy}
-                  >
-                    <FileText size={15} />
-                    <span>原始素材</span>
-                  </button>
-                )}
-
-                {/* 组三：整理与展示 */}
-                <div className="nibi-note-export-group-label">整理与展示</div>
-                {[
-                  { icon: <FileDown size={15} />, label: 'PDF', format: 'pdf' as const },
-                  { icon: <FileType size={15} />, label: 'Word', format: 'docx' as const },
-                  { icon: <Image size={15} />, label: '长图', format: 'long_image' as const },
-                  { icon: <Presentation size={15} />, label: 'PPT', format: 'pptx' as const },
-                  { icon: <BookOpenCheck size={15} />, label: 'Obsidian 包', format: 'obsidian' as const },
-                ].map((item) => (
-                  <button
-                    key={item.label}
-                    className="nibi-note-export-item"
-                    onClick={() => (item.format === 'obsidian' ? handleExportObsidian() : handleDownloadNoteExport(item.format))}
-                    disabled={!!exportBusy}
-                  >
-                    {item.icon}
-                    <span>{exportBusy === item.format ? '导出中…' : item.label}</span>
-                  </button>
-                ))}
               </div>
             )}
           </div>
@@ -1917,39 +2053,26 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                     <div className="nibi-note-ai-action-desc">基于当前笔记与转写证据继续提问</div>
                   </div>
                 </button>
-                <button
-                  className="nibi-note-ai-action"
-                  onClick={() => {
-                    setAiToolsOpen(false)
-                    setNewSummaryTemplate(undefined)
-                    setShowNewSummaryModal(true)
-                  }}
-                >
-                  <Sparkles size={16} />
-                  <div>
-                    <div className="nibi-note-ai-action-title">生成新总结</div>
-                    <div className="nibi-note-ai-action-desc">选择模板并生成一个新的总结版本</div>
-                  </div>
-                </button>
                 <div className="nibi-note-ai-quick">
-                  <span className="nibi-note-ai-quick-label">常用模板</span>
+                  <span className="nibi-note-ai-quick-label">生成笔记素材</span>
                   {[
-                    { value: 'standard', label: '标准总结' },
-                    { value: 'detailed', label: '详细要点' },
-                    { value: 'outline', label: '大纲' },
-                    { value: 'qa', label: '问答卡' },
-                    { value: 'actions', label: '行动清单' },
-                  ].map((tpl) => (
+                    { value: 'mind_map' as const, label: '思维导图' },
+                    { value: 'action_items' as const, label: '行动项' },
+                    { value: 'key_cards' as const, label: '要点卡' },
+                    { value: 'flashcards' as const, label: '闪卡与测验' },
+                    { value: 'glossary' as const, label: '术语表' },
+                    { value: 'timeline' as const, label: '时间线' },
+                    { value: 'selection_rewrite' as const, label: '选区改写' },
+                  ].map((tool) => (
                     <button
-                      key={tpl.value}
+                      key={tool.value}
                       className="nibi-note-ai-quick-chip"
                       onClick={() => {
                         setAiToolsOpen(false)
-                        setNewSummaryTemplate(tpl.value)
-                        setShowNewSummaryModal(true)
+                        setArtifactTool(tool.value)
                       }}
                     >
-                      {tpl.label}
+                      {tool.label}
                     </button>
                   ))}
                 </div>
@@ -2594,6 +2717,30 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
               <button
                 className="btn-ghost"
                 type="button"
+                aria-label="删除线"
+                aria-pressed={editorFormatting.strike}
+                disabled={!editorFormatting.canStrike}
+                title="删除线"
+                onMouseDown={handleToolbarMouseDown}
+                onClick={() => handleApplyEditorFormat('strike')}
+              >
+                <Strikethrough size={14} aria-hidden="true" />
+              </button>
+              <button
+                className="btn-ghost"
+                type="button"
+                aria-label="链接"
+                aria-pressed={editorFormatting.link}
+                disabled={!editorFormatting.canLink}
+                title="链接"
+                onMouseDown={handleToolbarMouseDown}
+                onClick={handleApplyLink}
+              >
+                <Link size={14} aria-hidden="true" />
+              </button>
+              <button
+                className="btn-ghost"
+                type="button"
                 aria-label="二级标题"
                 aria-pressed={editorFormatting.heading}
                 disabled={!editorFormatting.canHeading}
@@ -2606,6 +2753,18 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
               <button
                 className="btn-ghost"
                 type="button"
+                aria-label="引用"
+                aria-pressed={editorFormatting.blockquote}
+                disabled={!editorFormatting.canBlockquote}
+                title="引用"
+                onMouseDown={handleToolbarMouseDown}
+                onClick={() => handleApplyEditorFormat('blockquote')}
+              >
+                <Quote size={14} aria-hidden="true" />
+              </button>
+              <button
+                className="btn-ghost"
+                type="button"
                 aria-label="无序列表"
                 aria-pressed={editorFormatting.bulletList}
                 disabled={!editorFormatting.canBulletList}
@@ -2614,6 +2773,85 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 onClick={() => handleApplyEditorFormat('bulletList')}
               >
                 <List size={14} aria-hidden="true" />
+              </button>
+              <button
+                className="btn-ghost"
+                type="button"
+                aria-label="有序列表"
+                aria-pressed={editorFormatting.orderedList}
+                disabled={!editorFormatting.canOrderedList}
+                title="有序列表"
+                onMouseDown={handleToolbarMouseDown}
+                onClick={() => handleApplyEditorFormat('orderedList')}
+              >
+                <ListOrdered size={14} aria-hidden="true" />
+              </button>
+              <button
+                className="btn-ghost"
+                type="button"
+                aria-label="待办列表"
+                aria-pressed={editorFormatting.taskList}
+                disabled={!editorFormatting.canTaskList}
+                title="待办列表"
+                onMouseDown={handleToolbarMouseDown}
+                onClick={() => handleApplyEditorFormat('taskList')}
+              >
+                <ListTodo size={14} aria-hidden="true" />
+              </button>
+              <button
+                className="btn-ghost"
+                type="button"
+                aria-label="行内代码"
+                aria-pressed={editorFormatting.inlineCode}
+                disabled={!editorFormatting.canInlineCode}
+                title="行内代码"
+                onMouseDown={handleToolbarMouseDown}
+                onClick={() => handleApplyEditorFormat('inlineCode')}
+              >
+                {'</>'}
+              </button>
+              <button
+                className="btn-ghost"
+                type="button"
+                aria-label="代码块"
+                aria-pressed={editorFormatting.codeBlock}
+                disabled={!editorFormatting.canCodeBlock}
+                title="代码块"
+                onMouseDown={handleToolbarMouseDown}
+                onClick={() => handleApplyEditorFormat('codeBlock')}
+              >
+                <Code2 size={14} aria-hidden="true" />
+              </button>
+              <span className="nibi-text-toolbar-divider" aria-hidden="true" />
+              <button
+                className="btn-ghost"
+                type="button"
+                aria-label="左对齐"
+                aria-pressed={editorPrefs.textAlign === 'left'}
+                title="左对齐"
+                onClick={() => updateEditorPrefs({ textAlign: 'left' })}
+              >
+                <AlignLeft size={14} aria-hidden="true" />
+              </button>
+              <button
+                className="btn-ghost"
+                type="button"
+                aria-label="居中"
+                aria-pressed={editorPrefs.textAlign === 'center'}
+                title="居中"
+                onClick={() => updateEditorPrefs({ textAlign: 'center' })}
+              >
+                <AlignCenter size={14} aria-hidden="true" />
+              </button>
+              <button
+                className="btn-ghost"
+                type="button"
+                aria-label="右对齐"
+                aria-pressed={editorPrefs.textAlign === 'right'}
+                title="右对齐"
+                onClick={() => updateEditorPrefs({ textAlign: 'right' })}
+              >
+                <AlignRight size={14} aria-hidden="true" />
               </button>
             </div>
             <div className="nibi-text-editor-content">
@@ -2767,6 +3005,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
           scopeHint="基于当前 note.md，并按问题检索完整转录证据"
           open={askAiOpen}
           onOpenChange={setAskAiOpen}
+          onWidthChange={setAskAiWidth}
           hideTrigger
         />
       )}
@@ -2789,6 +3028,16 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
             </button>
           )}
         </div>
+      )}
+
+      {artifactTool && (
+        <AiArtifactPanel
+          open
+          initialKind={artifactTool}
+          workspaceId={workspaceId}
+          itemId={itemId}
+          onClose={() => setArtifactTool(null)}
+        />
       )}
 
       {/* VN4.3 新建/重新生成总结弹窗（从 AI 工具菜单触发） */}

@@ -39,6 +39,8 @@ const SAVED = {
   frame_interval_sec: 12,
   diarize: true,
   speaker_count: 3,
+  summary_language: 'zh-Hans',
+  summary_language_custom: '',
 }
 
 describe('AnalysisDefaultsPage task defaults', () => {
@@ -58,8 +60,25 @@ describe('AnalysisDefaultsPage task defaults', () => {
     expect(screen.getByLabelText('默认截帧间隔')).toHaveValue(12)
     expect(screen.getByLabelText('默认区分说话人')).toBeChecked()
     expect(screen.getByLabelText('默认说话人数')).toHaveValue('3')
+    expect(screen.getByLabelText('总结输出语言')).toHaveValue('zh-Hans')
     expect(screen.queryByText(/音乐|BPM|Suno|Udio/)).not.toBeInTheDocument()
     expect(screen.queryByText(/模型选择|视觉模型/)).not.toBeInTheDocument()
+  })
+
+  it('允许保存自定义的总结输出语言', async () => {
+    const custom = { ...SAVED, summary_language: 'custom', summary_language_custom: 'fr-CA' }
+    getTaskDefaultsMock
+      .mockResolvedValueOnce(SAVED)
+      .mockResolvedValueOnce(custom)
+    updateTaskDefaultsMock.mockResolvedValue(custom)
+    render(<AnalysisDefaultsPage />)
+    fireEvent.click(screen.getByRole('tab', { name: '任务默认勾选' }))
+
+    fireEvent.change(await screen.findByLabelText('总结输出语言'), { target: { value: 'custom' } })
+    fireEvent.change(screen.getByLabelText('自定义语言标签'), { target: { value: 'fr-CA' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => expect(updateTaskDefaultsMock).toHaveBeenCalledWith(custom))
   })
 
   it('PATCH 保存后再次 GET 读回一致', async () => {

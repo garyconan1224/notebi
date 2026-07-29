@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import asdict, replace
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from shared.settings_store import (
@@ -30,6 +30,12 @@ class TaskDefaultsUpdateRequest(BaseModel):
     frame_interval_sec: Optional[int] = Field(default=None, ge=1, le=120)
     diarize: Optional[bool] = None
     speaker_count: Optional[int] = Field(default=None, ge=2, le=5)
+    summary_language: Optional[Literal["source", "zh-Hans", "zh-Hant", "en", "ja", "ko", "custom"]] = None
+    summary_language_custom: Optional[str] = Field(
+        default=None,
+        max_length=35,
+        pattern=r"^(?:|[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*)$",
+    )
 
 
 def _serialize(config: TaskDefaultsConfig) -> Dict[str, Any]:
@@ -77,6 +83,21 @@ def update_task_defaults(
             if "speaker_count" in fields_set
             else current.speaker_count
         ),
+        summary_language=(
+            request.summary_language
+            if "summary_language" in fields_set and request.summary_language is not None
+            else current.summary_language
+        ),
+        summary_language_custom=(
+            request.summary_language_custom
+            if "summary_language_custom" in fields_set and request.summary_language_custom is not None
+            else current.summary_language_custom
+        ),
     )
+    if updated.summary_language == "custom" and not updated.summary_language_custom:
+        raise HTTPException(
+            status_code=422,
+            detail="summary_language_custom is required when summary_language is custom",
+        )
     save_settings(replace(settings, task_defaults=updated))
     return _serialize(updated)

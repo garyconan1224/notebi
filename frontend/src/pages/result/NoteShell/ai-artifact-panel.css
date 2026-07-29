@@ -1,0 +1,231 @@
+.note-artifact-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(25 20 16 / 32%);
+}
+
+.note-artifact-panel {
+  width: min(980px, 96vw);
+  height: min(720px, 90vh);
+  overflow: hidden;
+  border: 1px solid var(--bdr);
+  border-radius: var(--rl);
+  background: var(--srf);
+  box-shadow: var(--sh3);
+}
+
+.note-artifact-panel > header {
+  display: flex;
+  min-height: 68px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 12px 20px;
+  border-bottom: 1px solid var(--bdr);
+}
+
+.note-artifact-panel > header div {
+  display: grid;
+  gap: 3px;
+}
+
+.note-artifact-panel > header strong,
+.note-artifact-panel footer button,
+.note-artifact-generate {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.note-artifact-panel > header span,
+.note-artifact-list small,
+.note-artifact-list > span {
+  color: var(--mut);
+  font-size: var(--xs);
+}
+
+.note-artifact-panel > header button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: var(--rs);
+}
+
+.note-artifact-layout {
+  display: grid;
+  height: calc(100% - 68px);
+  grid-template-columns: 236px minmax(0, 1fr);
+}
+
+.note-artifact-layout > aside {
+  min-width: 0;
+  padding: 16px;
+  border-right: 1px solid var(--bdr);
+  background: var(--bgalt);
+}
+
+.note-artifact-layout label,
+.note-artifact-list-label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--mut);
+  font-size: var(--xs);
+  font-weight: 700;
+}
+
+.note-artifact-layout select,
+.note-artifact-generate {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--bdrs);
+  border-radius: var(--rs);
+  background: var(--srf);
+}
+
+.note-artifact-generate {
+  justify-content: center;
+  margin: 10px 0 18px;
+  background: var(--acc);
+  color: var(--accfg);
+  font-weight: 700;
+}
+
+.note-artifact-list {
+  display: grid;
+  gap: 6px;
+}
+
+.note-artifact-list button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: var(--rs);
+  text-align: left;
+}
+
+.note-artifact-list button.is-active {
+  background: var(--accl);
+  color: var(--acc);
+}
+
+.note-artifact-layout > main {
+  min-width: 0;
+  overflow: auto;
+  padding: 24px;
+}
+
+.note-artifact-content {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--fg2);
+  font: 14px/1.75 var(--fb);
+}
+
+.note-artifact-progress,
+.note-artifact-error,
+.note-artifact-empty {
+  padding: 14px;
+  border-radius: var(--rs);
+  background: var(--bgalt);
+  color: var(--mut);
+}
+
+.note-artifact-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.note-artifact-error {
+  margin-bottom: 16px;
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.note-artifact-diff {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.note-artifact-diff article {
+  padding: 16px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--rs);
+}
+
+.note-artifact-diff h3 {
+  margin: 0 0 10px;
+  font-size: var(--sm);
+}
+
+.note-artifact-diff p {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.7;
+}
+
+.note-artifact-diff-actions,
+.note-artifact-panel footer {
+  display: flex;
+  gap: 8px;
+}
+
+.note-artifact-diff-actions {
+  grid-column: 1 / -1;
+}
+
+.note-artifact-panel footer {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--bdr);
+}
+
+.note-artifact-panel footer button,
+.note-artifact-diff-actions button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--bdrs);
+  border-radius: var(--rs);
+}
+
+@media (max-width: 720px) {
+  .note-artifact-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .note-artifact-panel {
+    width: 100%;
+    height: min(86vh, 760px);
+    border-radius: var(--rl) var(--rl) 0 0;
+  }
+
+  .note-artifact-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .note-artifact-layout > aside {
+    border-right: 0;
+    border-bottom: 1px solid var(--bdr);
+  }
+
+  .note-artifact-list {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .note-artifact-list button {
+    min-width: 150px;
+  }
+
+  .note-artifact-diff {
+    grid-template-columns: 1fr;
+  }
+}

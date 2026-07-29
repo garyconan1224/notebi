@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -122,23 +122,29 @@ describe('NoteShell 导出菜单信息架构（阶段 A1）', () => {
     useLnEditorStore.getState().resetFormatting()
   })
 
-  it('导出菜单显示 Markdown，不显示 当前正文.md', async () => {
+  it('导出先选择内容来源，再选择文件格式', async () => {
     await renderNoteShell()
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
 
-    expect(screen.getByText('Markdown')).toBeTruthy()
-    expect(screen.queryByText('当前正文.md')).toBeNull()
+    expect(screen.getByText('选择内容')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /当前显示内容/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^主笔记$/ })).toBeInTheDocument()
+    expect(screen.queryByText('Markdown')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /当前显示内容/ }))
+    expect(screen.getByText('选择格式')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Markdown' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'HTML' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '返回内容选择' })).toBeInTheDocument()
   })
 
   it('转写菜单项不包含笔记标题', async () => {
     await renderNoteShell()
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
+    fireEvent.click(screen.getByRole('button', { name: /转写文本$/ }))
 
-    expect(screen.getByText('转写文本')).toBeTruthy()
-    expect(screen.getByText('转写文本（区分说话人）')).toBeTruthy()
-    // 菜单项不应包含标题
-    expect(screen.queryByText('测试音频 · 转写文本')).toBeNull()
-    expect(screen.queryByText('测试音频 · 转写文本（区分说话人）')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Markdown' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'PDF' })).not.toBeInTheDocument()
   })
 
   it('原始素材在导出菜单中，顶栏不再有独立原始素材按钮', async () => {
@@ -171,12 +177,26 @@ describe('NoteShell 文本编辑器工具栏（S4）', () => {
     useLnEditorStore.getState().setFormattingState({
       bold: true,
       italic: false,
+      strike: false,
+      inlineCode: false,
+      link: false,
       heading: false,
+      blockquote: false,
       bulletList: false,
+      orderedList: false,
+      taskList: false,
+      codeBlock: false,
       canBold: true,
       canItalic: true,
+      canStrike: true,
+      canInlineCode: true,
+      canLink: true,
       canHeading: true,
+      canBlockquote: true,
       canBulletList: true,
+      canOrderedList: true,
+      canTaskList: true,
+      canCodeBlock: true,
     })
 
     await renderNoteShell(TEXT_NOTE)
@@ -187,6 +207,15 @@ describe('NoteShell 文本编辑器工具栏（S4）', () => {
     expect(screen.getByRole('button', { name: '斜体' })).not.toBeDisabled()
     expect(screen.getByRole('button', { name: '二级标题' })).not.toBeDisabled()
     expect(screen.getByRole('button', { name: '无序列表' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: '删除线' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: '链接' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: '引用' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: '有序列表' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: '待办列表' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: '代码块' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: '左对齐' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: '居中' }))
+    expect(screen.getByRole('button', { name: '居中' })).toHaveAttribute('aria-pressed', 'true')
     expect(
       screen.getAllByTestId('note-editor').map(
         (editor) => editor.getAttribute('data-register-commands'),
@@ -239,29 +268,28 @@ describe('NoteShell 菜单交互（阶段 A1）', () => {
   })
 })
 
-describe('NoteShell AI 工具菜单（阶段 A1）', () => {
+describe('NoteShell AI 工具菜单（S3）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.downloadTranscript.mockResolvedValue(undefined)
   })
 
-  it('AI 菜单只提供问 AI 和生成新总结，不显示更多 AI 工具', async () => {
+  it('删除重复总结入口并提供七种笔记工具', async () => {
     await renderNoteShell()
     fireEvent.click(screen.getByRole('button', { name: 'AI 工具' }))
 
     expect(screen.getByText('问 AI')).toBeTruthy()
-    expect(screen.getByText('生成新总结')).toBeTruthy()
-    expect(screen.queryByText('更多 AI 工具')).toBeNull()
-  })
-
-  it('点击生成新总结打开 NewSummaryModal', async () => {
-    await renderNoteShell()
-    fireEvent.click(screen.getByRole('button', { name: 'AI 工具' }))
-    fireEvent.click(screen.getByText('生成新总结'))
-
-    // NewSummaryModal 应出现（通过其标题或关闭按钮判断）
-    await waitFor(() => {
-      expect(document.querySelector('.nsm-overlay')).toBeTruthy()
-    })
+    expect(screen.queryByText('生成新总结')).not.toBeInTheDocument()
+    for (const label of [
+      '思维导图',
+      '行动项',
+      '要点卡',
+      '闪卡与测验',
+      '术语表',
+      '时间线',
+      '选区改写',
+    ]) {
+      expect(screen.getByRole('button', { name: new RegExp(label) })).toBeInTheDocument()
+    }
   })
 })

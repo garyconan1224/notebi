@@ -12,6 +12,7 @@ import { HelpCircle } from 'lucide-react'
 import { useProviderStore, type Model } from '@/store/providerStore'
 import { useConfigStore } from '@/store/configStore'
 import { fetchTemplates, type TemplateCategory, type VideoTemplateItem } from '@/services/templates'
+import { getTaskDefaults } from '@/services/taskDefaults'
 
 import './new-summary-modal.css'
 
@@ -70,6 +71,8 @@ interface NewSummaryModalProps {
     providerId: string
     model: string
     searchWeb: boolean
+    summaryLanguage: string
+    summaryLanguageCustom: string
   }) => void
   onClose: () => void
 }
@@ -87,6 +90,8 @@ export function NewSummaryModal({
   const [summaryMode, setSummaryMode] = useState<'general' | 'speaker_aware'>('general')
   const [background, setBackground] = useState('')
   const [searchWeb, setSearchWeb] = useState(false)
+  const [summaryLanguage, setSummaryLanguage] = useState('zh-Hans')
+  const [summaryLanguageCustom, setSummaryLanguageCustom] = useState('')
   const [styleTemplates, setStyleTemplates] = useState<VideoTemplateItem[]>([])
   const userPickedRef = useRef(false)
 
@@ -119,6 +124,19 @@ export function NewSummaryModal({
       .catch(() => {})
     return () => { cancelled = true }
   }, [allowSpeakerAware, templateCategory])
+
+  // 设置是全局默认；此控件只为本次总结提供覆盖，不回写设置。
+  useEffect(() => {
+    let cancelled = false
+    getTaskDefaults()
+      .then((defaults) => {
+        if (cancelled) return
+        setSummaryLanguage(defaults.summary_language)
+        setSummaryLanguageCustom(defaults.summary_language_custom)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   const templateOptions = useMemo(() => {
     if (styleTemplates.length === 0) return [...QUICK_CARDS, ...MORE_STYLES]
@@ -209,6 +227,8 @@ export function NewSummaryModal({
       providerId: effectiveProviderId,
       model: effectiveModelId,
       searchWeb,
+      summaryLanguage,
+      summaryLanguageCustom,
     })
   }
 
@@ -320,6 +340,36 @@ export function NewSummaryModal({
                 ))}
               </select>
             </div>
+          </div>
+
+          <div className="nsm-section">
+            <div className="nsm-section-label">本次总结语言</div>
+            <select
+              aria-label="本次总结语言"
+              value={summaryLanguage}
+              onChange={(event) => {
+                setSummaryLanguage(event.target.value)
+                if (event.target.value !== 'custom') setSummaryLanguageCustom('')
+              }}
+              className="nsm-select"
+            >
+              <option value="zh-Hans">简体中文</option>
+              <option value="zh-Hant">繁体中文</option>
+              <option value="en">English</option>
+              <option value="ja">日本語</option>
+              <option value="ko">한국어</option>
+              <option value="source">跟随原文</option>
+              <option value="custom">自定义语言标签</option>
+            </select>
+            {summaryLanguage === 'custom' && (
+              <input
+                aria-label="本次自定义语言标签"
+                value={summaryLanguageCustom}
+                onChange={(event) => setSummaryLanguageCustom(event.target.value)}
+                className="nsm-select"
+                placeholder="例如 fr-CA"
+              />
+            )}
           </div>
 
           {/* 联网搜索开关 */}

@@ -139,12 +139,37 @@ function MilkdownEditorInner({
       })
       return true
     })
-    const formatFn = (format: Parameters<typeof runEditorFormat>[1]) => {
+    useLnEditorStore.getState().setGetSelectionFn(() => {
+      const editor = getEditor()
+      if (!editor) return ''
+      let selected = ''
+      editor.action((ctx: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+        const view = ctx.get(editorViewCtx)
+        const { from, to } = view.state.selection
+        selected = view.state.doc.textBetween(from, to, '\n')
+      })
+      return selected
+    })
+    useLnEditorStore.getState().setReplaceSelectionFn((text) => {
+      const editor = getEditor()
+      if (!editor) return false
+      editor.action((ctx: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+        const view = ctx.get(editorViewCtx)
+        const { from, to } = view.state.selection
+        view.dispatch(view.state.tr.insertText(text, from, to))
+        view.focus()
+      })
+      return true
+    })
+    const formatFn = (
+      format: Parameters<typeof runEditorFormat>[1],
+      value?: string,
+    ) => {
       const editor = getEditor()
       if (!editor) return false
       let applied = false
       editor.action((ctx: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-        applied = runEditorFormat(ctx.get(editorViewCtx), format)
+        applied = runEditorFormat(ctx.get(editorViewCtx), format, value)
       })
       return applied
     }
@@ -152,6 +177,8 @@ function MilkdownEditorInner({
     return () => {
       useLnEditorStore.getState().setInsertFn(null)
       useLnEditorStore.getState().setWrapSelectionFn(null)
+      useLnEditorStore.getState().setGetSelectionFn(null)
+      useLnEditorStore.getState().setReplaceSelectionFn(null)
       if (useLnEditorStore.getState().formatFn === formatFn) {
         useLnEditorStore.getState().resetFormatting()
       }

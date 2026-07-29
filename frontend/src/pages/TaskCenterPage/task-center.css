@@ -199,6 +199,55 @@
   transition: width 220ms ease;
 }
 
+.task-public-progress {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--r);
+  background: var(--bgalt);
+}
+
+.task-public-progress > div:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.task-public-progress span {
+  color: var(--mut);
+  font-size: var(--xs);
+}
+
+.task-public-progress strong {
+  color: var(--fg2);
+  font-size: var(--sm);
+}
+
+.task-public-progress > p,
+.task-summary-preview p {
+  margin: 0;
+  color: var(--mut);
+  font-size: var(--xs);
+  line-height: 1.55;
+}
+
+.task-summary-preview {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+  padding-top: 9px;
+  border-top: 1px solid var(--bdr);
+}
+
+.task-summary-preview a {
+  width: fit-content;
+  color: var(--acc);
+  font-size: var(--xs);
+  font-weight: 600;
+}
+
 .task-batch-meta {
   display: flex;
   flex-wrap: wrap;

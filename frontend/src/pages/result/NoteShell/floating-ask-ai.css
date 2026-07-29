@@ -1,0 +1,133 @@
+.note-ai-trigger {
+  position: fixed;
+  right: 24px;
+  bottom: 80px;
+  z-index: 38;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--acc);
+  border-radius: var(--rf);
+  background: var(--acc);
+  box-shadow: var(--sh2);
+  color: var(--accfg);
+  font-family: var(--fm);
+  font-size: var(--xs);
+  font-weight: 600;
+}
+
+.note-ai-dock {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 42;
+  display: flex;
+  width: var(--note-ai-width);
+  flex-direction: column;
+  border-left: 1px solid var(--bdrs);
+  background: var(--srf);
+  box-shadow: var(--sh3);
+}
+
+.note-ai-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  width: 8px;
+  cursor: col-resize;
+}
+
+.note-ai-resizer::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+  content: '';
+  transition: background 140ms ease;
+}
+
+.note-ai-resizer:hover::after {
+  background: var(--acc);
+}
+
+.note-ai-dock-header {
+  display: flex;
+  min-height: 68px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px 12px 18px;
+  border-bottom: 1px solid var(--bdr);
+}
+
+.note-ai-dock-header > div {
+  min-width: 0;
+}
+
+.note-ai-dock-header strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg);
+  font-size: var(--sm);
+}
+
+.note-ai-dock-header span {
+  display: block;
+  overflow: hidden;
+  margin-top: 4px;
+  color: var(--mut);
+  font-size: var(--xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-ai-dock-header button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--rs);
+  color: var(--mut);
+}
+
+.note-ai-dock-header button:hover {
+  background: var(--bgalt);
+  color: var(--fg);
+}
+
+.note-ai-dock-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+@media (max-width: 720px) {
+  .note-ai-dock {
+    top: auto;
+    left: 0;
+    width: 100%;
+    height: min(72vh, 680px);
+    border-top: 1px solid var(--bdrs);
+    border-left: 0;
+    border-radius: var(--rl) var(--rl) 0 0;
+  }
+
+  .note-ai-resizer {
+    top: -4px;
+    right: 0;
+    bottom: auto;
+    left: 0;
+    width: auto;
+    height: 8px;
+    cursor: ns-resize;
+  }
+}

@@ -354,6 +354,26 @@ class TestGenerateSummary:
         assert result.version == 0  # 默认 0，调用方负责覆盖
 
     @patch("backend.app.services.summary_generator._call_llm")
+    def test_output_language_is_injected_into_visible_summary_prompt(self, mock_llm: MagicMock) -> None:
+        mock_llm.return_value = ("# Summary", "openai/gpt")
+
+        generate_summary(_make_item(), "concise", summary_language="en")
+
+        system_prompt = mock_llm.call_args.args[0]
+        assert "【输出语言】" in system_prompt
+        assert "English" in system_prompt
+
+    @patch("backend.app.services.summary_generator._call_llm")
+    def test_custom_output_language_is_injected(self, mock_llm: MagicMock) -> None:
+        mock_llm.return_value = ("# Resume", "openai/gpt")
+
+        generate_summary(
+            _make_item(), "concise", summary_language="custom", summary_language_custom="fr-CA",
+        )
+
+        assert "fr-CA" in mock_llm.call_args.args[0]
+
+    @patch("backend.app.services.summary_generator._call_llm")
     def test_speaker_aware_summary_records_mode(self, mock_llm: MagicMock) -> None:
         mock_llm.return_value = ("# 待确认_SPEAKER_00\n\nSPEAKER_00 指出关键结论", "model")
         item = _make_item(

@@ -134,6 +134,33 @@ class TestCreateSummary:
         assert captured["template"] == "concise"
         assert captured["background_for_summary"] == "背景信息"
 
+    def test_create_passes_single_run_language_override_to_task(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import backend.app.routes.workspaces as ws_module
+
+        captured: dict[str, object] = {}
+        def fake_create_task(project_id: str, task_type: str, payload: dict[str, object]) -> TaskRecord:
+            captured.update(payload)
+            return _fake_summary_task("summary-language")
+
+        monkeypatch.setattr(ws_module._pipeline_runner, "create_task", fake_create_task)
+        resp = client.post("/workspaces/ws-1/items/item-1/summaries", json={
+            "template": "concise",
+            "summary_language": "custom",
+            "summary_language_custom": "fr-CA",
+        })
+
+        assert resp.status_code == 201
+        assert captured["summary_language"] == "custom"
+        assert captured["summary_language_custom"] == "fr-CA"
+
+    def test_create_rejects_invalid_single_run_language(self) -> None:
+        resp = client.post("/workspaces/ws-1/items/item-1/summaries", json={
+            "template": "concise", "summary_language": "not-a-language",
+        })
+        assert resp.status_code == 422
+
     def test_create_appends_task_id_to_item_related_task_ids(
         self, monkeypatch: pytest.MonkeyPatch, _patch_store: WorkspaceStore,
     ) -> None:

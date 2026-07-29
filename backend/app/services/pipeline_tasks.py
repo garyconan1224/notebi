@@ -4630,6 +4630,14 @@ def _generate_audio_summary(
     template = get_template(template_id)
     if template.speaker_aware_only and summary_mode != "speaker_aware":
         raise RuntimeError(f"模板 {template_id!r} 仅支持区分说话人总结")
+    # Keep the chunk extraction and final merge consistent with the regular
+    # summary endpoint.  The instruction deliberately excludes hidden
+    # reasoning: it only controls the visible generated note.
+    from backend.app.services.summary_generator import summary_output_language_instruction
+    output_language_instruction = summary_output_language_instruction(
+        str(payload.get("summary_language") or ""),
+        str(payload.get("summary_language_custom") or ""),
+    )
     chunks = _chunk_audio_summary_source(source)
     if not chunks:
         return ""
@@ -4684,7 +4692,7 @@ def _generate_audio_summary(
             ChatRequest(
                 model=chat_model,
                 messages=[
-                    {"role": "system", "content": template.system_prompt},
+                    {"role": "system", "content": template.system_prompt + output_language_instruction},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.3,
@@ -4704,6 +4712,7 @@ def _generate_audio_summary(
         "你是严格的长音频分段事实提取器。只整理当前分段，用紧凑 Markdown 输出："
         "本段主题、关键问答/各方观点、明确结论或行动、分歧与未决问题、带说话人和时间的证据。"
         "禁止把每个转写短句扩写成一行问答，禁止编造。"
+        + output_language_instruction
     )
     total_calls = len(chunks) + 3
     for index, (chunk, manifest_entry) in enumerate(zip(chunks, manifest), start=1):
@@ -4817,7 +4826,7 @@ def _generate_audio_summary(
         ChatRequest(
             model=chat_model,
             messages=[
-                {"role": "system", "content": template.system_prompt + media_frame_rule},
+                {"role": "system", "content": template.system_prompt + media_frame_rule + output_language_instruction},
                 {"role": "user", "content": final_prompt},
             ],
             temperature=0.3,

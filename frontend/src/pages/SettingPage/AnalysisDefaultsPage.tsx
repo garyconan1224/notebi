@@ -185,6 +185,8 @@ const CODE_TASK_DEFAULTS: TaskDefaults = {
   frame_interval_sec: 5,
   diarize: false,
   speaker_count: null,
+  summary_language: 'zh-Hans',
+  summary_language_custom: '',
 }
 
 function TaskDefaultsPanel() {
@@ -272,6 +274,50 @@ function TaskDefaultsPanel() {
             <option value="quotes">金句提取</option>
           </select>
         </label>
+        <label className="settings-inline-field">
+          <span>
+            <strong>总结输出语言</strong>
+            <p>不改变原始字幕；新建总结默认按这里的语言生成，单次生成时仍可覆盖。</p>
+          </span>
+          <select
+            aria-label="总结输出语言"
+            className="settings-native-select"
+            value={draft.summary_language}
+            onChange={(event) => setDraft((current) => ({
+              ...current,
+              summary_language: event.target.value as TaskDefaults['summary_language'],
+              summary_language_custom: event.target.value === 'custom'
+                ? current.summary_language_custom
+                : '',
+            }))}
+          >
+            <option value="zh-Hans">简体中文</option>
+            <option value="zh-Hant">繁体中文</option>
+            <option value="en">English</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="source">跟随原文</option>
+            <option value="custom">自定义语言标签</option>
+          </select>
+        </label>
+        {draft.summary_language === 'custom' && (
+          <label className="settings-inline-field">
+            <span>
+              <strong>自定义语言标签</strong>
+              <p>使用 BCP-47 标签，例如 fr、de 或 pt-BR。</p>
+            </span>
+            <input
+              aria-label="自定义语言标签"
+              className="settings-native-select"
+              value={draft.summary_language_custom}
+              placeholder="例如 fr"
+              onChange={(event) => setDraft((current) => ({
+                ...current,
+                summary_language_custom: event.target.value,
+              }))}
+            />
+          </label>
+        )}
         <label className="settings-inline-field">
           <span>
             <strong>视频画面分析与笔记配图</strong>

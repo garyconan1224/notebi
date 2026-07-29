@@ -23,6 +23,14 @@ const templateMocks = vi.hoisted(() => ({
   fetchTemplates: vi.fn(),
 }))
 
+const taskDefaultsMocks = vi.hoisted(() => ({
+  getTaskDefaults: vi.fn(),
+}))
+
+vi.mock('@/services/taskDefaults', () => ({
+  getTaskDefaults: taskDefaultsMocks.getTaskDefaults,
+}))
+
 vi.mock('@/services/templates', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/templates')>()
   return { ...actual, fetchTemplates: templateMocks.fetchTemplates }
@@ -50,6 +58,10 @@ describe('NewSummaryModal', () => {
     storeMocks.providerState.modelsLoading = {}
     vi.clearAllMocks()
     templateMocks.fetchTemplates.mockResolvedValue([])
+    taskDefaultsMocks.getTaskDefaults.mockResolvedValue({
+      summary_template: 'standard', video_frame_analysis: true, frame_interval_sec: 5,
+      diarize: false, speaker_count: null, summary_language: 'zh-Hans', summary_language_custom: '',
+    })
   })
 
   it('defaultTemplate late arrival does not overwrite manual template choice', () => {
@@ -98,6 +110,22 @@ describe('NewSummaryModal', () => {
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       providerId: 'openai_compatible-siliconflow',
       model: 'Qwen/Qwen3-8B',
+    }))
+  })
+
+  it('使用全局默认语言，并允许仅覆盖本次总结', async () => {
+    taskDefaultsMocks.getTaskDefaults.mockResolvedValue({
+      summary_template: 'standard', video_frame_analysis: true, frame_interval_sec: 5,
+      diarize: false, speaker_count: null, summary_language: 'en', summary_language_custom: '',
+    })
+    const onSubmit = vi.fn()
+    render(<NewSummaryModal creating={false} onSubmit={onSubmit} onClose={vi.fn()} />)
+    expect(await screen.findByLabelText('本次总结语言')).toHaveProperty('value', 'en')
+    fireEvent.change(screen.getByLabelText('本次总结语言'), { target: { value: 'custom' } })
+    fireEvent.change(screen.getByLabelText('本次自定义语言标签'), { target: { value: 'fr-CA' } })
+    fireEvent.click(screen.getByText('生成'))
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      summaryLanguage: 'custom', summaryLanguageCustom: 'fr-CA',
     }))
   })
 

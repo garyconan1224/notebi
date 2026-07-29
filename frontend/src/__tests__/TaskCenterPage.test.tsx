@@ -105,6 +105,27 @@ describe('TaskCenterPage', () => {
     )
   })
 
+  it('展示公开处理阶段与已完成总结预览，不把内部思维当作可见日志', async () => {
+    listTasksMock.mockResolvedValueOnce([{
+      task_id: 'summary-1', project_id: 'ws1', task_type: 'summary', status: 'SUCCESS', progress: 1,
+      batch_id: '', payload: { workspace_id: 'ws1', item_id: 'item-1' },
+      result: { summary: { content_md: '# 结论\n\n这是可查看的总结正文。' } },
+      log: [{ ts: '2026-07-29T08:00:00Z', level: 'info', message: '正在保存总结版本' }],
+    }])
+    render(<MemoryRouter><TaskCenterPage /></MemoryRouter>)
+    await screen.findByText('测试批次')
+    fireEvent.click(screen.getByRole('button', { name: '单条任务' }))
+
+    expect(await screen.findByText('当前环节')).toBeInTheDocument()
+    expect(screen.getByText('正在保存总结版本')).toBeInTheDocument()
+    expect(screen.getByText('总结预览')).toBeInTheDocument()
+    expect(screen.getByText(/这是可查看的总结正文/)).toBeInTheDocument()
+    expect(screen.getByText(/不展示模型的内部思维过程/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '打开完整总结' })).toHaveAttribute(
+      'href', '/workspaces/ws1/items/item-1/note',
+    )
+  })
+
   it('使用四类基础状态过滤，来源放到高级筛选', async () => {
     render(<MemoryRouter><TaskCenterPage /></MemoryRouter>)
     expect(await screen.findByText('测试批次')).toBeInTheDocument()

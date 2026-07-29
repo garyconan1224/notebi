@@ -79,6 +79,10 @@ from backend.app.services.note_assembler import (
     note_dir,
 )
 from backend.app.services.note_exporter import build_note_export_response
+from backend.app.services.note_artifacts import (
+    ARTIFACT_KINDS,
+    generate_note_artifact,
+)
 from backend.app.services.metadata_store import MetadataStore
 from backend.app.services.note_version_store import NoteVersionStore
 from backend.app.services.speaker_labels import (
@@ -133,6 +137,8 @@ def _handle_summary_task(record: TaskRecord, runner: Any) -> Dict[str, Any]:
         provider_id=str(payload.get("provider_id") or ""),
         model=str(payload.get("model") or ""),
         search_web=bool(payload.get("search_web")),
+        summary_language=str(payload.get("summary_language") or ""),
+        summary_language_custom=str(payload.get("summary_language_custom") or ""),
         progress=lambda ratio, message: runner.set_progress(record.task_id, ratio, message),
     )
     # 在模型调用完成后再取版本号，避免两个并行总结任务同时拿到同一个 vN。
@@ -148,6 +154,41 @@ def _handle_summary_task(record: TaskRecord, runner: Any) -> Dict[str, Any]:
 
 
 _pipeline_runner.register("summary", _handle_summary_task)
+
+
+def _handle_note_artifact_task(record: TaskRecord, runner: Any) -> Dict[str, Any]:
+    """Generate and persist an AI note artifact independently of summaries."""
+    payload = record.payload or {}
+    workspace_id = str(payload.get("workspace_id") or record.project_id)
+    item_id = str(payload.get("item_id") or "")
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise RuntimeError(f"workspace not found: {workspace_id}")
+    item = _find_item(rec, item_id)
+    artifact = generate_note_artifact(
+        item,
+        str(payload.get("kind") or ""),
+        selected_text=str(payload.get("selected_text") or ""),
+        instructions=str(payload.get("instructions") or ""),
+        provider_id=str(payload.get("provider_id") or ""),
+        model=str(payload.get("model") or ""),
+        progress=lambda ratio, message: runner.set_progress(record.task_id, ratio, message),
+    )
+    _store.append_item_result(
+        workspace_id,
+        item_id,
+        "ai_artifacts",
+        artifact,
+    )
+    runner.set_progress(record.task_id, 0.98, "正在保存笔记产物")
+    return {
+        "artifact": artifact,
+        "workspace_id": workspace_id,
+        "item_id": item_id,
+    }
+
+
+_pipeline_runner.register("note_artifact", _handle_note_artifact_task)
 
 
 # R3.1: 本地路径 → /static/... URL（供前端 <img> / <video> / <audio> src 使用）
@@ -4884,6 +4925,27 @@ class SummaryCreateRequest(BaseModel):
     provider_id: str = Field("", description="指定 provider（空 = 默认）")
     model: str = Field("", description="指定模型（空 = provider 默认）")
     search_web: bool = Field(False, description="是否联网搜索补充上下文")
+    summary_language: str = Field("", max_length=16, description="总结输出语言；空值使用全局默认")
+    summary_language_custom: str = Field("", max_length=35, description="自定义 BCP-47 语言标签")
+
+
+_SUMMARY_OUTPUT_LANGUAGES = {"source", "zh-Hans", "zh-Hant", "en", "ja", "ko", "custom"}
+
+
+def _effective_summary_output_language(req: SummaryCreateRequest) -> tuple[str, str]:
+    """Validate per-run override and fall back to persisted task defaults."""
+    defaults = load_settings().task_defaults
+    language = (req.summary_language or defaults.summary_language or "zh-Hans").strip()
+    custom = (req.summary_language_custom or (
+        defaults.summary_language_custom if not req.summary_language else ""
+    )).strip()
+    if language not in _SUMMARY_OUTPUT_LANGUAGES:
+        raise HTTPException(status_code=422, detail="不支持的总结输出语言")
+    if language == "custom":
+        import re
+        if not re.fullmatch(r"[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*", custom):
+            raise HTTPException(status_code=422, detail="自定义总结语言必须是有效的 BCP-47 标签")
+    return language, custom
 
 
 def _ensure_valid_template(template_id: str) -> None:
@@ -4919,6 +4981,110 @@ def _summary_source_present(results: Dict[str, Any]) -> bool:
     )
 
 
+class NoteArtifactCreateRequest(BaseModel):
+    kind: Literal[
+        "mind_map",
+        "action_items",
+        "key_cards",
+        "flashcards",
+        "glossary",
+        "timeline",
+        "selection_rewrite",
+    ]
+    selected_text: str = Field("", max_length=16000)
+    instructions: str = Field("", max_length=2000)
+    provider_id: str = ""
+    model: str = ""
+
+
+@router.get("/{workspace_id}/items/{item_id}/artifacts")
+def list_note_artifacts(workspace_id: str, item_id: str) -> List[Dict[str, Any]]:
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    item = _find_item(rec, item_id)
+    artifacts = (item.results or {}).get("ai_artifacts") or []
+    return [dict(entry) for entry in artifacts if isinstance(entry, dict)]
+
+
+@router.post("/{workspace_id}/items/{item_id}/artifacts", status_code=201)
+def create_note_artifact(
+    workspace_id: str,
+    item_id: str,
+    req: NoteArtifactCreateRequest,
+) -> Dict[str, Any]:
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    item = _find_item(rec, item_id)
+    if req.kind not in ARTIFACT_KINDS:
+        raise HTTPException(status_code=400, detail="不支持的笔记 AI 工具")
+    if req.kind == "selection_rewrite" and not req.selected_text.strip():
+        raise HTTPException(status_code=400, detail="选区改写需要提供选中文本")
+    if req.kind != "selection_rewrite" and not _summary_source_present(item.results or {}):
+        raise HTTPException(status_code=400, detail="当前笔记没有可用于生成的内容")
+
+    try:
+        task = _pipeline_runner.create_task(
+            workspace_id,
+            "note_artifact",
+            {
+                "workspace_id": workspace_id,
+                "item_id": item_id,
+                "kind": req.kind,
+                "selected_text": req.selected_text,
+                "instructions": req.instructions,
+                "provider_id": req.provider_id,
+                "model": req.model,
+                "title": f"{item.name} · AI 笔记工具",
+            },
+        )
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=f"创建笔记 AI 任务失败: {err}") from err
+
+    if task.task_id not in item.related_task_ids:
+        try:
+            _store.update_item(
+                workspace_id,
+                item_id,
+                related_task_ids=[*item.related_task_ids, task.task_id],
+            )
+        except Exception as err:
+            try:
+                _pipeline_runner.store.delete(task.task_id)
+            except Exception:
+                pass
+            raise HTTPException(status_code=500, detail=f"关联笔记 AI 任务失败: {err}") from err
+    return {
+        "status": "accepted",
+        "task_id": task.task_id,
+        "workspace_id": workspace_id,
+        "item_id": item_id,
+    }
+
+
+@router.delete("/{workspace_id}/items/{item_id}/artifacts/{artifact_id}")
+def delete_note_artifact(
+    workspace_id: str,
+    item_id: str,
+    artifact_id: str,
+) -> Dict[str, str]:
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    _find_item(rec, item_id)
+    deleted = _store.delete_item_result_entry(
+        workspace_id,
+        item_id,
+        "ai_artifacts",
+        "artifact_id",
+        artifact_id,
+    )
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"artifact not found: {artifact_id}")
+    return {"status": "deleted", "artifact_id": artifact_id}
+
+
 @router.get("/{workspace_id}/items/{item_id}/summaries")
 def list_summaries(workspace_id: str, item_id: str) -> List[Dict[str, Any]]:
     """列出该 item 的所有总结（按素材级 version 排序）。"""
@@ -4945,6 +5111,7 @@ async def create_summary(
 
     _ensure_valid_template(req.template)
     _ensure_valid_summary_mode(req.summary_mode)
+    summary_language, summary_language_custom = _effective_summary_output_language(req)
     rec = _store.get(workspace_id)
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
@@ -4992,6 +5159,8 @@ async def create_summary(
                 "model": req.model,
                 "search_web": req.search_web,
                 "summary_mode": req.summary_mode,
+                "summary_language": summary_language,
+                "summary_language_custom": summary_language_custom,
                 "title": item.name,
             },
         )

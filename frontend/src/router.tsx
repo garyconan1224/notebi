@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { lazy, Suspense, type ReactNode } from 'react'
-import { createBrowserRouter, Navigate, redirect } from 'react-router-dom'
+import { createBrowserRouter, Navigate, redirect, type Params } from 'react-router-dom'
 import Index from '@/pages/Index'
 import RouteErrorPage from '@/components/RouteErrorPage'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -31,9 +31,6 @@ const VideoTemplatesPage = lazy(
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
 const WorkspaceList = lazy(() => import('@/pages/WorkspacePage/WorkspaceList'))
 const TaskboardPage = lazy(() => import('@/pages/WorkspacePage/TaskboardPage'))
-const VideoResultPage = lazy(() => import('@/pages/result/VideoResultPage'))
-const ImageResultPage = lazy(() => import('@/pages/result/ImageResultPage'))
-const TextResultPage = lazy(() => import('@/pages/result/TextResultPage'))
 const ResultsOverview = lazy(() => import('@/pages/result/ResultsOverview/index'))
 const FavoritesPage = lazy(() => import('@/pages/FavoritesPage/FavoritesPage'))
 const SearchPage = lazy(() => import('@/pages/SearchPage/SearchPage'))
@@ -63,6 +60,20 @@ const RouteFallback = () => (
 const withSuspense = (node: ReactNode) => (
   <Suspense fallback={<RouteFallback />}>{node}</Suspense>
 )
+
+/** Keep legacy result deep links usable while maintaining one NoteShell state machine. */
+export function legacyDetailRedirect({
+  params,
+  request,
+}: {
+  params: Params
+  request: Request
+}) {
+  const url = new URL(request.url)
+  return redirect(
+    `/workspaces/${params.workspaceId}/items/${params.itemId}/note${url.search}`,
+  )
+}
 
 // React Router v7 Data Router 定义；URL 与原 BrowserRouter + Routes + Route 完全一致。
 export const router = createBrowserRouter([
@@ -98,20 +109,19 @@ export const router = createBrowserRouter([
       },
       {
         path: 'workspaces/:workspaceId/items/:itemId/video_detail',
-        element: withSuspense(<VideoResultPage />),
+        loader: legacyDetailRedirect,
       },
       {
         path: 'workspaces/:workspaceId/items/:itemId/image_detail',
-        element: withSuspense(<ImageResultPage />),
+        loader: legacyDetailRedirect,
       },
       {
         path: 'workspaces/:workspaceId/items/:itemId/audio_detail',
-        // 兼容旧链接；音频实际页面统一收敛到 /note。
-        loader: ({ params }) => redirect(`/workspaces/${params.workspaceId}/items/${params.itemId}/note`),
+        loader: legacyDetailRedirect,
       },
       {
         path: 'workspaces/:workspaceId/items/:itemId/text_detail',
-        element: withSuspense(<TextResultPage />),
+        loader: legacyDetailRedirect,
       },
       {
         path: 'workspaces/:workspaceId/items/:itemId/note',
@@ -120,19 +130,19 @@ export const router = createBrowserRouter([
       // 旧路由兼容（保留一个 release，loader redirect 到新路径）
       {
         path: 'workspaces/:workspaceId/items/:itemId/result',
-        loader: ({ params }) => redirect(`/workspaces/${params.workspaceId}/items/${params.itemId}/video_detail`),
+        loader: legacyDetailRedirect,
       },
       {
         path: 'workspaces/:workspaceId/items/:itemId/image_result',
-        loader: ({ params }) => redirect(`/workspaces/${params.workspaceId}/items/${params.itemId}/image_detail`),
+        loader: legacyDetailRedirect,
       },
       {
         path: 'workspaces/:workspaceId/items/:itemId/audio_result',
-        loader: ({ params }) => redirect(`/workspaces/${params.workspaceId}/items/${params.itemId}/note`),
+        loader: legacyDetailRedirect,
       },
       {
         path: 'workspaces/:workspaceId/items/:itemId/text_result',
-        loader: ({ params }) => redirect(`/workspaces/${params.workspaceId}/items/${params.itemId}/text_detail`),
+        loader: legacyDetailRedirect,
       },
       {
         path: 'processing/batch/:workspaceId',

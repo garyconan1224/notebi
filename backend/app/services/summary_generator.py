@@ -595,6 +595,35 @@ def build_prompt(
     return system_prompt, user_prompt
 
 
+def summary_output_language_instruction(
+    language: str = "",
+    custom_language: str = "",
+) -> str:
+    """Return a narrow, user-visible output-language constraint for a summary.
+
+    Source material is never translated or rewritten here; this only tells the
+    model which language to use for the generated summary.  Keeping it as a
+    short reusable instruction makes the normal and long-audio paths agree.
+    """
+    normalized = language.strip()
+    if not normalized or normalized == "source":
+        return ""
+    labels = {
+        "zh-Hans": "简体中文",
+        "zh-Hant": "繁体中文",
+        "en": "English",
+        "ja": "日本語",
+        "ko": "한국어",
+    }
+    target = custom_language.strip() if normalized == "custom" else labels.get(normalized, "")
+    if not target:
+        return ""
+    return (
+        f"\n\n【输出语言】请使用 {target} 撰写总结正文、标题和行动项。"
+        "保留专有名词、原始引文和时间码的原文；不要额外解释翻译过程。"
+    )
+
+
 # ── 智能配图：价值闸门 + 去重 + 自适应限量（治「图太多 / 不够智能」）──────
 # 低信息画面描述（价值闸门）：这些帧对理解无帮助，不进配图候选。
 _LOW_VALUE_FRAME_DESCS = {
@@ -1000,6 +1029,8 @@ def generate_summary(
     provider_id: str = "",
     model: str = "",
     search_web: bool = False,
+    summary_language: str = "",
+    summary_language_custom: str = "",
     embed_frames: bool = True,
     max_embed_frames: int = 0,
     progress: Callable[[float, str], None] | None = None,
@@ -1088,6 +1119,8 @@ def generate_summary(
                 "embed_frames": embed_frames,
                 "speaker_map": (item.results or {}).get("speaker_map") or {},
                 "speaker_roles": (item.results or {}).get("speaker_roles") or {},
+                "summary_language": summary_language,
+                "summary_language_custom": summary_language_custom,
             },
             transcript_text=long_source,
             transcript_segments=transcript_segments,
@@ -1129,6 +1162,9 @@ def generate_summary(
         item, template_id, background,
         summary_mode=summary_mode,
         embed_frames=embed_frames, max_embed_frames=max_embed_frames,
+    )
+    system_prompt += summary_output_language_instruction(
+        summary_language, summary_language_custom,
     )
 
     # 搜索结果拼到 user_prompt 前面

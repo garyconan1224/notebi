@@ -29,6 +29,8 @@ def test_get_task_defaults_uses_existing_code_defaults(client: TestClient) -> No
         "frame_interval_sec": 5,
         "diarize": False,
         "speaker_count": None,
+        "summary_language": "zh-Hans",
+        "summary_language_custom": "",
     }
 
 
@@ -41,6 +43,8 @@ def test_patch_task_defaults_round_trip_and_whitelist(
         "frame_interval_sec": 12,
         "diarize": True,
         "speaker_count": 3,
+        "summary_language": "en",
+        "summary_language_custom": "",
     }
 
     patched = client.patch("/task_defaults", json=payload)
@@ -68,6 +72,8 @@ def test_patch_task_defaults_preserves_omitted_fields(
             "frame_interval_sec": 9,
             "diarize": True,
             "speaker_count": 2,
+            "summary_language": "custom",
+            "summary_language_custom": "fr-CA",
         },
     )
 
@@ -83,6 +89,8 @@ def test_patch_task_defaults_preserves_omitted_fields(
         "frame_interval_sec": 15,
         "diarize": True,
         "speaker_count": None,
+        "summary_language": "custom",
+        "summary_language_custom": "fr-CA",
     }
 
 
@@ -96,6 +104,8 @@ def test_patch_task_defaults_preserves_omitted_fields(
         ({"speaker_count": 6}, "speaker_count"),
         ({"music_analysis": True}, "music_analysis"),
         ({"vision_model": "model-id"}, "vision_model"),
+        ({"summary_language": "unsupported"}, "summary_language"),
+        ({"summary_language": "custom", "summary_language_custom": "not a tag"}, "summary_language_custom"),
     ],
 )
 def test_patch_task_defaults_rejects_invalid_or_retired_fields(

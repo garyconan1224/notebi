@@ -199,6 +199,60 @@ class WorkspaceStore:
             self._save(rec)
             return rec
 
+    def append_item_result(
+        self,
+        workspace_id: str,
+        item_id: str,
+        key: str,
+        value: object,
+    ) -> WorkspaceRecord:
+        """Atomically append one entry to a list stored inside item.results."""
+        with self._lock:
+            rec = self._records.get(workspace_id)
+            if rec is None:
+                raise KeyError(f"workspace not found: {workspace_id}")
+            target = next((it for it in rec.items if it.item_id == item_id), None)
+            if target is None:
+                raise KeyError(f"item not found: {item_id}")
+            results = dict(target.results or {})
+            entries = list(results.get(key) or [])
+            entries.append(value)
+            results[key] = entries
+            target.results = results
+            target.updated_at = _now_iso()
+            self._save(rec)
+            return rec
+
+    def delete_item_result_entry(
+        self,
+        workspace_id: str,
+        item_id: str,
+        key: str,
+        id_key: str,
+        entry_id: str,
+    ) -> bool:
+        """Atomically remove one dict entry from a list inside item.results."""
+        with self._lock:
+            rec = self._records.get(workspace_id)
+            if rec is None:
+                raise KeyError(f"workspace not found: {workspace_id}")
+            target = next((it for it in rec.items if it.item_id == item_id), None)
+            if target is None:
+                raise KeyError(f"item not found: {item_id}")
+            results = dict(target.results or {})
+            entries = list(results.get(key) or [])
+            kept = [
+                entry for entry in entries
+                if not isinstance(entry, dict) or str(entry.get(id_key) or "") != entry_id
+            ]
+            if len(kept) == len(entries):
+                return False
+            results[key] = kept
+            target.results = results
+            target.updated_at = _now_iso()
+            self._save(rec)
+            return True
+
     def remove_item(self, workspace_id: str, item_id: str) -> WorkspaceRecord:
         with self._lock:
             rec = self._records.get(workspace_id)

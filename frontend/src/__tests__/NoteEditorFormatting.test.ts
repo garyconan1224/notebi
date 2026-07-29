@@ -16,13 +16,22 @@ const schema = new Schema({
       content: 'inline*',
       group: 'block',
     },
+    blockquote: { content: 'block+', group: 'block' },
+    code_block: { content: 'text*', group: 'block', marks: '' },
     text: { group: 'inline' },
     bullet_list: { content: 'list_item+', group: 'block' },
-    list_item: { content: 'paragraph block*' },
+    ordered_list: { content: 'list_item+', group: 'block' },
+    list_item: {
+      attrs: { checked: { default: null } },
+      content: 'paragraph block*',
+    },
   },
   marks: {
     strong: {},
     emphasis: {},
+    strike_through: {},
+    inlineCode: { code: true },
+    link: { attrs: { href: {}, title: { default: null } } },
   },
 })
 
@@ -103,5 +112,38 @@ describe('NoteShell editor formatting commands', () => {
     expect(list.childCount).toBe(2)
     expect(list.child(0).textContent).toBe('外层')
     expect(list.child(1).textContent).toBe('内层')
+  })
+
+  it('支持删除线、行内代码、引用、有序列表和待办列表', () => {
+    const doc = schema.node('doc', null, [paragraph('需要整理的内容')])
+    const selected = stateWithDoc(doc, 1, doc.content.size - 1)
+
+    const strike = applyEditorFormatToState(selected, 'strike')
+    expect(strike!.doc.rangeHasMark(1, 7, schema.marks.strike_through)).toBe(true)
+
+    const inlineCode = applyEditorFormatToState(selected, 'inlineCode')
+    expect(inlineCode!.doc.rangeHasMark(1, 7, schema.marks.inlineCode)).toBe(true)
+
+    const quote = applyEditorFormatToState(selected, 'blockquote')
+    expect(quote!.doc.child(0).type.name).toBe('blockquote')
+
+    const ordered = applyEditorFormatToState(selected, 'orderedList')
+    expect(ordered!.doc.child(0).type.name).toBe('ordered_list')
+
+    const task = applyEditorFormatToState(selected, 'taskList')
+    expect(task!.doc.child(0).type.name).toBe('bullet_list')
+    expect(task!.doc.child(0).child(0).attrs.checked).toBe(false)
+  })
+
+  it('链接格式保留目标地址', () => {
+    const doc = schema.node('doc', null, [paragraph('链接文字')])
+    const selected = stateWithDoc(doc, 1, doc.content.size - 1)
+
+    const linked = applyEditorFormatToState(selected, 'link', 'https://example.com')
+
+    expect(linked).not.toBeNull()
+    const marks = linked!.doc.child(0).child(0).marks
+    expect(marks[0].type).toBe(schema.marks.link)
+    expect(marks[0].attrs.href).toBe('https://example.com')
   })
 })

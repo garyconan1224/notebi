@@ -153,6 +153,9 @@ class TaskDefaultsConfig:
     frame_interval_sec: int = 5
     diarize: bool = False
     speaker_count: int | None = None
+    # 输出语言独立于 ASR 语言：source=跟随原文，custom 使用 summary_language_custom。
+    summary_language: str = "zh-Hans"
+    summary_language_custom: str = ""
 
     @classmethod
     def from_dict(cls, data: Any) -> "TaskDefaultsConfig":
@@ -177,7 +180,25 @@ class TaskDefaultsConfig:
             frame_interval_sec=frame_interval_sec,
             diarize=bool(data.get("diarize", False)),
             speaker_count=speaker_count,
+            summary_language=_normalize_summary_language(data.get("summary_language")),
+            summary_language_custom=_normalize_bcp47(data.get("summary_language_custom")),
         )
+
+
+_SUMMARY_LANGUAGES = frozenset({"source", "zh-Hans", "zh-Hant", "en", "ja", "ko", "custom"})
+
+
+def _normalize_summary_language(value: Any) -> str:
+    candidate = str(value or "zh-Hans").strip()
+    return candidate if candidate in _SUMMARY_LANGUAGES else "zh-Hans"
+
+
+def _normalize_bcp47(value: Any) -> str:
+    candidate = str(value or "").strip()
+    if not candidate:
+        return ""
+    import re
+    return candidate if re.fullmatch(r"[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*", candidate) else ""
 
 
 # ── NetworkConfig 网络配置 ────────────────────────────────────────────────────

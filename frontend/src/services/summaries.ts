@@ -47,7 +47,14 @@ export async function createSummary(
   itemId: string,
   template: string,
   background_for_summary = '',
-  options: { provider_id?: string; model?: string; search_web?: boolean; summary_mode?: 'general' | 'speaker_aware' } = {},
+  options: {
+    provider_id?: string
+    model?: string
+    search_web?: boolean
+    summary_mode?: 'general' | 'speaker_aware'
+    summary_language?: string
+    summary_language_custom?: string
+  } = {},
 ): Promise<SummaryTaskAccepted> {
   const { data } = await http.post<SummaryTaskAccepted>(
     `/workspaces/${workspaceId}/items/${itemId}/summaries`,
@@ -58,6 +65,8 @@ export async function createSummary(
       model: options.model ?? '',
       search_web: options.search_web ?? false,
       summary_mode: options.summary_mode ?? 'general',
+      summary_language: options.summary_language ?? '',
+      summary_language_custom: options.summary_language_custom ?? '',
     },
     { timeout: 30_000 },
   )
