@@ -675,22 +675,6 @@ export interface AudioResult {
     total_sec: number
     transcript_count: number
   }
-  /** IP.9.2: 人声分离结果 URL */
-  vocal_url?: string
-  /** IP.9.2: 人声文件路径 */
-  vocal_path?: string
-  /** IP.9.2: 音乐分析结果（Markdown） */
-  music_analysis?: string
-  /** 后端 pipeline 真实返回的 music 字段（兼容） */
-  music?: string | Record<string, unknown>
-  /** IP.9.2: 音乐转写结果（Markdown） */
-  music_transcription?: string
-  /** IP.9.2: 提示词输出（Markdown） */
-  prompt_output?: string
-  /** A3: 是否已自动切换为音乐分析模式 */
-  music_mode?: boolean
-  /** A3.3: 多段音乐 6 维度分析结果 */
-  music_segments?: MusicSegmentData[]
   /** N8: 说话人分离结果 */
   diarization?: {
     num_speakers: number
@@ -700,23 +684,6 @@ export interface AudioResult {
   speaker_map?: Record<string, string>
   /** A2: 说话人角色映射 */
   speaker_roles?: Record<string, string>
-}
-
-/** A3.3: 单个音乐片段的 6 维度分析 */
-export interface MusicSegmentData {
-  start: number
-  end: number
-  bpm: number
-  key: string
-  energy_mean: number
-  spectral_centroid_mean: number
-  genre: string
-  mood: string
-  instruments: string[]
-  atmosphere: string
-  music_prompt: string
-  similar_references: string[]
-  scenarios: string[]
 }
 
 /** GET /workspaces/{id}/items/{itemId}/audio_result — 音频结果页聚合数据 */

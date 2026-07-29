@@ -29,7 +29,6 @@ export interface LibraryItem {
   has_subtitle?: boolean
   has_chapters?: boolean
   frames_count?: number
-  audio_nature?: 'speech' | 'music' | null
 }
 
 export interface LibraryWorkspace {

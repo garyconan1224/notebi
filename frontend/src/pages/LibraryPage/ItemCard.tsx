@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import type { LibraryItem } from '@/services/library'
-import { Mic, Music, Play, Star } from 'lucide-react'
+import { Play, Star } from 'lucide-react'
 import { resolveItemRoute } from '@/lib/resolveItemRoute'
 import { SYSTEM_TAG_DIMENSIONS } from '@/constants/tagDimensions'
 import type { ItemTags } from '@/types/workspace'
@@ -131,20 +131,6 @@ export function ItemCard({ item, selected, selectMode, onToggleSelect, onDelete,
           <div className="doc-lines">
             {Array.from({ length: 4 }, (_, i) => <i key={i} />)}
           </div>
-        )}
-
-        {/* audio nature badge */}
-        {item.type === 'audio' && item.audio_nature && (
-          <span style={{
-            position: 'absolute', left: 9, bottom: 9, zIndex: 1,
-            borderRadius: 'var(--rs)', background: 'oklch(0% 0 0 / .55)',
-            color: 'oklch(100% 0 0)', fontSize: 10, fontFamily: 'var(--fm)',
-            fontWeight: 800, padding: '3px 7px', display: 'inline-flex',
-            alignItems: 'center', gap: 4,
-          }}>
-            {item.audio_nature === 'speech' ? <Mic size={11} /> : <Music size={11} />}
-            {item.audio_nature === 'speech' ? '人声' : '音乐'}
-          </span>
         )}
 
         {/* selection / actions overlay */}

@@ -350,6 +350,43 @@ def test_bridge_audio_maps_note_tasks_without_retired_music_features() -> None:
     assert "prompt_generation" not in payload
 
 
+def test_preflight_config_drops_retired_music_analysis() -> None:
+    config = PreflightConfig(
+        tasks={
+            "summary": {"enabled": True},
+            "music_analysis": {
+                "enabled": True,
+                "suno_format": True,
+                "udio_format": True,
+            },
+        },
+    )
+
+    assert config.tasks == {"summary": {"enabled": True}}
+
+
+def test_music_teaching_endpoint_is_retired(client: TestClient) -> None:
+    workspace_id = client.post(
+        "/workspaces",
+        json={"name": "No music analysis"},
+    ).json()["workspace_id"]
+    item_id = client.post(
+        f"/workspaces/{workspace_id}/items",
+        json={
+            "type": "video",
+            "source": "url",
+            "source_value": "https://example.com/video.mp4",
+        },
+    ).json()["items"][0]["item_id"]
+
+    response = client.post(
+        f"/workspaces/{workspace_id}/items/{item_id}/music-teaching/0",
+        json={"bpm": 120, "key": "C major", "music_prompt": "upbeat"},
+    )
+
+    assert response.status_code == 404
+
+
 def test_bridge_video_url_routes_to_note_task() -> None:
     """视频 URL 重新触发时应走 note task，避免 download 成功回调再创建 analyze task。"""
     workspace = WorkspaceRecord(workspace_id="ws-video", name="video")

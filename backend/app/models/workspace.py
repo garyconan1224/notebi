@@ -73,6 +73,14 @@ class PreflightConfig:
     tasks: Dict[str, Any] = field(default_factory=dict)   # 与 item.type 关联的勾选 + 子参数
     intent: str = ""  # "learning" | ""
 
+    def __post_init__(self) -> None:
+        # 音乐分析已退出 NoteBi；旧客户端或旧数据中的配置不再保存或回显。
+        self.tasks = {
+            key: value
+            for key, value in (self.tasks or {}).items()
+            if key != "music_analysis"
+        }
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 

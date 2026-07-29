@@ -59,12 +59,6 @@ export interface AudioAsrParams {
   whisper_lang: WhisperLang
 }
 
-export interface MusicAnalysisParams {
-  enabled: boolean
-  suno_format: boolean
-  udio_format: boolean
-}
-
 // ── 图片 ────────────────────────────────────────────────
 export type AssociationDirection =
   | 'usage'
@@ -133,12 +127,6 @@ export const DEFAULT_AUDIO_ASR: AudioAsrParams = {
   whisper_lang: 'auto',
 }
 
-export const DEFAULT_MUSIC_ANALYSIS: MusicAnalysisParams = {
-  enabled: false,
-  suno_format: true,
-  udio_format: false,
-}
-
 export const DEFAULT_IMAGE_FRAME_PROMPTS: ImageFramePromptsParams = {
   enabled: true,
 }
@@ -178,7 +166,6 @@ const DEFAULTS_BY_TYPE_AND_ID: Record<
     frame_prompt: { ...DEFAULT_VIDEO_FRAME_PROMPTS },
     summary: { ...DEFAULT_VIDEO_SUMMARY },
     srt: { enabled: true },
-    music_analysis: { ...DEFAULT_MUSIC_ANALYSIS },
   },
   audio: {
     asr_summary: { ...DEFAULT_AUDIO_ASR },
@@ -248,12 +235,14 @@ export function normalizeTasksShape(
   type: ItemType,
 ): Record<string, unknown> {
   const defaults = DEFAULTS_BY_TYPE_AND_ID[type] ?? {}
+  const retiredIds = type === 'video' ? new Set(['music_analysis']) : new Set<string>()
   const out: Record<string, unknown> = {}
   const allIds = new Set([
     ...Object.keys(defaults),
     ...Object.keys(tasks ?? {}),
   ])
   for (const id of allIds) {
+    if (retiredIds.has(id)) continue
     out[id] = getTaskParams(tasks, type, id)
   }
   return out
@@ -273,7 +262,6 @@ export function getTopLevelTasks(type: ItemType): TopLevelTask[] {
         { id: 'frame_prompt', label: '关键帧提取', desc: '截帧 → 视觉模型 → 描述' },
         { id: 'summary', label: '视频文案总结', desc: '三条路径选一' },
         { id: 'srt', label: '字幕导出', desc: '转写后导出 .srt' },
-        { id: 'music_analysis', label: '音乐分析', desc: '背景音乐 BPM / Suno-Udio' },
       ]
     case 'audio':
       return [

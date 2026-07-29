@@ -44,7 +44,7 @@ opencc-python-reimplemented>=0.1.7
 
 # ── 音频分析（N8）──────────────────────────────────────────────
 silero-vad>=5.0    # VAD 人声活动检测（轻量，torch 后端）
-librosa>=0.10      # 音乐特征：BPM / 调性 / 能量曲线
+librosa>=0.10      # m4a 解码与说话人分析的采样率回退
 # sherpa-onnx：默认说话人分离后端，支持 macOS / Windows / Linux 离线运行。
 # 固定 1.13.x，包含说话人分离边界检查修复且避免未来主/次版本破坏性升级。
 sherpa-onnx>=1.13.2,<1.14

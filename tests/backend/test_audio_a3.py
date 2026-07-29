@@ -21,10 +21,8 @@ from backend.app.models.tasks import TaskRecord, TaskStatus
 from shared.audio_analyzer import (
     DiarizationError,
     DiarizationResult,
-    MusicSegment,
     SpeakerSegment,
     VadResult,
-    segment_audio,
 )
 
 
@@ -610,94 +608,3 @@ def test_confirm_music_endpoint_410_for_completed_task() -> None:
         confirm_music_mode(task_id="audio-confirm-409")
     assert exc.value.status_code == 410
     assert "已移除音乐模式" in str(exc.value.detail)
-
-
-# ── A3.3: segment_audio 分段 ────────────────────────────────────
-
-def test_segment_audio_short_file_returns_single_segment(tmp_path: Path) -> None:
-    """短于 min_duration 的音频 → 返回单段。"""
-    # segment_audio 依赖 librosa，没装则返回空 list
-    try:
-        import librosa  # noqa: F401
-    except ImportError:
-        pytest.skip("librosa not installed")
-
-    import numpy as np
-    import soundfile as sf
-
-    sr = 22050
-    duration = 20.0  # < min_duration=30
-    t = np.linspace(0, duration, int(sr * duration), endpoint=False)
-    y = np.sin(2 * np.pi * 440 * t).astype(np.float32)
-
-    audio_path = tmp_path / "short.wav"
-    sf.write(str(audio_path), y, sr)
-
-    boundaries = segment_audio(str(audio_path), min_duration=30.0, fallback_duration=90.0)
-    assert len(boundaries) == 1
-    assert boundaries[0] == (0.0, pytest.approx(duration, abs=0.5))
-
-
-def test_segment_audio_long_uniform_fallback(tmp_path: Path) -> None:
-    """长均匀音频 → 回退固定 90s 窗。"""
-    try:
-        import librosa  # noqa: F401
-    except ImportError:
-        pytest.skip("librosa not installed")
-
-    import numpy as np
-    import soundfile as sf
-
-    sr = 22050
-    duration = 200.0
-    t = np.linspace(0, duration, int(sr * duration), endpoint=False)
-    y = (np.sin(2 * np.pi * 440 * t) * 0.5).astype(np.float32)
-
-    audio_path = tmp_path / "uniform.wav"
-    sf.write(str(audio_path), y, sr)
-
-    boundaries = segment_audio(str(audio_path), min_duration=30.0, fallback_duration=90.0)
-    # 200s / 90s → 至少 2 段
-    assert len(boundaries) >= 2
-    # 覆盖全时长
-    assert boundaries[0][0] == 0.0
-    assert boundaries[-1][1] == pytest.approx(duration, abs=1.0)
-
-
-def test_segment_audio_no_librosa_returns_empty(tmp_path: Path) -> None:
-    """librosa 未安装 → 返回空 list。"""
-    audio_path = tmp_path / "fake.wav"
-    audio_path.write_bytes(b"fake")
-
-    with patch("shared.audio_analyzer.logger") as mock_logger:
-        # 确保 import 失败
-        with patch.dict("sys.modules", {"librosa": None}):
-            # 需要重新导入以触发 import error
-            pass
-
-    # 因为 librosa 在函数内部 lazy import，这里模拟 ImportError
-    with patch("builtins.__import__", side_effect=ImportError("no librosa")):
-        boundaries = segment_audio(str(audio_path))
-    assert boundaries == []
-
-
-def test_music_segment_to_dict() -> None:
-    """MusicSegment.to_dict() 返回正确结构。"""
-    seg = MusicSegment(
-        start=0.0, end=90.0,
-        bpm=120.0, key="C major",
-        energy_mean=0.05, spectral_centroid_mean=1200.0,
-        genre="流行", mood="欢快",
-        instruments=["钢琴", "吉他"],
-        atmosphere="温暖治愈",
-        music_prompt="pop piano, upbeat, 120bpm",
-        similar_references=["Artist A", "Artist B"],
-        scenarios=["Vlog 配乐", "广告背景"],
-    )
-    d = seg.to_dict()
-    assert d["start"] == 0.0
-    assert d["end"] == 90.0
-    assert d["bpm"] == 120.0
-    assert d["genre"] == "流行"
-    assert d["instruments"] == ["钢琴", "吉他"]
-    assert len(d["similar_references"]) == 2

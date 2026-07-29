@@ -2152,15 +2152,6 @@ def get_library(
                     preferred_basenames=preferred_basenames,
                 )
             display_name = _item_display_name(rec, item, results)
-            audio_nature = None
-            if item.type == "audio":
-                music_mode = results.get("music_mode")
-                has_music = results.get("music")
-                has_speech = (results.get("vad") or {}).get("has_speech")
-                if music_mode or (has_music and not has_speech):
-                    audio_nature = "music"
-                elif has_speech:
-                    audio_nature = "speech"
             items_out.append({
                 "item_id": item.item_id,
                 "content_id": item.content_id,
@@ -2191,7 +2182,6 @@ def get_library(
                 "has_chapters": bool(results.get("chapters") or (results.get("av_synthesis") or {}).get("chapters")),
                 "primary_view": _compute_primary_view(item, results),
                 "frames_count": len(results.get("frames") or []) if item.type == "video" else 0,
-                "audio_nature": audio_nature,
             })
 
     return {"items": items_out, "workspaces": workspaces_out}
@@ -4145,6 +4135,17 @@ def get_audio_result(workspace_id: str, item_id: str) -> Dict[str, Any]:
     )
     if has_real:
         payload = dict(results)
+        for retired_key in (
+            "music_analysis",
+            "music",
+            "music_mode",
+            "music_segments",
+            "music_transcription",
+            "prompt_output",
+            "vocal_url",
+            "vocal_path",
+        ):
+            payload.pop(retired_key, None)
         payload.setdefault("source", "item_results")
         audio_payload = dict(payload.get("audio") or {})
         if not audio_payload.get("title"):
@@ -5708,58 +5709,6 @@ def save_inline_frames(
     frames = [InlineFrame.from_dict(f) for f in req.inline_frames]
     saved = _store.save_inline_frames(workspace_id, item_id, frames)
     return {"status": "saved", "count": len(saved)}
-
-
-# ── 音乐教学拆解（A-4） ──────────────────────────────────────────
-
-class MusicTeachingRequest(BaseModel):
-    bpm: float = Field(..., description="BPM")
-    key: str = Field(..., description="调性")
-    music_prompt: str = Field("", description="音乐提示词")
-
-
-@router.post("/{workspace_id}/items/{item_id}/music-teaching/{seg_idx}")
-async def music_teaching(
-    workspace_id: str,
-    item_id: str,
-    seg_idx: int,
-    req: MusicTeachingRequest,
-) -> Dict[str, str]:
-    """为指定音乐段生成「为什么动人」的教学解释。"""
-    from fastapi.concurrency import run_in_threadpool
-    from backend.app.services.music_teaching_prompts import (
-        MusicTeachingRequest as TeachingReq,
-        generate_teaching_explanation,
-    )
-
-    rec = _store.get(workspace_id)
-    if rec is None:
-        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
-    item = _find_item(rec, item_id)
-
-    # 验证 seg_idx 有效性
-    results = item.results or {}
-    music_segments = results.get("music_segments") or []
-    if seg_idx < 0 or seg_idx >= len(music_segments):
-        raise HTTPException(status_code=400, detail=f"无效的段索引: {seg_idx}")
-
-    teaching_req = TeachingReq(
-        bpm=req.bpm,
-        key=req.key,
-        music_prompt=req.music_prompt,
-    )
-
-    # 复用 chat_runner
-    from backend.app.services import chat_runner
-
-    try:
-        explanation = await run_in_threadpool(
-            lambda: generate_teaching_explanation(teaching_req, chat_runner)
-        )
-    except Exception as err:
-        raise HTTPException(status_code=502, detail=f"LLM 调用失败: {err}") from err
-
-    return {"explanation": explanation}
 
 
 # ── 融合（Merge） ──────────────────────────────────────────

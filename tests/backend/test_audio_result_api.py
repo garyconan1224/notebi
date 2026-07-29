@@ -84,3 +84,41 @@ def test_audio_result_404_workspace_not_found(client: TestClient) -> None:
     resp = client.get("/workspaces/nonexistent/items/anything/audio_result")
     assert resp.status_code == 404
     assert "workspace not found" in resp.json()["detail"]
+
+
+def test_audio_result_does_not_expose_retired_music_analysis(
+    client: TestClient,
+) -> None:
+    ws_id, item_id = _create_audio_workspace(client)
+    ws_module._store.update_item(
+        ws_id,
+        item_id,
+        results={
+            "transcript": [{"start": 0, "end": 1, "text": "hello"}],
+            "summary": "summary",
+            "music_analysis": "120 BPM",
+            "music": {"mood": "upbeat"},
+            "music_mode": True,
+            "music_segments": [{"bpm": 120}],
+            "music_transcription": "music notes",
+            "prompt_output": "Suno prompt",
+            "vocal_url": "/vocal.wav",
+            "vocal_path": "/tmp/vocal.wav",
+        },
+    )
+
+    response = client.get(f"/workspaces/{ws_id}/items/{item_id}/audio_result")
+
+    assert response.status_code == 200
+    body = response.json()
+    for key in (
+        "music_analysis",
+        "music",
+        "music_mode",
+        "music_segments",
+        "music_transcription",
+        "prompt_output",
+        "vocal_url",
+        "vocal_path",
+    ):
+        assert key not in body

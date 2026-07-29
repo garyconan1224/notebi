@@ -3,7 +3,6 @@
 主要覆盖不需要跑真模型的部分：
 - export_srt / export_txt 纯字符串生成
 - assign_speakers_to_segments 时间重叠映射
-- _parse_music_prompt_json 容错解析
 - run_diarization 使用 pyannote 4 API，并对不可用状态抛出结构化错误
 - VAD 用合成静音 wav 验证（silero-vad 已装时跑真模型）
 """
@@ -25,7 +24,6 @@ from shared.audio_analyzer import (
     DiarizationResult,
     SpeakerSegment,
     VadSegment,
-    _parse_music_prompt_json,
     assign_speakers_to_segments,
     export_srt,
     export_transcript_article,
@@ -163,26 +161,6 @@ def test_assign_speakers_unknown_segments_passthrough():
     )
     out = assign_speakers_to_segments(transcript, diar)
     assert "speaker" not in out[0]
-
-
-# ── 音乐提示词 JSON 解析 ──────────────────────────────────────
-
-
-def test_parse_music_prompt_json_extracts_block():
-    raw = """
-Here is the result:
-{"music_prompt": "indie folk, 92 bpm", "similar_references": ["Bon Iver"], "scenarios": ["vlog"]}
-done.
-"""
-    parsed = _parse_music_prompt_json(raw)
-    assert parsed is not None
-    assert parsed["music_prompt"] == "indie folk, 92 bpm"
-    assert parsed["similar_references"] == ["Bon Iver"]
-
-
-def test_parse_music_prompt_json_returns_none_on_garbage():
-    assert _parse_music_prompt_json("no json here") is None
-    assert _parse_music_prompt_json("") is None
 
 
 # ── diarization engine contract ───────────────────────────────
