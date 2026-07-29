@@ -1,0 +1,82 @@
+"""笔记任务默认值的持久化读写端点。"""
+
+from __future__ import annotations
+
+from dataclasses import asdict, replace
+from typing import Any, Dict, Optional
+
+from fastapi import APIRouter
+from pydantic import BaseModel, ConfigDict, Field
+
+from shared.settings_store import (
+    TaskDefaultsConfig,
+    load_settings,
+    save_settings,
+)
+
+router = APIRouter(tags=["task-defaults"])
+
+
+class TaskDefaultsUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    summary_template: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=80,
+        pattern=r"^[A-Za-z0-9_-]+$",
+    )
+    video_frame_analysis: Optional[bool] = None
+    frame_interval_sec: Optional[int] = Field(default=None, ge=1, le=120)
+    diarize: Optional[bool] = None
+    speaker_count: Optional[int] = Field(default=None, ge=2, le=5)
+
+
+def _serialize(config: TaskDefaultsConfig) -> Dict[str, Any]:
+    return asdict(config)
+
+
+@router.get("/task_defaults")
+def get_task_defaults() -> Dict[str, Any]:
+    return _serialize(load_settings().task_defaults)
+
+
+@router.patch("/task_defaults")
+def update_task_defaults(
+    request: TaskDefaultsUpdateRequest,
+) -> Dict[str, Any]:
+    settings = load_settings()
+    current = settings.task_defaults
+    fields_set = request.model_fields_set
+    updated = TaskDefaultsConfig(
+        summary_template=(
+            request.summary_template
+            if "summary_template" in fields_set
+            and request.summary_template is not None
+            else current.summary_template
+        ),
+        video_frame_analysis=(
+            request.video_frame_analysis
+            if "video_frame_analysis" in fields_set
+            and request.video_frame_analysis is not None
+            else current.video_frame_analysis
+        ),
+        frame_interval_sec=(
+            request.frame_interval_sec
+            if "frame_interval_sec" in fields_set
+            and request.frame_interval_sec is not None
+            else current.frame_interval_sec
+        ),
+        diarize=(
+            request.diarize
+            if "diarize" in fields_set and request.diarize is not None
+            else current.diarize
+        ),
+        speaker_count=(
+            request.speaker_count
+            if "speaker_count" in fields_set
+            else current.speaker_count
+        ),
+    )
+    save_settings(replace(settings, task_defaults=updated))
+    return _serialize(updated)

@@ -28,6 +28,16 @@ vi.mock('@/services/linkPreview', () => ({
   fetchLinkPreview: vi.fn().mockResolvedValue({}),
 }))
 
+vi.mock('@/services/taskDefaults', () => ({
+  getTaskDefaults: vi.fn().mockResolvedValue({
+    summary_template: 'standard',
+    video_frame_analysis: true,
+    frame_interval_sec: 5,
+    diarize: false,
+    speaker_count: null,
+  }),
+}))
+
 function renderLocal(opts: {
   embedFrames?: boolean
   noteStyle?: string

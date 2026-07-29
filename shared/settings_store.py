@@ -141,6 +141,45 @@ class PerformanceConfig:
         return "high"
 
 
+# ── TaskDefaultsConfig 任务创建默认值 ─────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class TaskDefaultsConfig:
+    """笔记任务默认值；缺失字段保持 S3 前的代码行为。"""
+
+    summary_template: str = "standard"
+    video_frame_analysis: bool = True
+    frame_interval_sec: int = 5
+    diarize: bool = False
+    speaker_count: int | None = None
+
+    @classmethod
+    def from_dict(cls, data: Any) -> "TaskDefaultsConfig":
+        if not isinstance(data, dict):
+            return cls()
+        summary_template = str(data.get("summary_template") or "standard").strip()
+        frame_interval_sec = _clamp_int(
+            data.get("frame_interval_sec"),
+            5,
+            1,
+            120,
+        )
+        raw_speaker_count = data.get("speaker_count")
+        speaker_count = (
+            _clamp_int(raw_speaker_count, 2, 2, 5)
+            if raw_speaker_count is not None
+            else None
+        )
+        return cls(
+            summary_template=summary_template or "standard",
+            video_frame_analysis=bool(data.get("video_frame_analysis", True)),
+            frame_interval_sec=frame_interval_sec,
+            diarize=bool(data.get("diarize", False)),
+            speaker_count=speaker_count,
+        )
+
+
 # ── NetworkConfig 网络配置 ────────────────────────────────────────────────────
 
 RoutingMode = Literal["smart", "direct", "proxy"]
@@ -313,6 +352,7 @@ class AppSettings:
     network: NetworkConfig = field(default_factory=NetworkConfig)
     download: DownloadConfig = field(default_factory=DownloadConfig)
     performance: PerformanceConfig = field(default_factory=PerformanceConfig)
+    task_defaults: TaskDefaultsConfig = field(default_factory=TaskDefaultsConfig)
     tavily_api_key: str = ""
 
     @classmethod
@@ -339,6 +379,7 @@ class AppSettings:
             network=NetworkConfig.from_dict(data.get("network")),
             download=DownloadConfig.from_dict(data.get("download")),
             performance=PerformanceConfig.from_dict(data.get("performance")),
+            task_defaults=TaskDefaultsConfig.from_dict(data.get("task_defaults")),
             tavily_api_key=str(data.get("tavily_api_key") or ""),
         )
 

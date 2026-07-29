@@ -20,6 +20,7 @@ def client(tmp_path: Path, monkeypatch):
     from backend.app.services.workspace_store import WorkspaceStore
     from backend.app.models.workspace import WorkspaceRecord
     from backend.app.routes import task_batches
+    from shared.settings_store import AppSettings
 
     store = TaskBatchStore(tmp_path / "batch-data")
     task_store = TaskStore(tmp_path / "backend_tasks.json")
@@ -48,6 +49,10 @@ def client(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(
         "backend.app.routes.task_batches.get_workspace_store",
         lambda: workspace_store,
+    )
+    monkeypatch.setattr(
+        "backend.app.routes.task_batches.load_settings",
+        lambda: AppSettings(),
     )
 
     from backend.app.main import app
@@ -195,6 +200,114 @@ def test_create_batch(client: TestClient) -> None:
     assert data["settings_snapshot"]["diarize"] is False
     assert data["settings_snapshot"]["frame_analysis"] is True
     assert data["target_workspace_id"]
+
+
+def test_create_batch_uses_saved_task_defaults(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from backend.app.routes import task_batches
+    from shared.settings_store import AppSettings, TaskDefaultsConfig
+
+    monkeypatch.setattr(
+        task_batches,
+        "load_settings",
+        lambda: AppSettings(
+            task_defaults=TaskDefaultsConfig(
+                summary_template="detailed",
+                video_frame_analysis=False,
+                frame_interval_sec=11,
+                diarize=True,
+                speaker_count=3,
+            )
+        ),
+    )
+
+    response = client.post(
+        "/pipeline/batches",
+        json={
+            "name": "saved defaults",
+            "workspace_id": "ws-1",
+            "start": False,
+            "items": [
+                {
+                    "batch_item_id": "saved-1",
+                    "source_url": "https://example.com/saved",
+                    "action": "process",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    snapshot = response.json()["settings_snapshot"]
+    assert snapshot["note_style"] == "detailed"
+    assert snapshot["frame_analysis"] is False
+    assert snapshot["frame_interval"] == 11
+    assert snapshot["diarize"] is True
+    assert snapshot["speaker_count"] == 3
+    payload = snapshot["item_payloads"]["saved-1"]
+    assert payload["summary_template"] == "detailed"
+    assert payload["preflight"]["embed_frames"] is False
+    assert payload["preflight"]["frame_prompt"]["interval_sec"] == 11
+    assert payload["diarize"] is True
+    assert payload["summary_mode"] == "speaker_aware"
+    assert payload["speaker_count"] == 3
+
+
+def test_create_batch_explicit_settings_override_saved_defaults(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from backend.app.routes import task_batches
+    from shared.settings_store import AppSettings, TaskDefaultsConfig
+
+    monkeypatch.setattr(
+        task_batches,
+        "load_settings",
+        lambda: AppSettings(
+            task_defaults=TaskDefaultsConfig(
+                summary_template="detailed",
+                video_frame_analysis=False,
+                frame_interval_sec=11,
+                diarize=True,
+                speaker_count=3,
+            )
+        ),
+    )
+
+    response = client.post(
+        "/pipeline/batches",
+        json={
+            "name": "explicit defaults",
+            "workspace_id": "ws-1",
+            "start": False,
+            "settings": {
+                "note_style": "concise",
+                "frame_analysis": True,
+                "frame_interval": 7,
+                "diarize": False,
+                "speaker_count": None,
+            },
+            "items": [
+                {
+                    "batch_item_id": "explicit-1",
+                    "source_url": "https://example.com/explicit",
+                    "action": "process",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    snapshot = response.json()["settings_snapshot"]
+    assert snapshot["note_style"] == "concise"
+    assert snapshot["frame_analysis"] is True
+    assert snapshot["frame_interval"] == 7
+    assert snapshot["diarize"] is False
+    assert snapshot["speaker_count"] is None
+    payload = snapshot["item_payloads"]["explicit-1"]
+    assert payload["summary_mode"] == "general"
 
 
 def test_create_batch_idempotent(client: TestClient) -> None:

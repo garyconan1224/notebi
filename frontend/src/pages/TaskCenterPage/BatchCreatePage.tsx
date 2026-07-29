@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { createTaskBatch, previewTaskBatch } from '@/services/taskBatches'
 import type { BatchPreviewItem } from '@/types/taskBatch'
+import { getTaskDefaults } from '@/services/taskDefaults'
 
 export default function BatchCreatePage() {
   const navigate = useNavigate()
@@ -14,8 +15,28 @@ export default function BatchCreatePage() {
   const [recognitionType, setRecognitionType] = useState('auto')
   const [diarize, setDiarize] = useState(false)
   const [frameAnalysis, setFrameAnalysis] = useState(true)
+  const [frameInterval, setFrameInterval] = useState(5)
+  const [speakerCount, setSpeakerCount] = useState('auto')
   const [items, setItems] = useState<BatchPreviewItem[]>([])
   const [error, setError] = useState('')
+  const settingsEditedRef = useRef(false)
+
+  useEffect(() => {
+    let cancelled = false
+    getTaskDefaults()
+      .then((defaults) => {
+        if (cancelled || settingsEditedRef.current) return
+        setNoteStyle(defaults.summary_template)
+        setFrameAnalysis(defaults.video_frame_analysis)
+        setFrameInterval(defaults.frame_interval_sec)
+        setDiarize(defaults.diarize)
+        setSpeakerCount(defaults.speaker_count?.toString() ?? 'auto')
+      })
+      .catch(() => setError('加载任务默认值失败，已使用内置默认值'))
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const sources = useMemo(
     () => sourceText.split(/\r?\n/).map((value) => value.trim()).filter(Boolean),
@@ -53,6 +74,8 @@ export default function BatchCreatePage() {
           note_type: recognitionType,
           diarize,
           frame_analysis: frameAnalysis,
+          frame_interval: frameInterval,
+          speaker_count: speakerCount === 'auto' ? null : Number(speakerCount),
         },
       })
       navigate(`/tasks/batches/${batch.batch_id}`)
@@ -87,10 +110,12 @@ export default function BatchCreatePage() {
         </section>
         <section className="space-y-4 rounded-xl border p-5">
           <h2 className="text-xl font-bold">常用笔记设置</h2>
-          <label className="block">笔记风格<select aria-label="笔记风格" className="mt-1 w-full rounded border p-2" value={noteStyle} onChange={(e) => setNoteStyle(e.target.value)}><option value="standard">标准总结</option><option value="brief">精简</option><option value="deep">深入</option></select></label>
+          <label className="block">笔记风格<select aria-label="笔记风格" className="mt-1 w-full rounded border p-2" value={noteStyle} onChange={(e) => { settingsEditedRef.current = true; setNoteStyle(e.target.value) }}><option value="standard">标准总结</option><option value="concise">精简摘要</option><option value="detailed">详细要点</option></select></label>
           <label className="block">识别类型<select aria-label="识别类型" className="mt-1 w-full rounded border p-2" value={recognitionType} onChange={(e) => setRecognitionType(e.target.value)}><option value="auto">自动识别</option><option value="video">视频</option><option value="audio">音频</option><option value="image_text">图文</option><option value="mixed">混合</option></select></label>
-          <label className="flex gap-2"><input type="checkbox" checked={diarize} onChange={(e) => setDiarize(e.target.checked)} />区分说话人</label>
-          <label className="flex gap-2"><input type="checkbox" checked={frameAnalysis} onChange={(e) => setFrameAnalysis(e.target.checked)} />画面分析</label>
+          <label className="flex gap-2"><input aria-label="区分说话人" type="checkbox" checked={diarize} onChange={(e) => { settingsEditedRef.current = true; setDiarize(e.target.checked) }} />区分说话人</label>
+          <label className="block">说话人数<select aria-label="说话人数" className="mt-1 w-full rounded border p-2" disabled={!diarize} value={speakerCount} onChange={(e) => { settingsEditedRef.current = true; setSpeakerCount(e.target.value) }}><option value="auto">自动判断</option>{[2, 3, 4, 5].map((count) => <option key={count} value={count}>{count} 人</option>)}</select></label>
+          <label className="flex gap-2"><input aria-label="画面分析" type="checkbox" checked={frameAnalysis} onChange={(e) => { settingsEditedRef.current = true; setFrameAnalysis(e.target.checked) }} />画面分析</label>
+          <label className="block">截帧间隔<input aria-label="截帧间隔" className="mt-1 w-full rounded border p-2" type="number" min={1} max={120} value={frameInterval} onChange={(e) => { settingsEditedRef.current = true; setFrameInterval(Number(e.target.value)) }} /></label>
           <div className="max-h-72 overflow-y-auto rounded border">
             {items.length === 0 ? <div className="p-5 text-center text-sm">预览后可逐项选择跳过、复制或重新处理</div> : items.map((item, index) => (
               <div key={item.batch_item_id} className="flex items-center gap-2 border-b p-2 text-sm">

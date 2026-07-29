@@ -26,6 +26,7 @@ from backend.app.routes.export import router as export_router
 from backend.app.routes.network_config import router as network_config_router
 from backend.app.routes.pipeline import router as pipeline_router
 from backend.app.routes.task_batches import router as task_batches_router
+from backend.app.routes.task_defaults import router as task_defaults_router
 from backend.app.routes.providers import router as providers_router
 from backend.app.routes.rag import router as rag_router
 from backend.app.routes.search import router as search_router
@@ -187,6 +188,7 @@ app.include_router(performance_tier_router)
 app.include_router(download_config_router)
 app.include_router(network_config_router)
 app.include_router(task_batches_router)
+app.include_router(task_defaults_router)
 app.include_router(rag_router)
 app.include_router(search_router)
 app.include_router(templates_router)

@@ -1,11 +1,17 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import ScreenshotPage from './ScreenshotPage'
 import TranscriberPage from './TranscriberPage'
 import PerformanceTierPage from './PerformanceTierPage'
 import { useSettingsShellStore } from '@/store/settingsShellStore'
 import { CARD_COLUMN_OPTIONS, useLibraryStore, type CardColumns } from '@/store/libraryStore'
 import { AUDIO_ERROR_GUIDANCE } from '@/lib/errorCategories'
+import {
+  getTaskDefaults,
+  updateTaskDefaults,
+  type TaskDefaults,
+} from '@/services/taskDefaults'
 
 type TabKey = 'performance' | 'display' | 'screenshot' | 'transcriber' | 'defaults' | 'audio-errors'
 
@@ -109,7 +115,7 @@ export default function AnalysisDefaultsPage() {
         {tab === 'display' && <DisplayDefaultsPanel />}
         {tab === 'screenshot' && <ScreenshotPage />}
         {tab === 'transcriber' && <TranscriberPage />}
-        {tab === 'defaults' && <TaskDefaultsPlaceholder />}
+        {tab === 'defaults' && <TaskDefaultsPanel />}
         {tab === 'audio-errors' && <AudioErrorGuidancePanel />}
       </div>
     </div>
@@ -173,11 +179,174 @@ function DisplayDefaultsPanel() {
   )
 }
 
-/** 任务默认勾选偏好（SPEC §2.6）——占位，后续实现 */
-function TaskDefaultsPlaceholder() {
+const CODE_TASK_DEFAULTS: TaskDefaults = {
+  summary_template: 'standard',
+  video_frame_analysis: true,
+  frame_interval_sec: 5,
+  diarize: false,
+  speaker_count: null,
+}
+
+function TaskDefaultsPanel() {
+  const setSaveBar = useSettingsShellStore((state) => state.setSaveBar)
+  const resetSaveBar = useSettingsShellStore((state) => state.resetSaveBar)
+  const [saved, setSaved] = useState<TaskDefaults>(CODE_TASK_DEFAULTS)
+  const [draft, setDraft] = useState<TaskDefaults>(CODE_TASK_DEFAULTS)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    getTaskDefaults()
+      .then((value) => {
+        if (cancelled) return
+        setSaved(value)
+        setDraft(value)
+      })
+      .catch(() => toast.error('加载任务默认值失败'))
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleSave = useCallback(async () => {
+    setSaving(true)
+    try {
+      await updateTaskDefaults(draft)
+      const readBack = await getTaskDefaults()
+      if (JSON.stringify(readBack) !== JSON.stringify(draft)) {
+        toast.error('保存后读回不一致，请重试')
+        return
+      }
+      setSaved(readBack)
+      setDraft(readBack)
+      toast.success('任务默认值已保存并读回验证')
+    } catch {
+      toast.error('保存任务默认值失败')
+    } finally {
+      setSaving(false)
+    }
+  }, [draft])
+
+  const dirty = JSON.stringify(saved) !== JSON.stringify(draft)
+  useEffect(() => {
+    setSaveBar({
+      dirtyCount: dirty ? 1 : 0,
+      saving,
+      onSave: handleSave,
+      onReset: () => setDraft(saved),
+    })
+  }, [dirty, handleSave, saved, saving, setSaveBar])
+  useEffect(() => () => resetSaveBar(), [resetSaveBar])
+
+  if (loading) {
+    return <div className="settings-empty">加载任务默认值…</div>
+  }
+
   return (
-    <div className="settings-empty">
-      <p>任务默认勾选偏好功能开发中。用户将可自定义「添加素材时默认勾选哪些分析任务」。</p>
+    <div className="settings-subpanel">
+      <section className="settings-card">
+        <label className="settings-inline-field">
+          <span>
+            <strong>默认摘要模板</strong>
+            <p>新建单素材或批量笔记时预先选择，仍可在本次任务中覆盖。</p>
+          </span>
+          <select
+            aria-label="默认摘要模板"
+            className="settings-native-select"
+            value={draft.summary_template}
+            onChange={(event) => setDraft((current) => ({
+              ...current,
+              summary_template: event.target.value,
+            }))}
+          >
+            <option value="standard">标准总结</option>
+            <option value="concise">精简摘要</option>
+            <option value="detailed">详细要点</option>
+            <option value="outline">大纲</option>
+            <option value="lecture">教学笔记</option>
+            <option value="steps">步骤教程</option>
+            <option value="quotes">金句提取</option>
+          </select>
+        </label>
+        <label className="settings-inline-field">
+          <span>
+            <strong>视频画面分析与笔记配图</strong>
+            <p>关闭后视频任务默认生成纯文字笔记。</p>
+          </span>
+          <input
+            aria-label="视频画面分析与笔记配图"
+            type="checkbox"
+            checked={draft.video_frame_analysis}
+            onChange={(event) => setDraft((current) => ({
+              ...current,
+              video_frame_analysis: event.target.checked,
+            }))}
+          />
+        </label>
+        <label className="settings-inline-field">
+          <span>
+            <strong>默认截帧间隔</strong>
+            <p>视频画面分析时每隔多少秒取一帧，范围 1–120 秒。</p>
+          </span>
+          <input
+            aria-label="默认截帧间隔"
+            className="settings-native-select"
+            type="number"
+            min={1}
+            max={120}
+            value={draft.frame_interval_sec}
+            onChange={(event) => setDraft((current) => ({
+              ...current,
+              frame_interval_sec: Number(event.target.value),
+            }))}
+          />
+        </label>
+        <label className="settings-inline-field">
+          <span>
+            <strong>默认区分说话人</strong>
+            <p>适用于音频和视频转写，并影响说话人总结方式。</p>
+          </span>
+          <input
+            aria-label="默认区分说话人"
+            type="checkbox"
+            checked={draft.diarize}
+            onChange={(event) => setDraft((current) => ({
+              ...current,
+              diarize: event.target.checked,
+              speaker_count: event.target.checked
+                ? current.speaker_count
+                : null,
+            }))}
+          />
+        </label>
+        <label className="settings-inline-field">
+          <span>
+            <strong>默认说话人数</strong>
+            <p>不知道人数时保持自动判断。</p>
+          </span>
+          <select
+            aria-label="默认说话人数"
+            className="settings-native-select"
+            disabled={!draft.diarize}
+            value={draft.speaker_count?.toString() ?? 'auto'}
+            onChange={(event) => setDraft((current) => ({
+              ...current,
+              speaker_count: event.target.value === 'auto'
+                ? null
+                : Number(event.target.value),
+            }))}
+          >
+            <option value="auto">自动判断</option>
+            {[2, 3, 4, 5].map((count) => (
+              <option key={count} value={count}>{count} 人</option>
+            ))}
+          </select>
+        </label>
+      </section>
     </div>
   )
 }

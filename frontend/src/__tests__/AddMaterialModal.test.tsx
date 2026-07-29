@@ -19,6 +19,9 @@ const {
   getWorkspaceMock,
   fetchLinkPreviewMock,
   fetchTemplatesMock,
+  getTaskDefaultsMock,
+  fetchProvidersMock,
+  providerState,
 } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
   sniffUrlMock: vi.fn(),
@@ -36,6 +39,15 @@ const {
   getWorkspaceMock: vi.fn(),
   fetchLinkPreviewMock: vi.fn(),
   fetchTemplatesMock: vi.fn(),
+  getTaskDefaultsMock: vi.fn(),
+  fetchProvidersMock: vi.fn(),
+  providerState: {
+    providers: [{ id: 'p1', name: 'TestProvider', enabled: true, capabilities: ['vision'] }],
+    providerModels: { p1: [{ id: 'm1', name: 'TestModel', capabilities: ['vision'] }] },
+  } as {
+    providers: Array<{ id: string; name: string; enabled: boolean; capabilities: string[] }>
+    providerModels: Record<string, Array<{ id: string; name: string; capabilities: string[] }>>
+  },
 }))
 
 vi.mock('react-router-dom', () => ({
@@ -61,6 +73,10 @@ vi.mock('@/services/taskBatches', () => ({
   createTaskBatch: createTaskBatchMock,
 }))
 
+vi.mock('@/services/taskDefaults', () => ({
+  getTaskDefaults: getTaskDefaultsMock,
+}))
+
 vi.mock('@/services/linkPreview', () => ({
   fetchLinkPreview: fetchLinkPreviewMock,
 }))
@@ -72,9 +88,8 @@ vi.mock('@/services/templates', async (importOriginal) => {
 
 vi.mock('@/store/providerStore', () => ({
   useProviderStore: vi.fn(() => ({
-    providers: [{ id: 'p1', name: 'TestProvider', enabled: true, capabilities: ['vision'] }],
-    providerModels: { p1: [{ id: 'm1', name: 'TestModel', capabilities: ['vision'] }] },
-    fetchProviders: vi.fn(),
+    ...providerState,
+    fetchProviders: fetchProvidersMock,
   })),
 }))
 
@@ -97,6 +112,16 @@ describe('AddMaterialModal', () => {
     fetchLinkPreviewMock.mockReset()
     fetchTemplatesMock.mockReset()
     fetchTemplatesMock.mockResolvedValue([])
+    getTaskDefaultsMock.mockResolvedValue({
+      summary_template: 'standard',
+      video_frame_analysis: true,
+      frame_interval_sec: 5,
+      diarize: false,
+      speaker_count: null,
+    })
+    providerState.providers = [{ id: 'p1', name: 'TestProvider', enabled: true, capabilities: ['vision'] }]
+    providerState.providerModels = { p1: [{ id: 'm1', name: 'TestModel', capabilities: ['vision'] }] }
+    fetchProvidersMock.mockReset()
     probeDurationMock.mockResolvedValue({ duration_sec: 0 })
     fetchLinkPreviewMock.mockImplementation(() => new Promise(() => {}))
     generateNoteMock.mockResolvedValue({
@@ -149,6 +174,91 @@ describe('AddMaterialModal', () => {
     await waitFor(() => {
       expect(fetchTemplatesMock).toHaveBeenCalledWith('style_audio')
     })
+  })
+
+  it('打开时读取任务默认值并传入真实生成请求', async () => {
+    getTaskDefaultsMock.mockResolvedValue({
+      summary_template: 'detailed',
+      video_frame_analysis: false,
+      frame_interval_sec: 12,
+      diarize: true,
+      speaker_count: 3,
+    })
+    render(
+      <AddMaterialModal
+        open
+        onOpenChange={vi.fn()}
+        workspaceIds={['ws-1']}
+        urlValue="https://example.com/video"
+        sniffResult={{
+          primary_type: 'video',
+          possible_types: ['video'],
+          platform: 'example',
+          title: '默认值视频',
+          thumbnail: null,
+          content_type_header: null,
+        }}
+      />,
+    )
+
+    await waitFor(() => expect(getTaskDefaultsMock).toHaveBeenCalled())
+    expect(await screen.findByText('详细要点')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /开始生成/ }))
+
+    await waitFor(() => expect(generateNoteMock).toHaveBeenCalled())
+    expect(generateNoteMock.mock.calls[0]).toEqual([
+      'ws-1',
+      'https://example.com/video',
+      '默认值视频',
+      false,
+      'vision',
+      12,
+      '',
+      'note',
+      'auto',
+      expect.objectContaining({
+        diarize: true,
+        speaker_count: 3,
+        summary_template: 'detailed',
+        summary_mode: 'speaker_aware',
+      }),
+    ])
+  })
+
+  it('视觉模型晚于默认值加载时仍保留关闭画面分析的默认值', async () => {
+    providerState.providers = []
+    providerState.providerModels = {}
+    getTaskDefaultsMock.mockResolvedValue({
+      summary_template: 'standard',
+      video_frame_analysis: false,
+      frame_interval_sec: 9,
+      diarize: false,
+      speaker_count: null,
+    })
+    const props = {
+      open: true,
+      onOpenChange: vi.fn(),
+      workspaceIds: ['ws-1'],
+      urlValue: 'https://example.com/late-provider',
+      sniffResult: {
+        primary_type: 'video' as const,
+        possible_types: ['video'] as Array<'video'>,
+        platform: 'example',
+        title: '晚加载模型',
+        thumbnail: null,
+        content_type_header: null,
+      },
+    }
+    const { rerender } = render(<AddMaterialModal {...props} />)
+
+    await waitFor(() => expect(getTaskDefaultsMock).toHaveBeenCalled())
+    providerState.providers = [{ id: 'p1', name: 'TestProvider', enabled: true, capabilities: ['vision'] }]
+    providerState.providerModels = { p1: [{ id: 'm1', name: 'TestModel', capabilities: ['vision'] }] }
+    rerender(<AddMaterialModal {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: /开始生成/ }))
+
+    await waitFor(() => expect(generateNoteMock).toHaveBeenCalled())
+    expect(generateNoteMock.mock.calls[0][3]).toBe(false)
   })
 
   it('显示三层入口，不显示手动分析模式', () => {

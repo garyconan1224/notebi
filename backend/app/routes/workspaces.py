@@ -3308,6 +3308,40 @@ def generate_note(workspace_id: str, req: GenerateNoteRequest) -> Dict[str, Any]
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
 
+    settings = load_settings()
+    saved_defaults = settings.task_defaults
+    explicit_fields = req.model_fields_set
+    effective_embed_frames = (
+        req.embed_frames
+        if "embed_frames" in explicit_fields
+        else saved_defaults.video_frame_analysis
+    )
+    effective_frame_interval = (
+        req.frame_interval
+        if "frame_interval" in explicit_fields
+        else saved_defaults.frame_interval_sec
+    )
+    effective_summary_template = (
+        req.summary_template
+        if "summary_template" in explicit_fields
+        else saved_defaults.summary_template
+    )
+    effective_diarize = (
+        req.diarize
+        if "diarize" in explicit_fields
+        else saved_defaults.diarize
+    )
+    effective_speaker_count = (
+        req.speaker_count
+        if "speaker_count" in explicit_fields
+        else saved_defaults.speaker_count
+    )
+    effective_summary_mode = (
+        req.summary_mode
+        if "summary_mode" in explicit_fields
+        else ("speaker_aware" if effective_diarize else "general")
+    )
+
     # 1. 嗅探 URL 类型 → 映射 ItemType（图文平台且 primary_type=text 时 override 为 image）
     try:
         sniff = sniff_url(url)
@@ -3346,11 +3380,11 @@ def generate_note(workspace_id: str, req: GenerateNoteRequest) -> Dict[str, Any]
     # R3.16: 透传嵌图开关 → note task；embed_frames=False 时 standard 总结不配图。
     # max_embed_frames 不传，由 summary_generator 按候选数自适应封顶（智能按需）。
     _task_payload["preflight"] = {
-        "embed_frames": req.embed_frames,
+        "embed_frames": effective_embed_frames,
         "image_mode": req.image_mode,
         "frame_prompt": {
             "mode": "interval",
-            "interval_sec": req.frame_interval
+            "interval_sec": effective_frame_interval
         },
         "intent": req.intent or "note",
     }
@@ -3364,15 +3398,15 @@ def generate_note(workspace_id: str, req: GenerateNoteRequest) -> Dict[str, Any]
     _task_payload["source_type"] = "link"
     _task_payload["kind_hint"] = sniff.primary_type  # "video"|"audio"|"image"|"text"
     # VN2: 透传笔记风格/发言人区分/用户补充说明（VN5 前后端联调时消费）
-    _task_payload["summary_template"] = req.summary_template
-    _task_payload["diarize"] = req.diarize
-    _task_payload["summary_mode"] = req.summary_mode
-    if req.speaker_count is not None:
-        _task_payload["speaker_count"] = req.speaker_count
+    _task_payload["summary_template"] = effective_summary_template
+    _task_payload["diarize"] = effective_diarize
+    _task_payload["summary_mode"] = effective_summary_mode
+    if effective_diarize and effective_speaker_count is not None:
+        _task_payload["speaker_count"] = effective_speaker_count
     if req.user_notes.strip():
         _task_payload["user_notes"] = req.user_notes.strip()
     try:
-        _s = load_settings()
+        _s = settings
         for _p in _s.providers:
             if not _p.enabled or not _p.api_key.strip():
                 continue

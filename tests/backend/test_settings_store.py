@@ -191,3 +191,19 @@ def test_invalid_cookie_mode_falls_back_to_browser(settings_path: Path) -> None:
     store = SettingsStore(settings_path)
     settings = store.load()
     assert settings.download.cookie_mode == "browser"
+
+
+def test_task_defaults_missing_fields_keep_current_behavior(
+    settings_path: Path,
+) -> None:
+    from shared.settings_store import SettingsStore
+
+    settings_path.write_text("{}", encoding="utf-8")
+
+    task_defaults = SettingsStore(settings_path).load().task_defaults
+
+    assert task_defaults.summary_template == "standard"
+    assert task_defaults.video_frame_analysis is True
+    assert task_defaults.frame_interval_sec == 5
+    assert task_defaults.diarize is False
+    assert task_defaults.speaker_count is None

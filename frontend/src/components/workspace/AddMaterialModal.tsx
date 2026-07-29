@@ -28,6 +28,7 @@ import { createTaskBatch } from '@/services/taskBatches'
 import { fetchLinkPreview } from '@/services/linkPreview'
 import { batchAddItemsToWorkspace, fetchLibrary, type LibraryItem } from '@/services/library'
 import { fetchTemplates, type TemplateCategory, type VideoTemplateItem } from '@/services/templates'
+import { getTaskDefaults } from '@/services/taskDefaults'
 import type {
   AnalysisScope,
   ItemType,
@@ -274,6 +275,8 @@ export function AddMaterialModal({
   const [existingQuery, setExistingQuery] = useState('')
   const sniffTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const autoBatchResolveKeyRef = useRef('')
+  const taskDefaultsEditedRef = useRef(false)
+  const savedEmbedFramesRef = useRef<boolean | null>(null)
 
   // R4.7: 收集所有可用视觉模型（provider 有 vision 能力 + 模型有 vision 标签）
   const visionModels = providers
@@ -376,7 +379,8 @@ export function AddMaterialModal({
   const userToggledRef = useRef(false)
   useEffect(() => {
     if (!userToggledRef.current) {
-      setEmbedFrames(hasVisionModel)
+      const savedPreference = savedEmbedFramesRef.current
+      setEmbedFrames((savedPreference ?? true) && hasVisionModel)
     }
   }, [hasVisionModel])
 
@@ -444,12 +448,20 @@ export function AddMaterialModal({
 
   const speakerAwareMedia = (showAudioNoteSettings || showVideoNoteSettings) && diarizeOn
   const selectedSpeakerCount = speakerCount === 'auto' ? undefined : Number(speakerCount)
-  const visiblePrimaryStyleOptions = speakerAwareMedia ? SPEAKER_AWARE_STYLES : primaryStyleOptions
+  const selectedGeneralStyle = styleOptions.find((style) => style.id === noteStyle)
+  const visiblePrimaryStyleOptions = speakerAwareMedia
+    ? (
+        selectedGeneralStyle && !SPEAKER_AWARE_STYLE_IDS.has(noteStyle)
+          ? [selectedGeneralStyle, ...SPEAKER_AWARE_STYLES]
+          : SPEAKER_AWARE_STYLES
+      )
+    : primaryStyleOptions
   const visibleMoreStyleOptions = speakerAwareMedia
     ? []
     : moreStyleOptions
 
   const handleDiarizeChange = (enabled: boolean) => {
+    taskDefaultsEditedRef.current = true
     setDiarizeOn(enabled)
     if (showAudioNoteSettings || showVideoNoteSettings) {
       if (enabled) setNoteStyle(SPEAKER_AWARE_STYLES[0].id)
@@ -511,8 +523,30 @@ export function AddMaterialModal({
     setCoverUrl('')
     setLinkTitle('')
     userToggledRef.current = false
+    taskDefaultsEditedRef.current = false
+    savedEmbedFramesRef.current = null
     // 每次重开恢复到当前 provider 能力下的默认值，避免上次展开/切换残留到这次弹框。
     setEmbedFrames(hasVisionModel)
+    let cancelled = false
+    getTaskDefaults()
+      .then((defaults) => {
+        if (cancelled || taskDefaultsEditedRef.current) return
+        savedEmbedFramesRef.current = defaults.video_frame_analysis
+        setNoteStyle(defaults.summary_template)
+        setEmbedFrames(defaults.video_frame_analysis && hasVisionModel)
+        setCaptureMode('manual')
+        setFrameInterval(defaults.frame_interval_sec)
+        setDiarizeOn(defaults.diarize)
+        setSpeakerCount(
+          defaults.speaker_count == null
+            ? 'auto'
+            : String(defaults.speaker_count) as SpeakerCountChoice,
+        )
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
   }, [open, urlValue, sourceText])
 
   useEffect(() => {
@@ -1046,7 +1080,10 @@ export function AddMaterialModal({
             onSelectedNoteTypeChange={setSelectedNoteType}
             noteTypeCards={NOTE_TYPE_CARDS}
             noteStyle={noteStyle}
-            onNoteStyleChange={setNoteStyle}
+            onNoteStyleChange={(value) => {
+              taskDefaultsEditedRef.current = true
+              setNoteStyle(value)
+            }}
             speakerAwareMedia={speakerAwareMedia}
             visiblePrimaryStyleOptions={visiblePrimaryStyleOptions}
             visibleMoreStyleOptions={visibleMoreStyleOptions}
@@ -1054,19 +1091,31 @@ export function AddMaterialModal({
             diarizeOn={diarizeOn}
             onDiarizeChange={handleDiarizeChange}
             speakerCount={speakerCount}
-            onSpeakerCountChange={setSpeakerCount}
+            onSpeakerCountChange={(value) => {
+              taskDefaultsEditedRef.current = true
+              setSpeakerCount(value)
+            }}
             showFrameAnalysisSettings={showFrameAnalysisSettings}
             embedFrames={embedFrames}
             onEmbedFramesChange={setEmbedFrames}
-            onUserToggled={() => { userToggledRef.current = true }}
+            onUserToggled={() => {
+              userToggledRef.current = true
+              taskDefaultsEditedRef.current = true
+            }}
             visionModels={visionModels}
             hasVisionModel={hasVisionModel}
             selectedVisionModel={selectedVisionModel}
             onSelectedVisionModelChange={setSelectedVisionModel}
             captureMode={captureMode}
-            onCaptureModeChange={setCaptureMode}
+            onCaptureModeChange={(value) => {
+              taskDefaultsEditedRef.current = true
+              setCaptureMode(value)
+            }}
             frameInterval={frameInterval}
-            onFrameIntervalChange={setFrameInterval}
+            onFrameIntervalChange={(value) => {
+              taskDefaultsEditedRef.current = true
+              setFrameInterval(value)
+            }}
             videoDuration={videoDuration}
             userNotes={userNotes}
             onUserNotesChange={setUserNotes}

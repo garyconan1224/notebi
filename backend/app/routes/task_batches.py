@@ -287,8 +287,19 @@ def create_batch(req: BatchCreateRequest) -> Dict[str, Any]:
         action = str(item.get("action") or "process")
         if action not in {"process", "skip", "copy"}:
             raise HTTPException(status_code=422, detail=f"不支持的批次动作: {action}")
+    saved_defaults = load_settings().task_defaults
+    effective_settings: dict[str, Any] = {
+        "task_type": "note",
+        "note_style": saved_defaults.summary_template,
+        "note_type": "auto",
+        "diarize": saved_defaults.diarize,
+        "frame_analysis": saved_defaults.video_frame_analysis,
+        "frame_interval": saved_defaults.frame_interval_sec,
+        "speaker_count": saved_defaults.speaker_count,
+        **req.settings,
+    }
     try:
-        frame_interval = int(req.settings.get("frame_interval") or 5)
+        frame_interval = int(effective_settings.get("frame_interval") or 5)
     except (TypeError, ValueError) as error:
         raise HTTPException(status_code=422, detail="frame_interval 必须是整数") from error
     if not 1 <= frame_interval <= 3600:
@@ -331,11 +342,15 @@ def create_batch(req: BatchCreateRequest) -> Dict[str, Any]:
             source_url = str(item.get("source_url") or "")
             workspace_item_id = str(uuid.uuid4())
             source_title = str(item.get("source_title") or "").strip() or source_url
-            frame_analysis = bool(req.settings.get("frame_analysis", True))
-            summary_template = str(req.settings.get("note_style") or "standard")
-            note_type = str(req.settings.get("note_type") or "auto")
-            diarize = bool(req.settings.get("diarize", False))
-            summary_mode = str(req.settings.get("summary_mode") or "general")
+            frame_analysis = bool(effective_settings.get("frame_analysis", True))
+            summary_template = str(effective_settings.get("note_style") or "standard")
+            note_type = str(effective_settings.get("note_type") or "auto")
+            diarize = bool(effective_settings.get("diarize", False))
+            summary_mode = (
+                str(effective_settings.get("summary_mode") or "general")
+                if "summary_mode" in req.settings
+                else ("speaker_aware" if diarize else "general")
+            )
             preflight = {
                 "embed_frames": frame_analysis,
                 "image_mode": "vision",
@@ -397,9 +412,11 @@ def create_batch(req: BatchCreateRequest) -> Dict[str, Any]:
                 "summary_template": summary_template,
                 "diarize": diarize,
                 "summary_mode": summary_mode,
-                "speaker_count": req.settings.get("speaker_count"),
-                "vision_model": str(req.settings.get("vision_model") or ""),
-                "user_notes": str(req.settings.get("user_notes") or ""),
+                "speaker_count": (
+                    effective_settings.get("speaker_count") if diarize else None
+                ),
+                "vision_model": str(effective_settings.get("vision_model") or ""),
+                "user_notes": str(effective_settings.get("user_notes") or ""),
             }
         items.append(
             BatchItem(
@@ -415,12 +432,7 @@ def create_batch(req: BatchCreateRequest) -> Dict[str, Any]:
         )
 
     settings_snapshot = {
-        "task_type": "note",
-        "note_style": "standard",
-        "note_type": "auto",
-        "diarize": False,
-        "frame_analysis": True,
-        **req.settings,
+        **effective_settings,
         "task_type": "note",
         "idempotency_key": req.idempotency_key,
         "item_payloads": item_payloads,

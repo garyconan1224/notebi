@@ -283,6 +283,89 @@ def test_intent_defaults_to_note(client):
     assert created_payload["note_media_kind"] == "auto"
 
 
+def test_generate_note_uses_saved_task_defaults_when_fields_are_omitted(client):
+    c, store, _ = client
+    ws_id = _create_ws(store)
+    from shared.settings_store import AppSettings, TaskDefaultsConfig
+
+    sniff_result = SniffResult(
+        primary_type="video",
+        possible_types=["video"],
+        platform="bilibili",
+    )
+    settings = AppSettings(
+        task_defaults=TaskDefaultsConfig(
+            summary_template="detailed",
+            video_frame_analysis=False,
+            frame_interval_sec=13,
+            diarize=True,
+            speaker_count=4,
+        )
+    )
+    with (
+        patch.object(ws_module, "sniff_url", return_value=sniff_result),
+        patch.object(ws_module, "load_settings", return_value=settings),
+    ):
+        response = c.post(
+            f"/workspaces/{ws_id}/items/generate-note",
+            json={"url": "https://www.bilibili.com/video/BV1saved"},
+        )
+
+    assert response.status_code == 200
+    payload = ws_module._pipeline_runner.create_task.call_args.args[2]
+    assert payload["summary_template"] == "detailed"
+    assert payload["preflight"]["embed_frames"] is False
+    assert payload["preflight"]["frame_prompt"]["interval_sec"] == 13
+    assert payload["diarize"] is True
+    assert payload["summary_mode"] == "speaker_aware"
+    assert payload["speaker_count"] == 4
+
+
+def test_generate_note_explicit_fields_override_saved_task_defaults(client):
+    c, store, _ = client
+    ws_id = _create_ws(store)
+    from shared.settings_store import AppSettings, TaskDefaultsConfig
+
+    sniff_result = SniffResult(
+        primary_type="video",
+        possible_types=["video"],
+        platform="bilibili",
+    )
+    settings = AppSettings(
+        task_defaults=TaskDefaultsConfig(
+            summary_template="detailed",
+            video_frame_analysis=False,
+            frame_interval_sec=13,
+            diarize=True,
+            speaker_count=4,
+        )
+    )
+    with (
+        patch.object(ws_module, "sniff_url", return_value=sniff_result),
+        patch.object(ws_module, "load_settings", return_value=settings),
+    ):
+        response = c.post(
+            f"/workspaces/{ws_id}/items/generate-note",
+            json={
+                "url": "https://www.bilibili.com/video/BV1explicit",
+                "summary_template": "concise",
+                "embed_frames": True,
+                "frame_interval": 7,
+                "diarize": False,
+                "speaker_count": None,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = ws_module._pipeline_runner.create_task.call_args.args[2]
+    assert payload["summary_template"] == "concise"
+    assert payload["preflight"]["embed_frames"] is True
+    assert payload["preflight"]["frame_prompt"]["interval_sec"] == 7
+    assert payload["diarize"] is False
+    assert payload["summary_mode"] == "general"
+    assert "speaker_count" not in payload
+
+
 def test_summary_hint_in_note_response(client):
     """note API 返回 summary_hint（content_category + default_template）。"""
     c, store, _ = client
