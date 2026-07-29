@@ -176,6 +176,7 @@
         "online": "Online"
       },
       "description": {
+        "subtitle": "Choose a transcription engine that fits your device and workflow.",
         "fastWhisper": "Free local transcription, fast but requires local resources, supports offline mode",
         "bcut": "Bilibili's online service, no local resources needed, requires internet",
         "kuaishou": "Kuaishou online service, no local resources needed, requires internet",

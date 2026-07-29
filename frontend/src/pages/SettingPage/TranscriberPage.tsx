@@ -247,7 +247,7 @@ const TranscriberPage = () => {
       <Section
         icon={<AudioLines className="size-4" />}
         title={t('transcriber.engine.title')}
-        description={t('transcriber.engine.description')}
+        description={t('transcriber.engine.description.subtitle')}
       >
         <div className="grid gap-3 sm:grid-cols-2">
           {getAvailableTranscriberTypes().map((opt) => {
@@ -292,13 +292,15 @@ const TranscriberPage = () => {
           </div>
         )}
 
-        {/* Whisper 模型大小（仅 fast-whisper） */}
-        {draft.type === 'fast-whisper' && (
+        {/* 两种本地 Whisper 引擎共用规格选择；下载中心负责分别展示缓存状态。 */}
+        {(draft.type === 'fast-whisper' || draft.type === 'mlx-whisper') && (
           <div className="mt-6 border-t pt-6">
             <FieldRow
               htmlFor="whisper-model-size"
               label={t('transcriber.engine.modelSize')}
-              hint={t('transcriber.engine.modelSize') + ' — tiny 最快，large-v3 最精准'}
+              hint={draft.type === 'mlx-whisper'
+                ? '选择 Apple Silicon 上使用的 MLX 模型规格；可先在“本地模型”下载。'
+                : t('transcriber.engine.modelSize') + ' — tiny 最快，large-v3 最精准'}
               dirty={dirty.whisper_model_size}
             >
               <select
@@ -310,7 +312,9 @@ const TranscriberPage = () => {
                 })}
               >
                 {getWhisperModelSizes().map((size) => {
-                  const status = modelStatuses.find((m) => m.name === size)
+                  const status = draft.type === 'fast-whisper'
+                    ? modelStatuses.find((m) => m.name === size)
+                    : undefined
                   return (
                     <option key={size} value={size}>
                       {status ? `${size} · ${modelStatusText(status)}` : size}
@@ -320,8 +324,8 @@ const TranscriberPage = () => {
               </select>
             </FieldRow>
 
-            {/* 缓存位置提示：下载慢时用户可自行排查磁盘空间/网络 */}
-            {cacheDir && (
+            {/* Faster Whisper 的缓存状态由原有探测接口提供；MLX 详情在本地模型中心。 */}
+            {draft.type === 'fast-whisper' && cacheDir && (
               <p className="mt-2 text-xs text-muted-foreground">
                 模型缓存目录：<code className="rounded bg-muted px-1 py-0.5 text-[11px]">{cacheDir}</code>
               </p>
