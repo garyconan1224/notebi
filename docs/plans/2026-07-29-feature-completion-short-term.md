@@ -1,10 +1,10 @@
 # NoteBi 功能完成短期计划
 
-状态：用户已确认
+状态：S0–S6 已执行完成，等待用户确认进入发布准备
 基线：`main` 的 `09f2797`
 目标平台：macOS / Linux
 执行方式：单 Agent、单阶段、独立分支、验证后再交接
-执行进度：S0 已由 `ad29776` 完成，S1 已由 `d277157` 完成，S2 已由 `622ae63` 完成，S3 已由 `2e9af28` 完成，S4 已由 `a8bfc0c` 完成，S5 已由 `ee4adf6` 完成；下一阶段为 S6
+执行进度：S0 已由 `ad29776` 完成，S1 已由 `d277157` 完成，S2 已由 `622ae63` 完成，S3 已由 `2e9af28` 完成，S4 已由 `a8bfc0c` 完成，S5 已由 `ee4adf6` 完成，S6 已由 `b9a53ea`、`c273094` 完成
 
 ## 1. 背景与现状证据
 
@@ -214,6 +214,13 @@ WIP 分支 `codex/wip-batch-settings-cleanup` 只作为证据保留，不可整�
 - 全部路由冒烟无 console error。
 
 ### S6：质量收口与 macOS/Linux 验收
+
+执行结果：
+
+- `pnpm lint` 为 `0 errors / 0 warnings`；Vitest `315 passed`，类型检查与生产构建通过。
+- 后端全套 `1301 passed, 2 skipped`；pytest mark、Starlette TestClient、Python 编译和依赖检查无警告。
+- NoteShell 主 chunk 从 `522.72 kB` 降至 `105.26 kB`，生产构建不再出现大 chunk 警告。
+- 真实浏览器复验主要设置、任务、知识库、本地合集、真实视频/音频笔记和新建素材弹窗，console error 为 `0`；图片、文本、批次、兼容重定向和 404 已在 S5 路由矩阵验证。
 
 质量债分批处理：
 
