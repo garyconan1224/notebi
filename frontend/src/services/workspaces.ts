@@ -849,6 +849,48 @@ export async function downloadExport(workspaceId: string, itemId: string): Promi
   URL.revokeObjectURL(url)
 }
 
+export interface BatchExportResult {
+  exportedCount: number
+  skippedCount: number
+  failedCount: number
+}
+
+/** POST /workspaces/{id}/items/batch-export — 下载所选素材的单个 ZIP。 */
+export async function downloadBatchExport(
+  workspaceId: string,
+  itemIds: string[],
+): Promise<BatchExportResult> {
+  const res = await http.post(
+    `${BASE}/${workspaceId}/items/batch-export`,
+    { item_ids: itemIds },
+    { responseType: 'blob' },
+  )
+  const disposition = res.headers['content-disposition'] as string | undefined
+  let filename = '笔记素材包_批量.zip'
+  if (disposition) {
+    const match = disposition.match(/filename\*=\s*(?:UTF-8''|")?([^";]+)/i)
+    if (match) filename = decodeURIComponent(match[1])
+  }
+  const url = URL.createObjectURL(res.data as Blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+
+  const readCount = (name: string, fallback: number) => {
+    const value = Number.parseInt(String(res.headers[name] ?? ''), 10)
+    return Number.isFinite(value) ? value : fallback
+  }
+  return {
+    exportedCount: readCount('x-exported-count', itemIds.length),
+    skippedCount: readCount('x-skipped-count', 0),
+    failedCount: readCount('x-failed-count', 0),
+  }
+}
+
 /** GET /workspaces/{id}/export-html — 下载合集全部笔记的自包含 HTML 文件 */
 export async function downloadCollectionHtml(workspaceId: string): Promise<void> {
   const res = await http.get(`${BASE}/${workspaceId}/export-html`, {

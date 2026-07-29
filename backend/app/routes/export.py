@@ -445,6 +445,110 @@ class BatchExportRequest(BaseModel):
     item_ids: List[str]
 
 
+def _has_exportable_results(item: WorkspaceItem) -> bool:
+    """批量导出只接受真实分析结果，不把 demo fixture 当作完成产物。"""
+    results = item.results
+    if not isinstance(results, dict):
+        return False
+
+    result_keys = {
+        ItemType.VIDEO.value: ("frames", "transcript", "transcript_segments", "summary"),
+        ItemType.IMAGE.value: ("description", "ocr_text", "summary"),
+        ItemType.AUDIO.value: ("transcript", "transcript_segments", "segments", "summary"),
+        ItemType.TEXT.value: ("content", "markdown", "summary"),
+    }
+    return any(results.get(key) not in (None, "", [], {}) for key in result_keys.get(item.type, ()))
+
+
+def _write_batch_export_item(
+    zf: zipfile.ZipFile,
+    item: WorkspaceItem,
+    prefix: str,
+) -> None:
+    """把一个已有真实结果的素材写入批量 ZIP。"""
+    item_type = item.type
+    raw_results = dict(item.results or {})
+    if item_type == ItemType.IMAGE.value:
+        data = raw_results
+        title = data.get("image", {}).get("title", item.name)
+        analysis_data = _build_analysis_json_image(data)
+        img_url = data.get("image", {}).get("image_url", "")
+        zf.writestr(
+            f"{prefix}/reference_frames/source_image.txt",
+            f"原始图片 URL: {img_url}\n标题: {title}\n",
+        )
+        zf.writestr(
+            f"{prefix}/analysis.json",
+            json.dumps(analysis_data, ensure_ascii=False, indent=2),
+        )
+        return
+
+    if item_type == ItemType.VIDEO.value:
+        data = raw_results
+        frames = data.get("frames", [])
+        transcript = data.get("transcript", [])
+        analysis_data = _build_analysis_json_video(frames)
+        for frame in frames:
+            ts = frame.get("ts", "00-00").replace(":", "-")
+            shot = frame.get("shot_type", "frame")
+            fname = f"{prefix}/reference_frames/frame_{ts}_{shot}.txt"
+            content = (
+                f"镜头: {frame.get('title', '')}\n"
+                f"时间: {frame.get('ts', '')}\n"
+                f"类型: {frame.get('shot_type', '')}\n"
+                f"描述: {frame.get('description', '')}\n"
+            )
+            zf.writestr(fname, content)
+        zf.writestr(f"{prefix}/subtitles.srt", _build_srt(transcript))
+        zf.writestr(
+            f"{prefix}/analysis.json",
+            json.dumps(analysis_data, ensure_ascii=False, indent=2),
+        )
+        return
+
+    if item_type == ItemType.TEXT.value:
+        data = raw_results
+        analysis_data = _build_analysis_json_text(data)
+        zf.writestr(
+            f"{prefix}/source.md",
+            data.get("content") or data.get("markdown", ""),
+        )
+        zf.writestr(f"{prefix}/summary.md", str(data.get("summary", "")))
+        zf.writestr(
+            f"{prefix}/analysis.json",
+            json.dumps(analysis_data, ensure_ascii=False, indent=2),
+        )
+        return
+
+    if item_type == ItemType.AUDIO.value:
+        data = raw_results
+        if "transcript_segments" in data and "segments" not in data:
+            data["segments"] = data["transcript_segments"]
+        transcript = data.get("transcript", [])
+        segments = data.get("segments", [])
+        analysis_data = _build_analysis_json_audio(data)
+        article = export_transcript_article(segments) or _build_transcript_txt(transcript)
+        grouped = export_transcript_by_speaker(
+            segments,
+            speaker_map=data.get("speaker_map") or {},
+        )
+        zf.writestr(f"{prefix}/转写文本（无时间轴）.txt", article)
+        if grouped:
+            zf.writestr(f"{prefix}/转写文本（无时间轴·区分说话人）.txt", grouped)
+        zf.writestr(f"{prefix}/summary.md", str(data.get("summary", "")))
+        zf.writestr(
+            f"{prefix}/segments.json",
+            json.dumps(segments, ensure_ascii=False, indent=2),
+        )
+        zf.writestr(
+            f"{prefix}/analysis.json",
+            json.dumps(analysis_data, ensure_ascii=False, indent=2),
+        )
+        return
+
+    raise ValueError(f"unsupported item type: {item_type}")
+
+
 @router.post("/{workspace_id}/items/batch-export")
 def batch_export_items(workspace_id: str, req: BatchExportRequest) -> StreamingResponse:
     """批量导出多个素材为一个笔记素材包 zip，每个素材一个子目录。"""
@@ -454,12 +558,25 @@ def batch_export_items(workspace_id: str, req: BatchExportRequest) -> StreamingR
 
     item_map = {it.item_id: it for it in rec.items}
     buf = io.BytesIO()
-    exported = 0
+    manifest: dict[str, Any] = {
+        "requested_count": len(req.item_ids),
+        "exported_count": 0,
+        "skipped_count": 0,
+        "failed_count": 0,
+        "exported": [],
+        "skipped": [],
+        "failed": [],
+    }
+    used_prefixes: set[str] = set()
 
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for item_id in req.item_ids:
             item = item_map.get(item_id)
             if item is None:
+                manifest["skipped"].append({
+                    "item_id": item_id,
+                    "reason": "item_not_found",
+                })
                 continue
 
             # 同步 task 产物
@@ -467,69 +584,72 @@ def batch_export_items(workspace_id: str, req: BatchExportRequest) -> StreamingR
             if overlay and overlay.get("results") and not item.results:
                 item.results = overlay["results"]
 
-            item_type = item.type
-            prefix = _sanitize_zip_prefix(item.name or item_id[:8])
-
-            if item_type == ItemType.IMAGE.value:
-                data = _get_image_data(item)
-                title = data.get("image", {}).get("title", item.name)
-                analysis_data = _build_analysis_json_image(data)
-                img_url = data.get("image", {}).get("image_url", "")
-                zf.writestr(
-                    f"{prefix}/reference_frames/source_image.txt",
-                    f"原始图片 URL: {img_url}\n标题: {title}\n",
-                )
-                zf.writestr(f"{prefix}/analysis.json", json.dumps(analysis_data, ensure_ascii=False, indent=2))
-            elif item_type == ItemType.VIDEO.value:
-                data = _get_video_data(item)
-                frames = data.get("frames", [])
-                transcript = data.get("transcript", [])
-                title = data.get("video", {}).get("title", item.name)
-                analysis_data = _build_analysis_json_video(data.get("frames", []))
-                srt_content = _build_srt(transcript)
-                if frames:
-                    for f in frames:
-                        ts = f.get("ts", "00-00").replace(":", "-")
-                        shot = f.get("shot_type", "frame")
-                        fname = f"{prefix}/reference_frames/frame_{ts}_{shot}.txt"
-                        content = (
-                            f"镜头: {f.get('title', '')}\n"
-                            f"时间: {f.get('ts', '')}\n"
-                            f"类型: {f.get('shot_type', '')}\n"
-                            f"描述: {f.get('description', '')}\n"
-                        )
-                        zf.writestr(fname, content)
-                zf.writestr(f"{prefix}/subtitles.srt", srt_content)
-                zf.writestr(f"{prefix}/analysis.json", json.dumps(analysis_data, ensure_ascii=False, indent=2))
-            elif item_type == ItemType.TEXT.value:
-                data = _get_text_data(item)
-                title = data.get("title", item.name) or item.name
-                analysis_data = _build_analysis_json_text(data)
-                zf.writestr(f"{prefix}/source.md", data.get("content") or data.get("markdown", ""))
-                zf.writestr(f"{prefix}/summary.md", data.get("summary", ""))
-                zf.writestr(f"{prefix}/analysis.json", json.dumps(analysis_data, ensure_ascii=False, indent=2))
-            elif item_type == ItemType.AUDIO.value:
-                data = _get_audio_data(item)
-                transcript = data.get("transcript", [])
-                segments = data.get("segments", [])
-                analysis_data = _build_analysis_json_audio(data)
-                article = export_transcript_article(segments) or _build_transcript_txt(transcript)
-                grouped = export_transcript_by_speaker(
-                    segments,
-                    speaker_map=data.get("speaker_map") or {},
-                )
-                zf.writestr(f"{prefix}/转写文本（无时间轴）.txt", article)
-                if grouped:
-                    zf.writestr(f"{prefix}/转写文本（无时间轴·区分说话人）.txt", grouped)
-                zf.writestr(f"{prefix}/summary.md", data.get("summary", ""))
-                zf.writestr(f"{prefix}/segments.json", json.dumps(data.get("segments", []), ensure_ascii=False, indent=2))
-                zf.writestr(f"{prefix}/analysis.json", json.dumps(analysis_data, ensure_ascii=False, indent=2))
-            else:
+            if item.type not in {
+                ItemType.IMAGE.value,
+                ItemType.VIDEO.value,
+                ItemType.TEXT.value,
+                ItemType.AUDIO.value,
+            }:
+                manifest["skipped"].append({
+                    "item_id": item_id,
+                    "name": item.name,
+                    "reason": "unsupported_type",
+                })
                 continue
 
-            exported += 1
+            if not _has_exportable_results(item):
+                manifest["skipped"].append({
+                    "item_id": item_id,
+                    "name": item.name,
+                    "reason": "no_exportable_results",
+                })
+                continue
 
-    if exported == 0:
+            base_prefix = _sanitize_zip_prefix(item.name or item_id[:8])
+            prefix = base_prefix
+            suffix = 2
+            while prefix in used_prefixes:
+                prefix = f"{base_prefix}-{suffix}"
+                suffix += 1
+
+            try:
+                item_buf = io.BytesIO()
+                with zipfile.ZipFile(
+                    item_buf,
+                    "w",
+                    zipfile.ZIP_DEFLATED,
+                ) as item_zip:
+                    _write_batch_export_item(item_zip, item, prefix)
+                item_buf.seek(0)
+                with zipfile.ZipFile(item_buf, "r") as item_zip:
+                    for entry in item_zip.infolist():
+                        zf.writestr(entry, item_zip.read(entry.filename))
+            except Exception as exc:  # noqa: BLE001
+                manifest["failed"].append({
+                    "item_id": item_id,
+                    "name": item.name,
+                    "reason": "export_failed",
+                    "error": str(exc),
+                })
+                continue
+
+            used_prefixes.add(prefix)
+            manifest["exported"].append({
+                "item_id": item_id,
+                "name": item.name,
+                "type": item.type,
+                "path": f"{prefix}/",
+            })
+
+        manifest["exported_count"] = len(manifest["exported"])
+        manifest["skipped_count"] = len(manifest["skipped"])
+        manifest["failed_count"] = len(manifest["failed"])
+        zf.writestr(
+            "manifest.json",
+            json.dumps(manifest, ensure_ascii=False, indent=2),
+        )
+
+    if manifest["exported_count"] == 0:
         raise HTTPException(status_code=400, detail="no valid items to export")
 
     buf.seek(0)
@@ -542,6 +662,9 @@ def batch_export_items(workspace_id: str, req: BatchExportRequest) -> StreamingR
         media_type="application/zip",
         headers={
             "Content-Disposition": f"attachment; filename*= {filename_star}",
+            "X-Exported-Count": str(manifest["exported_count"]),
+            "X-Skipped-Count": str(manifest["skipped_count"]),
+            "X-Failed-Count": str(manifest["failed_count"]),
         },
     )
 

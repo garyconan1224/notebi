@@ -171,6 +171,12 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[
+        "Content-Disposition",
+        "X-Exported-Count",
+        "X-Skipped-Count",
+        "X-Failed-Count",
+    ],
 )
 
 app.include_router(providers_router)

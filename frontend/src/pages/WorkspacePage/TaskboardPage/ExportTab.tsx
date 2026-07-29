@@ -8,7 +8,7 @@ import {
   FileText,
   FileVideo,
 } from 'lucide-react'
-import { downloadExport } from '@/services/workspaces'
+import { downloadBatchExport } from '@/services/workspaces'
 import type { WorkspaceItem, ItemType } from '@/types/workspace'
 import { toast } from 'sonner'
 
@@ -47,10 +47,20 @@ export function ExportTab({ items, workspaceId }: ExportTabProps) {
     if (selected.size === 0) return
     setExporting(true)
     try {
-      // 导出第一个选中项（后端按 item 粒度导出）
-      const firstId = [...selected][0]
-      await downloadExport(workspaceId, firstId)
-      toast.success('导出成功')
+      const itemIds = items
+        .filter((item) => selected.has(item.item_id))
+        .map((item) => item.item_id)
+      const result = await downloadBatchExport(workspaceId, itemIds)
+      if (result.skippedCount > 0 || result.failedCount > 0) {
+        const details = [
+          `已导出 ${result.exportedCount} 项`,
+          result.skippedCount > 0 ? `跳过 ${result.skippedCount} 项` : '',
+          result.failedCount > 0 ? `失败 ${result.failedCount} 项` : '',
+        ].filter(Boolean)
+        toast.warning(details.join('，'))
+      } else {
+        toast.success(`已导出 ${result.exportedCount} 项`)
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '导出失败')
     } finally {

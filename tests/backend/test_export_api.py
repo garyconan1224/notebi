@@ -338,6 +338,21 @@ def test_batch_export_happy_path_mixed(client: TestClient) -> None:
         json={"source": "url", "source_value": "https://example.com/test2.mp4", "name": "test-video-2", "type": "video"},
     ).json()
     vid_id = rec["items"][-1]["item_id"]
+    ws_module._store.update_item(
+        ws_id,
+        img_id,
+        results={"description": "图片说明"},
+        status="done",
+    )
+    ws_module._store.update_item(
+        ws_id,
+        vid_id,
+        results={
+            "frames": [{"ts": "00:01", "description": "画面"}],
+            "transcript": [{"start": 0, "end": 1, "text": "视频正文"}],
+        },
+        status="done",
+    )
 
     resp = client.post(
         f"/workspaces/{ws_id}/items/batch-export",
@@ -351,11 +366,23 @@ def test_batch_export_happy_path_mixed(client: TestClient) -> None:
     # 两个素材各有一个 analysis.json
     prompt_files = [n for n in names if n.endswith("analysis.json")]
     assert len(prompt_files) == 2
+    manifest = json.loads(zf.read("manifest.json"))
+    assert manifest["requested_count"] == 2
+    assert manifest["exported_count"] == 2
+    assert manifest["skipped"] == []
+    assert resp.headers["x-exported-count"] == "2"
+    assert resp.headers["x-skipped-count"] == "0"
 
 
 def test_batch_export_image_only(client: TestClient) -> None:
     """批量导出：仅图片素材应正常出 zip。"""
     ws_id, item_id = _create_workspace_with_item(client, "image")
+    ws_module._store.update_item(
+        ws_id,
+        item_id,
+        results={"description": "图片说明"},
+        status="done",
+    )
     resp = client.post(
         f"/workspaces/{ws_id}/items/batch-export",
         json={"item_ids": [item_id]},
@@ -396,6 +423,12 @@ def test_batch_export_path_traversal_sanitized(client: TestClient) -> None:
         json={"source": "url", "source_value": "https://example.com/test.mp4", "name": "../escape", "type": "image"},
     ).json()
     item_id = rec["items"][-1]["item_id"]
+    ws_module._store.update_item(
+        ws_id,
+        item_id,
+        results={"description": "图片说明"},
+        status="done",
+    )
 
     resp = client.post(
         f"/workspaces/{ws_id}/items/batch-export",
@@ -407,3 +440,203 @@ def test_batch_export_path_traversal_sanitized(client: TestClient) -> None:
     for name in zf.namelist():
         assert not name.startswith("../"), f"zip path not sanitized: {name}"
         assert not name.startswith("/"), f"zip path not sanitized: {name}"
+
+
+def test_batch_export_manifest_reports_missing_and_no_result_items(
+    client: TestClient,
+) -> None:
+    ws_id, ready_id = _create_workspace_with_item(client, "text")
+    ws_module._store.update_item(
+        ws_id,
+        ready_id,
+        results={"content": "可导出的正文"},
+        status="done",
+    )
+    rec = client.post(
+        f"/workspaces/{ws_id}/items",
+        json={
+            "source": "url",
+            "source_value": "https://example.com/pending",
+            "name": "尚无结果",
+            "type": "audio",
+        },
+    ).json()
+    pending_id = rec["items"][-1]["item_id"]
+
+    response = client.post(
+        f"/workspaces/{ws_id}/items/batch-export",
+        json={"item_ids": [ready_id, pending_id, "missing-item"]},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["x-exported-count"] == "1"
+    assert response.headers["x-skipped-count"] == "2"
+    archive = zipfile.ZipFile(io.BytesIO(response.content))
+    manifest = json.loads(archive.read("manifest.json"))
+    assert manifest["exported_count"] == 1
+    assert manifest["skipped_count"] == 2
+    assert {entry["reason"] for entry in manifest["skipped"]} == {
+        "item_not_found",
+        "no_exportable_results",
+    }
+
+
+def test_batch_export_uses_unique_sanitized_directories_for_duplicate_names(
+    client: TestClient,
+) -> None:
+    ws_id, first_id = _create_workspace_with_item(client, "text")
+    ws_module._store.update_item(
+        ws_id,
+        first_id,
+        name="../同名",
+        results={"content": "第一条"},
+        status="done",
+    )
+    rec = client.post(
+        f"/workspaces/{ws_id}/items",
+        json={
+            "source": "url",
+            "source_value": "https://example.com/second",
+            "name": "../同名",
+            "type": "text",
+        },
+    ).json()
+    second_id = rec["items"][-1]["item_id"]
+    ws_module._store.update_item(
+        ws_id,
+        second_id,
+        results={"content": "第二条"},
+        status="done",
+    )
+
+    response = client.post(
+        f"/workspaces/{ws_id}/items/batch-export",
+        json={"item_ids": [first_id, second_id]},
+    )
+
+    assert response.status_code == 200
+    archive = zipfile.ZipFile(io.BytesIO(response.content))
+    manifest = json.loads(archive.read("manifest.json"))
+    paths = [entry["path"] for entry in manifest["exported"]]
+    assert len(set(paths)) == 2
+    assert all(".." not in path and not path.startswith("/") for path in paths)
+
+
+def test_batch_export_supports_all_four_item_types(client: TestClient) -> None:
+    ws_id, video_id = _create_workspace_with_item(client, "video")
+    ws_module._store.update_item(
+        ws_id,
+        video_id,
+        results={"frames": [{"ts": "00:01", "description": "视频帧"}]},
+        status="done",
+    )
+    item_ids = [video_id]
+    fixtures = [
+        ("image", {"description": "图片说明"}),
+        (
+            "audio",
+            {
+                "transcript_segments": [
+                    {"start": 0, "end": 1, "text": "音频正文"},
+                ],
+            },
+        ),
+        ("text", {"content": "文本正文"}),
+    ]
+    for item_type, results in fixtures:
+        rec = client.post(
+            f"/workspaces/{ws_id}/items",
+            json={
+                "source": "url",
+                "source_value": f"https://example.com/{item_type}",
+                "name": f"{item_type}-item",
+                "type": item_type,
+            },
+        ).json()
+        item_id = rec["items"][-1]["item_id"]
+        ws_module._store.update_item(
+            ws_id,
+            item_id,
+            results=results,
+            status="done",
+        )
+        item_ids.append(item_id)
+
+    response = client.post(
+        f"/workspaces/{ws_id}/items/batch-export",
+        json={"item_ids": item_ids},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["x-exported-count"] == "4"
+    archive = zipfile.ZipFile(io.BytesIO(response.content))
+    manifest = json.loads(archive.read("manifest.json"))
+    assert {entry["type"] for entry in manifest["exported"]} == {
+        "video",
+        "image",
+        "audio",
+        "text",
+    }
+    names = set(archive.namelist())
+    assert any(name.endswith("/subtitles.srt") for name in names)
+    assert any(name.endswith("/reference_frames/source_image.txt") for name in names)
+    assert any(name.endswith("/转写文本（无时间轴）.txt") for name in names)
+    assert any(name.endswith("/source.md") for name in names)
+
+
+def test_batch_export_does_not_leave_partial_files_for_failed_item(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ws_id, failed_id = _create_workspace_with_item(client, "text")
+    ws_module._store.update_item(
+        ws_id,
+        failed_id,
+        name="失败素材",
+        results={"content": "不应残留"},
+        status="done",
+    )
+    rec = client.post(
+        f"/workspaces/{ws_id}/items",
+        json={
+            "source": "url",
+            "source_value": "https://example.com/ready",
+            "name": "正常素材",
+            "type": "text",
+        },
+    ).json()
+    ready_id = rec["items"][-1]["item_id"]
+    ws_module._store.update_item(
+        ws_id,
+        ready_id,
+        results={"content": "正常正文"},
+        status="done",
+    )
+    original_writer = export_module._write_batch_export_item
+
+    def fail_after_partial_write(
+        archive: zipfile.ZipFile,
+        item,
+        prefix: str,
+    ) -> None:
+        if item.item_id == failed_id:
+            archive.writestr(f"{prefix}/partial.txt", "半成品")
+            raise RuntimeError("expected test failure")
+        original_writer(archive, item, prefix)
+
+    monkeypatch.setattr(
+        export_module,
+        "_write_batch_export_item",
+        fail_after_partial_write,
+    )
+
+    response = client.post(
+        f"/workspaces/{ws_id}/items/batch-export",
+        json={"item_ids": [failed_id, ready_id]},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["x-exported-count"] == "1"
+    assert response.headers["x-failed-count"] == "1"
+    archive = zipfile.ZipFile(io.BytesIO(response.content))
+    assert not any(name.startswith("失败素材/") for name in archive.namelist())
