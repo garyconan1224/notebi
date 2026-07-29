@@ -8,7 +8,7 @@
 
 - 当前未提交源码保存到 `codex/wip-batch-settings-cleanup` 的 `e90785b`。
 - 未合并旧分支和原 stash 建立归档标签后移除活动引用。
-- 删除已合并旧分支和多余 worktree，只保留 `main`、清理分支和 WIP 分支。
+- 删除已合并旧分支和多余 worktree；清理分支验证后快进合入 `main` 并删除，当前只保留 `main` 和 WIP 分支。
 - 从当前树删除 195 份历史计划、旧多产品规格、旧截图和截图型验收证据。
 - 保留精简 JSON 验收报告和验收脚本。
 - 旧 Windows 离线包、构建产物和缓存移到系统废纸篓。
@@ -32,6 +32,8 @@
 - `checkpoint/main-sync-a-20260729`
 - `archive/complete-approved-plan-20260729`
 - `archive/pre-main-sync-user-work-20260729`
+- `checkpoint/project-clean-20260729`
+- `checkpoint/project-clean-final-20260729`
 
 系统废纸篓中的本轮目录为 `notebi-cleanup-20260729`。确认项目长期稳定后再由用户决定是否彻底清空。
 
