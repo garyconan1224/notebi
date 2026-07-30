@@ -85,8 +85,12 @@ export const router = createBrowserRouter([
       { index: true, element: withSuspense(<WorkbenchPage />) },
       { path: 'new', element: <Navigate to="/" replace /> },
       {
-        path: 'workspaces',
+        path: 'collections',
         element: withSuspense(<WorkspaceList />),
+      },
+      {
+        path: 'workspaces',
+        element: <Navigate to="/collections" replace />,
       },
       { path: 'favorites', element: withSuspense(<FavoritesPage />) },
       { path: 'knowledge', element: withSuspense(<SearchPage />) },

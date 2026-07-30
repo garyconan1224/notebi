@@ -19,7 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { downloadItemNoteExport, downloadSubtitles, downloadTranscript, exportItemNoteObsidian, getItemNote, putItemNote, updateSpeakerMap, type ItemNoteExportFormat, type TranscriptExportMode } from '@/services/workspaces'
 import type { VideoResultTranscriptLine } from '@/services/workspaces'
 import type { ItemNote } from '@/types/workspace'
-import { createSummary, deleteSummary, listSummaries, renameSummary, type ItemSummary } from '@/services/summaries'
+import { createSummary, deleteSummary, listSummaries, renameSummary, updateSummaryContent, type ItemSummary } from '@/services/summaries'
 import { retryPipelineTask } from '@/services/pipeline'
 import { MarkdownToc, extractToc, slugify } from '@/components/MarkdownToc'
 import { platformLabelFromUrl } from './note-shell-utils'
@@ -35,7 +35,6 @@ import { NoteHistoryPanel } from './NoteHistoryPanel'
 import '@/pages/results/LearningNotesPage/learning-notes.css'
 import './note-shell.css'
 import { NewSummaryModal } from '@/components/NewSummaryModal'
-import NoteChatDrawer from '@/components/NoteChatDrawer'
 import { FloatingAskAi } from './FloatingAskAi'
 import { AiArtifactPanel } from './AiArtifactPanel'
 import type { NoteArtifactKind } from '@/services/noteArtifacts'
@@ -485,7 +484,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [editingSpeakerRole, setEditingSpeakerRole] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [chatOpen] = useState(false)
   const [askAiOpen, setAskAiOpen] = useState(false)
   const [askAiWidth, setAskAiWidth] = useState(400)
   const [exportOpen, setExportOpen] = useState(false)
@@ -510,6 +508,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [creatingSummary, setCreatingSummary] = useState(false)
   const [creatingSummaryTaskId, setCreatingSummaryTaskId] = useState<string | null>(null)
   const [retryingAutoSummary, setRetryingAutoSummary] = useState(false)
+  const [retryingSpeakerAnalysis, setRetryingSpeakerAnalysis] = useState(false)
   const [editorPrefsOpen, setEditorPrefsOpen] = useState(false)
   const editorPrefsRef = useRef<HTMLDivElement>(null)
   const [editorPrefs, setEditorPrefs] = useState<NoteEditorPrefs>(readEditorPrefs)
@@ -1069,6 +1068,20 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     }
   }, [fetchNote, note?.summary_retry_task_id])
 
+  const handleRetrySpeakerAnalysis = useCallback(async () => {
+    const taskId = note?.speaker_retry_task_id
+    if (!taskId) return
+    setRetryingSpeakerAnalysis(true)
+    try {
+      await retryPipelineTask(taskId, { stage: 'diarization' })
+      toast.success('已开始仅补做说话人识别，不会重复转写或生成笔记。完成后刷新本页即可查看。')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : '提交说话人识别失败')
+    } finally {
+      setRetryingSpeakerAnalysis(false)
+    }
+  }, [note?.speaker_retry_task_id])
+
   // 字幕保存成功后轻量刷新 source.md（不 setLoading、不重置正文编辑态；字幕编辑只动 source.md/transcript）
   const refreshAfterTranscriptEdit = useCallback(async () => {
     try {
@@ -1092,6 +1105,20 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     }
   }, [workspaceId, itemId])
 
+  const doSaveSummary = useCallback(async (summaryId: string, body: string) => {
+    setSaveStatus('saving')
+    try {
+      const updated = await updateSummaryContent(workspaceId, itemId, summaryId, body)
+      setSummaries((previous) => previous.map((summary) => (
+        summary.summary_id === summaryId ? updated : summary
+      )))
+      setSaveStatus('saved')
+      setSavedAt(formatTime(new Date()))
+    } catch {
+      setSaveStatus('failed')
+    }
+  }, [workspaceId, itemId])
+
   const handleEditorChange = useCallback((md: string) => {
     setEditingBody(md)
     // 程序化版本切换触发的刷新不保存。
@@ -1100,13 +1127,15 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
       return
     }
     if (activeSummaryId) {
-      setSaveStatus('idle')
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      const summaryId = activeSummaryId
+      debounceRef.current = setTimeout(() => { doSaveSummary(summaryId, md) }, 1500)
       return
     }
     // 清除旧定时器，1.5s 后自动保存
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => { doSave(md) }, 1500)
-  }, [activeSummaryId, doSave])
+  }, [activeSummaryId, doSave, doSaveSummary])
 
   // 组件卸载时清理定时器
   useEffect(() => {
@@ -2256,6 +2285,15 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
             {/* 转录 */}
             {!isPip && Array.isArray(note.transcript) && (note.transcript as VideoResultTranscriptLine[]).length > 0 ? (
               <div className="nibi-note-transcript-wrap">
+                {speakerIds.length === 0 && note.speaker_retry_task_id && (
+                  <div className="nibi-audio-speaker-empty">
+                    <strong>尚未区分说话人</strong>
+                    <span>现有转写已保留，可只补做说话人识别。</span>
+                    <button type="button" onClick={() => void handleRetrySpeakerAnalysis()} disabled={retryingSpeakerAnalysis}>
+                      {retryingSpeakerAnalysis ? '正在提交…' : '仅补做说话人识别'}
+                    </button>
+                  </div>
+                )}
                 {speakerIds.length > 0 && (
                   <div className="nibi-audio-speaker-chips" aria-label="视频说话人">
                     <span className="nibi-audio-speaker-title">说话人</span>
@@ -2543,7 +2581,12 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                     ) : (
                       <div className="nibi-audio-speaker-empty">
                         <strong>暂无说话人信息</strong>
-                        <span>重新分析并启用“区分说话人”后，将按人物显示颜色、名称与发言占比。</span>
+                        <span>现有转写已保留，可只补做说话人识别后按人物显示颜色、名称与发言占比。</span>
+                        {note.speaker_retry_task_id && (
+                          <button type="button" onClick={() => void handleRetrySpeakerAnalysis()} disabled={retryingSpeakerAnalysis}>
+                            {retryingSpeakerAnalysis ? '正在提交…' : '仅补做说话人识别'}
+                          </button>
+                        )}
                       </div>
                     )}
                     <LNTranscriptPanel
@@ -3058,17 +3101,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
               </dl>
             </section>
 
-            {chatOpen && (
-              <div style={{ height: 320, borderTop: '1px solid var(--bdr)', display: 'flex', overflow: 'hidden' }}>
-                <NoteChatDrawer
-                  workspaceId={workspaceId}
-                  systemPrompt={chatSystemPrompt}
-                  itemIds={[itemId]}
-                  scopeHint="基于当前 note.md，并按问题检索完整转录证据"
-                  mode="inline"
-                />
-              </div>
-            )}
             {(itemType === 'audio' && note.media?.audio) && (
               <section className="nibi-note-side-card nibi-note-media-card">
                 <div className="nibi-note-card-kicker">AUDIO SOURCE</div>

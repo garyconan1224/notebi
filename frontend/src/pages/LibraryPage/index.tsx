@@ -18,6 +18,7 @@ import {
 import './library.css'
 
 const PAGE_SIZE = 24
+const COLLECTION_PICKER_PAGE_SIZE = 50
 
 function matchesQuery(query: string, values: Array<string | null | undefined>): boolean {
   if (!query) return true
@@ -173,6 +174,7 @@ export default function LibraryPage() {
   const [filterOpen, setFilterOpen] = useState(false)
   const [collectionPickerOpen, setCollectionPickerOpen] = useState(false)
   const [collectionQuery, setCollectionQuery] = useState('')
+  const [collectionPickerLimit, setCollectionPickerLimit] = useState(COLLECTION_PICKER_PAGE_SIZE)
   const [page, setPage] = useState(1)
 
   const selectedFilters = useLibraryStore((s) => s.selectedFilters)
@@ -267,20 +269,24 @@ export default function LibraryPage() {
     [scopedWorkspaces, itemsByWorkspace],
   )
 
+  // 展示上仍把多素材 workspace 做成合集卡片；归类目标不能因当前
+  // 只有一条笔记而消失，所有非收纳箱 workspace 都可以承载共享笔记。
+  const collectionTargets = scopedWorkspaces
+
   const collectionWorkspaceIds = useMemo(
     () => new Set(collectionWorkspaces.map((ws) => ws.workspace_id)),
     [collectionWorkspaces],
   )
 
   useEffect(() => {
-    if (collectionWorkspaces.length === 0) {
+    if (collectionTargets.length === 0) {
       if (collectionTargetId) setCollectionTargetId('')
       return
     }
-    if (!collectionTargetId || !collectionWorkspaces.some((ws) => ws.workspace_id === collectionTargetId)) {
-      setCollectionTargetId(collectionWorkspaces[0].workspace_id)
+    if (!collectionTargetId || !collectionTargets.some((ws) => ws.workspace_id === collectionTargetId)) {
+      setCollectionTargetId(collectionTargets[0].workspace_id)
     }
-  }, [collectionTargetId, collectionWorkspaces])
+  }, [collectionTargetId, collectionTargets])
 
   const visibleWorkspaces = useMemo(() => {
     if (!data) return []
@@ -342,11 +348,16 @@ export default function LibraryPage() {
   )
   const filteredCollectionWorkspaces = useMemo(() => {
     const normalized = collectionQuery.trim().toLowerCase()
-    if (!normalized) return collectionWorkspaces
-    return collectionWorkspaces.filter((workspace) =>
+    if (!normalized) return collectionTargets
+    return collectionTargets.filter((workspace) =>
       workspace.name.toLowerCase().includes(normalized),
     )
-  }, [collectionWorkspaces, collectionQuery])
+  }, [collectionTargets, collectionQuery])
+
+  const visibleCollectionTargets = useMemo(
+    () => filteredCollectionWorkspaces.slice(0, collectionPickerLimit),
+    [filteredCollectionWorkspaces, collectionPickerLimit],
+  )
 
   useEffect(() => {
     setPage(1)
@@ -486,32 +497,32 @@ export default function LibraryPage() {
       return
     }
     if (selectedItemRefs.length === 0) {
-      toast.error('请选择要复制到合集的内容')
+      toast.error('请选择要归入合集的笔记')
       return
     }
     setAddingToCollection(true)
-    const targetName = collectionWorkspaces.find((ws) => ws.workspace_id === collectionTargetId)?.name || '合集'
+    const targetName = collectionTargets.find((ws) => ws.workspace_id === collectionTargetId)?.name || '合集'
     try {
       const res = await batchAddItemsToWorkspace(collectionTargetId, selectedItemRefs)
       if (res.added > 0) {
-        toast.success(`已复制 ${res.added} 项到「${targetName}」${res.skipped ? `，${res.skipped} 项已存在` : ''}`)
+        toast.success(`已将 ${res.added} 项归入「${targetName}」${res.skipped ? `，${res.skipped} 项已在其中` : ''}`)
         setSelectedSet(new Set())
         setSelecting(false)
       } else if (res.skipped > 0) {
         toast.info(`选中内容已在「${targetName}」中`)
       } else {
-        toast.error('没有内容被复制到合集')
+        toast.error('没有笔记被归入合集')
       }
       if (res.failed > 0) {
         toast.error(`${res.failed} 项加入失败，请检查目标合集类型`)
       }
       await load()
     } catch {
-      toast.error('复制到合集失败，请重试')
+      toast.error('归入合集失败，请重试')
     } finally {
       setAddingToCollection(false)
     }
-  }, [collectionTargetId, selectedItemRefs, collectionWorkspaces, load])
+  }, [collectionTargetId, selectedItemRefs, collectionTargets, load])
 
   const handleCreateCollection = useCallback(async () => {
     setCreatingWorkspace(true)
@@ -575,7 +586,7 @@ export default function LibraryPage() {
   const pageTone = 'note'
   const pageKicker = 'NOTE LIBRARY'
   const activeFilterCount = selectedFilters.includes('all') ? 0 : selectedFilters.length
-  const selectedCollectionName = collectionWorkspaces.find(
+  const selectedCollectionName = collectionTargets.find(
     (workspace) => workspace.workspace_id === collectionTargetId,
   )?.name
 
@@ -749,7 +760,13 @@ export default function LibraryPage() {
                 type="button"
                 className="btn btn-sm"
                 aria-expanded={collectionPickerOpen}
-                onClick={() => setCollectionPickerOpen((value) => !value)}
+                onClick={() => setCollectionPickerOpen((value) => {
+                  if (!value) {
+                    setCollectionQuery('')
+                    setCollectionPickerLimit(COLLECTION_PICKER_PAGE_SIZE)
+                  }
+                  return !value
+                })}
               >
                 <FolderInput size={13} />
                 目标合集：{selectedCollectionName || '请选择'}
@@ -761,12 +778,15 @@ export default function LibraryPage() {
                     aria-label="搜索合集"
                     placeholder="搜索合集"
                     value={collectionQuery}
-                    onChange={(event) => setCollectionQuery(event.target.value)}
+                    onChange={(event) => {
+                      setCollectionQuery(event.target.value)
+                      setCollectionPickerLimit(COLLECTION_PICKER_PAGE_SIZE)
+                    }}
                   />
                   <div className="collection-picker-list">
                     {filteredCollectionWorkspaces.length === 0 ? (
                       <span>没有匹配的合集</span>
-                    ) : filteredCollectionWorkspaces.map((workspace) => (
+                    ) : visibleCollectionTargets.map((workspace) => (
                       <button
                         key={workspace.workspace_id}
                         type="button"
@@ -780,6 +800,15 @@ export default function LibraryPage() {
                       </button>
                     ))}
                   </div>
+                  {filteredCollectionWorkspaces.length > visibleCollectionTargets.length && (
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => setCollectionPickerLimit((limit) => limit + COLLECTION_PICKER_PAGE_SIZE)}
+                    >
+                      加载更多（还剩 {filteredCollectionWorkspaces.length - visibleCollectionTargets.length}）
+                    </button>
+                  )}
                 </div>
               )}
               <button

@@ -112,6 +112,7 @@ export function FloatingAskAi({
               itemIds={itemIds}
               scopeHint={scopeHint}
               mode="inline"
+              showHeader={false}
             />
           </div>
         </aside>

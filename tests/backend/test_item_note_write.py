@@ -19,6 +19,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.app.routes import workspaces as ws_module
+from backend.app.models.workspace import ItemSummary
 from backend.app.services.note_assembler import assemble_item_note, note_dir
 from backend.app.services.workspace_store import WorkspaceStore
 
@@ -110,6 +111,32 @@ def test_put_then_get_body_matches(client: TestClient):
     get_body = get_data["note_md"].split("---\n", 2)[2].strip()
     assert put_body == new_body
     assert get_body == new_body
+
+
+def test_linked_collection_note_write_uses_the_canonical_note_file(client: TestClient):
+    """先归入合集再首次编辑，所有入口也必须读到同一份 note.md。"""
+    source_id, item_id = _create_ws_and_item(client)
+    target_id = client.post("/workspaces", json={"name": "目标合集"}).json()["workspace_id"]
+    linked = client.post(
+        "/workspaces/items/batch-add-to-workspace",
+        json={
+            "target_workspace_id": target_id,
+            "items": [{"workspace_id": source_id, "item_id": item_id}],
+        },
+    )
+    assert linked.status_code == 200
+    assert linked.json()["added"] == 1
+
+    body = "# 从合集编辑\n\n这段正文必须同步到原始笔记。"
+    written = client.put(
+        f"/workspaces/{target_id}/items/{item_id}/note",
+        json={"body": body},
+    )
+    assert written.status_code == 200
+
+    source_note = client.get(f"/workspaces/{source_id}/items/{item_id}/note")
+    assert source_note.status_code == 200
+    assert body in source_note.json()["note_md"]
 
 
 def test_frontmatter_tags_preserved(client: TestClient):
@@ -309,6 +336,66 @@ def test_export_item_note_rejects_unsupported_format(client: TestClient):
     ws_id, item_id = _create_ws_and_item(client)
     resp = client.get(f"/workspaces/{ws_id}/items/{item_id}/note/export?format=xyz")
     assert resp.status_code == 400
+
+
+def test_summary_export_uses_current_speaker_name_mapping(client: TestClient):
+    ws_id, item_id = _create_ws_and_item(client)
+    item = ws_module._find_item(ws_module._store.get(ws_id), item_id)
+    item.type = "video"
+    item.results = {"speaker_map": {"SPEAKER_00": "王老师"}}
+    item.summaries = [
+        ItemSummary(
+            summary_id="speaker-summary",
+            template="speaker_meeting",
+            version=0,
+            content_md="# 会议纪要\n\nSPEAKER_00：确认了下一步。",
+        )
+    ]
+    assemble_item_note(ws_id, item_id, _item=item)
+
+    response = client.get(
+        f"/workspaces/{ws_id}/items/{item_id}/note/export",
+        params={"format": "md", "source_kind": "summary", "summary_id": "speaker-summary"},
+    )
+
+    assert response.status_code == 200
+    assert "王老师：确认了下一步" in response.text
+    assert "SPEAKER_00" not in response.text
+
+
+def test_summary_body_edit_persists_and_is_exported(client: TestClient):
+    ws_id, item_id = _create_ws_and_item(client)
+    ws_module._store.add_item_summary(
+        ws_id,
+        item_id,
+        ItemSummary(
+            summary_id="editable-summary",
+            template="concise",
+            version=0,
+            content_md="# 旧总结\n\n旧内容。",
+        ),
+    )
+    edited = "# 已编辑总结\n\n这份内容刷新和导出后都必须保留。"
+
+    saved = client.patch(
+        f"/workspaces/{ws_id}/items/{item_id}/summaries/editable-summary",
+        json={"content_md": edited},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["content_md"] == edited
+
+    fetched = client.get(
+        f"/workspaces/{ws_id}/items/{item_id}/summaries/editable-summary",
+    )
+    assert fetched.status_code == 200
+    assert fetched.json()["content_md"] == edited
+
+    exported = client.get(
+        f"/workspaces/{ws_id}/items/{item_id}/note/export",
+        params={"format": "md", "source_kind": "summary", "summary_id": "editable-summary"},
+    )
+    assert exported.status_code == 200
+    assert "这份内容刷新和导出后都必须保留" in exported.text
 
 
 def test_put_note_preserves_image_results_images(client: TestClient):

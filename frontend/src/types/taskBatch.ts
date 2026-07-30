@@ -20,6 +20,19 @@ export interface BatchItem {
   error: string
 }
 
+/** 批次详情附带的可见任务状态；不包含模型私有推理。 */
+export interface BatchTaskDetail {
+  task_id: string
+  status: string
+  progress: number
+  stage: string
+  visible_events: string[]
+  summary_preview: string
+  error: string
+  workspace_id: string
+  item_id: string
+}
+
 export interface TaskBatch {
   batch_id: string
   name: string
@@ -38,6 +51,7 @@ export interface TaskBatch {
   completed_at: string
   pause_requested: boolean
   cancel_requested: boolean
+  task_details?: Record<string, BatchTaskDetail>
 }
 
 export interface BatchPreviewItem {

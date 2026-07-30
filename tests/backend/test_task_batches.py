@@ -472,6 +472,53 @@ def test_get_batch(client: TestClient) -> None:
     assert resp.json()["name"] == "detail"
 
 
+def test_get_batch_includes_user_visible_task_progress_and_summary(client: TestClient) -> None:
+    """批次详情一次返回阶段、可见进度与实际产出，不需要前端逐条补请求。"""
+    from backend.app.models.tasks import TaskLogEntry, TaskRecord, TaskStatus
+    from backend.app.routes import task_batches
+
+    create_resp = client.post(
+        "/pipeline/batches",
+        json={
+            "name": "transparent detail",
+            "workspace_id": "ws-1",
+            "start": False,
+            "items": [{"batch_item_id": "detail-item", "source_url": "https://example.com/detail"}],
+        },
+    )
+    batch_id = create_resp.json()["batch_id"]
+    task = TaskRecord(
+        task_id="detail-task",
+        project_id="ws-1",
+        task_type="note",
+        status=TaskStatus.SUCCESS.value,
+        progress=1.0,
+        payload={"workspace_id": "ws-1", "item_id": "note-1"},
+        result={"summary": "# 可见总结\n\n已经完成。"},
+        log=[
+            TaskLogEntry(ts="2026-07-29T00:00:00Z", level="info", message="正在生成总结"),
+            TaskLogEntry(ts="2026-07-29T00:00:01Z", level="info", message="总结已保存"),
+        ],
+    )
+    service = task_batches.get_batch_service()
+    service.runner.store.create(task)
+    batch = service.batch_store.get(batch_id)
+    assert batch is not None
+    batch.items[0].task_id = task.task_id
+    batch.items[0].task_ids = [task.task_id]
+    service.batch_store.save(batch)
+
+    response = client.get(f"/pipeline/batches/{batch_id}")
+
+    assert response.status_code == 200
+    detail = response.json()["task_details"][task.task_id]
+    assert detail["stage"] == "总结已保存"
+    assert detail["visible_events"] == ["正在生成总结", "总结已保存"]
+    assert detail["summary_preview"] == "# 可见总结\n\n已经完成。"
+    assert detail["workspace_id"] == "ws-1"
+    assert detail["item_id"] == "note-1"
+
+
 def test_get_batch_not_found(client: TestClient) -> None:
     """批次不存在返回 404。"""
     resp = client.get("/pipeline/batches/nonexistent")

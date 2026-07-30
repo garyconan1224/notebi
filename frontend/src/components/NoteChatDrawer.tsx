@@ -25,6 +25,8 @@ export interface NoteChatDrawerProps {
   mode?: 'drawer' | 'inline'
   /** drawer 模式下关闭按钮回调（inline 模式可不传） */
   onClose?: () => void
+  /** 父级已有标题时隐藏内部标题，避免停靠面板重复显示“问 AI”。 */
+  showHeader?: boolean
 }
 
 /**
@@ -39,6 +41,7 @@ export default function NoteChatDrawer({
   scopeHint,
   mode = 'drawer',
   onClose,
+  showHeader = true,
 }: NoteChatDrawerProps) {
   const [open, setOpen] = useState(mode === 'inline') // inline 模式默认打开
   const [chatId, setChatId] = useState<string | null>(null)
@@ -136,17 +139,19 @@ export default function NoteChatDrawer({
 
   const chatContent = (
     <>
-      <div className="note-chat-header">
-        <div className="note-chat-title">
-          <MessageCircle size={14} />
-          <span>问 AI</span>
+      {showHeader && (
+        <div className="note-chat-header">
+          <div className="note-chat-title">
+            <MessageCircle size={14} />
+            <span>问 AI</span>
+          </div>
+          {mode === 'drawer' && (
+            <Button size="sm" variant="ghost" title="关闭" onClick={handleClose}>
+              <X size={14} />
+            </Button>
+          )}
         </div>
-        {mode === 'drawer' && (
-          <Button size="sm" variant="ghost" title="关闭" onClick={handleClose}>
-            <X size={14} />
-          </Button>
-        )}
-      </div>
+      )}
 
       <div className="note-chat-scope-hint">{scopeHint}</div>
 

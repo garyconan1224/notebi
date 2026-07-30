@@ -333,6 +333,227 @@
   font-size: var(--xs);
 }
 
+.task-detail-header {
+  display: grid;
+  gap: 14px;
+}
+
+.task-back-link,
+.task-detail-monitor-link {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 6px;
+  color: var(--mut);
+  font-size: var(--sm);
+}
+
+.task-back-link:hover,
+.task-detail-monitor-link:hover {
+  color: var(--acc);
+}
+
+.task-detail-heading,
+.task-detail-item-heading,
+.task-detail-output > div {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.task-detail-heading h1 {
+  margin: 8px 0 4px;
+  font-family: var(--fd);
+  font-size: clamp(24px, 3vw, 34px);
+  letter-spacing: -0.03em;
+}
+
+.task-detail-heading p,
+.task-detail-item-heading p {
+  margin: 0;
+  color: var(--mut);
+  font-size: var(--sm);
+  line-height: 1.55;
+}
+
+.task-inline-error,
+.task-detail-failure {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--err) 45%, var(--bdr));
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--err) 8%, var(--srf));
+  color: var(--err);
+  font-size: var(--sm);
+}
+
+.task-detail-progress,
+.task-detail-list {
+  padding: 18px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--rl);
+  background: var(--srf);
+  box-shadow: var(--sh1);
+}
+
+.task-detail-progress .task-progress-row {
+  margin-top: 0;
+}
+
+.task-detail-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.task-detail-stats div {
+  display: grid;
+  gap: 6px;
+  min-height: 72px;
+  padding: 12px;
+  border-radius: var(--r);
+  background: var(--bgalt);
+}
+
+.task-detail-stats span,
+.task-detail-stage span,
+.task-detail-output span {
+  color: var(--mut);
+  font-size: var(--xs);
+}
+
+.task-detail-stats strong {
+  color: var(--fg);
+  font-family: var(--fd);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.task-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.task-detail-list {
+  display: grid;
+  gap: 10px;
+}
+
+.task-detail-item {
+  padding: 16px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--r);
+  background: var(--srf);
+}
+
+.task-detail-item h2 {
+  margin: 0 0 5px;
+  color: var(--fg);
+  font-size: var(--base);
+  line-height: 1.45;
+}
+
+.task-item-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin: 0 8px 6px 0;
+  border-radius: 999px;
+  background: var(--bgalt);
+  color: var(--mut);
+  font-family: var(--fm);
+  font-size: var(--xs);
+}
+
+.task-detail-item-progress {
+  margin-top: 13px;
+}
+
+.task-detail-stage {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.task-detail-stage strong {
+  color: var(--fg2);
+  font-size: var(--sm);
+}
+
+.task-detail-output {
+  display: grid;
+  gap: 7px;
+  margin-top: 13px;
+  padding: 12px;
+  border-radius: var(--r);
+  background: var(--bgalt);
+}
+
+.task-detail-output a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--acc);
+  font-size: var(--xs);
+  font-weight: 600;
+}
+
+.task-detail-output p {
+  max-height: 180px;
+  margin: 0;
+  overflow: auto;
+  color: var(--fg2);
+  font-size: var(--sm);
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.task-detail-failure {
+  margin-top: 13px;
+}
+
+.task-detail-events {
+  margin-top: 13px;
+  border-top: 1px solid var(--bdr);
+  padding-top: 11px;
+  color: var(--fg2);
+  font-size: var(--xs);
+}
+
+.task-detail-events summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--mut);
+}
+
+.task-detail-events ol {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0 0;
+  padding-left: 22px;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .task-detail-heading,
+  .task-detail-item-heading,
+  .task-detail-output > div {
+    flex-direction: column;
+  }
+
+  .task-detail-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 900px) {
   .task-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));

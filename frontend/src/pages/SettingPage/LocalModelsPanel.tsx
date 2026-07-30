@@ -92,7 +92,7 @@ export default function LocalModelsPanel() {
           <div>
             <div className="settings-row-label">本地模型下载与切换</div>
             <div className="settings-row-hint">
-              仅在点击下载后联网；下载完成后到“转写设置”选择相应引擎和规格。状态每 2 秒更新一次。
+              仅在点击下载后联网；下载完成后可直接使用“切换使用”启用。下载期间进度每 2 秒更新一次。
             </div>
           </div>
           <div className="settings-row-control">

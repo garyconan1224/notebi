@@ -414,10 +414,24 @@ class WorkspaceStore:
             if owner.workspace_id == target_workspace_id:
                 return False
             refs = self._memberships.setdefault(target_workspace_id, [])
+            if any(
+                ref["workspace_id"] == owner.workspace_id
+                and ref["item_id"] == item.item_id
+                for ref in refs
+            ):
+                return False
+            # The current route shape addresses a member by item_id.  Old data
+            # can theoretically reuse the same item_id in two workspaces; do
+            # not silently drop one of them until that route contract can use
+            # content_id end-to-end.
             if any(ref["item_id"] == item.item_id for ref in refs):
-                return False
+                raise ValueError(
+                    "item_id collision: target collection already contains a different canonical item with this item_id"
+                )
             if self._find_local_item(target_workspace_id, item.item_id) is not None:
-                return False
+                raise ValueError(
+                    "item_id collision: target collection owns a different item with this item_id"
+                )
             refs.append({"workspace_id": owner.workspace_id, "item_id": item.item_id})
             self._save_memberships()
             source_note_dir = note_dir(owner.workspace_id, item.item_id)
@@ -432,6 +446,127 @@ class WorkspaceStore:
                     # must not turn a successful membership request into a copy.
                     pass
             return True
+
+    def promote_owned_items(
+        self,
+        source_workspace_id: str,
+        target_workspace_id: str,
+    ) -> List[str]:
+        """Move canonical ownership without copying notes or result payloads.
+
+        A workspace is a collection, not the identity of its notes.  Before a
+        canonical owner can be permanently removed, its local items are moved
+        to the stable inbox and every collection membership is rewired to that
+        new owner.  Canonical note directories move with the owner; a regular
+        per-collection directory is treated as a prior divergent-write conflict
+        and refuses the destructive operation rather than overwriting it.
+        """
+        with self._lock:
+            source = self._records.get(source_workspace_id)
+            target = self._records.get(target_workspace_id)
+            if source is None or target is None:
+                raise KeyError("source or target workspace not found")
+            if source_workspace_id == target_workspace_id:
+                return []
+            owned_items = list(source.items)
+            if not owned_items:
+                return []
+
+            source_item_ids = {item.item_id for item in owned_items}
+            existing_item_ids = {item.item_id for item in target.items}
+            if source_item_ids & existing_item_ids:
+                raise ValueError("item_id collision while promoting canonical items")
+
+            # Preflight every filesystem mutation.  A real directory in a
+            # collection is evidence of an old divergent write, not an alias
+            # that we may discard automatically.
+            for item in owned_items:
+                canonical_dir = note_dir(source_workspace_id, item.item_id)
+                target_dir = note_dir(target_workspace_id, item.item_id)
+                if target_dir.exists() and not target_dir.is_symlink():
+                    raise ValueError(
+                        f"canonical note directory conflict for item {item.item_id}"
+                    )
+                for member_workspace_id, refs in self._memberships.items():
+                    if member_workspace_id == source_workspace_id:
+                        continue
+                    if not any(
+                        ref["workspace_id"] == source_workspace_id
+                        and ref["item_id"] == item.item_id
+                        for ref in refs
+                    ):
+                        continue
+                    alias = note_dir(member_workspace_id, item.item_id)
+                    if alias.exists() and not alias.is_symlink() and alias != canonical_dir:
+                        raise ValueError(
+                            f"member note directory conflict for item {item.item_id}"
+                        )
+
+            moved_dirs: List[Tuple[Path, Path]] = []
+            try:
+                for item in owned_items:
+                    canonical_dir = note_dir(source_workspace_id, item.item_id)
+                    target_dir = note_dir(target_workspace_id, item.item_id)
+                    if target_dir.is_symlink():
+                        target_dir.unlink()
+                    if canonical_dir.exists():
+                        target_dir.parent.mkdir(parents=True, exist_ok=True)
+                        os.replace(canonical_dir, target_dir)
+                        moved_dirs.append((canonical_dir, target_dir))
+            except OSError as exc:
+                for original_dir, moved_dir in reversed(moved_dirs):
+                    try:
+                        original_dir.parent.mkdir(parents=True, exist_ok=True)
+                        os.replace(moved_dir, original_dir)
+                    except OSError:
+                        pass
+                raise ValueError("could not move canonical note files") from exc
+
+            source.items = []
+            target.items.extend(owned_items)
+            for member_workspace_id, refs in list(self._memberships.items()):
+                rewritten: List[Dict[str, str]] = []
+                seen: set[Tuple[str, str]] = set()
+                for ref in refs:
+                    if (
+                        ref["workspace_id"] == source_workspace_id
+                        and ref["item_id"] in source_item_ids
+                    ):
+                        if member_workspace_id == target_workspace_id:
+                            # This used to be the target's membership.  It is
+                            # now a local canonical item, so no reference stays.
+                            continue
+                        ref = {"workspace_id": target_workspace_id, "item_id": ref["item_id"]}
+                    key = (ref["workspace_id"], ref["item_id"])
+                    if key not in seen:
+                        seen.add(key)
+                        rewritten.append(ref)
+                if rewritten:
+                    self._memberships[member_workspace_id] = rewritten
+                else:
+                    self._memberships.pop(member_workspace_id, None)
+
+            for member_workspace_id, refs in self._memberships.items():
+                for ref in refs:
+                    if ref["workspace_id"] != target_workspace_id or ref["item_id"] not in source_item_ids:
+                        continue
+                    alias = note_dir(member_workspace_id, ref["item_id"])
+                    canonical_dir = note_dir(target_workspace_id, ref["item_id"])
+                    if alias.is_symlink():
+                        alias.unlink()
+                    if canonical_dir.exists() and not alias.exists():
+                        try:
+                            alias.parent.mkdir(parents=True, exist_ok=True)
+                            alias.symlink_to(canonical_dir, target_is_directory=True)
+                        except OSError:
+                            # Route file access resolves the canonical owner;
+                            # the alias is only a compatibility convenience.
+                            pass
+
+            self._save(source)
+            self._save(target)
+            self._save_memberships()
+            return [item.item_id for item in owned_items]
 
     def unlink_workspace_memberships(self, workspace_id: str) -> int:
         """Remove all memberships owned by a collection without touching notes."""
@@ -559,6 +694,33 @@ class WorkspaceStore:
                 raise KeyError(f"summary not found: {summary_id}")
             summary.name = name
             self._save(rec)
+            return summary
+
+    def update_item_summary_content(
+        self,
+        workspace_id: str,
+        item_id: str,
+        summary_id: str,
+        content_md: str,
+    ) -> "ItemSummary":
+        """Persist one edited summary and its canonical Markdown companion."""
+        with self._lock:
+            rec, item = self._locate_item(workspace_id, item_id)
+            summary = next((s for s in item.summaries if s.summary_id == summary_id), None)
+            if summary is None:
+                raise KeyError(f"summary not found: {summary_id}")
+            summary.content_md = content_md
+            item.updated_at = _now_iso()
+            self._save(rec)
+
+            summary_path = note_dir(rec.workspace_id, item_id) / "summaries" / summary.template / f"v{summary.version}.md"
+            try:
+                summary_path.parent.mkdir(parents=True, exist_ok=True)
+                summary_path.write_text(content_md, encoding="utf-8")
+            except OSError:
+                # JSON is authoritative.  A stale optional companion file must
+                # not make the user's saved summary appear to have failed.
+                pass
             return summary
 
     # ── InlineFrames ──────────────────────────────────────────

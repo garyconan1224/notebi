@@ -93,6 +93,7 @@ class TaskRunner:
             "PROBE": "PROBE",
             "FRAMES": "FRAMES",
             "ASR": "ASR",
+            "DIARIZATION": "DIARIZATION",
             "VLM": "VLM",
             "FETCH": "FETCH",
             "PARSE": "PARSE",
@@ -338,14 +339,21 @@ class TaskRunner:
                 level="ERROR",
             )
 
-    def set_progress(self, task_id: str, progress: float, message: Optional[str] = None) -> None:
+    def set_progress(
+        self,
+        task_id: str,
+        progress: float,
+        message: Optional[str] = None,
+        *,
+        public_stage: Optional[str] = None,
+    ) -> None:
         pct = max(0.0, min(float(progress), 1.0))
         self.store.update(task_id, progress=pct)
         if message:
             self.store.append_log(task_id, message)
         current = self.store.get(task_id)
         if current is not None:
-            stage = self._public_stage(current.status)
+            stage = self._public_stage(public_stage or current.status)
             if stage:
                 self._emit_task_event(current, stage, message or stage)
 
@@ -395,11 +403,16 @@ class TaskRunner:
             )
         if stage not in {"diarization", "summary"}:
             raise ValueError(f"unsupported retry stage: {stage}")
-        if rec.task_type != "audio" or rec.status not in {
+        is_audio = rec.task_type == "audio"
+        is_video_note = rec.task_type == "note" and bool(
+            (rec.result or {}).get("video_file")
+        )
+        retryable_kind = is_audio or (stage == "diarization" and is_video_note)
+        if not retryable_kind or rec.status not in {
             TaskStatus.PARTIAL.value,
             TaskStatus.SUCCESS.value,
         }:
-            raise ValueError(f"{stage} retry requires a terminal audio task")
+            raise ValueError(f"{stage} retry requires a terminal audio or video task")
         failure = rec.result.get("partial_failure") if isinstance(rec.result, dict) else None
         if rec.status == TaskStatus.PARTIAL.value:
             if not isinstance(failure, dict) or failure.get("stage") != stage:
@@ -407,6 +420,8 @@ class TaskRunner:
         if stage == "diarization" and not rec.result.get("transcript_segments"):
             raise ValueError("task has no reusable transcript segments")
         if stage == "summary":
+            if not is_audio:
+                raise ValueError("summary retry currently requires a terminal audio task")
             if not rec.result.get("transcript"):
                 raise ValueError("task has no reusable transcript")
             if rec.status == TaskStatus.SUCCESS.value and rec.result.get("summary"):

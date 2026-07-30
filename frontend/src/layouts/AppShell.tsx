@@ -4,6 +4,7 @@ import {
   Home,
   Plus,
   FileText,
+  FolderOpen,
   Star,
   Search,
   Settings,
@@ -37,6 +38,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { id: 'home',       path: '/',           icon: Home,         label: '首页' },
   { id: 'notes',      path: '/notes',      icon: FileText,     label: '笔记' },
+  { id: 'collections', path: '/collections', icon: FolderOpen, label: '合集' },
   { id: 'tasks',      path: '/tasks',      icon: ListChecks,   label: '任务中心' },
 ]
 
@@ -197,6 +199,9 @@ export function AppShell({ children }: AppShellProps) {
   const isActive = (item: NavItem) => {
     if (item.id === 'home') return location.pathname === '/'
     if (item.id === 'notes') return location.pathname.startsWith('/notes')
+    if (item.id === 'collections') {
+      return location.pathname.startsWith('/collections') || location.pathname === '/workspaces'
+    }
     return location.pathname.startsWith(item.path)
   }
 

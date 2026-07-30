@@ -159,3 +159,28 @@ def test_diarization_only_retry_accepts_success_audio_task(tmp_path: Path) -> No
     retried = runner.retry_task(parent.task_id, stage="diarization")
     assert retried.retry_of == parent.task_id
     assert retried.payload["_retry_stage"] == "diarization"
+
+
+def test_diarization_only_retry_accepts_success_video_note_task(tmp_path: Path) -> None:
+    store = TaskStore(path=tmp_path / "tasks.json")
+    runner = TaskRunner(store, max_workers=1)
+    runner._executor.submit = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+    parent = TaskRecord(
+        task_id="video-success-parent",
+        project_id="p1",
+        task_type="note",
+        status=TaskStatus.SUCCESS.value,
+        payload={"url": "https://example.test/video"},
+        result={
+            "video_file": "/tmp/interview.mp4",
+            "transcript_segments": [{"start": 0, "end": 1, "text": "已保存的转录"}],
+        },
+    )
+    store.create(parent)
+
+    retried = runner.retry_task(parent.task_id, stage="diarization")
+
+    assert retried.retry_of == parent.task_id
+    assert retried.task_type == "note"
+    assert retried.payload["_retry_stage"] == "diarization"
+    assert retried.payload["_retry_source_task_id"] == parent.task_id

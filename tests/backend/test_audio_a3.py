@@ -312,6 +312,72 @@ def test_audio_diarization_retry_reuses_transcript_without_asr(tmp_path: Path) -
     assert result["retry_stage"] == "diarization"
 
 
+def test_video_diarization_retry_reuses_transcript_without_transcribing(tmp_path: Path) -> None:
+    """视频补做说话人识别只提取音轨，不重新下载或转录。"""
+    from backend.app.services.pipeline_tasks import handle_note_task
+
+    video_file = tmp_path / "interview.mp4"
+    video_file.write_bytes(b"fake-video-data")
+    parent = TaskRecord(
+        task_id="video-success-parent",
+        project_id="default_project",
+        task_type="note",
+        status=TaskStatus.SUCCESS.value,
+        payload={"url": "https://example.test/video"},
+        result={
+            "video_file": str(video_file),
+            "transcript_text": "主持人你好。嘉宾你好。",
+            "transcript_segments": [
+                {"text": "主持人你好。", "start": 0.0, "end": 1.0},
+                {"text": "嘉宾你好。", "start": 1.0, "end": 2.0},
+            ],
+        },
+    )
+    retry = TaskRecord(
+        task_id="video-diarization-retry",
+        project_id="default_project",
+        task_type="note",
+        retry_of=parent.task_id,
+        payload={"_retry_stage": "diarization", "_retry_source_task_id": parent.task_id},
+    )
+    runner = MagicMock()
+    runner.store.get.return_value = parent
+
+    def fake_extract(_video: Path, output: Path, **_kwargs: object) -> Path:
+        output.write_bytes(b"fake-wav")
+        return output
+
+    with (
+        patch("backend.app.services.pipeline_tasks._extract_audio_from_video", side_effect=fake_extract),
+        patch(
+            "backend.app.services.pipeline_tasks.run_diarization",
+            return_value=DiarizationResult(
+                num_speakers=2,
+                engine="pyannote",
+                model="community-1",
+                segments=[
+                    SpeakerSegment(0.0, 1.0, "SPEAKER_00"),
+                    SpeakerSegment(1.0, 2.0, "SPEAKER_01"),
+                ],
+            ),
+        ),
+        patch("backend.app.services.pipeline_tasks.get_workspace_json_dir", return_value=tmp_path / "json"),
+    ):
+        result = handle_note_task(retry, runner)
+
+    assert [segment["speaker"] for segment in result["transcript_segments"]] == ["SPEAKER_00", "SPEAKER_01"]
+    assert result["retry_stage"] == "diarization"
+    assert result["retry_source_task_id"] == parent.task_id
+    assert result["video_file"] == str(video_file)
+    assert not (tmp_path / "json" / "video-diarization-retry_diarization.wav").exists()
+    runner.set_progress.assert_any_call(
+        retry.task_id,
+        0.66,
+        "从视频音轨区分说话人…",
+        public_stage="DIARIZATION",
+    )
+
+
 def test_long_audio_summary_covers_tail_instead_of_truncating() -> None:
     from backend.app.services.pipeline_tasks import _generate_audio_summary
 

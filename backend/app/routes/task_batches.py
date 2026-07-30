@@ -107,6 +107,54 @@ def _link_created_task_to_workspace(
     )
 
 
+def _batch_task_detail(task: TaskRecord) -> Dict[str, Any]:
+    """Build a concise, user-visible task state for batch details.
+
+    The batch page intentionally shows progress messages and generated output,
+    rather than private model reasoning.  It remains transparent about the
+    actual pipeline stage and failures without adding one HTTP request per
+    task.
+    """
+    result = dict(task.result or {})
+    summary = result.get("summary") or result.get("note_summary")
+    if isinstance(summary, dict):
+        summary = summary.get("content_md") or summary.get("content") or ""
+    summary_preview = str(summary or "").strip()
+    if len(summary_preview) > 1200:
+        summary_preview = summary_preview[:1200] + "…"
+
+    visible_events = [
+        str(entry.message).strip()
+        for entry in task.log[-8:]
+        if str(entry.message).strip()
+    ]
+    task_status = str(getattr(task.status, "value", task.status))
+    fallback_stage = {
+        "PENDING": "等待处理",
+        "DOWNLOAD": "下载或读取素材",
+        "ASR": "转录与说话人分析",
+        "FRAMES": "分析视频画面",
+        "ANALYZE": "整理内容",
+        "STORE": "保存笔记",
+        "SUCCESS": "处理完成",
+        "PARTIAL": "部分完成，需要留意",
+        "FAILED": "处理失败",
+        "CANCELLED": "已取消",
+    }.get(task_status, "处理中")
+    task_payload = dict(task.payload or {})
+    return {
+        "task_id": task.task_id,
+        "status": task_status,
+        "progress": max(0.0, min(float(task.progress or 0.0), 1.0)),
+        "stage": visible_events[-1] if visible_events else fallback_stage,
+        "visible_events": visible_events,
+        "summary_preview": summary_preview,
+        "error": str(task.error or ""),
+        "workspace_id": str(task_payload.get("workspace_id") or result.get("workspace_id") or ""),
+        "item_id": str(task_payload.get("item_id") or result.get("item_id") or ""),
+    }
+
+
 def get_batch_service() -> TaskBatchService:
     """返回与当前批次 store 绑定的生命周期服务。"""
     store = get_default_batch_store()
@@ -481,11 +529,19 @@ def list_batches(
 @router.get("/{batch_id}")
 def get_batch(batch_id: str) -> Dict[str, Any]:
     """获取批次详情。"""
-    store = get_default_batch_store()
-    batch = store.get(batch_id)
+    service = get_batch_service()
+    batch = service.batch_store.get(batch_id)
     if not batch:
         raise HTTPException(status_code=404, detail="批次不存在")
-    return batch.to_dict()
+    payload = batch.to_dict()
+    task_details: Dict[str, Dict[str, Any]] = {}
+    for item in batch.items:
+        for task_id in item.task_ids:
+            task = service.runner.store.get(task_id)
+            if task is not None:
+                task_details[task_id] = _batch_task_detail(task)
+    payload["task_details"] = task_details
+    return payload
 
 
 @router.post("/{batch_id}/pause")

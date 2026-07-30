@@ -210,7 +210,7 @@ export async function updateWorkspace(
   return res.data
 }
 
-/** DELETE /workspaces/{id} — 软删除（标记 trashed=True） */
+/** DELETE /workspaces/{id} — 删除合集；其中笔记会保留在收纳箱或其它合集。 */
 export interface DeleteWorkspaceResult {
   trashed: boolean
   workspace_id: string
@@ -221,6 +221,7 @@ export interface DeleteWorkspaceResult {
 
 export async function deleteWorkspace(
   workspaceId: string,
+  // 旧调用方可能仍传该值；后端会安全地按 keep 处理，不能因删合集删笔记。
   contentPolicy: 'keep' | 'trash' = 'keep',
 ): Promise<DeleteWorkspaceResult> {
   const response = await http.delete<DeleteWorkspaceResult>(`${BASE}/${workspaceId}`, {

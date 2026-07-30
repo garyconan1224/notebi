@@ -64,6 +64,7 @@ describe('workbench recent notes projection', () => {
         {
           ...baseItem,
           item_id: 'latest',
+          content_id: 'content-2',
           workspace_id: 'ws-2',
           name: '最新笔记',
           updated_at: '2026-07-03T00:00:00Z',
@@ -94,5 +95,37 @@ describe('workbench recent notes projection', () => {
 
     fireEvent.click(cards[0])
     expect(await screen.findByText('笔记详情')).toBeTruthy()
+  })
+
+  it('does not repeat one shared note when it belongs to multiple collections', async () => {
+    mocks.fetchLibrary.mockResolvedValue({
+      items: [
+        {
+          ...baseItem,
+          item_id: 'shared-note',
+          workspace_id: 'collection-a',
+          name: '共享笔记（较早视图）',
+          updated_at: '2026-07-02T00:00:00Z',
+        },
+        {
+          ...baseItem,
+          item_id: 'shared-note',
+          workspace_id: 'collection-b',
+          name: '共享笔记（最新视图）',
+          updated_at: '2026-07-04T00:00:00Z',
+        },
+      ],
+      workspaces: [],
+    })
+
+    render(
+      <MemoryRouter>
+        <RecentTasks />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('共享笔记（最新视图）')).toBeTruthy()
+    expect(screen.queryByText('共享笔记（较早视图）')).toBeNull()
+    expect(screen.getByText(/全部 · 1/)).toBeTruthy()
   })
 })

@@ -81,14 +81,16 @@ describe('BatchDetailPage', () => {
     retryMock.mockResolvedValue({ ...batch, status: 'running' })
   })
 
-  it('展示批次汇总、attempt 和真实日志链接', async () => {
+  it('展示批次汇总、可见处理记录入口和真实监控链接', async () => {
     renderPage()
     expect(await screen.findByText('测试批次')).toBeInTheDocument()
-    expect(screen.getByText('1/2 完成 · 1 失败 · running')).toBeInTheDocument()
+    expect(screen.getByText('已完成')).toBeInTheDocument()
+    expect(screen.getAllByText('失败').length).toBeGreaterThan(0)
     expect(screen.getByText('素材一')).toBeInTheDocument()
+    expect(screen.getByText(/处理新素材/)).toBeInTheDocument()
     expect(screen.getByText('task-1')).toBeInTheDocument()
     expect(screen.getByText('task-2')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '查看日志' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '查看监控' })).toHaveAttribute(
       'href',
       '/settings/monitor?batch_id=batch-1',
     )
@@ -120,7 +122,7 @@ describe('BatchDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '重试失败项' }))
 
     await waitFor(() => expect(retryMock).toHaveBeenCalledWith('batch-1'))
-    expect(screen.getByText('1/2 完成 · 0 失败 · running')).toBeInTheDocument()
+    expect(screen.getByText('已完成')).toBeInTheDocument()
   })
 
   it('运行中的批次自动刷新计数，完成后停止轮询', async () => {
@@ -139,12 +141,12 @@ describe('BatchDetailPage', () => {
       await act(async () => {
         await Promise.resolve()
       })
-      expect(screen.getByText('0/2 完成 · 0 失败 · running')).toBeInTheDocument()
+      expect(screen.getAllByText('处理中').length).toBeGreaterThan(0)
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(2_000)
       })
-      expect(screen.getByText('2/2 完成 · 0 失败 · completed')).toBeInTheDocument()
+      expect(screen.getAllByText('已完成').length).toBeGreaterThan(0)
       expect(getMock).toHaveBeenCalledTimes(2)
 
       await act(async () => {

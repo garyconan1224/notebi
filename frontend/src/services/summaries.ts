@@ -109,3 +109,17 @@ export async function renameSummary(
   )
   return data
 }
+
+/** PATCH 保存总结正文（不创建第二份总结版本）。 */
+export async function updateSummaryContent(
+  workspaceId: string,
+  itemId: string,
+  summaryId: string,
+  contentMd: string,
+): Promise<ItemSummary> {
+  const { data } = await http.patch<ItemSummary>(
+    `/workspaces/${workspaceId}/items/${itemId}/summaries/${summaryId}`,
+    { content_md: contentMd },
+  )
+  return data
+}

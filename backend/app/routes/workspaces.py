@@ -2547,11 +2547,49 @@ def _cleanup_workspace_chat(workspace_id: str) -> None:
 
 
 def _permanently_delete_workspace(workspace_id: str) -> None:
-    """物理删除 workspace：JSON 记录 + 上传目录 + 聊天文件。
+    """物理删除合集记录，同时保留其仍存在的 canonical 笔记。
 
     不递归扫描全局共享目录（data/videos / data/json_data）——那些目录按 item 维度
     组织且可能与其它 workspace 共享，由 item 级删除路径独立处理。
     """
+    if workspace_id == _INBOX_WORKSPACE_ID:
+        raise HTTPException(status_code=409, detail="收纳箱承载未归类笔记，不能永久删除")
+
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+
+    # A worker may still write into the canonical record.  Do not delete or
+    # move ownership beneath it; the caller can retry after the task ends.
+    for item in rec.items:
+        try:
+            owner_workspace_id, _ = _store.owner_reference(workspace_id, item.item_id)
+        except KeyError:
+            continue
+        if owner_workspace_id != workspace_id:
+            continue
+        for task_id in item.related_task_ids:
+            task = _pipeline_runner.store.get(task_id)
+            if task is not None and task.status not in TERMINAL_STATUS_VALUES:
+                raise HTTPException(
+                    status_code=409,
+                    detail="该合集仍有运行中的任务，请先等待完成或取消后再永久删除",
+                )
+
+    promoted_item_ids: List[str] = []
+    if rec.items:
+        ensure_inbox()
+        try:
+            promoted_item_ids = _store.promote_owned_items(
+                workspace_id,
+                _INBOX_WORKSPACE_ID,
+            )
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(
+                status_code=409,
+                detail=f"无法安全保留共享笔记，合集未删除：{exc}",
+            ) from exc
+
     ok = _store.delete(workspace_id)
     if not ok:
         raise HTTPException(
@@ -2561,7 +2599,11 @@ def _permanently_delete_workspace(workspace_id: str) -> None:
                 "(check filesystem permissions on data/workspaces/)"
             ),
         )
-    _cleanup_workspace_uploads(workspace_id)
+    # Result/media paths still point to the original local storage root.  When
+    # a canonical item was promoted we intentionally retain that directory;
+    # deleting it would turn a collection deletion into media data loss.
+    if not promoted_item_ids:
+        _cleanup_workspace_uploads(workspace_id)
     _cleanup_workspace_chat(workspace_id)
 
 
@@ -2586,11 +2628,15 @@ def delete_workspace(
     workspace_id: str,
     content_policy: Literal["keep", "trash"] = Query("keep"),
 ) -> Dict[str, Any]:
-    """软删除：标记 trashed=True，不删 JSON 记录与素材文件。
+    """移除合集：标记合集为 trashed，不删除或隐藏其中的笔记。
 
     通过 POST /workspaces/{id}/restore 恢复；
     通过 DELETE /workspaces/{id}/permanent 彻底删除。
+
+    ``content_policy`` 是旧客户端参数，保留校验兼容；合集删除始终遵守
+    “只解除归类”的规则，不会把笔记一并移入垃圾桶。
     """
+    del content_policy
     rec = _store.get(workspace_id)
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
@@ -2607,7 +2653,7 @@ def delete_workspace(
 
     moved_to_inbox = 0
     already_elsewhere = 0
-    if content_policy == "keep" and rec.source != "inbox":
+    if rec.source != "inbox":
         active_records = [
             workspace
             for workspace in _store.list_all(include_trashed=False)
@@ -2656,7 +2702,7 @@ def delete_workspace(
         "workspace_id": workspace_id,
         "moved_to_inbox": moved_to_inbox,
         "already_elsewhere": already_elsewhere,
-        "trashed_count": len(rec.items) if content_policy == "trash" else 0,
+        "trashed_count": 0,
     }
 
 
@@ -4582,7 +4628,7 @@ async def translate_transcript(
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
     item = _find_item(rec, item_id)
 
-    nd = note_dir(workspace_id, item_id)
+    nd = note_dir(_canonical_note_owner(workspace_id, item_id), item_id)
     lines = _note_transcript(item.results or {}, nd)
     if not lines:
         raise HTTPException(status_code=400, detail="该素材没有字幕可翻译")
@@ -4885,7 +4931,7 @@ def update_transcript_segment(
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
     item = _find_item(rec, item_id)
-    nd = note_dir(workspace_id, item_id)
+    nd = note_dir(_canonical_note_owner(workspace_id, item_id), item_id)
 
     # 显示列表（与前端字幕轴完全一致）——按它的下标做边界校验，不再只认内存 results
     lines = _note_transcript(item.results or {}, nd)
@@ -5245,7 +5291,8 @@ def delete_summary(workspace_id: str, item_id: str, summary_id: str) -> Dict[str
 
 
 class SummaryRenameRequest(BaseModel):
-    name: str = ""
+    name: Optional[str] = None
+    content_md: Optional[str] = Field(default=None, max_length=200_000)
 
 
 @router.patch("/{workspace_id}/items/{item_id}/summaries/{summary_id}")
@@ -5255,15 +5302,27 @@ def rename_summary(
     summary_id: str,
     req: SummaryRenameRequest,
 ) -> Dict[str, Any]:
-    """改名指定总结版本（空字符串 = 清除自定义名）。"""
+    """改名或保存指定总结版本的正文。"""
     rec = _store.get(workspace_id)
     if rec is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
     _find_item(rec, item_id)  # 确认 item 存在
+    if req.name is None and req.content_md is None:
+        raise HTTPException(status_code=422, detail="name or content_md is required")
     try:
-        summary = _store.rename_item_summary(workspace_id, item_id, summary_id, req.name)
+        summary = None
+        if req.name is not None:
+            summary = _store.rename_item_summary(workspace_id, item_id, summary_id, req.name)
+        if req.content_md is not None:
+            summary = _store.update_item_summary_content(
+                workspace_id,
+                item_id,
+                summary_id,
+                req.content_md,
+            )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    assert summary is not None
     return summary.to_dict()
 
 
@@ -5298,6 +5357,21 @@ def _note_transcript(results: Dict[str, Any], nd: Path) -> List[Dict[str, Any]]:
         except Exception:
             return []
     return []
+
+
+def _canonical_note_owner(workspace_id: str, item_id: str) -> str:
+    """Resolve a collection member before any note-file read or write.
+
+    Memberships deliberately do not copy a note directory.  Resolving here
+    makes lazy assembly, note edits, transcript edits and exports converge on
+    the same canonical files even when the collection was linked before the
+    first note file existed.
+    """
+    try:
+        owner_workspace_id, _ = _store.owner_reference(workspace_id, item_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return owner_workspace_id
 
 
 def _rebuild_source_md_transcript(nd: Path, lines: List[Dict[str, Any]]) -> None:
@@ -5339,7 +5413,8 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
     item = _find_item(rec, item_id)
 
-    nd = note_dir(workspace_id, item_id)
+    owner_workspace_id = _canonical_note_owner(workspace_id, item_id)
+    nd = note_dir(owner_workspace_id, item_id)
     note_path = nd / "note.md"
 
     # 从 task store 回填最新 SUCCESS result；note.md 已存在时也需要回填，
@@ -5357,7 +5432,7 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
 
     # 惰性组装：目录不存在或 note.md 缺失时触发；旧自动稿则按最新结果刷新。
     if not note_path.exists():
-        assemble_item_note(workspace_id, item_id, _item=item)
+        assemble_item_note(owner_workspace_id, item_id, _item=item)
     else:
         _refresh_auto_note_if_stale(workspace_id, item, note_path)
 
@@ -5460,7 +5535,7 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
                 _video_url = to_static_url(_fm_video)
             elif _fm_video:
                 _video_url = _fm_video
-        _vid_dir = DATA_DIR / "workspaces" / workspace_id / "videos"
+        _vid_dir = DATA_DIR / "workspaces" / owner_workspace_id / "videos"
         if not _video_url and _vid_dir.is_dir():
             _vid_files = sorted(_vid_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
             if _vid_files:
@@ -5480,7 +5555,7 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
         transcript = _note_transcript(results, nd)
 
     elif item_type == "audio":
-        media["audio"] = _note_audio_url(workspace_id, item, results, frontmatter)
+        media["audio"] = _note_audio_url(owner_workspace_id, item, results, frontmatter)
         media["waveform"] = results.get("waveform_peaks") or []
         # transcript：统一规范成 [{t_sec, t_str, text}]
         transcript = _note_transcript(results, nd)
@@ -5502,6 +5577,23 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
         if isinstance(raw_summary_failure, dict) and raw_summary_failure.get("stage") == "summary"
         else None
     )
+    has_speaker_labels = any(
+        str(segment.get("speaker") or "").strip()
+        for segment in (transcript or [])
+        if isinstance(segment, dict)
+    )
+    speaker_retry_task_id = ""
+    if item_type in {"audio", "video"} and transcript and not has_speaker_labels:
+        for task_id in reversed(item.related_task_ids):
+            task = _pipeline_runner.store.get(task_id)
+            if task is None or task.status not in TERMINAL_STATUS_VALUES:
+                continue
+            if item_type == "audio" and task.task_type == "audio":
+                speaker_retry_task_id = task.task_id
+                break
+            if item_type == "video" and task.task_type == "note" and (task.result or {}).get("video_file"):
+                speaker_retry_task_id = task.task_id
+                break
 
     return {
         "frontmatter": frontmatter,
@@ -5519,6 +5611,7 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
         # 自动总结失败时，结果页必须拿到原因和可重试的任务 ID，不能只显示空态。
         "summary_failure": summary_failure,
         "summary_retry_task_id": latest_result_task.task_id if summary_failure and latest_result_task else "",
+        "speaker_retry_task_id": speaker_retry_task_id,
     }
 
 
@@ -5546,7 +5639,8 @@ def update_item_note(workspace_id: str, item_id: str, req: NoteUpdateRequest) ->
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
     item = _find_item(rec, item_id)
 
-    nd = note_dir(workspace_id, item_id)
+    owner_workspace_id = _canonical_note_owner(workspace_id, item_id)
+    nd = note_dir(owner_workspace_id, item_id)
     note_path = nd / "note.md"
     previous_body: Optional[str] = None
 
@@ -5572,7 +5666,7 @@ def update_item_note(workspace_id: str, item_id: str, req: NoteUpdateRequest) ->
                     merged.update(task.result)
                     item.results = merged
                     break
-        assemble_item_note(workspace_id, item_id, _item=item)
+        assemble_item_note(owner_workspace_id, item_id, _item=item)
         # 重新读取刚刚写入的 frontmatter
         if note_path.exists():
             raw = note_path.read_text(encoding="utf-8")
@@ -5790,7 +5884,8 @@ def export_item_note(
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
     item = _find_item(rec, item_id)
 
-    nd = note_dir(workspace_id, item_id)
+    owner_workspace_id = _canonical_note_owner(workspace_id, item_id)
+    nd = note_dir(owner_workspace_id, item_id)
     note_path = nd / "note.md"
     if not note_path.exists():
         if item.related_task_ids:
@@ -5801,7 +5896,7 @@ def export_item_note(
                     merged.update(task.result)
                     item.results = merged
                     break
-        assemble_item_note(workspace_id, item_id, _item=item)
+        assemble_item_note(owner_workspace_id, item_id, _item=item)
 
     if not note_path.exists():
         raise HTTPException(status_code=404, detail="note not generated")
@@ -5813,7 +5908,11 @@ def export_item_note(
         summary = next((entry for entry in item.summaries if entry.summary_id == summary_id), None)
         if summary is None:
             raise HTTPException(status_code=404, detail="summary not found")
-        note_md = summary.content_md or ""
+        speaker_map = (item.results or {}).get("speaker_map") or {}
+        note_md = apply_speaker_map(
+            summary.content_md or "",
+            speaker_map if isinstance(speaker_map, dict) else {},
+        )
     source_path = nd / "source.md"
     source_md = source_path.read_text(encoding="utf-8") if source_path.exists() else ""
     return build_note_export_response(
@@ -5992,7 +6091,7 @@ def merge_notes(workspace_id: str, req: MergeRequest) -> Dict[str, Any]:
         item = next((it for it in rec.items if it.item_id == item_id), None)
         if item is None:
             continue
-        nd = note_dir(workspace_id, item_id)
+        nd = note_dir(_canonical_note_owner(workspace_id, item_id), item_id)
         note_path = nd / "note.md"
         if not note_path.exists():
             continue

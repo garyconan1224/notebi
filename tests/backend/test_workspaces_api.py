@@ -346,14 +346,17 @@ def test_upload_item_persists_file_and_registers_item(
     assert stored.is_file()
     assert stored.read_bytes() == payload
 
-    # N1.3 之后 DELETE 是软删除，文件保留；需 permanent 才会清理上传目录
+    # 删除合集只解除归类。即使永久删除合集，原始素材仍会保留并转入收纳箱。
     resp = client.delete(f"/workspaces/{ws_id}")
     assert resp.status_code == 200
     assert stored.exists(), "soft delete should not remove uploaded files"
 
     resp = client.delete(f"/workspaces/{ws_id}/permanent")
     assert resp.status_code == 200
-    assert not stored.exists()
+    assert stored.exists(), "deleting a collection must not delete canonical media"
+    inbox = client.get("/workspaces/__inbox__")
+    assert inbox.status_code == 200
+    assert [saved["item_id"] for saved in inbox.json()["items"]] == [item["item_id"]]
 
 
 def test_upload_item_workspace_not_found(client: TestClient) -> None:

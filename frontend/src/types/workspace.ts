@@ -204,6 +204,8 @@ export interface ItemNote {
   } | null
   /** 对应的终结态音频任务，供页面只重试摘要而不重复转写。 */
   summary_retry_task_id?: string
+  /** 无说话人标签的音视频可只补做说话人识别，不重跑转写。 */
+  speaker_retry_task_id?: string
 }
 
 /** 中文展示文案——状态 */

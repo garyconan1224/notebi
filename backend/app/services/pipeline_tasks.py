@@ -375,21 +375,28 @@ def _maybe_diarize_video_segments(
     speaker_count: Optional[int],
     audio_dir: Path,
     log: Callable[[str], None],
+    report_stage: Optional[Callable[[str], None]] = None,
 ) -> List[Dict[str, Any]]:
     """为视频音轨补充说话人标签；失败时保留完整转写并允许用户重试。"""
     if not enabled or not segments:
         return segments
     audio_path = audio_dir / f"{video_path.stem}_diarization.wav"
     try:
+        if report_stage:
+            report_stage("视频说话人识别中…")
         log("🗣️ 视频说话人识别中...")
         _extract_audio_from_video(video_path, audio_path, log_fn=log)
         diarization = run_diarization(audio_path, num_speakers=speaker_count)
         labeled = assign_speakers_to_segments(segments, diarization)
         labeled_count = sum(1 for seg in labeled if str(seg.get("speaker") or "").strip())
         log(f"✅ 视频说话人识别完成 | {labeled_count}/{len(labeled)} 段已标注")
+        if report_stage:
+            report_stage("视频说话人识别完成")
         return labeled
     except (DiarizationError, RuntimeError, OSError) as exc:
         log(f"⚠️ 视频说话人识别失败，保留无标签转写：{exc}")
+        if report_stage:
+            report_stage("视频说话人识别未完成，可稍后单独重试")
         return segments
     finally:
         audio_path.unlink(missing_ok=True)
@@ -2578,6 +2585,9 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
     payload = record.payload
     task_id = record.task_id
 
+    if payload.get("_retry_stage") == "diarization":
+        return _handle_video_diarization_retry(record, runner)
+
     # ── 0. 解析步骤列表 ────────────────────────────────────────
     steps: List[str] = payload.get("steps") or ["download", "transcribe", "analyze", "note"]
     completed_steps: List[str] = []
@@ -2964,6 +2974,23 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
 
                 # ④16 CC-first：先尝试直取平台字幕，命中则跳过 Whisper
                 log_fn = lambda msg: runner.append_log(task_id, msg)  # noqa: E731
+
+                def _report_video_diarization(message: str) -> None:
+                    """Keep the monitor on the actual speaker-analysis stage.
+
+                    The task remains in ASR while transcription and visual analysis run
+                    concurrently.  An explicit public stage prevents the monitor from
+                    labelling these events as generic transcription work.
+                    """
+                    current = runner.store.get(task_id)
+                    current_progress = float(current.progress) if current else 0.30
+                    runner.set_progress(
+                        task_id,
+                        max(0.30, current_progress),
+                        message,
+                        public_stage="DIARIZATION",
+                    )
+
                 cc_result = _try_cc_subtitle(payload, log_fn)
                 if cc_result:
                     _cc_text, _cc_segments, _cc_meta = cc_result
@@ -2974,6 +3001,7 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
                         speaker_count=speaker_count,
                         audio_dir=project_json_dir,
                         log=log_fn,
+                        report_stage=_report_video_diarization,
                     )
                     _monotonic_progress(0.30, "字幕已就绪，跳过转录")
                     return _cc_text, _cc_segments
@@ -3040,6 +3068,7 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
                     speaker_count=speaker_count,
                     audio_dir=project_json_dir,
                     log=log_fn,
+                    report_stage=_report_video_diarization,
                 )
                 return _text, _segments
 
@@ -5035,6 +5064,86 @@ def _summary_failure_details(error: Exception) -> Dict[str, str]:
     }
 
 
+def _resolve_diarization_retry_video(parent: TaskRecord, project_id: str) -> Path:
+    result = dict(parent.result or {})
+    candidates = [
+        str(result.get("video_file") or ""),
+        str(result.get("source_path") or ""),
+        str(parent.payload.get("video_file") or ""),
+    ]
+    for raw in candidates:
+        if raw and Path(raw).is_file():
+            return Path(raw)
+    for path in get_workspace_videos_dir(project_id).glob("*"):
+        if path.is_file() and path.suffix.lower() in {".mp4", ".mov", ".mkv", ".avi", ".webm", ".flv"}:
+            return path
+    raise RuntimeError("找不到原视频缓存，无法仅补做说话人识别；请重新提交完整任务")
+
+
+def _handle_video_diarization_retry(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
+    """Reuse a completed video transcript and only run speaker diarization."""
+    task_id = record.task_id
+    log = lambda message: runner.append_log(task_id, message)  # noqa: E731
+    source_task_id = str(record.payload.get("_retry_source_task_id") or record.retry_of or "")
+    parent = runner.store.get(source_task_id)
+    if parent is None or parent.status not in {TaskStatus.PARTIAL.value, TaskStatus.SUCCESS.value}:
+        raise RuntimeError("原终结态视频任务不存在，无法仅补做说话人识别")
+    parent_result = dict(parent.result or {})
+    segments = [dict(seg) for seg in parent_result.get("transcript_segments") or [] if isinstance(seg, dict)]
+    if not segments:
+        raise RuntimeError("原任务没有可复用的转录片段")
+
+    video_path = _resolve_diarization_retry_video(parent, record.project_id)
+    retry_dir = get_workspace_json_dir(record.project_id)
+    retry_dir.mkdir(parents=True, exist_ok=True)
+    extracted_audio = retry_dir / f"{task_id}_diarization.wav"
+    speaker_count_raw = record.payload.get("speaker_count")
+    speaker_count = (
+        int(speaker_count_raw)
+        if speaker_count_raw is not None and str(speaker_count_raw).strip()
+        else None
+    )
+    log(f"♻️  复用原视频任务 {source_task_id} 的转录，仅补做说话人识别")
+    runner.set_progress(
+        task_id,
+        0.66,
+        "从视频音轨区分说话人…",
+        public_stage="DIARIZATION",
+    )
+    try:
+        _extract_audio_from_video(video_path, extracted_audio, log_fn=log)
+        diar = run_diarization(
+            extracted_audio,
+            progress_callback=lambda ratio, message: runner.set_progress(
+                task_id,
+                0.66 + ratio * 0.20,
+                message,
+                public_stage="DIARIZATION",
+            ),
+            num_speakers=speaker_count,
+        )
+        segments = refine_segments(assign_speakers_to_segments(segments, diar))
+    finally:
+        extracted_audio.unlink(missing_ok=True)
+
+    labeled_count = sum(1 for segment in segments if str(segment.get("speaker") or "").strip())
+    log(f"✅ 视频说话人识别完成：{labeled_count}/{len(segments)} 段已标注")
+    result = {
+        **parent_result,
+        "task_id": task_id,
+        "project_id": record.project_id,
+        "transcript_segments": segments,
+        "diarization": diar.to_dict(),
+        "partial_failure": None,
+        "retry_stage": "diarization",
+        "retry_source_task_id": source_task_id,
+    }
+    runner.set_progress(task_id, 0.95, "归档说话人识别结果…", public_stage="STORE")
+    json_path = retry_dir / f"{task_id}.json"
+    json_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {**result, "json_path": str(json_path.resolve())}
+
+
 def _handle_audio_diarization_retry(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
     task_id = record.task_id
     log = lambda msg: runner.append_log(task_id, msg)  # noqa: E731
@@ -5056,7 +5165,7 @@ def _handle_audio_diarization_retry(record: TaskRecord, runner: TaskRunner) -> D
     log(f"♻️  复用原任务 {source_task_id} 的转录，仅重试说话人分析")
     runner.store.update(task_id, status=TaskStatus.ASR.value)
     # 阶段重试沿用完整音频任务的进度契约，前端可以准确显示“说话人分析”而不是转录。
-    runner.set_progress(task_id, 0.66, "说话人分离中...")
+    runner.set_progress(task_id, 0.66, "说话人分离中...", public_stage="DIARIZATION")
     speaker_count_raw = record.payload.get("speaker_count")
     speaker_count = (
         int(speaker_count_raw)
@@ -5066,7 +5175,7 @@ def _handle_audio_diarization_retry(record: TaskRecord, runner: TaskRunner) -> D
     diar = run_diarization(
         audio_path,
         progress_callback=lambda ratio, message: runner.set_progress(
-            task_id, 0.66 + ratio * 0.06, message
+            task_id, 0.66 + ratio * 0.06, message, public_stage="DIARIZATION"
         ),
         num_speakers=speaker_count,
     )
@@ -5407,13 +5516,21 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
     diarization_dict: Optional[Dict[str, Any]] = None
     partial_failure: Optional[Dict[str, str]] = None
     if diarization_enabled and vad_result.has_speech:
-        runner.set_progress(task_id, 0.66, "根据音色区分说话人...")
+        runner.set_progress(
+            task_id,
+            0.66,
+            "根据音色区分说话人...",
+            public_stage="DIARIZATION",
+        )
         log("🎤 说话人分离中（sherpa-onnx，失败时回退 pyannote）")
         try:
             diar = run_diarization(
                 audio_local_path,
                 progress_callback=lambda ratio, message: runner.set_progress(
-                    task_id, 0.66 + ratio * 0.06, message
+                    task_id,
+                    0.66 + ratio * 0.06,
+                    message,
+                    public_stage="DIARIZATION",
                 ),
                 num_speakers=speaker_count,
             )

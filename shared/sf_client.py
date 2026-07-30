@@ -74,6 +74,28 @@ def _post_json(
     return resp.json()
 
 
+def _unsupported_optional_chat_field(error: object, field: str) -> bool:
+    """Whether one provider rejected a known optional chat-completion field.
+
+    OpenAI-compatible gateways differ on optional sampling and thinking
+    parameters.  Retry only when the response explicitly names the field, so a
+    genuine model, credential, or prompt failure is never hidden.
+    """
+    text = str(error).lower()
+    return field.lower() in text and any(
+        marker in text
+        for marker in ("unsupported", "not support", "unknown parameter", "invalid parameter", "unrecognized")
+    )
+
+
+def _without_rejected_optional_field(payload: dict[str, Any], error: object) -> bool:
+    for field in ("temperature", "reasoning_effort", "enable_thinking"):
+        if field in payload and _unsupported_optional_chat_field(error, field):
+            payload.pop(field, None)
+            return True
+    return False
+
+
 def _sanitize_embedding_text(text: str, max_chars: int) -> str:
     """去掉首尾空白，截断到安全长度；空串用占位符，避免 API 拒收。"""
     s = (text or "").strip()
@@ -183,7 +205,13 @@ def chat_completion(
         payload["reasoning_effort"] = reasoning_effort
     if enable_thinking is not None:
         payload["enable_thinking"] = enable_thinking
-    data = _post_json(api_key, "/chat/completions", payload, timeout=timeout, base_url=base_url)
+    while True:
+        try:
+            data = _post_json(api_key, "/chat/completions", payload, timeout=timeout, base_url=base_url)
+            break
+        except SiliconFlowError as error:
+            if not _without_rejected_optional_field(payload, error):
+                raise
     choices = data.get("choices") or []
     if not choices:
         raise SiliconFlowError(f"无 choices 字段: {data}")
@@ -243,32 +271,41 @@ def chat_completion_stream(
     if enable_thinking is not None:
         payload["enable_thinking"] = enable_thinking
     headers = _headers(api_key)
-    with requests.post(url, headers=headers, json=payload, stream=True, timeout=300) as resp:
-        if resp.status_code in (429, 503, 504):
-            raise SiliconFlowTransientError(f"HTTP {resp.status_code}: {resp.text[:500]}")
-        if resp.status_code >= 400:
-            try:
-                detail = resp.json()
-            except Exception:
-                detail = resp.text
-            raise SiliconFlowError(f"HTTP {resp.status_code}: {detail}")
-        for raw_line in resp.iter_lines():
-            if not raw_line:
-                continue
-            line = raw_line.decode("utf-8") if isinstance(raw_line, bytes) else raw_line
-            if not line.startswith("data: "):
-                continue
-            payload_str = line[6:]
-            if payload_str.strip() == "[DONE]":
-                break
-            try:
-                chunk = json.loads(payload_str)
-            except json.JSONDecodeError:
-                continue
-            delta = (chunk.get("choices") or [{}])[0].get("delta") or {}
-            text = _assistant_content(delta.get("content"))
-            if text:
-                yield text
+    while True:
+        retry_without_optional_field = False
+        with requests.post(url, headers=headers, json=payload, stream=True, timeout=300) as resp:
+            if resp.status_code in (429, 503, 504):
+                raise SiliconFlowTransientError(f"HTTP {resp.status_code}: {resp.text[:500]}")
+            if resp.status_code >= 400:
+                try:
+                    detail = resp.json()
+                except Exception:
+                    detail = resp.text
+                error = SiliconFlowError(f"HTTP {resp.status_code}: {detail}")
+                retry_without_optional_field = _without_rejected_optional_field(payload, error)
+                if not retry_without_optional_field:
+                    raise error
+            else:
+                for raw_line in resp.iter_lines():
+                    if not raw_line:
+                        continue
+                    line = raw_line.decode("utf-8") if isinstance(raw_line, bytes) else raw_line
+                    if not line.startswith("data: "):
+                        continue
+                    payload_str = line[6:]
+                    if payload_str.strip() == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(payload_str)
+                    except json.JSONDecodeError:
+                        continue
+                    delta = (chunk.get("choices") or [{}])[0].get("delta") or {}
+                    text = _assistant_content(delta.get("content"))
+                    if text:
+                        yield text
+                return
+        if not retry_without_optional_field:
+            return
 
 
 def build_vision_user_content(

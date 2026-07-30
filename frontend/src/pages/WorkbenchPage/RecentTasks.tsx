@@ -98,6 +98,20 @@ function legacyItems(tasks: TaskRecord[]): LibraryItem[] {
     }))
 }
 
+/** 首页按笔记内容聚合；合集只是归类视图，不能让同一笔记占多个最近位。 */
+function uniqueNoteViews(items: LibraryItem[]): LibraryItem[] {
+  const newestFirst = [...items].sort(
+    (left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime(),
+  )
+  const seen = new Set<string>()
+  return newestFirst.filter((item) => {
+    const key = item.content_id || `${item.workspace_id}:${item.item_id}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 function CoverFallback({ type }: { type: LibraryItem['type'] }) {
   if (type === 'audio') {
     return (
@@ -174,16 +188,12 @@ export function RecentTasks({ tasks: tasksProp }: RecentTasksProps) {
     }
   }, [tasksProp, terminalSignature])
 
-  const recentItems = useMemo(
-    () =>
-      [...items]
-        .sort(
-          (left, right) =>
-            new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime(),
-        )
-        .slice(0, 8),
+  const noteItems = useMemo(
+    () => uniqueNoteViews(items),
     [items],
   )
+
+  const recentItems = useMemo(() => noteItems.slice(0, 8), [noteItems])
 
   const activeTasks = tasks
     .filter((task) => !HIDDEN_TASK_TYPES.has(task.task_type) && !isTaskTerminal(task.status))
@@ -237,7 +247,7 @@ export function RecentTasks({ tasks: tasksProp }: RecentTasksProps) {
       <div className="sec-h">
         <h2 className="sec-title">最近笔记</h2>
         <button className="sec-link" onClick={() => navigate('/notes')}>
-          全部 · {items.length} <ArrowRight size={13} />
+          全部 · {noteItems.length} <ArrowRight size={13} />
         </button>
       </div>
 

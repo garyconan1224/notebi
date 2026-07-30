@@ -145,12 +145,12 @@ export function MaterialsTab({
         [...copyTargetIds].map((targetId) => batchAddItemsToWorkspace(targetId, references)),
       )
       const added = results.reduce((sum, result) => sum + result.added, 0)
-      toast.success(`已创建 ${added} 个独立副本`)
+      toast.success(`已将 ${added} 条笔记归入所选合集`)
       setCopyOpen(false)
       setSelectedIds(new Set())
       setSelectMode(false)
     } catch {
-      toast.error('复制到合集失败，请重试')
+      toast.error('归入合集失败，请重试')
     } finally {
       setBatchRunning(false)
     }
@@ -263,7 +263,7 @@ export function MaterialsTab({
             onClick={() => void openCopyTargets()}
           >
             <Copy size={13} />
-            复制到合集
+            归入合集
           </button>
           <button
             className="btn btn-ghost btn-sm btn-danger"
@@ -287,8 +287,8 @@ export function MaterialsTab({
       {copyOpen && (
         <div className="tb-modal-overlay" onClick={() => setCopyOpen(false)}>
           <div className="tb-modal" onClick={(event) => event.stopPropagation()}>
-            <h2 className="text-lg font-semibold">复制到一个或多个合集</h2>
-            <p className="text-sm text-muted-foreground">每个目标都会得到可独立修改的副本，并保留同源关系。</p>
+            <h2 className="text-lg font-semibold">归入一个或多个合集</h2>
+            <p className="text-sm text-muted-foreground">不会复制内容；后续编辑始终同步，移出合集只解除归类。</p>
             <div className="my-4 max-h-72 space-y-2 overflow-y-auto">
               {copyTargets.map((workspace) => (
                 <label key={workspace.workspace_id} className="flex gap-2">
@@ -310,7 +310,7 @@ export function MaterialsTab({
             <div className="flex gap-2">
               <button className="btn" type="button" onClick={() => setCopyOpen(false)}>取消</button>
               <button className="btn btn-primary" type="button" disabled={copyTargetIds.size === 0 || batchRunning} onClick={() => void copySelected()}>
-                确认复制
+                确认归入
               </button>
             </div>
           </div>

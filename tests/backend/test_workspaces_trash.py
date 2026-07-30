@@ -199,7 +199,32 @@ def test_delete_collection_unlinks_shared_member_but_keeps_canonical_note(client
         store.get_item(target, "canonical-note")
 
 
-def test_explicit_trash_policy_does_not_copy_content(client):
+def test_permanently_deleting_original_collection_keeps_shared_canonical_note(client):
+    """删除合集不能借由永久删除把仍归入其它合集的笔记一并删除。"""
+    c, store = client
+    source = _make_ws(c, "canonical-source")
+    target = _make_ws(c, "shared-target")
+    store.add_item(
+        source,
+        WorkspaceItem(
+            item_id="canonical-note",
+            type="text",
+            source="local",
+            source_value="manual",
+        ),
+    )
+    assert store.add_item_membership(target, source, "canonical-note") is True
+
+    assert c.delete(f"/workspaces/{source}").status_code == 200
+    response = c.delete(f"/workspaces/{source}/permanent")
+
+    assert response.status_code == 200
+    assert store.get(source) is None
+    assert store.get_item(target, "canonical-note").item_id == "canonical-note"
+    assert store.get_item("__inbox__", "canonical-note").item_id == "canonical-note"
+
+
+def test_legacy_trash_policy_still_preserves_collection_content(client):
     c, store = client
     wid = _make_ws(c, "trash-content")
     store.add_item(
@@ -213,8 +238,9 @@ def test_explicit_trash_policy_does_not_copy_content(client):
     )
     response = c.delete(f"/workspaces/{wid}?content_policy=trash")
     assert response.status_code == 200
-    assert response.json()["moved_to_inbox"] == 0
-    assert store.get("__inbox__") is None
+    assert response.json()["moved_to_inbox"] == 1
+    assert response.json()["trashed_count"] == 0
+    assert store.get_item("__inbox__", "trash").item_id == "trash"
 
 
 def test_invalid_content_policy_is_rejected(client):

@@ -69,7 +69,6 @@ export default function WorkspaceList() {
   // 删除确认状态
   const [deleteTarget, setDeleteTarget] = useState<WorkspaceRecord | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const [contentPolicy, setContentPolicy] = useState<'keep' | 'trash'>('keep')
 
   // Phase 3C.5：tag 筛选（与 URL search params 双向同步）
   const { filter, setFilter, filterItems, hasActiveFilter } = useTagFilter()
@@ -122,18 +121,13 @@ export default function WorkspaceList() {
 
   const handleDelete = async () => {
     if (!deleteTarget) return
-    if (
-      contentPolicy === 'trash'
-      && !window.confirm('危险操作：合集及其中内容都会进入垃圾桶。确认继续？')
-    ) return
     setDeleting(true)
     try {
-      await deleteWorkspace(deleteTarget.workspace_id, contentPolicy)
+      await deleteWorkspace(deleteTarget.workspace_id)
       // 阶段 C2：软删除整个合集后即时清空其任务，与其它删除入口保持一致。
       // 后端 list_tasks 已过滤 trashed workspace，轮询不会重新加入。
       useTaskStore.getState().removeByProject(deleteTarget.workspace_id)
       setDeleteTarget(null)
-      setContentPolicy('keep')
       await refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '删除失败')
@@ -208,7 +202,6 @@ export default function WorkspaceList() {
               workspace={ws}
               onOpen={() => navigate(`/workspaces/${ws.workspace_id}`)}
               onDelete={() => {
-                setContentPolicy('keep')
                 setDeleteTarget(ws)
               }}
             />
@@ -264,33 +257,13 @@ export default function WorkspaceList() {
           <AlertDialogHeader>
             <AlertDialogTitle>确认删除？</AlertDialogTitle>
             <AlertDialogDescription>
-              删除合集「{deleteTarget?.name}」。默认把只存在于此合集的内容保留到收纳箱。
+              删除合集「{deleteTarget?.name}」只会解除归类；笔记仍保留在收纳箱或其它合集。
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="space-y-2">
-            <label className="flex gap-2">
-              <input
-                type="radio"
-                name="content-policy"
-                checked={contentPolicy === 'keep'}
-                onChange={() => setContentPolicy('keep')}
-              />
-              删除合集，内容保留在收纳箱
-            </label>
-            <label className="flex gap-2 text-destructive">
-              <input
-                type="radio"
-                name="content-policy"
-                checked={contentPolicy === 'trash'}
-                onChange={() => setContentPolicy('trash')}
-              />
-              合集及其中内容移入垃圾桶
-            </label>
-          </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>取消</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} disabled={deleting}>
-              {deleting ? '删除中…' : '删除'}
+              {deleting ? '删除中…' : '删除合集'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
