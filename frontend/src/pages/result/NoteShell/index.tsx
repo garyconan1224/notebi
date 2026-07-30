@@ -16,7 +16,7 @@ import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Bold, BookOpenCheck, Bra
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
 
-import { downloadItemNoteExport, downloadTranscript, exportItemNoteObsidian, getItemNote, putItemNote, updateSpeakerMap, type ItemNoteExportFormat, type TranscriptExportMode } from '@/services/workspaces'
+import { downloadItemNoteExport, downloadSubtitles, downloadTranscript, exportItemNoteObsidian, getItemNote, putItemNote, updateSpeakerMap, type ItemNoteExportFormat, type TranscriptExportMode } from '@/services/workspaces'
 import type { VideoResultTranscriptLine } from '@/services/workspaces'
 import type { ItemNote } from '@/types/workspace'
 import { createSummary, deleteSummary, listSummaries, renameSummary, type ItemSummary } from '@/services/summaries'
@@ -367,6 +367,10 @@ function extensionForExport(format: ItemNoteExportFormat): string {
     long_image: 'png',
     pptx: 'pptx',
     obsidian: 'zip',
+    transcript_txt: 'txt',
+    srt: 'srt',
+    vtt: 'vtt',
+    ass: 'ass',
   }
   return map[format]
 }
@@ -380,6 +384,10 @@ function labelForNoteExport(format: ItemNoteExportFormat): string {
     long_image: '长图',
     pptx: 'PPT',
     obsidian: 'Obsidian 包',
+    transcript_txt: '转写文本',
+    srt: 'SRT 字幕',
+    vtt: 'VTT 字幕',
+    ass: 'ASS 字幕',
   }
   return map[format]
 }
@@ -1284,6 +1292,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         format,
         `${safeFilename(title)}.${extensionForExport(format)}`,
         controller.signal,
+        activeSummaryId ? 'summary' : 'main',
+        activeSummaryId || undefined,
       )
       showOperationNotice(`${label}已开始下载`, 'success')
       setExportOpen(false)
@@ -1298,7 +1308,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
       if (exportAbortRef.current === controller) exportAbortRef.current = null
       setExportBusy(null)
     }
-  }, [workspaceId, itemId, note, showOperationNotice])
+  }, [activeSummaryId, workspaceId, itemId, note, showOperationNotice])
 
   const handleDownloadSourceMd = useCallback(async () => {
     if (!note?.source_md) {
@@ -1331,6 +1341,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     if (exportSource === 'current') {
       if (format === 'md') void handleExportMarkdown()
       if (format === 'html') void handleExportCurrentHtml()
+      if (!['md', 'html'].includes(format)) void handleDownloadNoteExport(format)
       return
     }
     if (exportSource === 'main') {
@@ -1339,11 +1350,17 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
       return
     }
     if (exportSource === 'transcript') {
-      void handleExportTranscript('article')
+      if (format === 'transcript_txt') void handleExportTranscript('article')
+      if (format === 'srt' || format === 'vtt' || format === 'ass') {
+        void downloadSubtitles(workspaceId, itemId, format).then(() => {
+          showOperationNotice(`${format.toUpperCase()} 字幕已开始下载`, 'success')
+          setExportOpen(false)
+        }).catch(() => showOperationNotice('字幕导出失败，请重试', 'error'))
+      }
       return
     }
     if (exportSource === 'speaker_transcript') {
-      void handleExportTranscript('speaker_grouped')
+      if (format === 'transcript_txt') void handleExportTranscript('speaker_grouped')
       return
     }
     setExportOpen(false)
@@ -1355,6 +1372,9 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     handleExportMarkdown,
     handleExportObsidian,
     handleExportTranscript,
+    itemId,
+    showOperationNotice,
+    workspaceId,
   ])
 
   // VN4.3 新建总结（从 AI 工具菜单触发，复用 NewSummaryModal）
@@ -1591,7 +1611,9 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
       await refreshSummaries()
       const updatedCount = result.summary_refresh?.updated_count ?? 0
       toast.success(
-        result.summary_refresh?.status === 'updated'
+        result.summary_refresh?.status === 'needs_regeneration'
+          ? '身份已更新，历史总结中的名称已同步；请生成新版本以刷新角色解读'
+          : result.summary_refresh?.status === 'updated'
           ? `说话人已更新，已同步刷新 ${updatedCount} 份历史总结`
           : '说话人已更新',
       )
@@ -1994,6 +2016,10 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                     {(exportSource === 'current' ? [
                       { icon: <FileText size={15} />, label: 'Markdown', format: 'md' as const },
                       { icon: <FileText size={15} />, label: 'HTML', format: 'html' as const },
+                      { icon: <FileDown size={15} />, label: 'PDF', format: 'pdf' as const },
+                      { icon: <FileType size={15} />, label: 'Word', format: 'docx' as const },
+                      { icon: <Image size={15} />, label: '长图', format: 'long_image' as const },
+                      { icon: <Presentation size={15} />, label: 'PPT', format: 'pptx' as const },
                     ] : exportSource === 'main' ? [
                       { icon: <FileText size={15} />, label: 'Markdown', format: 'md' as const },
                       { icon: <FileText size={15} />, label: 'HTML', format: 'html' as const },
@@ -2002,8 +2028,13 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                       { icon: <Image size={15} />, label: '长图', format: 'long_image' as const },
                       { icon: <Presentation size={15} />, label: 'PPT', format: 'pptx' as const },
                       { icon: <BookOpenCheck size={15} />, label: 'Obsidian 包', format: 'obsidian' as const },
+                    ] : exportSource === 'transcript' ? [
+                      { icon: <FileText size={15} />, label: 'TXT 文章', format: 'transcript_txt' as const },
+                      { icon: <Subtitles size={15} />, label: 'SRT 字幕', format: 'srt' as const },
+                      { icon: <Subtitles size={15} />, label: 'VTT 字幕', format: 'vtt' as const },
+                      { icon: <Subtitles size={15} />, label: 'ASS 字幕', format: 'ass' as const },
                     ] : [
-                      { icon: <FileText size={15} />, label: 'Markdown', format: 'md' as const },
+                      { icon: <Subtitles size={15} />, label: 'TXT（按说话人归组）', format: 'transcript_txt' as const },
                     ]).map((item) => (
                       <button
                         key={item.label}
@@ -2225,6 +2256,64 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
             {/* 转录 */}
             {!isPip && Array.isArray(note.transcript) && (note.transcript as VideoResultTranscriptLine[]).length > 0 ? (
               <div className="nibi-note-transcript-wrap">
+                {speakerIds.length > 0 && (
+                  <div className="nibi-audio-speaker-chips" aria-label="视频说话人">
+                    <span className="nibi-audio-speaker-title">说话人</span>
+                    {speakerIds.map((speakerId) => {
+                      const displayName = speakerMap[speakerId] || speakerId.replace(/^SPEAKER_/, 'S')
+                      const displayRole = speakerRoles[speakerId] || ''
+                      const speakerStat = speakerStatsMap.get(speakerId)
+                      const speakerPercent = totalSpeakerDuration > 0 && speakerStat
+                        ? Math.round((speakerStat.duration / totalSpeakerDuration) * 100)
+                        : 0
+                      const isEditing = editingSpeakerId === speakerId
+                      if (isEditing) {
+                        return (
+                          <div key={speakerId} className="nibi-audio-speaker-editor">
+                            <input
+                              className="nibi-audio-speaker-input"
+                              autoFocus
+                              value={editingSpeakerName}
+                              aria-label={`${speakerId} 姓名`}
+                              onChange={(event) => setEditingSpeakerName(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') void handleSpeakerProfileSave(speakerId, editingSpeakerName, editingSpeakerRole)
+                                if (event.key === 'Escape') setEditingSpeakerId(null)
+                              }}
+                            />
+                            <select
+                              className="nibi-audio-speaker-role"
+                              aria-label={`${speakerId} 角色`}
+                              value={editingSpeakerRole}
+                              onChange={(event) => setEditingSpeakerRole(event.target.value)}
+                            >
+                              <option value="">未设置角色</option>
+                              {SPEAKER_ROLE_OPTIONS.map((role) => <option key={role} value={role}>{role}</option>)}
+                            </select>
+                            <button type="button" className="nibi-audio-speaker-save" onClick={() => void handleSpeakerProfileSave(speakerId, editingSpeakerName, editingSpeakerRole)}>保存</button>
+                          </div>
+                        )
+                      }
+                      return (
+                        <button
+                          key={speakerId}
+                          className="nibi-audio-speaker-chip"
+                          style={{ '--speaker-color': audioSpeakerColor(speakerId) } as CSSProperties}
+                          title="点击编辑姓名和角色"
+                          onClick={() => {
+                            setEditingSpeakerId(speakerId)
+                            setEditingSpeakerName(speakerMap[speakerId] || '')
+                            setEditingSpeakerRole(speakerRoles[speakerId] || '')
+                          }}
+                        >
+                          <span className="nibi-audio-speaker-dot" />
+                          <span>{displayName}{displayRole ? ` · ${displayRole}` : ''}</span>
+                          {speakerStat && <small>{speakerStat.count} 段 · {speakerPercent}%</small>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
                 <LNTranscriptPanel
                   transcript={note.transcript as VideoResultTranscriptLine[]}
                   currentTime={currentTime}
@@ -2233,6 +2322,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                   itemId={itemId}
                   onSaved={refreshAfterTranscriptEdit}
                   translations={note.translations ?? null}
+                  speakerMap={speakerMap}
+                  speakerPresentation="detailed"
                   title="转录"
                   countLabel={`${transcriptCount} 条`}
                 />

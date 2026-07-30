@@ -52,17 +52,41 @@ class OpenAICompatProvider(BaseProvider):
     def chat(self, req: ChatRequest) -> str:
         if not self.api_key:
             raise ProviderRequestError("missing api_key")
+        kwargs: dict[str, Any] = {
+            "temperature": req.temperature,
+            "timeout": req.timeout or 300,
+            "base_url": self.base_url or None,
+        }
+        if req.reasoning_effort:
+            kwargs["reasoning_effort"] = req.reasoning_effort
+        if req.enable_thinking is not None:
+            kwargs["enable_thinking"] = req.enable_thinking
         try:
             return chat_completion(
                 self.api_key,
                 req.model,
                 req.messages,
-                temperature=req.temperature,
                 max_tokens=req.max_tokens,
-                timeout=req.timeout or 300,
-                base_url=self.base_url or None,
+                **kwargs,
             )
         except SiliconFlowError as err:
+            # Some reasoning models reject temperature entirely. Retry once
+            # without it; all other provider errors remain unchanged.
+            detail = str(err).lower()
+            if req.temperature is not None and "temperature" in detail and any(
+                marker in detail for marker in ("unsupported", "not support", "invalid", "unknown")
+            ):
+                kwargs.pop("temperature", None)
+                try:
+                    return chat_completion(
+                        self.api_key,
+                        req.model,
+                        req.messages,
+                        max_tokens=req.max_tokens,
+                        **kwargs,
+                    )
+                except SiliconFlowError as retry_err:
+                    raise ProviderRequestError(str(retry_err)) from retry_err
             raise ProviderRequestError(str(err)) from err
 
     def create_embeddings(self, model: str, inputs: Sequence[str]) -> list[list[float]]:

@@ -11,13 +11,14 @@ from __future__ import annotations
 便于浏览/手工修改/未来分库；不像 task_store 把所有任务塞一个文件）。
 """
 
+import copy
 import json
 import os
 import tempfile
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from backend.app.models.workspace import (
     InlineFrame,
@@ -68,7 +69,12 @@ class WorkspaceStore:
         self.root.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self._records: Dict[str, WorkspaceRecord] = {}
+        # ``target workspace -> [{workspace_id, item_id}]``.  The item remains
+        # owned by its original workspace; a collection stores only this small
+        # membership record, never a copied note/result/media payload.
+        self._memberships: Dict[str, List[Dict[str, str]]] = {}
         self._load_all()
+        self._load_memberships()
 
     # ── 内部：磁盘 I/O ────────────────────────────────────────
 
@@ -76,6 +82,10 @@ class WorkspaceStore:
         # 简单消毒：禁止跨目录；workspace_id 由后端生成（uuid），用户不应直接传任意字符串
         safe = workspace_id.replace("/", "_").replace("\\", "_").strip()
         return self.root / f"{safe}.json"
+
+    @property
+    def _membership_path(self) -> Path:
+        return self.root / "_memberships.json"
 
     def _load_all(self) -> None:
         if not self.root.is_dir():
@@ -91,10 +101,110 @@ class WorkspaceStore:
             if rec.workspace_id:
                 self._records[rec.workspace_id] = rec
 
+    def _load_memberships(self) -> None:
+        """Read membership data defensively so an old workspace directory works.
+
+        Memberships are deliberately external to ``WorkspaceRecord``: old JSON
+        files stay valid and the canonical item has exactly one serialized home.
+        """
+        try:
+            data = json.loads(self._membership_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, json.JSONDecodeError):
+            return
+        if not isinstance(data, dict):
+            return
+        for target_id, refs in data.items():
+            if target_id not in self._records or not isinstance(refs, list):
+                continue
+            cleaned: List[Dict[str, str]] = []
+            seen: set[Tuple[str, str]] = set()
+            for ref in refs:
+                if not isinstance(ref, dict):
+                    continue
+                source_id = str(ref.get("workspace_id") or "").strip()
+                item_id = str(ref.get("item_id") or "").strip()
+                if not source_id or not item_id or (source_id, item_id) in seen:
+                    continue
+                if self._find_local_item(source_id, item_id) is None:
+                    continue
+                seen.add((source_id, item_id))
+                cleaned.append({"workspace_id": source_id, "item_id": item_id})
+            if cleaned:
+                self._memberships[str(target_id)] = cleaned
+
     def _save(self, rec: WorkspaceRecord) -> None:
         rec.updated_at = _now_iso()
         data = json.dumps(rec.to_dict(), ensure_ascii=False, indent=2)
         _atomic_write(self._file_path(rec.workspace_id), data)
+
+    def _save_memberships(self) -> None:
+        _atomic_write(
+            self._membership_path,
+            json.dumps(self._memberships, ensure_ascii=False, indent=2),
+        )
+
+    def _find_local_item(self, workspace_id: str, item_id: str) -> Optional[WorkspaceItem]:
+        rec = self._records.get(workspace_id)
+        if rec is None:
+            return None
+        return next((item for item in rec.items if item.item_id == item_id), None)
+
+    def _locate_item(self, workspace_id: str, item_id: str) -> Tuple[WorkspaceRecord, WorkspaceItem]:
+        """Resolve a member reference to the one workspace that owns its data."""
+        direct = self._records.get(workspace_id)
+        if direct is None:
+            raise KeyError(f"workspace not found: {workspace_id}")
+        item = self._find_local_item(workspace_id, item_id)
+        if item is not None:
+            return direct, item
+        for ref in self._memberships.get(workspace_id, []):
+            if ref["item_id"] != item_id:
+                continue
+            owner = self._records.get(ref["workspace_id"])
+            member = self._find_local_item(ref["workspace_id"], item_id)
+            if owner is not None and member is not None:
+                return owner, member
+        raise KeyError(f"item not found: {item_id}")
+
+    def _view(self, rec: WorkspaceRecord) -> WorkspaceRecord:
+        """Return a read view with linked members while retaining one owner item."""
+        view = copy.copy(rec)
+        items = list(rec.items)
+        known_ids = {item.item_id for item in items}
+        for ref in self._memberships.get(rec.workspace_id, []):
+            if ref["item_id"] in known_ids:
+                continue
+            item = self._find_local_item(ref["workspace_id"], ref["item_id"])
+            if item is not None:
+                items.append(item)
+                known_ids.add(item.item_id)
+        view.items = items
+        return view
+
+    def _remove_item_memberships(self, owner_workspace_id: str, item_id: str) -> bool:
+        changed = False
+        for target_id, refs in list(self._memberships.items()):
+            kept = [
+                ref for ref in refs
+                if not (ref["workspace_id"] == owner_workspace_id and ref["item_id"] == item_id)
+            ]
+            if len(kept) != len(refs):
+                changed = True
+                self._unlink_member_note_dir(target_id, item_id)
+            if kept:
+                self._memberships[target_id] = kept
+            else:
+                self._memberships.pop(target_id, None)
+        return changed
+
+    def _unlink_member_note_dir(self, workspace_id: str, item_id: str) -> None:
+        """Remove only our directory alias; never remove the canonical note."""
+        alias = note_dir(workspace_id, item_id)
+        if alias.is_symlink():
+            try:
+                alias.unlink()
+            except OSError:
+                pass
 
     # ── Workspace 级 CRUD ────────────────────────────────────
 
@@ -107,11 +217,13 @@ class WorkspaceStore:
     def get(self, workspace_id: str) -> Optional[WorkspaceRecord]:
         if self._lock.acquire(timeout=0.2):
             try:
-                return self._records.get(workspace_id)
+                rec = self._records.get(workspace_id)
+                return self._view(rec) if rec is not None else None
             finally:
                 self._lock.release()
         # 写入正在 fsync 时，读路径仍可返回内存快照，避免列表页被长时间阻塞。
-        return self._records.get(workspace_id)
+        rec = self._records.get(workspace_id)
+        return self._view(rec) if rec is not None else None
 
     def list_all(
         self,
@@ -170,6 +282,17 @@ class WorkspaceStore:
                 except OSError:
                     return False
             del self._records[workspace_id]
+            changed = self._memberships.pop(workspace_id, None) is not None
+            for target_id, refs in list(self._memberships.items()):
+                kept = [ref for ref in refs if ref["workspace_id"] != workspace_id]
+                if len(kept) != len(refs):
+                    changed = True
+                if kept:
+                    self._memberships[target_id] = kept
+                else:
+                    self._memberships.pop(target_id, None)
+            if changed:
+                self._save_memberships()
             return True
 
     # ── Item 级操作 ──────────────────────────────────────────
@@ -187,17 +310,13 @@ class WorkspaceStore:
         self, workspace_id: str, item_id: str, **kwargs: object
     ) -> WorkspaceRecord:
         with self._lock:
-            rec = self._records.get(workspace_id)
-            if rec is None:
-                raise KeyError(f"workspace not found: {workspace_id}")
-            target = next((it for it in rec.items if it.item_id == item_id), None)
-            if target is None:
-                raise KeyError(f"item not found: {item_id}")
+            rec, target = self._locate_item(workspace_id, item_id)
             for k, v in kwargs.items():
                 setattr(target, k, v)
             target.updated_at = _now_iso()
             self._save(rec)
-            return rec
+            requested = self._records.get(workspace_id)
+            return self._view(requested) if requested is not None else rec
 
     def append_item_result(
         self,
@@ -208,12 +327,7 @@ class WorkspaceStore:
     ) -> WorkspaceRecord:
         """Atomically append one entry to a list stored inside item.results."""
         with self._lock:
-            rec = self._records.get(workspace_id)
-            if rec is None:
-                raise KeyError(f"workspace not found: {workspace_id}")
-            target = next((it for it in rec.items if it.item_id == item_id), None)
-            if target is None:
-                raise KeyError(f"item not found: {item_id}")
+            rec, target = self._locate_item(workspace_id, item_id)
             results = dict(target.results or {})
             entries = list(results.get(key) or [])
             entries.append(value)
@@ -233,12 +347,7 @@ class WorkspaceStore:
     ) -> bool:
         """Atomically remove one dict entry from a list inside item.results."""
         with self._lock:
-            rec = self._records.get(workspace_id)
-            if rec is None:
-                raise KeyError(f"workspace not found: {workspace_id}")
-            target = next((it for it in rec.items if it.item_id == item_id), None)
-            if target is None:
-                raise KeyError(f"item not found: {item_id}")
+            rec, target = self._locate_item(workspace_id, item_id)
             results = dict(target.results or {})
             entries = list(results.get(key) or [])
             kept = [
@@ -258,6 +367,18 @@ class WorkspaceStore:
             rec = self._records.get(workspace_id)
             if rec is None:
                 raise KeyError(f"workspace not found: {workspace_id}")
+            # A member is not content owned by this collection: removing it only
+            # unlinks the relation and deliberately keeps tasks/files untouched.
+            refs = self._memberships.get(workspace_id, [])
+            kept_refs = [ref for ref in refs if ref["item_id"] != item_id]
+            if len(kept_refs) != len(refs) and self._find_local_item(workspace_id, item_id) is None:
+                if kept_refs:
+                    self._memberships[workspace_id] = kept_refs
+                else:
+                    self._memberships.pop(workspace_id, None)
+                self._save_memberships()
+                self._unlink_member_note_dir(workspace_id, item_id)
+                return self._view(rec)
             before = len(rec.items)
             rec.items = [it for it in rec.items if it.item_id != item_id]
             if len(rec.items) == before:
@@ -265,30 +386,96 @@ class WorkspaceStore:
             # 同步从收藏夹移除
             rec.favorites = [fid for fid in rec.favorites if fid != item_id]
             self._save(rec)
+            if self._remove_item_memberships(workspace_id, item_id):
+                self._save_memberships()
             return rec
+
+    def is_member_reference(self, workspace_id: str, item_id: str) -> bool:
+        with self._lock:
+            return (
+                self._find_local_item(workspace_id, item_id) is None
+                and any(ref["item_id"] == item_id for ref in self._memberships.get(workspace_id, []))
+            )
+
+    def add_item_membership(
+        self,
+        target_workspace_id: str,
+        source_workspace_id: str,
+        item_id: str,
+    ) -> bool:
+        """Add one canonical item to a collection.  Returns False when already linked."""
+        with self._lock:
+            target = self._records.get(target_workspace_id)
+            if target is None:
+                raise KeyError(f"workspace not found: {target_workspace_id}")
+            owner, item = self._locate_item(source_workspace_id, item_id)
+            if owner.kind != target.kind:
+                raise ValueError("workspace kind mismatch")
+            if owner.workspace_id == target_workspace_id:
+                return False
+            refs = self._memberships.setdefault(target_workspace_id, [])
+            if any(ref["item_id"] == item.item_id for ref in refs):
+                return False
+            if self._find_local_item(target_workspace_id, item.item_id) is not None:
+                return False
+            refs.append({"workspace_id": owner.workspace_id, "item_id": item.item_id})
+            self._save_memberships()
+            source_note_dir = note_dir(owner.workspace_id, item.item_id)
+            target_note_dir = note_dir(target_workspace_id, item.item_id)
+            if source_note_dir.exists() and not target_note_dir.exists():
+                try:
+                    target_note_dir.parent.mkdir(parents=True, exist_ok=True)
+                    target_note_dir.symlink_to(source_note_dir, target_is_directory=True)
+                except OSError:
+                    # The persisted membership remains authoritative.  A missing
+                    # alias only affects optional note-file convenience paths and
+                    # must not turn a successful membership request into a copy.
+                    pass
+            return True
+
+    def unlink_workspace_memberships(self, workspace_id: str) -> int:
+        """Remove all memberships owned by a collection without touching notes."""
+        with self._lock:
+            refs = self._memberships.pop(workspace_id, [])
+            if not refs:
+                return 0
+            self._save_memberships()
+            for ref in refs:
+                self._unlink_member_note_dir(workspace_id, ref["item_id"])
+            return len(refs)
+
+    def membership_count(self, workspace_id: str) -> int:
+        with self._lock:
+            return len(self._memberships.get(workspace_id, []))
+
+    def owner_reference(self, workspace_id: str, item_id: str) -> Tuple[str, str]:
+        with self._lock:
+            owner, item = self._locate_item(workspace_id, item_id)
+            return owner.workspace_id, item.item_id
+
+    def member_workspace_ids(self, source_workspace_id: str, item_id: str) -> List[str]:
+        with self._lock:
+            return sorted(
+                target_id
+                for target_id, refs in self._memberships.items()
+                if any(
+                    ref["workspace_id"] == source_workspace_id and ref["item_id"] == item_id
+                    for ref in refs
+                )
+            )
 
     # ── Summary 操作 ──────────────────────────────────────────
 
     def get_item(self, workspace_id: str, item_id: str) -> WorkspaceItem:
         """获取单个 item，找不到抛 KeyError。"""
         with self._lock:
-            rec = self._records.get(workspace_id)
-            if rec is None:
-                raise KeyError(f"workspace not found: {workspace_id}")
-            item = next((it for it in rec.items if it.item_id == item_id), None)
-            if item is None:
-                raise KeyError(f"item not found: {item_id}")
+            _, item = self._locate_item(workspace_id, item_id)
             return item
 
     def next_summary_version(self, workspace_id: str, item_id: str) -> int:
         """返回该素材的下一个总结版本号（所有模板共用连续序号）。"""
         with self._lock:
-            rec = self._records.get(workspace_id)
-            if rec is None:
-                raise KeyError(f"workspace not found: {workspace_id}")
-            item = next((it for it in rec.items if it.item_id == item_id), None)
-            if item is None:
-                raise KeyError(f"item not found: {item_id}")
+            _, item = self._locate_item(workspace_id, item_id)
             return max((s.version for s in item.summaries), default=-1) + 1
 
     def next_version_for_template(
@@ -303,12 +490,7 @@ class WorkspaceStore:
     ) -> ItemSummary:
         """向 item.summaries 追加一份总结并落盘。"""
         with self._lock:
-            rec = self._records.get(workspace_id)
-            if rec is None:
-                raise KeyError(f"workspace not found: {workspace_id}")
-            item = next((it for it in rec.items if it.item_id == item_id), None)
-            if item is None:
-                raise KeyError(f"item not found: {item_id}")
+            rec, item = self._locate_item(workspace_id, item_id)
             item.summaries.append(summary)
             item.updated_at = _now_iso()
             self._save(rec)
@@ -323,12 +505,7 @@ class WorkspaceStore:
     ) -> int:
         """把姓名改动同步到 JSON、主笔记和所有历史总结文件。"""
         with self._lock:
-            rec = self._records.get(workspace_id)
-            if rec is None:
-                raise KeyError(f"workspace not found: {workspace_id}")
-            item = next((it for it in rec.items if it.item_id == item_id), None)
-            if item is None:
-                raise KeyError(f"item not found: {item_id}")
+            rec, item = self._locate_item(workspace_id, item_id)
             old_map = previous_speaker_map or {
                 str(key): str(value)
                 for key, value in (item.results or {}).get("speaker_map", {}).items()
@@ -343,7 +520,7 @@ class WorkspaceStore:
                 summary.content_md = content_md
                 updated_count += 1
             rewritten_files = 0
-            nd = note_dir(workspace_id, item_id)
+            nd = note_dir(rec.workspace_id, item_id)
             for path in [nd / "note.md", *sorted(nd.glob("summaries/**/*.md"))]:
                 if not path.exists():
                     continue
@@ -362,12 +539,7 @@ class WorkspaceStore:
     ) -> bool:
         """硬删指定 summary，返回是否找到并删除。"""
         with self._lock:
-            rec = self._records.get(workspace_id)
-            if rec is None:
-                raise KeyError(f"workspace not found: {workspace_id}")
-            item = next((it for it in rec.items if it.item_id == item_id), None)
-            if item is None:
-                raise KeyError(f"item not found: {item_id}")
+            rec, item = self._locate_item(workspace_id, item_id)
             before = len(item.summaries)
             item.summaries = [s for s in item.summaries if s.summary_id != summary_id]
             if len(item.summaries) == before:
@@ -381,12 +553,7 @@ class WorkspaceStore:
     ) -> "ItemSummary":
         """改名指定 summary 并落盘。"""
         with self._lock:
-            rec = self._records.get(workspace_id)
-            if rec is None:
-                raise KeyError(f"workspace not found: {workspace_id}")
-            item = next((it for it in rec.items if it.item_id == item_id), None)
-            if item is None:
-                raise KeyError(f"item not found: {item_id}")
+            rec, item = self._locate_item(workspace_id, item_id)
             summary = next((s for s in item.summaries if s.summary_id == summary_id), None)
             if summary is None:
                 raise KeyError(f"summary not found: {summary_id}")
@@ -401,12 +568,7 @@ class WorkspaceStore:
     ) -> List[InlineFrame]:
         """整体覆盖 item.inline_frames 并落盘。"""
         with self._lock:
-            rec = self._records.get(workspace_id)
-            if rec is None:
-                raise KeyError(f"workspace not found: {workspace_id}")
-            item = next((it for it in rec.items if it.item_id == item_id), None)
-            if item is None:
-                raise KeyError(f"item not found: {item_id}")
+            rec, item = self._locate_item(workspace_id, item_id)
             item.inline_frames = frames
             item.updated_at = _now_iso()
             self._save(rec)

@@ -8,7 +8,9 @@ It intentionally never runs a download during application startup.
 from __future__ import annotations
 
 import platform
+import os
 import threading
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -21,9 +23,12 @@ from backend.app.services.asr_fast_whisper import (
 )
 from backend.app.services.asr_mlx_whisper import MLX_MODEL_MAP, resolve_mlx_repo_id
 from shared.sherpa_diarizer import _model_root
+from shared.settings_store import load_settings, save_settings
 
 
 _FAST_SIZES = ("tiny", "base", "small", "medium", "large-v3", "large-v3-turbo")
+_WESPEAKER_CACHE_DIR = Path.home() / ".wespeaker"
+_PYANNOTE_REPO_ID = "pyannote/speaker-diarization-community-1"
 _jobs_lock = threading.Lock()
 _jobs: dict[str, dict[str, Any]] = {}
 
@@ -149,13 +154,94 @@ def _ocr_status() -> dict[str, Any]:
     }
 
 
+def _wespeaker_status() -> dict[str, Any]:
+    job = _job("wespeaker")
+    cached = _WESPEAKER_CACHE_DIR.is_dir() and any(_WESPEAKER_CACHE_DIR.rglob("*"))
+    return {
+        "model_id": "wespeaker",
+        "family": "speaker-embedding",
+        "title": "音色识别 · WeSpeaker",
+        "description": "中英文音色特征模型；用于说话人聚类，运行时缓存于 ~/.wespeaker。",
+        "estimated_size_mb": 0,
+        "done_mb": 0,
+        "pending_mb": 0,
+        "cached": cached,
+        "compatible": True,
+        "cache_dir": str(_WESPEAKER_CACHE_DIR),
+        "status": "ready" if cached else str(job.get("status") or "not_downloaded"),
+        "progress": 1.0 if cached else float(job.get("progress") or 0),
+        "message": str(job.get("message") or "未下载"),
+        "error": str(job.get("error") or ""),
+        "requires_token": False,
+    }
+
+
+def _pyannote_status() -> dict[str, Any]:
+    job = _job("pyannote")
+    token_available = bool(
+        os.environ.get("HF_TOKEN")
+        or os.environ.get("HUGGINGFACE_TOKEN")
+        or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+    )
+    cached = _repo_cached(_PYANNOTE_REPO_ID)
+    return {
+        "model_id": "pyannote",
+        "family": "speaker-diarization",
+        "title": "说话人回退 · Pyannote Community-1",
+        "description": "需要 Hugging Face Token 与模型许可；仅作为 Sherpa/WeSpeaker 不可用时的高级回退。",
+        "estimated_size_mb": 0,
+        "done_mb": 0,
+        "pending_mb": 0,
+        "cached": cached,
+        "compatible": token_available,
+        "cache_dir": str(_hf_hub_cache_dir()),
+        "status": "ready" if cached else str(job.get("status") or ("needs_token" if not token_available else "not_downloaded")),
+        "progress": 1.0 if cached else float(job.get("progress") or 0),
+        "message": str(job.get("message") or ("请先在环境中配置 HF_TOKEN" if not token_available else "未下载")),
+        "error": str(job.get("error") or ""),
+        "requires_token": True,
+    }
+
+
 def list_local_models() -> list[dict[str, Any]]:
-    return [
+    models = [
         *[_fast_status(size) for size in _FAST_SIZES],
         *[_mlx_status(size) for size in _FAST_SIZES if size in MLX_MODEL_MAP],
         _sherpa_status(),
         _ocr_status(),
+        _wespeaker_status(),
+        _pyannote_status(),
     ]
+    settings = load_settings()
+    active_type = settings.transcriber.type
+    active_size = settings.transcriber.whisper_model_size
+    for model in models:
+        model["active"] = (
+            (model["family"] == "fast-whisper" and active_type == "fast-whisper" and model["model_id"] == f"fast-whisper:{active_size}")
+            or (model["family"] == "mlx-whisper" and active_type == "mlx-whisper" and model["model_id"] == f"mlx-whisper:{active_size}")
+        )
+    return models
+
+
+def activate_local_model(model_id: str) -> dict[str, Any]:
+    """Persist the selected ASR model so every audio/video path consumes it."""
+    known = {model["model_id"]: model for model in list_local_models()}
+    model = known.get(model_id)
+    if model is None:
+        raise KeyError(model_id)
+    if not (model.get("cached") or model.get("status") == "ready"):
+        raise ValueError("模型尚未下载完成")
+    if model["family"] not in {"fast-whisper", "mlx-whisper"}:
+        raise ValueError("该模型由运行时自动选择，不能作为转写引擎激活")
+    engine, _, size = model_id.partition(":")
+    settings = load_settings()
+    next_config = replace(settings.transcriber, type=engine, whisper_model_size=size)
+    if engine == "mlx-whisper":
+        next_config = replace(next_config, device="mps")
+    elif next_config.device == "mps":
+        next_config = replace(next_config, device="cpu")
+    save_settings(replace(settings, transcriber=next_config))
+    return {"model_id": model_id, "type": engine, "whisper_model_size": size}
 
 
 def _run_download(model_id: str, report: Callable[[float, str], None]) -> None:
@@ -182,6 +268,25 @@ def _run_download(model_id: str, report: Callable[[float, str], None]) -> None:
         from shared.ocr_service import _get_engine
         _get_engine()
         report(1.0, "图片文字识别模型已就绪")
+        return
+    if model_id == "wespeaker":
+        report(0.05, "正在初始化 WeSpeaker 音色模型")
+        from wespeakerruntime import Speaker
+        Speaker(lang="chs", intra_op_num_threads=2)
+        report(1.0, "WeSpeaker 音色模型已就绪")
+        return
+    if model_id == "pyannote":
+        token = (
+            os.environ.get("HF_TOKEN")
+            or os.environ.get("HUGGINGFACE_TOKEN")
+            or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+        )
+        if not token:
+            raise RuntimeError("请先配置 HF_TOKEN，并在 Hugging Face 接受 Community-1 许可")
+        report(0.05, "正在连接 Pyannote Community-1 模型")
+        from pyannote.audio import Pipeline  # type: ignore
+        Pipeline.from_pretrained(_PYANNOTE_REPO_ID, token=token)
+        report(1.0, "Pyannote 回退模型已就绪")
         return
     raise ValueError("未知本地模型")
 

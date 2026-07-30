@@ -29,6 +29,8 @@ export interface LibraryItem {
   has_subtitle?: boolean
   has_chapters?: boolean
   frames_count?: number
+  /** 这条笔记当前归属的其它合集（不复制内容）。 */
+  collection_ids?: string[]
 }
 
 export interface LibraryWorkspace {

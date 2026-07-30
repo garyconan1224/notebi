@@ -733,10 +733,10 @@ export function AddMaterialModal({
     }
     const toastId = `workspace-add-existing-${targetWorkspaceId}`
     setExistingAdding(true)
-    toast.loading('正在加入已分析内容…', { id: toastId })
+    toast.loading('正在归入合集…', { id: toastId })
     try {
       const result = await batchAddItemsToWorkspace(targetWorkspaceId, selectedExistingRefs)
-      toast.success(`已加入 ${result.added} 项内容${result.skipped ? `，跳过 ${result.skipped} 项` : ''}`, { id: toastId })
+      toast.success(`已归入 ${result.added} 项笔记${result.skipped ? `，跳过 ${result.skipped} 项` : ''}`, { id: toastId })
       onAdded?.()
       setExistingSelectedIds(new Set())
       setExistingPanelOpen(false)

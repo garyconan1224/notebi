@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from backend.app.models.workspace import WorkspaceItem, WorkspaceRecord
 from backend.app.routes import workspaces as workspace_routes
 from backend.app.services.content_identity_migration import (
@@ -47,7 +49,7 @@ def test_legacy_items_receive_unique_content_and_shared_lineage(tmp_path: Path) 
     assert second.get_item("alpha", "shared").content_id == alpha.content_id
 
 
-def test_copy_is_independent_and_lineage_is_discoverable(
+def test_membership_shares_one_canonical_item_and_is_discoverable(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -69,18 +71,17 @@ def test_copy_is_independent_and_lineage_is_discoverable(
             items=[{"workspace_id": "source", "item_id": "source-item"}],
         )
     )
-    clone = store.get_item("target", result["added_ids"][0])
-    clone.results["content_md"] = "版本 B"
-    store.update_item("target", clone.item_id, results=clone.results)
-
-    assert clone.item_id != source_item.item_id
-    assert clone.content_id != source_item.content_id
-    assert clone.lineage_id == source_item.lineage_id
-    assert store.get_item("source", "source-item").results["content_md"] == "版本 A"
+    shared = store.get_item("target", result["added_ids"][0])
+    assert shared.item_id == source_item.item_id
+    assert shared.content_id == source_item.content_id
+    assert shared.lineage_id == source_item.lineage_id
+    store.update_item("target", shared.item_id, results={"content_md": "版本 B"})
+    assert store.get_item("source", "source-item").results["content_md"] == "版本 B"
     lineage = workspace_routes.list_item_lineage("source", "source-item")
-    assert lineage["copies"][0]["content_id"] == clone.content_id
+    assert lineage["memberships"][0]["workspace_id"] == "target"
     store.remove_item("source", "source-item")
-    assert store.get_item("target", clone.item_id).content_id == clone.content_id
+    with pytest.raises(KeyError):
+        store.get_item("target", "source-item")
 
 
 def test_identity_migration_is_idempotent_and_rollback_restores_backup(

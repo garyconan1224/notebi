@@ -292,7 +292,7 @@ describe('NoteShell summary switching', () => {
     // 新契约：菜单项不带笔记标题
     expect(screen.getByRole('button', { name: '转写文本' })).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '转写文本（区分说话人）' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Markdown' }))
+    fireEvent.click(screen.getByRole('button', { name: 'TXT（按说话人归组）' }))
 
     await waitFor(() => {
       // downloadTranscript 现在接收标题作为第 4 个参数，用于 fallback 文件名

@@ -50,6 +50,7 @@ _LIST_RESULT_DISPLAY_KEYS = (
     "note_kind",
     "project_id",
     "audio",
+    "summary",
 )
 
 
@@ -86,6 +87,14 @@ def list_tasks(
         if not include_result:
             src = r.result or {}
             d["result"] = {k: src[k] for k in _LIST_RESULT_DISPLAY_KEYS if k in src}
+            summary = d["result"].get("summary")
+            if isinstance(summary, dict) and isinstance(summary.get("content_md"), str):
+                d["result"]["summary"] = {
+                    "content_md": summary["content_md"][:360],
+                    "summary_id": summary.get("summary_id", ""),
+                }
+            elif isinstance(summary, str):
+                d["result"]["summary"] = summary[:360]
         out.append(d)
     return out
 

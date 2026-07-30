@@ -24,6 +24,10 @@ class ProviderTransientError(ProviderError):
 class ChatRequest:
     model: str
     messages: list[dict[str, Any]]
-    temperature: float = 0.7
+    temperature: float | None = 0.7
     max_tokens: int = 2048
     timeout: int | None = None
+    # Reasoning-capable providers may use either OpenAI-compatible extra fields
+    # or simply return ``reasoning_content`` alongside the final content.
+    reasoning_effort: str | None = None
+    enable_thinking: bool | None = None

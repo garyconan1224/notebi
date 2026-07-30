@@ -164,36 +164,65 @@ def chat_completion(
     api_key: str,
     model: str,
     messages: list[dict[str, Any]],
-    temperature: float = 0.7,
+    temperature: float | None = 0.7,
     max_tokens: int = 8192,
     timeout: int = 300,
     base_url: str | None = None,
+    reasoning_effort: str | None = None,
+    enable_thinking: bool | None = None,
 ) -> str:
     """OpenAI 兼容 /v1/chat/completions，返回 assistant 文本。"""
-    payload = {
+    payload: dict[str, Any] = {
         "model": model,
         "messages": messages,
-        "temperature": temperature,
         "max_tokens": max_tokens,
     }
+    if temperature is not None:
+        payload["temperature"] = temperature
+    if reasoning_effort:
+        payload["reasoning_effort"] = reasoning_effort
+    if enable_thinking is not None:
+        payload["enable_thinking"] = enable_thinking
     data = _post_json(api_key, "/chat/completions", payload, timeout=timeout, base_url=base_url)
     choices = data.get("choices") or []
     if not choices:
         raise SiliconFlowError(f"无 choices 字段: {data}")
     msg = choices[0].get("message") or {}
-    content = msg.get("content")
-    if not isinstance(content, str):
+    content = _assistant_content(msg.get("content"))
+    if not content:
+        # Reasoning-only responses are not a valid visible answer.  Do not
+        # leak hidden reasoning into the saved note; surface a clear provider
+        # error so the caller can retry with a compatible model.
         raise SiliconFlowError(f"异常 message 结构: {msg}")
     return content
+
+
+def _assistant_content(raw: Any) -> str:
+    """Normalize string or OpenAI content-block responses to visible text."""
+    if isinstance(raw, str):
+        return raw
+    if not isinstance(raw, list):
+        return ""
+    parts: list[str] = []
+    for block in raw:
+        if isinstance(block, str):
+            parts.append(block)
+        elif isinstance(block, dict) and block.get("type") in {"text", "output_text"}:
+            text = block.get("text")
+            if isinstance(text, str):
+                parts.append(text)
+    return "".join(parts)
 
 
 def chat_completion_stream(
     api_key: str,
     model: str,
     messages: list[dict[str, Any]],
-    temperature: float = 0.7,
+    temperature: float | None = 0.7,
     max_tokens: int = 8192,
     base_url: str | None = None,
+    reasoning_effort: str | None = None,
+    enable_thinking: bool | None = None,
 ) -> Iterator[str]:
     """OpenAI 兼容流式 /v1/chat/completions（stream=True），逐块 yield 文本片段。
 
@@ -201,13 +230,18 @@ def chat_completion_stream(
     API 返回 [DONE] 或流结束时自动停止迭代。
     """
     url = f"{_base_url(base_url)}/chat/completions"
-    payload = {
+    payload: dict[str, Any] = {
         "model": model,
         "messages": messages,
-        "temperature": temperature,
         "max_tokens": max_tokens,
         "stream": True,
     }
+    if temperature is not None:
+        payload["temperature"] = temperature
+    if reasoning_effort:
+        payload["reasoning_effort"] = reasoning_effort
+    if enable_thinking is not None:
+        payload["enable_thinking"] = enable_thinking
     headers = _headers(api_key)
     with requests.post(url, headers=headers, json=payload, stream=True, timeout=300) as resp:
         if resp.status_code in (429, 503, 504):
@@ -232,7 +266,7 @@ def chat_completion_stream(
             except json.JSONDecodeError:
                 continue
             delta = (chunk.get("choices") or [{}])[0].get("delta") or {}
-            text = delta.get("content")
+            text = _assistant_content(delta.get("content"))
             if text:
                 yield text
 

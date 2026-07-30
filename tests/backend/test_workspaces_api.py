@@ -104,6 +104,28 @@ def test_list_workspaces_derived_fields_present(client: TestClient) -> None:
     assert ws["last_active_at"] == ws["updated_at"]
 
 
+def test_batch_add_to_workspace_creates_shared_membership_not_copy(client: TestClient) -> None:
+    source = client.post("/workspaces", json={"name": "来源"}).json()["workspace_id"]
+    target = client.post("/workspaces", json={"name": "目标"}).json()["workspace_id"]
+    item_response = client.post(
+        f"/workspaces/{source}/items",
+        json={"type": "text", "source": "local", "source_value": "manual", "name": "共享笔记"},
+    ).json()
+    item_id = item_response["items"][0]["item_id"]
+
+    response = client.post(
+        "/workspaces/items/batch-add-to-workspace",
+        json={"target_workspace_id": target, "items": [{"workspace_id": source, "item_id": item_id}]},
+    )
+    assert response.status_code == 200
+    assert response.json()["added_ids"] == [item_id]
+
+    source_json = client.get(f"/workspaces/{source}").json()
+    target_json = client.get(f"/workspaces/{target}").json()
+    assert source_json["items"][0]["content_id"] == target_json["items"][0]["content_id"]
+    assert source_json["items"][0]["item_id"] == target_json["items"][0]["item_id"] == item_id
+
+
 def test_create_workspace_rejects_retired_replica_kind(client: TestClient) -> None:
     """Public workspace creation must not silently normalize legacy replica input."""
     response = client.post("/workspaces", json={"name": "旧复刻", "kind": "replica"})
@@ -928,7 +950,7 @@ def test_library_trashed_filter(client: TestClient) -> None:
     body = resp.json()
     assert len(body["workspaces"]) == 1
     assert body["workspaces"][0]["workspace_id"] == ws1_id
-    # 默认删除策略会把唯一内容复制到稳定收纳箱，因此主库仍能看到该内容。
+    # 默认删除策略把唯一内容归入稳定收纳箱，但不复制内容。
     assert len(body["items"]) == 2
     assert {item["workspace_id"] for item in body["items"]} == {ws1_id, "__inbox__"}
 
@@ -939,6 +961,7 @@ def test_library_trashed_filter(client: TestClient) -> None:
     assert len(body["workspaces"]) == 2
     ws_ids = {w["workspace_id"] for w in body["workspaces"]}
     assert ws_ids == {ws1_id, ws2_id}
+    # include_trashed 可见来源合集与收纳箱的两个轻量引用行，但内容 ID 相同。
     assert len(body["items"]) == 3
 
 

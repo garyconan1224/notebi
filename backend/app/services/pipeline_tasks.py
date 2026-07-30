@@ -2997,20 +2997,36 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
                 def _on_log(msg: str) -> None:
                     runner.append_log(task_id, f"[转录] {msg}")
 
-                # 7.4: return_segments=True 获取带时间码的分段，供实时字幕面板使用
-                _text, _segments, _dur = transcribe_file_with_fast_whisper(
-                    video_file,
-                    model_name=tcfg.whisper_model_size or "base",
-                    device=_device,
-                    language=tcfg.language or "",
-                    initial_prompt=tcfg.initial_prompt or "",
-                    log_callback=_on_log,
-                    progress_callback=_on_progress,
-                    return_segments=True,
-                    cpu_threads=tcfg.cpu_threads,
-                    beam_size=tcfg.beam_size,
-                    vad_filter=tcfg.vad_filter,
-                )
+                # 7.4: 视频路径也遵从当前引擎；fast-whisper 保留原生参数和线程模型，
+                # MLX 切换时才走统一回退路由，避免重复初始化 CTranslate2。
+                if tcfg.type == "mlx-whisper":
+                    from backend.app.services.asr_router import run_local_asr_with_fallback
+                    _text, _segments, _dur, _engine = run_local_asr_with_fallback(
+                        video_file,
+                        api_key=api_key,
+                        api_base=str(getattr(settings, "openai_base_url", "") or "https://api.siliconflow.cn/v1"),
+                        model_name=tcfg.whisper_model_size or "base",
+                        audio_model=str(payload.get("audio_model") or "FunAudioLLM/SenseVoiceSmall"),
+                        language=tcfg.language or "",
+                        initial_prompt=tcfg.initial_prompt or "",
+                        log_callback=_on_log,
+                        progress_callback=_on_progress,
+                        preferred_engine=tcfg.type,
+                    )
+                else:
+                    _text, _segments, _dur = transcribe_file_with_fast_whisper(
+                        video_file,
+                        model_name=tcfg.whisper_model_size or "base",
+                        device=_device,
+                        language=tcfg.language or "",
+                        initial_prompt=tcfg.initial_prompt or "",
+                        log_callback=_on_log,
+                        progress_callback=_on_progress,
+                        return_segments=True,
+                        cpu_threads=tcfg.cpu_threads,
+                        beam_size=tcfg.beam_size,
+                        vad_filter=tcfg.vad_filter,
+                    )
                 if not _text or not _text.strip():
                     runner.append_log(
                         task_id,

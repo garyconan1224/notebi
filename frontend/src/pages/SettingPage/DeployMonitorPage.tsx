@@ -62,6 +62,7 @@ const STAGE_LABELS: Record<string, string> = {
 }
 
 const LOG_POLL_MS = 2000
+const LIFECYCLE_STAGES = new Set(['created', 'started', 'succeeded', 'failed', 'cancelled', 'application_started'])
 
 /** 合并初始页、增量轮询和向前翻页结果，避免并发响应重复插入同一日志。 */
 export function mergeLogEntries(...groups: LogEntry[][]): LogEntry[] {
@@ -268,7 +269,7 @@ export default function DeployMonitorPage() {
     [logs, scopeFilters],
   )
   const progressLogs = useMemo(
-    () => scopedLogs.filter((log) => log.stage && !isIssue(log)).slice().reverse(),
+    () => scopedLogs.filter((log) => log.stage && !LIFECYCLE_STAGES.has(String(log.stage).toLowerCase()) && !isIssue(log)).slice().reverse(),
     [scopedLogs],
   )
   const issueLogs = useMemo(

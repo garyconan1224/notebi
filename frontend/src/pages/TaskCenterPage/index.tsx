@@ -121,6 +121,9 @@ function publicTaskStage(task: TaskRecord): string {
 
 function completedSummaryPreview(task: TaskRecord): string {
   const summary = task.result?.summary
+  if (typeof summary === 'string') {
+    return summary.replace(/[#*_`>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 360)
+  }
   if (!summary || typeof summary !== 'object') return ''
   const content = (summary as Record<string, unknown>).content_md
   if (typeof content !== 'string') return ''
@@ -177,14 +180,15 @@ export default function TaskCenterPage() {
   const hasActiveBatch = batches.some((batch) =>
     ACTIVE_BATCH_STATUSES.has(batch.status),
   )
+  const hasActiveTask = tasks.some((task) => !['SUCCESS', 'PARTIAL', 'FAILED', 'CANCELLED'].includes(task.status))
 
   useEffect(() => {
-    if (!hasActiveBatch || loading) return
+    if ((!hasActiveBatch && !hasActiveTask) || loading) return
     const timer = window.setTimeout(() => {
       void load(true)
     }, 2000)
     return () => window.clearTimeout(timer)
-  }, [hasActiveBatch, loading, load, batches])
+  }, [hasActiveBatch, hasActiveTask, loading, load, batches, tasks])
 
   useEffect(() => {
     setPage(1)

@@ -176,6 +176,29 @@ def test_delete_collection_does_not_duplicate_shared_content(client):
     assert response.json()["already_elsewhere"] == 1
 
 
+def test_delete_collection_unlinks_shared_member_but_keeps_canonical_note(client):
+    c, store = client
+    source = _make_ws(c, "canonical-source")
+    target = _make_ws(c, "shared-target")
+    store.add_item(
+        source,
+        WorkspaceItem(
+            item_id="canonical-note",
+            type="text",
+            source="local",
+            source_value="manual",
+        ),
+    )
+    assert store.add_item_membership(target, source, "canonical-note") is True
+
+    response = c.delete(f"/workspaces/{target}")
+
+    assert response.status_code == 200
+    assert store.get_item(source, "canonical-note").item_id == "canonical-note"
+    with pytest.raises(KeyError):
+        store.get_item(target, "canonical-note")
+
+
 def test_explicit_trash_policy_does_not_copy_content(client):
     c, store = client
     wid = _make_ws(c, "trash-content")

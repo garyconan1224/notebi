@@ -353,7 +353,7 @@ export function MaterialSourcePanel({
             <Layers size={11} />
             已分析内容
           </button>
-          <span className="kw">从笔记库选择已完成内容加入当前合集</span>
+          <span className="kw">将已有笔记归入当前合集；编辑和总结会始终同步</span>
         </div>
       )}
       {existingPanelOpen && (

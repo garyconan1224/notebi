@@ -11,10 +11,12 @@ export interface LocalModelStatus {
   cached: boolean
   compatible: boolean
   cache_dir: string
-  status: 'ready' | 'not_downloaded' | 'downloading' | 'failed' | 'not_verified'
+  status: 'ready' | 'not_downloaded' | 'downloading' | 'failed' | 'not_verified' | 'needs_token'
   progress: number
   message: string
   error: string
+  requires_token?: boolean
+  active?: boolean
 }
 
 export async function listLocalModels(): Promise<LocalModelStatus[]> {
@@ -24,4 +26,8 @@ export async function listLocalModels(): Promise<LocalModelStatus[]> {
 
 export async function downloadLocalModel(modelId: string): Promise<void> {
   await http.post(`/local_models/${encodeURIComponent(modelId)}/download`)
+}
+
+export async function activateLocalModel(modelId: string): Promise<void> {
+  await http.post(`/local_models/${encodeURIComponent(modelId)}/activate`)
 }

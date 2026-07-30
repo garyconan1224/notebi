@@ -143,7 +143,10 @@ describe('NoteShell 导出菜单信息架构（阶段 A1）', () => {
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
     fireEvent.click(screen.getByRole('button', { name: /转写文本$/ }))
 
-    expect(screen.getByRole('button', { name: 'Markdown' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'TXT 文章' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'SRT 字幕' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'VTT 字幕' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'ASS 字幕' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'PDF' })).not.toBeInTheDocument()
   })
 

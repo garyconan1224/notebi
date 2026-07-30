@@ -26,7 +26,11 @@ from backend.app.services.asr_fast_whisper import (
     _scan_model_cache_bytes,
     is_model_cached,
 )
-from backend.app.services.local_model_manager import list_local_models, start_local_model_download
+from backend.app.services.local_model_manager import (
+    activate_local_model,
+    list_local_models,
+    start_local_model_download,
+)
 
 router = APIRouter(tags=["transcriber"])
 
@@ -177,3 +181,15 @@ def download_local_model(model_id: str) -> Dict[str, Any]:
     except KeyError as err:
         raise HTTPException(status_code=404, detail="未知本地模型") from err
     return {"status": "accepted", "model_id": model_id, "job": job}
+
+
+@router.post("/local_models/{model_id:path}/activate")
+def activate_downloaded_local_model(model_id: str) -> Dict[str, Any]:
+    """Make a downloaded Whisper engine the persisted default for all media paths."""
+    try:
+        selected = activate_local_model(model_id)
+    except KeyError as err:
+        raise HTTPException(status_code=404, detail="未知本地模型") from err
+    except ValueError as err:
+        raise HTTPException(status_code=409, detail=str(err)) from err
+    return {"status": "active", **selected}

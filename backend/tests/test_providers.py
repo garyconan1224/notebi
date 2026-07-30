@@ -89,3 +89,37 @@ def test_openai_compatible_model_discovery_uses_standard_models_endpoint(monkeyp
     ) == ["Qwen3-Ascend"]
     assert seen["url"] == "http://127.0.0.1:8000/v1/models"
     assert "params" not in seen["kwargs"]
+
+
+def test_openai_compatible_reasoning_model_retries_without_temperature(monkeypatch):
+    from src.vidmirror.core.providers import openai_compat_provider
+    from src.vidmirror.core.providers.types import ChatRequest
+    from shared.sf_client import SiliconFlowError
+
+    calls: list[dict[str, object]] = []
+
+    def fake_chat(*args, **kwargs):
+        calls.append(dict(kwargs))
+        if len(calls) == 1:
+            raise SiliconFlowError("temperature is not supported by this model")
+        return "最终可见答案"
+
+    monkeypatch.setattr(openai_compat_provider, "chat_completion", fake_chat)
+    provider = openai_compat_provider.OpenAICompatProvider(
+        provider_id="reasoning", display_name="Reasoning", api_key="test-key",
+    )
+
+    result = provider.chat(ChatRequest(model="reasoning-model", messages=[], temperature=0.3))
+
+    assert result == "最终可见答案"
+    assert calls[0]["temperature"] == 0.3
+    assert "temperature" not in calls[1]
+
+
+def test_assistant_content_accepts_openai_text_blocks_without_reasoning_leak():
+    from shared.sf_client import _assistant_content
+
+    assert _assistant_content([
+        {"type": "reasoning_content", "text": "隐藏推理"},
+        {"type": "text", "text": "可见"},
+    ]) == "可见"

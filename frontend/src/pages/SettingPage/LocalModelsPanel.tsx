@@ -4,6 +4,7 @@ import { Download, RefreshCw } from 'lucide-react'
 
 import {
   downloadLocalModel,
+  activateLocalModel,
   listLocalModels,
   type LocalModelStatus,
 } from '@/services/localModels'
@@ -14,6 +15,7 @@ function formatSize(size: number): string {
 }
 
 function statusLabel(model: LocalModelStatus): string {
+  if (model.status === 'needs_token') return '需要 Token'
   if (!model.compatible) return '当前设备不支持'
   if (model.status === 'ready' || model.cached) return '已就绪'
   if (model.status === 'downloading') return `下载中 ${Math.round(model.progress * 100)}%`
@@ -68,6 +70,19 @@ export default function LocalModelsPanel() {
     }
   }
 
+  const activate = async (model: LocalModelStatus) => {
+    setBusyId(model.model_id)
+    try {
+      await activateLocalModel(model.model_id)
+      toast.success(`${model.title} 已设为默认转写模型`)
+      await refresh()
+    } catch {
+      toast.error(`${model.title} 尚未就绪，无法切换`)
+    } finally {
+      setBusyId('')
+    }
+  }
+
   if (loading) return <div className="settings-empty">正在读取本地模型状态…</div>
 
   return (
@@ -106,10 +121,21 @@ export default function LocalModelsPanel() {
                   </div>
                   <div className="local-model-actions">
                     <span data-status={model.status}>{statusLabel(model)}</span>
+                    {model.active && <span className="local-model-active">当前使用</span>}
+                    {(model.family === 'fast-whisper' || model.family === 'mlx-whisper') && (
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        disabled={!ready || isBusy || model.active}
+                        onClick={() => void activate(model)}
+                      >
+                        {model.active ? '已启用' : '切换使用'}
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="btn"
-                      disabled={!model.compatible || ready || isBusy}
+                      disabled={!model.compatible || ready || isBusy || model.status === 'needs_token'}
                       onClick={() => void startDownload(model)}
                     >
                       <Download size={14} /> {isBusy ? '下载中…' : ready ? '已下载' : '下载'}

@@ -1262,6 +1262,10 @@ export type ItemNoteExportFormat =
   | 'long_image'
   | 'pptx'
   | 'obsidian'
+  | 'transcript_txt'
+  | 'srt'
+  | 'vtt'
+  | 'ass'
 
 /** GET /workspaces/{id}/items/{itemId}/note/export?format=... */
 export async function downloadItemNoteExport(
@@ -1270,9 +1274,11 @@ export async function downloadItemNoteExport(
   format: ItemNoteExportFormat,
   fallbackFilename: string,
   signal?: AbortSignal,
+  sourceKind: 'main' | 'summary' = 'main',
+  summaryId?: string,
 ): Promise<void> {
   const res = await http.get(`${BASE}/${workspaceId}/items/${itemId}/note/export`, {
-    params: { format },
+    params: { format, source_kind: sourceKind, summary_id: summaryId },
     responseType: 'blob',
     signal,
   })

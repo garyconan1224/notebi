@@ -84,6 +84,7 @@ def run_local_asr_with_fallback(
     initial_prompt: str = "",
     log_callback: Optional[Callable[[str], None]] = None,
     progress_callback: Optional[Callable[[float, str], None]] = None,
+    preferred_engine: str = "",
 ) -> Tuple[str, List[Dict[str, Any]], float, str]:
     """按优先级尝试 ASR 引擎，返回 (text, segments, duration, engine_name)。
 
@@ -103,63 +104,69 @@ def run_local_asr_with_fallback(
             except Exception:  # noqa: BLE001
                 pass
 
-    # ── 1. mlx-whisper ──────────────────────────────────────────
-    try:
-        from backend.app.services.asr_mlx_whisper import (
-            is_mlx_whisper_available,
-            transcribe_file_with_mlx_whisper,
-        )
-        if is_mlx_whisper_available():
-            tried.append("mlx-whisper")
-            _emit("🔍 选用 ASR 引擎：mlx-whisper")
-            result = transcribe_file_with_mlx_whisper(
-                file_path,
-                model_name=model_name,
-                language=language,
-                initial_prompt=initial_prompt,
-                log_callback=log_callback,
-                progress_callback=progress_callback,
-                return_segments=True,
-            )
-            text, segs, dur = result
-            if text.strip():
-                text = _to_simplified(text)
-                for seg in segs:
-                    seg["text"] = _to_simplified(seg.get("text", ""))
-                return text, segs, dur, "mlx-whisper"
-            errors.append("mlx-whisper: 转写结果为空")
-    except Exception as err:
-        errors.append(f"mlx-whisper: {err}")
-        logger.warning("mlx-whisper 失败，尝试下一引擎: %s", err)
+    configured = preferred_engine.strip().lower()
+    engine_order = ["mlx-whisper", "fast-whisper"]
+    if configured in {"mlx-whisper", "fast-whisper"}:
+        engine_order = [configured, *[name for name in engine_order if name != configured]]
 
-    # ── 2. fast-whisper ─────────────────────────────────────────
-    try:
-        from backend.app.services.asr_fast_whisper import (
-            is_fast_whisper_available,
-            transcribe_file_with_fast_whisper,
-        )
-        if is_fast_whisper_available():
-            tried.append("fast-whisper")
-            _emit("🔍 选用 ASR 引擎：fast-whisper")
-            result = transcribe_file_with_fast_whisper(
-                file_path,
-                model_name=model_name,
-                language=language,
-                initial_prompt=initial_prompt,
-                log_callback=log_callback,
-                progress_callback=progress_callback,
-                return_segments=True,
-            )
-            text, segs, dur = result
-            if text.strip():
-                text = _to_simplified(text)
-                for seg in segs:
-                    seg["text"] = _to_simplified(seg.get("text", ""))
-                return text, segs, dur, "fast-whisper"
-            errors.append("fast-whisper: 转写结果为空")
-    except Exception as err:
-        errors.append(f"fast-whisper: {err}")
-        logger.warning("fast-whisper 失败，尝试下一引擎: %s", err)
+    # ── 本地引擎：顺序受设置页“当前使用”控制，失败后才回退 ─────
+    for engine_name in engine_order:
+        if engine_name == "mlx-whisper":
+            try:
+                from backend.app.services.asr_mlx_whisper import (
+                    is_mlx_whisper_available,
+                    transcribe_file_with_mlx_whisper,
+                )
+                if is_mlx_whisper_available():
+                    tried.append("mlx-whisper")
+                    _emit("🔍 选用 ASR 引擎：mlx-whisper")
+                    result = transcribe_file_with_mlx_whisper(
+                        file_path,
+                        model_name=model_name,
+                        language=language,
+                        initial_prompt=initial_prompt,
+                        log_callback=log_callback,
+                        progress_callback=progress_callback,
+                        return_segments=True,
+                    )
+                    text, segs, dur = result
+                    if text.strip():
+                        text = _to_simplified(text)
+                        for seg in segs:
+                            seg["text"] = _to_simplified(seg.get("text", ""))
+                        return text, segs, dur, "mlx-whisper"
+                    errors.append("mlx-whisper: 转写结果为空")
+            except Exception as err:
+                errors.append(f"mlx-whisper: {err}")
+                logger.warning("mlx-whisper 失败，尝试下一引擎: %s", err)
+        else:
+            try:
+                from backend.app.services.asr_fast_whisper import (
+                    is_fast_whisper_available,
+                    transcribe_file_with_fast_whisper,
+                )
+                if is_fast_whisper_available():
+                    tried.append("fast-whisper")
+                    _emit("🔍 选用 ASR 引擎：fast-whisper")
+                    result = transcribe_file_with_fast_whisper(
+                        file_path,
+                        model_name=model_name,
+                        language=language,
+                        initial_prompt=initial_prompt,
+                        log_callback=log_callback,
+                        progress_callback=progress_callback,
+                        return_segments=True,
+                    )
+                    text, segs, dur = result
+                    if text.strip():
+                        text = _to_simplified(text)
+                        for seg in segs:
+                            seg["text"] = _to_simplified(seg.get("text", ""))
+                        return text, segs, dur, "fast-whisper"
+                    errors.append("fast-whisper: 转写结果为空")
+            except Exception as err:
+                errors.append(f"fast-whisper: {err}")
+                logger.warning("fast-whisper 失败，尝试下一引擎: %s", err)
 
     # ── 3. remote HTTP（需要 api_key）──────────────────────────
     if api_key:

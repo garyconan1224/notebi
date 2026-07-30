@@ -71,6 +71,27 @@ class TaskRunner:
             retry_count=max(0, record.attempt_no - 1),
         )
 
+    @staticmethod
+    def _public_stage(status: str) -> str:
+        """Expose only the user-facing pipeline stage, not lifecycle noise."""
+        normalized = str(status or "").upper()
+        return {
+            "PENDING": "PENDING",
+            "DOWNLOAD": "DOWNLOAD",
+            "PROBE": "PROBE",
+            "FRAMES": "FRAMES",
+            "ASR": "ASR",
+            "VLM": "VLM",
+            "FETCH": "FETCH",
+            "PARSE": "PARSE",
+            "EXTRACT": "EXTRACT",
+            "SUM": "SUM",
+            "ASSOCIATE": "ASSOCIATE",
+            "REWRITE": "REWRITE",
+            "TRANSLATE": "TRANSLATE",
+            "STORE": "STORE",
+        }.get(normalized, "")
+
     def register(self, task_type: str, handler: TaskHandler) -> None:
         with self._lock:
             self._handlers[task_type] = handler
@@ -310,6 +331,11 @@ class TaskRunner:
         self.store.update(task_id, progress=pct)
         if message:
             self.store.append_log(task_id, message)
+        current = self.store.get(task_id)
+        if current is not None:
+            stage = self._public_stage(current.status)
+            if stage:
+                self._emit_task_event(current, stage, message or stage)
 
     def set_download_speed(self, task_id: str, speed: str) -> None:
         """将实时下载速度字符串合并写入 task.result['download_speed']，供前端展示。

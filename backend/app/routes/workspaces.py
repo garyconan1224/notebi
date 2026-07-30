@@ -1933,7 +1933,7 @@ def list_workspaces(
     )
     # 隐藏收纳箱，不在合集列表展示
     recs = [r for r in recs if r.source != "inbox"]
-    return [_enrich_workspace(r) for r in recs]
+    return [_enrich_workspace(_store.get(r.workspace_id) or r) for r in recs]
 
 
 # ── Phase L1：资料库聚合端点 ──────────────────────────────
@@ -2159,20 +2159,31 @@ def get_library(
     workspaces_out: List[Dict[str, Any]] = []
 
     for rec in recs:
+        view = _store.get(rec.workspace_id) or rec
         # workspace 摘要卡片（收纳箱不展示为合集卡片）
         if rec.source != "inbox":
             workspaces_out.append({
                 "workspace_id": rec.workspace_id,
                 "name": rec.name,
                 "kind": rec.kind,
-                "items_count": len(rec.items),
-                "items_count_by_type": _items_count_by_type(rec),
-                "cover_thumbnail": _cover_thumbnail(rec),
+                "items_count": len(view.items),
+                "items_count_by_type": _items_count_by_type(view),
+                "cover_thumbnail": _cover_thumbnail(view),
                 "updated_at": rec.updated_at,
                 "status": rec.status,
             })
 
-        for item in rec.items:
+        for item in view.items:
+            try:
+                owner_workspace_id, owner_item_id = _store.owner_reference(rec.workspace_id, item.item_id)
+            except KeyError:
+                continue
+            owner_workspace = _store.get(owner_workspace_id) or rec
+            # Each collection gets a lightweight reference row so its card can
+            # render the member.  ``content_id``/``item_id`` remain identical;
+            # this is a view fan-out, not a serialized copy of the note.
+            display_workspace_id = rec.workspace_id
+            display_workspace = rec
             # X.1 bridge：用 task 状态覆盖 item status
             item_status = item.status
             overlay = _sync_item_with_tasks(item)
@@ -2191,9 +2202,9 @@ def get_library(
                 "item_id": item.item_id,
                 "content_id": item.content_id,
                 "lineage_id": item.lineage_id,
-                "workspace_id": rec.workspace_id,
-                "workspace_name": rec.name,
-                "workspace_kind": rec.kind,
+                "workspace_id": display_workspace_id,
+                "workspace_name": display_workspace.name,
+                "workspace_kind": display_workspace.kind,
                 "type": item.type,
                 "source": item.source,
                 "source_value": item.source_value,
@@ -2218,6 +2229,7 @@ def get_library(
                 "has_chapters": bool(results.get("chapters") or (results.get("av_synthesis") or {}).get("chapters")),
                 "primary_view": _compute_primary_view(item, results),
                 "frames_count": len(results.get("frames") or []) if item.type == "video" else 0,
+                "collection_ids": _store.member_workspace_ids(owner_workspace_id, owner_item_id),
             })
 
     return {"items": items_out, "workspaces": workspaces_out}
@@ -2253,7 +2265,8 @@ def batch_delete_items(req: BatchDeleteRequest) -> Dict[str, Any]:
         # 否则批量删除会留下孤儿任务（单个删除已处理，批量删除此前遗漏）。
         ws = _store.get(ws_id)
         item = next((it for it in ws.items if it.item_id == item_id), None) if ws else None
-        related_tids = list(item.related_task_ids) if item else []
+        is_member = _store.is_member_reference(ws_id, item_id)
+        related_tids = list(item.related_task_ids) if item and not is_member else []
         try:
             _store.remove_item(ws_id, item_id)
             removed.append(item_id)
@@ -2272,14 +2285,13 @@ def batch_delete_items(req: BatchDeleteRequest) -> Dict[str, Any]:
 def batch_add_items_to_workspace(req: BatchAddToWorkspaceRequest) -> Dict[str, Any]:
     """把已有素材加入目标合集。
 
-    创建独立内容副本，保留同源谱系和只读媒体引用，不重复触发下载/分析。
+    只保存成员关系，笔记、总结、转写和媒体仍由原始素材唯一持有。
     """
     target_id = req.target_workspace_id.strip()
     target = _store.get(target_id)
     if target is None:
         raise HTTPException(status_code=404, detail=f"workspace not found: {target_id}")
 
-    existing_lineages = {item.lineage_id for item in target.items}
     added: List[str] = []
     skipped: List[str] = []
     failed: List[Dict[str, Any]] = []
@@ -2290,40 +2302,12 @@ def batch_add_items_to_workspace(req: BatchAddToWorkspaceRequest) -> Dict[str, A
         if not ws_id or not item_id:
             failed.append({**entry, "reason": "missing workspace_id or item_id"})
             continue
-        source = _store.get(ws_id)
-        if source is None:
-            failed.append({"workspace_id": ws_id, "item_id": item_id, "reason": "source workspace not found"})
-            continue
-        if source.kind != target.kind:
-            failed.append({"workspace_id": ws_id, "item_id": item_id, "reason": "workspace kind mismatch"})
-            continue
-
-        item = next((it for it in source.items if it.item_id == item_id), None)
-        if item is None:
-            failed.append({"workspace_id": ws_id, "item_id": item_id, "reason": "item not found"})
-            continue
-        if item.lineage_id in existing_lineages:
-            skipped.append(item_id)
-            continue
-
-        target_note_dir: Optional[Path] = None
         try:
-            cloned = WorkspaceItem.from_dict(item.to_dict())
-            cloned.item_id = str(uuid.uuid4())
-            cloned.content_id = str(uuid.uuid4())
-            cloned.origin_content_id = item.content_id
-            cloned.legacy_item_id = item.legacy_item_id or item.item_id
-            cloned.related_task_ids = []
-            source_note_dir = note_dir(ws_id, item_id)
-            target_note_dir = note_dir(target_id, cloned.item_id)
-            if source_note_dir.exists():
-                shutil.copytree(source_note_dir, target_note_dir)
-            _store.add_item(target_id, cloned)
-            existing_lineages.add(cloned.lineage_id)
-            added.append(cloned.item_id)
-        except Exception as err:
-            if target_note_dir is not None:
-                shutil.rmtree(target_note_dir, ignore_errors=True)
+            if _store.add_item_membership(target_id, ws_id, item_id):
+                added.append(item_id)
+            else:
+                skipped.append(item_id)
+        except (KeyError, ValueError) as err:
             failed.append({"workspace_id": ws_id, "item_id": item_id, "reason": str(err)})
 
     return {
@@ -2369,7 +2353,7 @@ def batch_organize_items(req: BatchOrganizeRequest) -> Dict[str, Any]:
 
 @router.get("/{workspace_id}/items/{item_id}/lineage")
 def list_item_lineage(workspace_id: str, item_id: str) -> Dict[str, Any]:
-    """列出其他合集中的同源独立副本，不自动合并或覆盖。"""
+    """列出其它合集中的旧副本与当前共享成员关系。"""
 
     try:
         current = _store.get_item(workspace_id, item_id)
@@ -2396,6 +2380,20 @@ def list_item_lineage(workspace_id: str, item_id: str) -> Dict[str, Any]:
                 )[:240],
                 "jump_url": _jump_url(workspace.workspace_id, item.item_id, item.type),
             })
+    memberships = []
+    for target_id in _store.member_workspace_ids(workspace_id, current.item_id):
+        target = _store.get(target_id)
+        if target is None:
+            continue
+        memberships.append({
+            "workspace_id": target_id,
+            "workspace_name": target.name,
+            "item_id": current.item_id,
+            "content_id": current.content_id,
+            "lineage_id": current.lineage_id,
+            "updated_at": current.updated_at,
+            "jump_url": _jump_url(target_id, current.item_id, current.type),
+        })
     return {
         "content_id": current.content_id,
         "lineage_id": current.lineage_id,
@@ -2406,6 +2404,7 @@ def list_item_lineage(workspace_id: str, item_id: str) -> Dict[str, Any]:
             "updated_at": current.updated_at,
         },
         "copies": sorted(copies, key=lambda copy: copy["updated_at"], reverse=True),
+        "memberships": memberships,
     }
 
 
@@ -2648,6 +2647,9 @@ def delete_workspace(
             moved_to_inbox = int(copy_result.get("added") or 0)
             already_elsewhere += int(copy_result.get("skipped") or 0)
     _store.update(workspace_id, trashed=True)
+    # Removing a collection never removes shared notes.  Its incoming member
+    # rows are just detached after any optional keep-to-inbox handling above.
+    _store.unlink_workspace_memberships(workspace_id)
     invalidate_workspace_index(workspace_id)
     return {
         "trashed": True,
@@ -2795,7 +2797,8 @@ def remove_item(workspace_id: str, item_id: str) -> Dict[str, Any]:
     ws = _store.get(workspace_id)
     if ws is not None:
         item = next((it for it in ws.items if it.item_id == item_id), None)
-    related_tids = list(item.related_task_ids) if item else []
+    is_member = _store.is_member_reference(workspace_id, item_id)
+    related_tids = list(item.related_task_ids) if item and not is_member else []
     try:
         rec = _store.remove_item(workspace_id, item_id)
     except KeyError as err:
@@ -4487,6 +4490,11 @@ def update_speaker_map(
         str(key): str(value)
         for key, value in (results.get("speaker_map") or {}).items()
     }
+    previous_roles = {
+        str(key): str(value)
+        for key, value in (results.get("speaker_roles") or {}).items()
+        if str(value or "").strip()
+    }
     roles = req.speaker_roles
     if roles is None:
         roles = dict(results.get("speaker_roles") or {})
@@ -4509,13 +4517,24 @@ def update_speaker_map(
     updated_count = _store.update_speaker_summary_labels(
         workspace_id, item_id, req.speaker_map, previous_speaker_map=previous_map
     )
+    role_changed = previous_roles != normalized_roles
+    summary_status = (
+        "needs_regeneration"
+        if has_speaker_summaries and role_changed
+        else "updated"
+        if has_speaker_summaries
+        else "not_needed"
+    )
     return {
         "speaker_map": req.speaker_map,
         "speaker_roles": normalized_roles,
         "summary_refresh": {
-            "status": "updated" if has_speaker_summaries else "not_needed",
+            "status": summary_status,
             "updated_count": updated_count,
-            "reason": f"已同步替换 {updated_count} 份区分说话人总结中的名称。"
+            **({"role_changed": True} if has_speaker_summaries and role_changed else {}),
+            "reason": "说话人身份已变化，请生成新版本总结以重新解读角色。"
+            if has_speaker_summaries and role_changed
+            else f"已同步替换 {updated_count} 份区分说话人总结中的名称。"
             if has_speaker_summaries
             else "当前没有区分说话人总结需要更新。",
         },
@@ -5757,7 +5776,13 @@ def adopt_sibling_note(
 
 
 @router.get("/{workspace_id}/items/{item_id}/note/export")
-def export_item_note(workspace_id: str, item_id: str, format: str = "obsidian") -> StreamingResponse:
+def export_item_note(
+    workspace_id: str,
+    item_id: str,
+    format: str = "obsidian",
+    source_kind: Literal["main", "summary"] = "main",
+    summary_id: Optional[str] = None,
+) -> StreamingResponse:
     """导出单素材 NoteShell 笔记。"""
 
     rec = _store.get(workspace_id)
@@ -5782,6 +5807,13 @@ def export_item_note(workspace_id: str, item_id: str, format: str = "obsidian") 
         raise HTTPException(status_code=404, detail="note not generated")
 
     note_md = note_path.read_text(encoding="utf-8")
+    if source_kind == "summary":
+        if not summary_id:
+            raise HTTPException(status_code=400, detail="summary_id is required for summary export")
+        summary = next((entry for entry in item.summaries if entry.summary_id == summary_id), None)
+        if summary is None:
+            raise HTTPException(status_code=404, detail="summary not found")
+        note_md = summary.content_md or ""
     source_path = nd / "source.md"
     source_md = source_path.read_text(encoding="utf-8") if source_path.exists() else ""
     return build_note_export_response(
