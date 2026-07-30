@@ -37,6 +37,7 @@ interface LogEntry {
   progress?: number
   duration_ms?: number
   retry_count?: number
+  details?: { task_type?: string; task_title?: string; source_type?: string }
 }
 
 interface LogsResponse {
@@ -466,6 +467,12 @@ export default function DeployMonitorPage() {
                     )}
                   </div>
                   {isIssue(log) && <p>{log.message}</p>}
+                  {log.details?.task_title && (
+                    <p className="monitor-task-title">
+                      {log.details.task_title}
+                      {log.details.source_type ? ` · ${log.details.source_type}` : ''}
+                    </p>
+                  )}
                   <div className="monitor-activity-meta">
                     {log.task_id && <span>任务 {log.task_id}</span>}
                     {log.batch_id && <span>批次 {log.batch_id}</span>}

@@ -31,6 +31,8 @@ _ALLOWED_DETAIL_KEYS = frozenset(
         "error_type",
         "item_count",
         "source_type",
+        "task_type",
+        "task_title",
     }
 )
 

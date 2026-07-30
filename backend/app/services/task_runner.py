@@ -69,6 +69,18 @@ class TaskRunner:
             stage=stage,
             progress=record.progress,
             retry_count=max(0, record.attempt_no - 1),
+            details={
+                "task_type": record.task_type,
+                "task_title": str(
+                    record.result.get("video_title")
+                    or record.payload.get("video_title")
+                    or record.payload.get("title")
+                    or record.payload.get("url")
+                    or record.payload.get("source")
+                    or record.task_type
+                )[:200],
+                "source_type": str(record.payload.get("source_type") or ""),
+            },
         )
 
     @staticmethod
