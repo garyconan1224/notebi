@@ -3,9 +3,9 @@ import { Link, useNavigate } from 'react-router-dom'
 
 import { PageHeader } from '@/components/ui/page-header'
 import { StatusBadge, type StatusKind } from '@/components/ui/status-badge'
-import { listPipelineTasks } from '@/services/pipeline'
+import { listPipelineTasks, deletePipelineTask } from '@/services/pipeline'
 import { listTaskBatches } from '@/services/taskBatches'
-import { getStatusText, type TaskRecord } from '@/types/task'
+import { getStatusText, isTaskTerminal, type TaskRecord } from '@/types/task'
 import type { BatchStatus, TaskBatch } from '@/types/taskBatch'
 
 import './task-center.css'
@@ -407,7 +407,14 @@ export default function TaskCenterPage() {
             <div className="task-item-list">
               {pageItems.length === 0 && <div className="task-state">暂无单条任务</div>}
               {(pageItems as TaskRecord[]).map((task) => (
-                <article key={task.task_id} className="task-item-card">
+                <article
+                  key={task.task_id}
+                  className="task-item-card"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`/processing/${task.task_id}`)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/processing/${task.task_id}`) }}
+                >
                   <div className="task-item-main">
                     <div>
                       <span className="tag">{TASK_TYPE_LABELS[task.task_type] || '处理任务'}</span>
@@ -456,6 +463,22 @@ export default function TaskCenterPage() {
                       查看高级日志
                     </Link>
                   </details>
+                  {isTaskTerminal(task.status) && (
+                    <div className="task-item-actions">
+                      <button
+                        type="button"
+                        className="btn-ghost task-delete-btn"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (window.confirm('只删除任务记录，不删除笔记和媒体。确认删除？')) {
+                            void deletePipelineTask(task.task_id).then(() => void load())
+                          }
+                        }}
+                      >
+                        删除记录
+                      </button>
+                    </div>
+                  )}
                 </article>
               ))}
             </div>
