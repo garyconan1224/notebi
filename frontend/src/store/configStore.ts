@@ -8,8 +8,8 @@ import {
   type DownloadConfigPatchPayload,
 } from '@/services/download'
 
-/** 音频转写引擎类型 */
-export type TranscriberType = 'auto' | 'fast-whisper' | 'bcut' | 'kuaishou' | 'groq' | 'mlx-whisper'
+/** 音频转写引擎类型（S4: 移除已退役的 bcut/kuaishou） */
+export type TranscriberType = 'auto' | 'fast-whisper' | 'groq' | 'mlx-whisper'
 
 /** Whisper 模型大小 */
 export type WhisperModelSize = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3' | 'large-v3-turbo'

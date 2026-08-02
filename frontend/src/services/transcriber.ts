@@ -67,8 +67,6 @@ export function getAvailableTranscriberTypes() {
   const baseTypes = [
     { value: 'auto', label: '自动选择（推荐）' },
     { value: 'fast-whisper', label: 'Faster Whisper（本地）' },
-    { value: 'bcut', label: '必剪（在线）' },
-    { value: 'kuaishou', label: '快手（在线）' },
     { value: 'groq', label: 'Groq（在线）' },
   ]
 

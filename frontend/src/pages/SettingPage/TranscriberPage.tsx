@@ -224,8 +224,6 @@ const TranscriberPage = () => {
       auto: 'auto',
       'fast-whisper': 'fastWhisper',
       'mlx-whisper': 'mlxWhisper',
-      'bcut': 'bcut',
-      'kuaishou': 'kuaishou',
       'groq': 'groq',
     }
     return keyMap[type]

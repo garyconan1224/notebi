@@ -50,8 +50,6 @@ _WHISPER_MODEL_SIZES: tuple[str, ...] = (
 _ALLOWED_TYPES: tuple[str, ...] = (
     "auto",
     "fast-whisper",
-    "bcut",
-    "kuaishou",
     "groq",
     "mlx-whisper",
 )
@@ -63,7 +61,7 @@ class TranscriberConfigUpdateRequest(BaseModel):
     全部字段可选：缺省则沿用现值；空串视为清空字符串字段。
     """
 
-    type: Optional[Literal["auto", "fast-whisper", "bcut", "kuaishou", "groq", "mlx-whisper"]] = Field(
+    type: Optional[Literal["auto", "fast-whisper", "groq", "mlx-whisper"]] = Field(
         default=None,
         description="转写引擎类型；传入值不在白名单时 422",
     )

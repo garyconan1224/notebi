@@ -22,16 +22,17 @@ SETTINGS_PATH: Path = SETTINGS_DIR / "settings.json"
 
 ProviderKind = Literal["openai_compatible", "anthropic"]
 ProviderCapability = Literal["chat", "vision", "embedding", "rerank"]
-TranscriberType = Literal["auto", "fast-whisper", "bcut", "kuaishou", "groq", "mlx-whisper"]
+TranscriberType = Literal["auto", "fast-whisper", "groq", "mlx-whisper"]
 
 _ALLOWED_TRANSCRIBER_TYPES: tuple[TranscriberType, ...] = (
     "auto",
     "fast-whisper",
-    "bcut",
-    "kuaishou",
     "groq",
     "mlx-whisper",
 )
+
+# S4: 已退役的转录引擎，读取历史配置时自动迁移到 auto
+_RETIRED_TRANSCRIBER_TYPES: frozenset[str] = frozenset({"bcut", "kuaishou"})
 
 
 @dataclass(frozen=True)
