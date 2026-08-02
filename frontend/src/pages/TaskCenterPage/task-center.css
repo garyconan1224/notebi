@@ -141,6 +141,37 @@
   transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
+.task-item-card {
+  position: relative;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+/* 全卡覆盖链接：空白区与标题由此进入详情，内部控件用 z-index 抬到上层 */
+.task-item-card-link {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+
+.task-item-card-link:focus-visible {
+  outline: none;
+  box-shadow: var(--shf);
+}
+
+.task-item-card:has(.task-item-card-link:hover) {
+  border-color: var(--bdrs);
+  box-shadow: var(--sh1);
+  transform: translateY(-1px);
+}
+
+.task-item-card .task-diagnostics,
+.task-item-card .task-item-actions,
+.task-item-card .task-summary-preview a {
+  position: relative;
+  z-index: 2;
+}
+
 .task-batch-card:hover {
   border-color: var(--bdrs);
   box-shadow: var(--sh1);
@@ -304,6 +335,12 @@
 
 .task-diagnostics a {
   color: var(--acc);
+}
+
+.task-item-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
 }
 
 .task-state {

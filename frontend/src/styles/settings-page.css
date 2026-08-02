@@ -353,14 +353,18 @@
 
 .local-model-row strong { color: var(--fg); font-size: var(--sm); }
 .local-model-row p { margin: 4px 0; color: var(--mut); font-size: var(--xs); line-height: 1.5; }
-.local-model-row small { display: block; color: var(--mut); font-family: var(--fm); font-size: 10px; overflow-wrap: anywhere; }
+.local-model-row small { display: block; color: var(--mut); font-family: var(--fm); font-size: 11px; overflow-wrap: anywhere; }
 .local-model-actions { display: grid; justify-items: end; gap: 7px; white-space: nowrap; }
-.local-model-actions > span { color: var(--mut); font-size: var(--xs); }
+.local-model-actions > span { color: var(--fg2); font-size: var(--xs); }
 .local-model-actions > span[data-status='ready'] { color: var(--ok); }
 .local-model-actions > span[data-status='failed'] { color: var(--err); }
 .local-model-progress { height: 5px; margin-top: 8px; overflow: hidden; border-radius: 999px; background: var(--bgalt); }
 .local-model-progress span { display: block; height: 100%; border-radius: inherit; background: var(--acc); transition: width .2s; }
-.local-model-error { margin-top: 5px; color: var(--err) !important; }
+/* 人类可读失败摘要放主区；原始技术错误默认折叠在 details 内 */
+.local-model-failure { margin-top: 6px; color: var(--err) !important; font-weight: 550; }
+.local-model-raw-error { margin-top: 6px; }
+.local-model-raw-error summary { width: fit-content; cursor: pointer; color: var(--fg2); font-size: var(--xs); }
+.local-model-raw-error[open] summary { margin-bottom: 4px; }
 
 @media (max-width: 640px) {
   .local-model-row { grid-template-columns: 1fr; }

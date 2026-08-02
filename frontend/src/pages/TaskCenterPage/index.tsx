@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/ui/page-header'
 import { StatusBadge, type StatusKind } from '@/components/ui/status-badge'
@@ -140,6 +141,15 @@ function taskNotePath(task: TaskRecord): string {
     : ''
 }
 
+/** 成功（含部分完成）且有产出路径的任务直接进结果页，其余进处理详情。 */
+function taskTargetPath(task: TaskRecord): string {
+  if (task.status === 'SUCCESS' || task.status === 'PARTIAL') {
+    const notePath = taskNotePath(task)
+    if (notePath) return notePath
+  }
+  return `/processing/${task.task_id}`
+}
+
 export default function TaskCenterPage() {
   const navigate = useNavigate()
   const [view, setView] = useState<View>('batches')
@@ -153,6 +163,7 @@ export default function TaskCenterPage() {
   const [batchSource, setBatchSource] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [page, setPage] = useState(1)
+  const [deletingIds, setDeletingIds] = useState<ReadonlySet<string>>(() => new Set())
 
   const load = useCallback(async (background = false) => {
     if (background) setRefreshing(true)
@@ -175,6 +186,24 @@ export default function TaskCenterPage() {
 
   useEffect(() => {
     void load()
+  }, [load])
+
+  const handleDeleteTask = useCallback(async (task: TaskRecord) => {
+    if (!window.confirm('只删除任务记录，不删除笔记和媒体。确认删除？')) return
+    setDeletingIds((previous) => new Set(previous).add(task.task_id))
+    try {
+      await deletePipelineTask(task.task_id)
+      toast.success('已删除任务记录')
+      await load()
+    } catch {
+      toast.error('删除失败，请稍后重试')
+    } finally {
+      setDeletingIds((previous) => {
+        const next = new Set(previous)
+        next.delete(task.task_id)
+        return next
+      })
+    }
   }, [load])
 
   const hasActiveBatch = batches.some((batch) =>
@@ -406,81 +435,78 @@ export default function TaskCenterPage() {
           {!loading && !error && view === 'tasks' && (
             <div className="task-item-list">
               {pageItems.length === 0 && <div className="task-state">暂无单条任务</div>}
-              {(pageItems as TaskRecord[]).map((task) => (
-                <article
-                  key={task.task_id}
-                  className="task-item-card"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => navigate(`/processing/${task.task_id}`)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/processing/${task.task_id}`) }}
-                >
-                  <div className="task-item-main">
-                    <div>
-                      <span className="tag">{TASK_TYPE_LABELS[task.task_type] || '处理任务'}</span>
-                      <h2>{taskTitle(task)}</h2>
+              {(pageItems as TaskRecord[]).map((task) => {
+                const deleting = deletingIds.has(task.task_id)
+                return (
+                  <article key={task.task_id} className="task-item-card">
+                    <Link
+                      className="task-item-card-link"
+                      to={taskTargetPath(task)}
+                      aria-label={`打开${taskTitle(task)}`}
+                    />
+                    <div className="task-item-main">
+                      <div>
+                        <span className="tag">{TASK_TYPE_LABELS[task.task_type] || '处理任务'}</span>
+                        <h2>{taskTitle(task)}</h2>
+                      </div>
+                      <StatusBadge status={taskStatusKind(task.status)}>
+                        {getStatusText(task.status)}
+                      </StatusBadge>
                     </div>
-                    <StatusBadge status={taskStatusKind(task.status)}>
-                      {getStatusText(task.status)}
-                    </StatusBadge>
-                  </div>
-                  <div className="task-progress-row">
-                    <strong>{Math.round((task.progress || 0) * 100)}%</strong>
-                    <div
-                      className="task-progress"
-                      role="progressbar"
-                      aria-label={`${taskTitle(task)}进度`}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={Math.round((task.progress || 0) * 100)}
-                    >
-                      <span style={{ width: `${Math.round((task.progress || 0) * 100)}%` }} />
+                    <div className="task-progress-row">
+                      <strong>{Math.round((task.progress || 0) * 100)}%</strong>
+                      <div
+                        className="task-progress"
+                        role="progressbar"
+                        aria-label={`${taskTitle(task)}进度`}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={Math.round((task.progress || 0) * 100)}
+                      >
+                        <span style={{ width: `${Math.round((task.progress || 0) * 100)}%` }} />
+                      </div>
                     </div>
-                  </div>
-                  <section className="task-public-progress" aria-label={`${taskTitle(task)}处理说明`}>
-                    <div>
-                      <span>当前环节</span>
-                      <strong>{publicTaskStage(task)}</strong>
-                    </div>
-                    <p>显示的是处理阶段与可见产出，不展示模型的内部思维过程。</p>
-                    {completedSummaryPreview(task) && (
-                      <div className="task-summary-preview">
-                        <span>总结预览</span>
-                        <p>{completedSummaryPreview(task)}{completedSummaryPreview(task).length >= 360 ? '…' : ''}</p>
-                        {taskNotePath(task) && <Link to={taskNotePath(task)}>打开完整总结</Link>}
+                    <section className="task-public-progress" aria-label={`${taskTitle(task)}处理说明`}>
+                      <div>
+                        <span>当前环节</span>
+                        <strong>{publicTaskStage(task)}</strong>
+                      </div>
+                      <p>显示的是处理阶段与可见产出，不展示模型的内部思维过程。</p>
+                      {completedSummaryPreview(task) && (
+                        <div className="task-summary-preview">
+                          <span>总结预览</span>
+                          <p>{completedSummaryPreview(task)}{completedSummaryPreview(task).length >= 360 ? '…' : ''}</p>
+                          {taskNotePath(task) && <Link to={taskNotePath(task)}>打开完整总结</Link>}
+                        </div>
+                      )}
+                    </section>
+                    <details className="task-diagnostics">
+                      <summary>诊断信息</summary>
+                      <dl>
+                        <div><dt>任务编号</dt><dd>{task.task_id}</dd></div>
+                        {task.batch_id && <div><dt>批次编号</dt><dd>{task.batch_id}</dd></div>}
+                      </dl>
+                      <Link
+                        to={`/settings/monitor?batch_id=${encodeURIComponent(task.batch_id || '')}&task_id=${encodeURIComponent(task.task_id)}&level=ERROR`}
+                      >
+                        查看高级日志
+                      </Link>
+                    </details>
+                    {isTaskTerminal(task.status) && (
+                      <div className="task-item-actions">
+                        <button
+                          type="button"
+                          className="btn-ghost task-delete-btn"
+                          disabled={deleting}
+                          onClick={() => void handleDeleteTask(task)}
+                        >
+                          {deleting ? '删除中…' : '删除记录'}
+                        </button>
                       </div>
                     )}
-                  </section>
-                  <details className="task-diagnostics">
-                    <summary>诊断信息</summary>
-                    <dl>
-                      <div><dt>任务编号</dt><dd>{task.task_id}</dd></div>
-                      {task.batch_id && <div><dt>批次编号</dt><dd>{task.batch_id}</dd></div>}
-                    </dl>
-                    <Link
-                      to={`/settings/monitor?batch_id=${encodeURIComponent(task.batch_id || '')}&task_id=${encodeURIComponent(task.task_id)}&level=ERROR`}
-                    >
-                      查看高级日志
-                    </Link>
-                  </details>
-                  {isTaskTerminal(task.status) && (
-                    <div className="task-item-actions">
-                      <button
-                        type="button"
-                        className="btn-ghost task-delete-btn"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (window.confirm('只删除任务记录，不删除笔记和媒体。确认删除？')) {
-                            void deletePipelineTask(task.task_id).then(() => void load())
-                          }
-                        }}
-                      >
-                        删除记录
-                      </button>
-                    </div>
-                  )}
-                </article>
-              ))}
+                  </article>
+                )
+              })}
             </div>
           )}
 

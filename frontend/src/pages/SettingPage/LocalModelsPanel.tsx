@@ -11,18 +11,19 @@ import {
 
 const PYANNOTE_ACCESS_URL = 'https://huggingface.co/pyannote/speaker-diarization-community-1'
 
-/** S5: 模型家族 → 用途分组标题 */
+/** S5: 模型家族 → 用途分组标题（以真实后端 family 值为准；未知家族归“其他”） */
 const FAMILY_PURPOSE: Record<string, string> = {
   'fast-whisper': '语音转写',
   'mlx-whisper': '语音转写',
+  'asr': '语音转写',
+  'ocr': '图片文字识别',
+  'vision': '图片理解',
+  'speaker-embedding': '说话人识别',
   'speaker-diarization': '说话人识别',
-  'wespeaker': '说话人识别',
-  'sherpa': '说话人识别',
-  'paddleocr': '图片文字识别',
 }
 
 function purposeLabel(family: string): string {
-  return FAMILY_PURPOSE[family] ?? family
+  return FAMILY_PURPOSE[family] ?? '其他'
 }
 
 function formatSize(size: number): string {
@@ -63,14 +64,15 @@ export default function LocalModelsPanel() {
     return () => window.clearInterval(timer)
   }, [downloading, refresh])
 
-  const byFamily = useMemo(() => {
+  const byPurpose = useMemo(() => {
     const groups = new Map<string, LocalModelStatus[]>()
     for (const model of models) {
-      const current = groups.get(model.family) ?? []
+      const purpose = purposeLabel(model.family)
+      const current = groups.get(purpose) ?? []
       current.push(model)
-      groups.set(model.family, current)
+      groups.set(purpose, current)
     }
-    return [...groups.values()]
+    return [...groups.entries()]
   }, [models])
 
   const startDownload = async (model: LocalModelStatus) => {
@@ -117,9 +119,9 @@ export default function LocalModelsPanel() {
             </button>
           </div>
         </div>
-        {byFamily.map((group) => (
-          <div className="local-model-family" key={group[0].family}>
-            <div className="local-model-purpose-header">{purposeLabel(group[0].family)}</div>
+        {byPurpose.map(([purpose, group]) => (
+          <div className="local-model-family" key={purpose}>
+            <div className="local-model-purpose-header">{purpose}</div>
             {group.map((model) => {
               const ready = model.status === 'ready' || model.cached
               const isBusy = busyId === model.model_id || model.status === 'downloading'
@@ -146,7 +148,15 @@ export default function LocalModelsPanel() {
                         <span style={{ width: `${Math.round(model.progress * 100)}%` }} />
                       </div>
                     )}
-                    {model.error && <small className="local-model-error">{model.error}</small>}
+                    {model.status === 'failed' && (
+                      <p className="local-model-failure">下载失败，可以重试。若多次失败，请检查网络或模型授权。</p>
+                    )}
+                    {model.error && (
+                      <details className="local-model-raw-error">
+                        <summary>原始错误</summary>
+                        <small>{model.error}</small>
+                      </details>
+                    )}
                   </div>
                   <div className="local-model-actions">
                     <span data-status={model.status}>{statusLabel(model)}</span>
@@ -158,7 +168,7 @@ export default function LocalModelsPanel() {
                         disabled={!ready || isBusy || model.active}
                         onClick={() => void activate(model)}
                       >
-                        {model.active ? '使用中' : '使用'}
+                        {model.active ? '使用中' : '切换使用'}
                       </button>
                     )}
                     {!ready && (
