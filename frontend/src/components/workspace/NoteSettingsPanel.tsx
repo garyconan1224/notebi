@@ -266,12 +266,11 @@ export function NoteSettingsPanel({
                         <input
                           type="number"
                           min={1}
-                          max={60}
                           value={activeInterval}
                           disabled={captureMode === 'auto'}
                           onChange={(e) => {
                             const next = Number(e.target.value)
-                            onFrameIntervalChange(Number.isFinite(next) ? Math.min(60, Math.max(1, next)) : 5)
+                            onFrameIntervalChange(Number.isFinite(next) && next >= 1 ? Math.round(next) : 5)
                           }}
                         />
                         <span>秒</span>

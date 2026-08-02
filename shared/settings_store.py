@@ -167,7 +167,7 @@ class TaskDefaultsConfig:
             data.get("frame_interval_sec"),
             5,
             1,
-            120,
+            2**31,  # S2: 手动截帧间隔不设人为上限，只要求正整数
         )
         raw_speaker_count = data.get("speaker_count")
         speaker_count = (

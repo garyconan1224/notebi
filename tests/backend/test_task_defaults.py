@@ -99,7 +99,7 @@ def test_patch_task_defaults_preserves_omitted_fields(
     [
         ({"summary_template": ""}, "summary_template"),
         ({"frame_interval_sec": 0}, "frame_interval_sec"),
-        ({"frame_interval_sec": 121}, "frame_interval_sec"),
+        ({"frame_interval_sec": -5}, "frame_interval_sec"),
         ({"speaker_count": 1}, "speaker_count"),
         ({"speaker_count": 6}, "speaker_count"),
         ({"music_analysis": True}, "music_analysis"),
@@ -142,3 +142,14 @@ def test_legacy_unknown_fields_are_not_written_back(client: TestClient) -> None:
     assert saved["task_defaults"]["diarize"] is True
     assert "music_analysis" not in saved["task_defaults"]
     assert "unknown_old_toggle" not in saved["task_defaults"]
+
+
+@pytest.mark.parametrize("interval", [300, 600, 121])
+def test_large_frame_interval_accepted(client: TestClient, interval: int) -> None:
+    """S2: 手动截帧间隔不设人为上限，只要求正整数。"""
+    response = client.patch("/task_defaults", json={"frame_interval_sec": interval})
+    assert response.status_code == 200
+    assert response.json()["frame_interval_sec"] == interval
+    # GET 回读一致
+    read_back = client.get("/task_defaults")
+    assert read_back.json()["frame_interval_sec"] == interval

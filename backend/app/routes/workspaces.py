@@ -908,7 +908,7 @@ class BatchSourceImportRequest(BaseModel):
     start: bool = Field(default=True, description="创建合集后是否立即启动每条笔记任务")
     embed_frames: bool = Field(default=True)
     image_mode: str = Field(default="vision")
-    frame_interval: int = Field(default=5, ge=1, le=120)
+    frame_interval: int = Field(default=5, ge=1)
     vision_model: str = Field(default="")
     intent: str = Field(default="note")
     note_media_kind: str = Field(default="video")

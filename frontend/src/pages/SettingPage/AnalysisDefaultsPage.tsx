@@ -335,14 +335,13 @@ function TaskDefaultsPanel() {
         <label className="settings-inline-field">
           <span>
             <strong>默认截帧间隔</strong>
-            <p>视频画面分析时每隔多少秒取一帧，范围 1–120 秒。</p>
+            <p>视频画面分析时每隔多少秒取一帧，正整数秒，无上限。</p>
           </span>
           <input
             aria-label="默认截帧间隔"
             className="settings-native-select"
             type="number"
             min={1}
-            max={120}
             value={draft.frame_interval_sec}
             onChange={(event) => setDraft((current) => ({
               ...current,

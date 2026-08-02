@@ -27,7 +27,7 @@ class TaskDefaultsUpdateRequest(BaseModel):
         pattern=r"^[A-Za-z0-9_-]+$",
     )
     video_frame_analysis: Optional[bool] = None
-    frame_interval_sec: Optional[int] = Field(default=None, ge=1, le=120)
+    frame_interval_sec: Optional[int] = Field(default=None, ge=1)
     diarize: Optional[bool] = None
     speaker_count: Optional[int] = Field(default=None, ge=2, le=5)
     summary_language: Optional[Literal["source", "zh-Hans", "zh-Hant", "en", "ja", "ko", "custom"]] = None

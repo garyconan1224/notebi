@@ -112,4 +112,26 @@ describe('AnalysisDefaultsPage task defaults', () => {
     expect(getTaskDefaultsMock).toHaveBeenCalledTimes(2)
     expect(successMock).toHaveBeenCalledWith('任务默认值已保存并读回验证')
   })
+
+  it('S2: 截帧间隔可输入 300 和 600，无上限截断', async () => {
+    getTaskDefaultsMock
+      .mockResolvedValueOnce(SAVED)
+      .mockResolvedValueOnce({ ...SAVED, frame_interval_sec: 300 })
+    updateTaskDefaultsMock.mockResolvedValue({ ...SAVED, frame_interval_sec: 300 })
+    render(<AnalysisDefaultsPage />)
+    fireEvent.click(screen.getByRole('tab', { name: '任务默认勾选' }))
+    const interval = await screen.findByLabelText('默认截帧间隔')
+
+    fireEvent.change(interval, { target: { value: '300' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => {
+      expect(updateTaskDefaultsMock).toHaveBeenCalledWith({
+        ...SAVED,
+        frame_interval_sec: 300,
+      })
+    })
+    // 输入框没有 max 属性
+    expect(interval).not.toHaveAttribute('max')
+  })
 })
