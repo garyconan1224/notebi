@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Check, ChevronDown } from 'lucide-react'
+import { Check, ChevronDown, Search } from 'lucide-react'
 import ProvidersManagementPage from './ProvidersManagementPage'
-import ModelManagementPage from './ModelManagementPage'
 import { http } from '@/services/client'
 import { useConfigStore } from '@/store/configStore'
 import { cn } from '@/lib/utils'
@@ -12,21 +11,19 @@ import { Skeleton } from '@/components/ui/skeleton'
 /**
  * 模型与渠道设置页（合并视图）。
  *
- * 单页三区布局：
- * 1. 供应商管理
- * 2. 模型管理
- * 3. 默认模型（为每种用途指定默认）
+ * 单页两区布局（S3）：
+ * 1. 服务渠道（供应商管理）
+ * 2. 默认模型（为每种用途指定默认）
  */
 export default function ProvidersAndModelsPage() {
   const { t } = useTranslation('settings')
   const [expandProviders, setExpandProviders] = useState(true)
-  const [expandModels, setExpandModels] = useState(true)
   const [expandDefaults, setExpandDefaults] = useState(true)
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-8">
-        {/* 区块一：供应商 */}
+        {/* 区块一：服务渠道 */}
         <Section
           title={t('layout.menu.providers', '供应商管理')}
           subtitle="配置 AI 服务供应商的 API 密钥和连接"
@@ -36,17 +33,7 @@ export default function ProvidersAndModelsPage() {
           <ProvidersManagementPage />
         </Section>
 
-        {/* 区块二：模型 */}
-        <Section
-          title={t('layout.menu.models', '模型管理')}
-          subtitle="浏览和选择各供应商提供的模型"
-          expanded={expandModels}
-          onToggle={() => setExpandModels((v) => !v)}
-        >
-          <ModelManagementPage />
-        </Section>
-
-        {/* 区块三：默认模型 */}
+        {/* 区块二：默认模型 */}
         <Section
           title="默认模型"
           subtitle="为对话、视觉、嵌入、重排分别指定全局默认模型"
@@ -400,6 +387,7 @@ function ModelRolePicker({
   const [selectedProviderId, setSelectedProviderId] = useState(currentProviderId)
   const [selectedModelId, setSelectedModelId] = useState(currentModelId)
   const [open, setOpen] = useState(false)
+  const [modelSearch, setModelSearch] = useState('')
 
   // 当外部 defaults 变化时同步
   useEffect(() => {
@@ -409,6 +397,13 @@ function ModelRolePicker({
 
   const activeProvider = providers.find((p) => p.id === selectedProviderId)
   const models = activeProvider?.models ?? []
+  const filteredModels = modelSearch.trim()
+    ? models.filter((mId) => {
+        const mName = activeProvider?.modelNames?.[mId] ?? mId
+        const q = modelSearch.trim().toLowerCase()
+        return mId.toLowerCase().includes(q) || mName.toLowerCase().includes(q)
+      })
+    : models
 
   const handleConfirm = () => {
     if (selectedModelId && selectedProviderId) {
@@ -460,6 +455,7 @@ function ModelRolePicker({
                   onChange={(e) => {
                     setSelectedProviderId(e.target.value)
                     setSelectedModelId('')
+                    setModelSearch('')
                   }}
                   className="w-full rounded border border-border bg-background px-2 py-1 text-xs"
                 >
@@ -471,12 +467,24 @@ function ModelRolePicker({
                   ))}
                 </select>
               </div>
-              {/* 模型选择 */}
+              {/* 模型搜索 */}
+              {selectedProviderId && models.length > 0 && (
+                <div className="flex items-center gap-1.5 rounded border border-border px-2 py-1">
+                  <Search size={11} className="text-muted-foreground shrink-0" />
+                  <input
+                    placeholder="搜索模型..."
+                    value={modelSearch}
+                    onChange={(e) => setModelSearch(e.target.value)}
+                    className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+                  />
+                </div>
+              )}
+              {/* 模型列表 */}
               {selectedProviderId && models.length > 0 && (
                 <div>
                   <div className="mb-1 text-[10px] text-muted-foreground uppercase">模型</div>
                   <div className="space-y-1 max-h-32 overflow-y-auto">
-                    {models.map((mId) => {
+                    {filteredModels.map((mId) => {
                       const mName = activeProvider?.modelNames?.[mId] ?? mId
                       const isSel = mId === selectedModelId
                       return (
@@ -511,6 +519,9 @@ function ModelRolePicker({
               )}
               {selectedProviderId && models.length === 0 && (
                 <div className="text-xs text-muted-foreground py-1">该供应商暂无模型</div>
+              )}
+              {selectedProviderId && models.length > 0 && filteredModels.length === 0 && (
+                <div className="text-xs text-muted-foreground py-1">无匹配模型</div>
               )}
             </div>
             <div className="flex items-center justify-between border-t border-border px-3 py-2">

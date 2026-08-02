@@ -234,3 +234,36 @@ describe('ProvidersAndModelsPage 默认模型保存与读回（P1）', () => {
     expect(configMocks.setConfig).not.toHaveBeenCalled()
   })
 })
+
+describe('S3: 页面结构重组', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('页面不再出现独立“模型管理”区块', async () => {
+    mockGet(makeProviders())
+    render(<ProvidersAndModelsPage />)
+    await waitFor(() => {
+      expect(screen.getByText('默认模型')).toBeTruthy()
+    })
+    // “模型管理”标题不应存在
+    expect(screen.queryByText('模型管理')).toBeNull()
+  })
+
+  it('模型选择器支持搜索过滤', async () => {
+    mockGet(makeProviders({}))
+    render(<ProvidersAndModelsPage />)
+    fireEvent.click((await screen.findAllByText('设置'))[0])
+    const providerSelect = await screen.findByRole('combobox')
+    fireEvent.change(providerSelect, { target: { value: 'openai' } })
+
+    // 搜索框存在
+    const searchInput = await screen.findByPlaceholderText('搜索模型...')
+    expect(searchInput).toBeTruthy()
+
+    // 搜索 "vision" 只留下 gpt-4-vision
+    fireEvent.change(searchInput, { target: { value: 'vision' } })
+    expect(screen.getByText('gpt-4-vision')).toBeTruthy()
+    expect(screen.queryByText('gpt-3.5-turbo')).toBeNull()
+  })
+})
