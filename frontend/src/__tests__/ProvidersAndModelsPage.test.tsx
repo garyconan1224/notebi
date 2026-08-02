@@ -235,6 +235,184 @@ describe('ProvidersAndModelsPage 默认模型保存与读回（P1）', () => {
   })
 })
 
+// ── 第 2 批：能力感知的默认模型选择 ─────────────────────────
+// 后端接口实况：/providers/{id}/models 会把上游返回的
+// capabilities / supported_modalities / supported_inputs 透传为模型级
+// capabilities（token 空间不保证是 chat|vision|embedding|rerank）；
+// 失败时返回 { models: [], error: "..." }。前端只能据此三态判断，
+// 不允许凭模型名猜能力。
+
+/** 带模型级 capabilities 的模型列表：覆盖 supported / unsupported / unknown 三态 */
+const CAP_MODELS = {
+  data: {
+    models: [
+      // vision 用途显式支持（capabilities 含 vision）
+      { id: 'vision-pro', name: 'Vision Pro', capabilities: ['chat', 'vision'] },
+      // 显式声明了 chat 但未声明 vision → 对 vision 用途显式不支持
+      { id: 'plain-chat', name: 'Plain Chat', capabilities: ['chat'] },
+      // 上游未返回 capabilities → 能力未知
+      { id: 'mystery', name: 'Mystery' },
+    ],
+  },
+}
+
+const mockGetWithModels = (providersPayload: unknown, modelsPayload: unknown) => {
+  vi.mocked(http.get).mockImplementation(async (url: string) => {
+    if (url === '/providers') return { data: providersPayload }
+    if (url === '/providers/openai/models') return { data: modelsPayload }
+    if (url === '/providers/anthropic/models') return { data: modelsPayload }
+    return { data: {} }
+  })
+}
+
+/** 打开 vision 卡片（第 2 个）的选择器并选中 openai 供应商 */
+async function openVisionPicker() {
+  fireEvent.click((await screen.findAllByText('设置'))[1])
+  fireEvent.change(await screen.findByRole('combobox'), { target: { value: 'openai' } })
+}
+
+describe('默认模型选择器：能力感知（第 2 批）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('模型行显示用途能力标签；显式支持当前用途的模型标「推荐：已验证支持当前用途」', async () => {
+    mockGetWithModels(makeProviders({}), CAP_MODELS)
+    render(<ProvidersAndModelsPage />)
+    await openVisionPicker()
+
+    // 推荐理由（vision-pro 的 capabilities 含 vision）
+    expect(await screen.findByText('推荐：已验证支持当前用途')).toBeTruthy()
+    // 用途能力标签（透传的 capabilities 显示出来）
+    expect(screen.getByText('chat · vision')).toBeTruthy()
+  })
+
+  it('能力未知的模型显示「能力待确认」，仍在候选列表且可选', async () => {
+    mockGetWithModels(makeProviders({}), CAP_MODELS)
+    render(<ProvidersAndModelsPage />)
+    await openVisionPicker()
+
+    expect(await screen.findByText('mystery')).toBeTruthy()
+    expect(screen.getByText('能力待确认')).toBeTruthy()
+  })
+
+  it('显式不支持当前用途的模型标注说明，但不从候选排除', async () => {
+    mockGetWithModels(makeProviders({}), CAP_MODELS)
+    render(<ProvidersAndModelsPage />)
+    await openVisionPicker()
+
+    // plain-chat 声明了 chat 未声明 vision → 次级区域但仍在列表
+    expect(await screen.findByText('plain-chat')).toBeTruthy()
+    expect(screen.getByText('未声明当前用途')).toBeTruthy()
+  })
+
+  it('能力未知（次级）模型可以选中并保存读回成功', async () => {
+    mockGetWithModels(makeProviders({}), CAP_MODELS)
+    vi.mocked(http.put).mockResolvedValue({ data: {} })
+    render(<ProvidersAndModelsPage />)
+    await openVisionPicker()
+
+    fireEvent.click(await screen.findByText('mystery'))
+    // 保存后读回 vision=mystery
+    mockGetWithModels(makeProviders({ vision: 'mystery' }), CAP_MODELS)
+    fireEvent.click(screen.getByText('确认'))
+
+    await waitFor(() => {
+      expect(toastMocks.success).toHaveBeenCalled()
+    })
+    expect(http.put).toHaveBeenCalledWith('/providers/openai', {
+      default_models: { vision: 'mystery' },
+    })
+  })
+
+  it('capabilities token 全部不可识别时视为能力未知，不误报不支持', async () => {
+    // 上游返回的 token 不在 role 空间（如 supported_inputs: ["audio"]）
+    mockGetWithModels(makeProviders({}), {
+      data: { models: [{ id: 'odd-model', name: 'Odd', capabilities: ['audio'] }] },
+    })
+    render(<ProvidersAndModelsPage />)
+    await openVisionPicker()
+
+    expect(await screen.findByText('odd-model')).toBeTruthy()
+    expect(screen.getByText('能力待确认')).toBeTruthy()
+    expect(screen.queryByText('未声明当前用途')).toBeNull()
+  })
+
+  it('提供商搜索过滤供应商下拉项', async () => {
+    const twoProviders = {
+      data: [
+        { id: 'openai', name: 'OpenAI', kind: 'openai', enabled: true, capabilities: ['chat'], default_models: {} },
+        { id: 'anthropic', name: 'Anthropic', kind: 'anthropic', enabled: true, capabilities: ['chat'], default_models: {} },
+      ],
+      default_provider_for_chat: '',
+      default_provider_for_vision: '',
+    }
+    mockGetWithModels(twoProviders, MOCK_MODELS)
+    render(<ProvidersAndModelsPage />)
+    fireEvent.click((await screen.findAllByText('设置'))[0])
+
+    const providerSearch = await screen.findByPlaceholderText('搜索供应商...')
+    fireEvent.change(providerSearch, { target: { value: 'anth' } })
+
+    const options = screen.getAllByRole('option')
+    const texts = options.map((o) => o.textContent)
+    expect(texts.join('|')).toContain('Anthropic (anthropic)')
+    expect(texts.join('|')).not.toContain('OpenAI')
+  })
+
+  it('用途筛选「支持当前用途」只显示推荐区模型', async () => {
+    mockGetWithModels(makeProviders({}), CAP_MODELS)
+    render(<ProvidersAndModelsPage />)
+    await openVisionPicker()
+
+    fireEvent.click(await screen.findByText('支持当前用途'))
+
+    expect(screen.getByText('vision-pro')).toBeTruthy()
+    expect(screen.queryByText('mystery')).toBeNull()
+    expect(screen.queryByText('plain-chat')).toBeNull()
+  })
+
+  it('模型列表上游报错时显示可读错误态，不与「暂无模型」混淆', async () => {
+    // 后端在上游失败时返回扁平的 { models: [], error: "..." }（不抛 500）
+    mockGetWithModels(makeProviders({}), { models: [], error: 'upstream timeout' })
+    render(<ProvidersAndModelsPage />)
+    fireEvent.click((await screen.findAllByText('设置'))[0])
+    fireEvent.change(await screen.findByRole('combobox'), { target: { value: 'openai' } })
+
+    expect(await screen.findByText(/模型加载失败/)).toBeTruthy()
+    expect(screen.getByText(/upstream timeout/)).toBeTruthy()
+    expect(screen.queryByText('该供应商暂无模型')).toBeNull()
+  })
+
+  it('Escape 关闭模型选择器并把焦点还给触发按钮', async () => {
+    mockGet(makeProviders({}))
+    render(<ProvidersAndModelsPage />)
+    const triggers = await screen.findAllByText('设置')
+    fireEvent.click(triggers[0])
+
+    expect(await screen.findByText('选择默认对话模型')).toBeTruthy()
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    await waitFor(() => {
+      expect(screen.queryByText('选择默认对话模型')).toBeNull()
+    })
+    expect(document.activeElement).toBe(triggers[0].closest('button'))
+  })
+
+  it('浮层外部 pointerdown 关闭模型选择器', async () => {
+    mockGet(makeProviders({}))
+    render(<ProvidersAndModelsPage />)
+    fireEvent.click((await screen.findAllByText('设置'))[0])
+
+    expect(await screen.findByText('选择默认对话模型')).toBeTruthy()
+    fireEvent.pointerDown(document.body)
+
+    await waitFor(() => {
+      expect(screen.queryByText('选择默认对话模型')).toBeNull()
+    })
+  })
+})
+
 describe('S3: 页面结构重组', () => {
   beforeEach(() => {
     vi.clearAllMocks()

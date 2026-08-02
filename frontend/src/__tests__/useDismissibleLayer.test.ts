@@ -75,6 +75,33 @@ describe('useDismissibleLayer', () => {
     cleanup()
   })
 
+  it('rerender 传入新 onClose 后，外部 pointerdown 调用的是最新回调（ref 稳定，不复用旧渲染的对象）', () => {
+    const onCloseA = vi.fn()
+    const onCloseB = vi.fn()
+    const containerRef = createRef<HTMLDivElement>()
+    const container = document.createElement('div')
+    document.body.append(container)
+    ;(containerRef as { current: HTMLDivElement | null }).current = container
+
+    const { rerender } = renderHook(
+      ({ onClose }: { onClose: () => void }) =>
+        useDismissibleLayer({ containerRef, open: true, onClose }),
+      { initialProps: { onClose: onCloseA } },
+    )
+
+    // open / containerRef 不变 → 监听 effect 不重挂；
+    // 此时 handler 持有的 ref 必须能读到最新的 onCloseB。
+    rerender({ onClose: onCloseB })
+
+    act(() => {
+      document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    })
+
+    expect(onCloseB).toHaveBeenCalledTimes(1)
+    expect(onCloseA).not.toHaveBeenCalled()
+    container.remove()
+  })
+
   it('routeKey 变化时关闭', () => {
     const containerRef = createRef<HTMLDivElement>()
     const onClose = vi.fn()

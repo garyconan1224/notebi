@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Check, ChevronDown, Search } from 'lucide-react'
 import ProvidersManagementPage from './ProvidersManagementPage'
 import { http } from '@/services/client'
 import { useConfigStore } from '@/store/configStore'
+import { useDismissibleLayer } from '@/hooks/useDismissibleLayer'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -94,6 +95,10 @@ interface ProviderOption {
   capabilities?: string[]
   models: string[]
   modelNames: Record<string, string>
+  /** 模型级显式能力 token（后端透传上游 capabilities，已小写归一）；无则视为能力未知 */
+  modelCaps: Record<string, string[]>
+  /** 模型列表拉取失败时的错误信息（后端返回 { models: [], error }），'' 表示无错误 */
+  modelsError: string
   defaultModels: Record<string, string>
 }
 
@@ -114,6 +119,8 @@ interface ModelChoice {
 interface ProviderModelOption {
   id: string
   name?: string
+  /** 后端透传上游 capabilities / supported_modalities / supported_inputs；token 空间不保证是 role 名 */
+  capabilities?: unknown[]
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -126,13 +133,21 @@ function providerListFromPayload(payload: unknown): ProviderApiOption[] {
   return []
 }
 
-function modelListFromPayload(payload: unknown): ProviderModelOption[] {
-  if (!isRecord(payload)) return []
-  if (Array.isArray(payload.models)) return payload.models as ProviderModelOption[]
+interface ParsedModelList {
+  models: ProviderModelOption[]
+  error: string
+}
+
+function modelListFromPayload(payload: unknown): ParsedModelList {
+  // 后端在上游失败时返回 { models: [], error: "..." } 而不是抛 500，
+  // 这里把 error 原样带出，供界面显示可读错误态，避免与「暂无模型」混淆。
+  const error = isRecord(payload) && typeof payload.error === 'string' ? payload.error : ''
+  if (!isRecord(payload)) return { models: [], error }
+  if (Array.isArray(payload.models)) return { models: payload.models as ProviderModelOption[], error }
   if (isRecord(payload.data) && Array.isArray(payload.data.models)) {
-    return payload.data.models as ProviderModelOption[]
+    return { models: payload.data.models as ProviderModelOption[], error }
   }
-  return []
+  return { models: [], error }
 }
 
 function DefaultModelsSection() {
@@ -154,12 +169,17 @@ function DefaultModelsSection() {
     for (const p of list) {
       const models: string[] = []
       const modelNames: Record<string, string> = {}
+      const modelCaps: Record<string, string[]> = {}
+      let modelsError = ''
       try {
         const mRes = await http.get(`/providers/${p.id}/models`)
-        const mList = modelListFromPayload(mRes.data)
-        for (const m of mList) {
+        const parsed = modelListFromPayload(mRes.data)
+        modelsError = parsed.error
+        for (const m of parsed.models) {
           models.push(m.id)
           modelNames[m.id] = m.name ?? m.id
+          const caps = normalizeCaps(m.capabilities)
+          if (caps.length > 0) modelCaps[m.id] = caps
         }
       } catch { /* 模型加载失败静默 */ }
       result.push({
@@ -170,6 +190,8 @@ function DefaultModelsSection() {
         capabilities: p.capabilities,
         models,
         modelNames,
+        modelCaps,
+        modelsError,
         defaultModels: p.default_models ?? {},
       })
     }
@@ -366,7 +388,71 @@ const ROLE_DESCRIPTIONS: Record<string, string> = {
   rerank: '用于知识库检索结果的精排',
 }
 
+// ── 能力感知（第 2 批）────────────────────────────────────
+// 只用后端显式返回的 capabilities 判断用途支持度：
+// - 模型级 capabilities 由后端透传上游（token 空间不保证是 role 名）；
+// - 不允许凭模型名猜能力；token 不可识别时保守判为「未知」。
+
+type RoleSupport = 'supported' | 'unsupported' | 'unknown'
+
+/** role 到其等价能力 token 的映射（保守：不纳入 text/image 这类歧义 token，
+ * 例如 embedding 模型的上游 supported_inputs 也常是 ["text"]，误映射会把用途判错） */
+const ROLE_CAP_ALIASES: Record<string, string[]> = {
+  chat: ['chat'],
+  vision: ['vision'],
+  embedding: ['embedding', 'embeddings'],
+  rerank: ['rerank', 'reranker'],
+}
+
+const KNOWN_CAP_TOKENS = new Set(Object.values(ROLE_CAP_ALIASES).flat())
+
+function normalizeCaps(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean)
+}
+
+/**
+ * 依据模型级显式能力判断对当前用途的支持度（三态）：
+ * - 无 capabilities → unknown（能力待确认）
+ * - 含当前 role 等价 token → supported
+ * - 含可识别 role token 但不含当前 role → unsupported（显式不支持）
+ * - token 全部不可识别 → unknown（保守，不误报不支持）
+ */
+function modelRoleSupport(caps: string[] | undefined, role: string): RoleSupport {
+  if (!caps || caps.length === 0) return 'unknown'
+  const wanted = new Set(ROLE_CAP_ALIASES[role] ?? [role])
+  if (caps.some((c) => wanted.has(c))) return 'supported'
+  if (caps.some((c) => KNOWN_CAP_TOKENS.has(c))) return 'unsupported'
+  return 'unknown'
+}
+
+function SupportBadge({ support }: { support: RoleSupport }) {
+  if (support === 'supported') {
+    return (
+      <span className="rounded-sm bg-violet-100 px-1 py-px text-[10px] text-violet-700">
+        推荐：已验证支持当前用途
+      </span>
+    )
+  }
+  if (support === 'unsupported') {
+    return (
+      <span className="rounded-sm bg-amber-100 px-1 py-px text-[10px] text-amber-700">
+        未声明当前用途
+      </span>
+    )
+  }
+  return (
+    <span className="rounded-sm bg-muted px-1 py-px text-[10px] text-muted-foreground">
+      能力待确认
+    </span>
+  )
+}
+
 function ModelRolePicker({
+  role,
   label,
   description,
   currentProviderId,
@@ -388,6 +474,19 @@ function ModelRolePicker({
   const [selectedModelId, setSelectedModelId] = useState(currentModelId)
   const [open, setOpen] = useState(false)
   const [modelSearch, setModelSearch] = useState('')
+  const [providerSearch, setProviderSearch] = useState('')
+  const [supportFilter, setSupportFilter] = useState<'all' | 'supported' | 'unverified'>('all')
+
+  const popoverRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+
+  // 统一弹层关闭规则：点外部 / Escape 关闭，Escape 后焦点返回触发按钮。
+  useDismissibleLayer({
+    containerRef: popoverRef,
+    triggerRef,
+    open,
+    onClose: () => setOpen(false),
+  })
 
   // 当外部 defaults 变化时同步
   useEffect(() => {
@@ -404,6 +503,36 @@ function ModelRolePicker({
         return mId.toLowerCase().includes(q) || mName.toLowerCase().includes(q)
       })
     : models
+
+  // 按当前用途的显式能力分区：推荐区（supported）与次级区（unknown / unsupported）。
+  // 显式不支持的模型不做推荐，但保留在候选中——用户在此选择后后端才会
+  // 把该用途持久化为 capability，提前排除会让新用途永远无从配置。
+  const entries = filteredModels.map((mId) => ({
+    mId,
+    support: modelRoleSupport(activeProvider?.modelCaps[mId], role),
+  }))
+  const recommended = entries.filter((e) => e.support === 'supported')
+  const others = entries.filter((e) => e.support !== 'supported')
+  const visibleRecommended = supportFilter === 'unverified' ? [] : recommended
+  const visibleOthers = supportFilter === 'supported' ? [] : others
+  const nothingVisible = visibleRecommended.length === 0 && visibleOthers.length === 0
+
+  // 供应商搜索：过滤下拉项；已选中的供应商始终保留，避免被搜索词滤掉。
+  const providerQuery = providerSearch.trim().toLowerCase()
+  const providerOptions = (() => {
+    if (!providerQuery) return providers
+    const filtered = providers.filter(
+      (p) =>
+        p.id.toLowerCase().includes(providerQuery) ||
+        p.name.toLowerCase().includes(providerQuery) ||
+        p.kind.toLowerCase().includes(providerQuery),
+    )
+    if (selectedProviderId && !filtered.some((p) => p.id === selectedProviderId)) {
+      const selected = providers.find((p) => p.id === selectedProviderId)
+      return selected ? [...filtered, selected] : filtered
+    }
+    return filtered
+  })()
 
   const handleConfirm = () => {
     if (selectedModelId && selectedProviderId) {
@@ -423,6 +552,46 @@ function ModelRolePicker({
     ? `${currentProviderName} / ${currentModelId}`
     : '（未设置，使用系统默认）'
 
+  const renderModelRow = (mId: string, support: RoleSupport) => {
+    const mName = activeProvider?.modelNames?.[mId] ?? mId
+    const caps = activeProvider?.modelCaps[mId]
+    const isSel = mId === selectedModelId
+    return (
+      <button
+        key={mId}
+        type="button"
+        onClick={() => setSelectedModelId(mId)}
+        className={cn(
+          'flex w-full items-start gap-2 rounded px-2 py-1 text-left text-xs',
+          isSel ? 'bg-violet-50 text-violet-700' : 'hover:bg-muted/60',
+        )}
+      >
+        <span
+          className={cn(
+            'mt-0.5 flex size-3.5 shrink-0 items-center justify-center rounded-sm border',
+            isSel ? 'border-violet-400 bg-violet-200' : 'border-border',
+          )}
+        >
+          {isSel ? <Check size={8} /> : null}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1">
+            <span className="truncate font-mono text-[11px]">{mId}</span>
+            {mName !== mId && (
+              <span className="truncate text-[10px] text-muted-foreground">{mName}</span>
+            )}
+          </span>
+          <span className="mt-0.5 flex flex-wrap items-center gap-1">
+            <SupportBadge support={support} />
+            {caps && caps.length > 0 && (
+              <span className="text-[10px] text-muted-foreground">{caps.join(' · ')}</span>
+            )}
+          </span>
+        </span>
+      </button>
+    )
+  }
+
   return (
     <div className="flex items-center justify-between rounded-md border border-border bg-background px-4 py-3">
       <div className="min-w-0 flex-1">
@@ -434,19 +603,37 @@ function ModelRolePicker({
       </div>
       <div className="relative ml-4 shrink-0">
         <button
+          ref={triggerRef}
           type="button"
           onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-haspopup="dialog"
           className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-3 py-1.5 text-xs text-foreground hover:bg-muted/60"
         >
           {currentModelId ? '更换' : '设置'}
           <ChevronDown size={12} />
         </button>
         {open && (
-          <div className="absolute right-0 top-full z-50 mt-1 w-72 rounded-md border border-border bg-card shadow-lg">
+          <div
+            ref={popoverRef}
+            role="dialog"
+            aria-label={`选择默认${label}`}
+            className="absolute right-0 top-full z-50 mt-1 w-72 rounded-md border border-border bg-card shadow-lg"
+          >
             <div className="border-b border-border px-3 py-2">
               <span className="text-xs font-medium text-muted-foreground">选择默认{label}</span>
             </div>
-            <div className="max-h-64 overflow-y-auto p-2 space-y-2">
+            <div className="max-h-72 overflow-y-auto p-2 space-y-2">
+              {/* 供应商搜索 */}
+              <div className="flex items-center gap-1.5 rounded border border-border px-2 py-1">
+                <Search size={11} className="text-muted-foreground shrink-0" />
+                <input
+                  placeholder="搜索供应商..."
+                  value={providerSearch}
+                  onChange={(e) => setProviderSearch(e.target.value)}
+                  className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+                />
+              </div>
               {/* 供应商选择 */}
               <div>
                 <div className="mb-1 text-[10px] text-muted-foreground uppercase">供应商</div>
@@ -456,16 +643,20 @@ function ModelRolePicker({
                     setSelectedProviderId(e.target.value)
                     setSelectedModelId('')
                     setModelSearch('')
+                    setSupportFilter('all')
                   }}
                   className="w-full rounded border border-border bg-background px-2 py-1 text-xs"
                 >
                   <option value="">-- 选择供应商 --</option>
-                  {providers.map((p) => (
+                  {providerOptions.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name} ({p.kind})
                     </option>
                   ))}
                 </select>
+                {providerQuery && providerOptions.length === 0 && (
+                  <div className="mt-1 text-xs text-muted-foreground">无匹配供应商</div>
+                )}
               </div>
               {/* 模型搜索 */}
               {selectedProviderId && models.length > 0 && (
@@ -479,48 +670,59 @@ function ModelRolePicker({
                   />
                 </div>
               )}
-              {/* 模型列表 */}
+              {/* 用途能力筛选 */}
               {selectedProviderId && models.length > 0 && (
+                <div className="flex flex-wrap gap-1" role="group" aria-label="用途能力筛选">
+                  {(
+                    [
+                      ['all', '全部'],
+                      ['supported', '支持当前用途'],
+                      ['unverified', '未验证'],
+                    ] as const
+                  ).map(([value, text]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setSupportFilter(value)}
+                      aria-pressed={supportFilter === value}
+                      className={cn(
+                        'rounded border px-1.5 py-0.5 text-[10px]',
+                        supportFilter === value
+                          ? 'border-violet-400 bg-violet-50 text-violet-700'
+                          : 'border-border text-muted-foreground hover:bg-muted/60',
+                      )}
+                    >
+                      {text}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* 模型列表：推荐区 + 次级区 */}
+              {selectedProviderId && models.length > 0 && visibleRecommended.length > 0 && (
                 <div>
-                  <div className="mb-1 text-[10px] text-muted-foreground uppercase">模型</div>
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
-                    {filteredModels.map((mId) => {
-                      const mName = activeProvider?.modelNames?.[mId] ?? mId
-                      const isSel = mId === selectedModelId
-                      return (
-                        <button
-                          key={mId}
-                          type="button"
-                          onClick={() => setSelectedModelId(mId)}
-                          className={cn(
-                            'flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs',
-                            isSel ? 'bg-violet-50 text-violet-700' : 'hover:bg-muted/60',
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              'flex size-3.5 shrink-0 items-center justify-center rounded-sm border',
-                              isSel
-                                ? 'border-violet-400 bg-violet-200'
-                                : 'border-border',
-                            )}
-                          >
-                            {isSel ? <Check size={8} /> : null}
-                          </span>
-                          <span className="truncate font-mono text-[11px]">{mId}</span>
-                          {mName !== mId && (
-                            <span className="truncate text-[10px] text-muted-foreground">{mName}</span>
-                          )}
-                        </button>
-                      )
-                    })}
+                  <div className="mb-1 text-[10px] text-muted-foreground uppercase">推荐</div>
+                  <div className="space-y-1">
+                    {visibleRecommended.map((e) => renderModelRow(e.mId, e.support))}
                   </div>
                 </div>
               )}
-              {selectedProviderId && models.length === 0 && (
+              {selectedProviderId && models.length > 0 && visibleOthers.length > 0 && (
+                <div>
+                  <div className="mb-1 text-[10px] text-muted-foreground uppercase">其他模型</div>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {visibleOthers.map((e) => renderModelRow(e.mId, e.support))}
+                  </div>
+                </div>
+              )}
+              {selectedProviderId && models.length === 0 && activeProvider?.modelsError && (
+                <div className="text-xs text-destructive py-1">
+                  模型加载失败：{activeProvider.modelsError}
+                </div>
+              )}
+              {selectedProviderId && models.length === 0 && !activeProvider?.modelsError && (
                 <div className="text-xs text-muted-foreground py-1">该供应商暂无模型</div>
               )}
-              {selectedProviderId && models.length > 0 && filteredModels.length === 0 && (
+              {selectedProviderId && models.length > 0 && nothingVisible && (
                 <div className="text-xs text-muted-foreground py-1">无匹配模型</div>
               )}
             </div>

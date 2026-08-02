@@ -40,9 +40,12 @@ export function useDismissibleLayer({
   routeKey,
   ignoreRefs,
 }: DismissibleLayerOptions): void {
-  // 用 ref 持有最新 onClose，避免父组件每次渲染重建回调导致监听器反复重挂。
-  const onCloseRef = { current: onClose }
-  onCloseRef.current = onClose
+  // 用稳定 ref 持有最新 onClose：普通对象 { current } 每次渲染都会新建，
+  // 被监听 effect 捕获的永远是首次渲染那一份，rerender 后回调会过期。
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  })
 
   // 外部 pointerdown 关闭
   useEffect(() => {
