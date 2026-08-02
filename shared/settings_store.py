@@ -45,6 +45,10 @@ def migrate_transcriber_type(raw: Any) -> TranscriberType:
     candidate = str(raw or "auto").strip()
     if candidate in _ALLOWED_TRANSCRIBER_TYPES:
         return candidate  # type: ignore[return-value]
+    if candidate in _RETIRED_TRANSCRIBER_TYPES:
+        # 退役引擎（bcut / kuaishou）显式迁移到 auto，不恢复其 UI 或云转录路径
+        return "auto"
+    # 其余未知值统一回退 auto
     return "auto"
 
 

@@ -67,6 +67,7 @@ const conversation = {
   conversation_id: 'c1',
   title: '新会话',
   default_scope: [],
+  default_item_refs: [],
   messages: [],
   created_at: '2026-07-25T00:00:00Z',
   updated_at: '2026-07-25T00:00:00Z',

@@ -21,6 +21,15 @@ function makeModel(overrides: Record<string, unknown>) {
   }
 }
 
+/** 取包含指定文案的模型卡片，收窄为非空 HTMLElement 供 within() 使用 */
+function cardOf(text: string): HTMLElement {
+  const card = screen.getByText(text).closest('article')
+  if (!(card instanceof HTMLElement)) {
+    throw new Error(`找不到 "${text}" 所在的 <article> 卡片`)
+  }
+  return card
+}
+
 const models = [
   {
     model_id: 'fast-whisper:base', family: 'fast-whisper', title: 'Faster Whisper · base',
@@ -115,15 +124,15 @@ describe('LocalModelsPanel', () => {
     render(<LocalModelsPanel />)
     await screen.findByText('未下载模型')
 
-    expect(within(screen.getByText('未下载模型').closest('article')).getByRole('button', { name: '下载' })).toBeEnabled()
+    expect(within(cardOf('未下载模型')).getByRole('button', { name: '下载' })).toBeEnabled()
 
-    const downloadingCard = screen.getByText('下载中模型').closest('article')
+    const downloadingCard = cardOf('下载中模型')
     expect(within(downloadingCard).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '42')
     expect(within(downloadingCard).getByRole('button', { name: '下载中…' })).toBeDisabled()
 
-    expect(within(screen.getByText('已就绪模型').closest('article')).getByRole('button', { name: '切换使用' })).toBeEnabled()
+    expect(within(cardOf('已就绪模型')).getByRole('button', { name: '切换使用' })).toBeEnabled()
 
-    const activeCard = screen.getByText('使用中模型').closest('article')
+    const activeCard = cardOf('使用中模型')
     expect(within(activeCard).getByRole('button', { name: '使用中' })).toBeDisabled()
   })
 

@@ -37,7 +37,9 @@ it('renders child settings save and reset actions in the shared shell', () => {
   )
 
   const saveBar = screen.getByRole('button', { name: '保存' }).closest('.settings-shared-savebar')
-  expect(saveBar).not.toBeNull()
+  if (!(saveBar instanceof HTMLElement)) {
+    throw new Error('找不到保存条 .settings-shared-savebar')
+  }
   expect(screen.getByRole('main')).not.toContainElement(saveBar)
 
   fireEvent.click(screen.getByRole('button', { name: '保存' }))

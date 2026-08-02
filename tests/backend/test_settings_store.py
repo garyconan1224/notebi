@@ -251,6 +251,8 @@ def test_frame_interval_beyond_32bit_round_trips_through_store(
 
 def test_migrate_transcriber_type_is_the_single_migration_gate() -> None:
     """退役引擎与未知值统一经 migrate_transcriber_type 迁移到 auto；白名单原样保留。"""
+    import inspect
+
     from shared.settings_store import (
         _ALLOWED_TRANSCRIBER_TYPES,
         _RETIRED_TRANSCRIBER_TYPES,
@@ -265,6 +267,9 @@ def test_migrate_transcriber_type_is_the_single_migration_gate() -> None:
     assert migrate_transcriber_type(None) == "auto"
     for valid in _ALLOWED_TRANSCRIBER_TYPES:
         assert migrate_transcriber_type(valid) == valid
+    # 退役集合必须被迁移逻辑显式消费，而不只是出现在 docstring 里。
+    source = inspect.getsource(migrate_transcriber_type)
+    assert "_RETIRED_TRANSCRIBER_TYPES" in source.split('"""', 2)[-1]
 
 
 def test_retired_transcriber_configs_migrate_to_auto_on_load(
