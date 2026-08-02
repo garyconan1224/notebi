@@ -127,6 +127,7 @@ sed -n '1,80p' docs/AI_HANDOFF.md         # 当前执行入口
 - 实际代码与 plan.md 描述不符（字段名、行号漂移除外，这类按关键字定位）
 - 跨 5+ 文件改动
 - 涉及 schema / 加密 / API key / 鉴权
+- UI 任务缺少 Open Design 设计产物，或设计与代码事实矛盾（不猜 UI，先回报）
 
 ---
 

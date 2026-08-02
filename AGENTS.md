@@ -37,6 +37,7 @@ Read `docs/PRODUCT_DECISIONS.md` only when product boundaries matter. Historical
 - Find and report potential issues (bugs, type errors, missing tests)
 - Directly fix the same unresolved issue after two failed Qwen attempts, with narrow tests and no scope expansion
 - Compare multiple agent branches, point out differences, let the user decide which to adopt
+- Invoke Open Design to produce or review UI designs (pages, layouts, visuals, interaction flows), then hand the confirmed artifacts, constraints, and acceptance points to Qwen for implementation. Open Design is a design/review tool only — it never writes production code; do not invoke it when the task has no UI/design need
 
 ### Codex Must NOT Do（除非用户对当前任务明确授权）
 

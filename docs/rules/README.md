@@ -14,7 +14,7 @@
 | [`model-strategy.md`](model-strategy.md) | Codex 调查计划 / Claude Code + 千问执行 / Codex 审查与失败接管 | 判断任务由谁调查、执行和接管时 |
 | [`project-map.md`](project-map.md) | 项目架构（后端 router / 前端路由 / shared）+ 常用命令 + 端口 + CodeGraph MCP | 新人入门、改路由、找模块入口 |
 | [`mimo-onboarding.md`](mimo-onboarding.md) | **千问执行加速协议**（旧文件名保留）：启动 60s + 低 token 读取 + fallback + 红线 | 千问（Claude Code 默认执行者）每次新会话先读 |
-| [`agent-roles.md`](agent-roles.md) | **Codex / 千问协作**：Codex 计划、千问执行、Codex 审查、两次失败接管 | 切换工具、写提示词、清理会话和判断失败升级 |
+| [`agent-roles.md`](agent-roles.md) | **Codex / 千问协作**：Codex 计划、千问执行、Codex 审查、两次失败接管、UI 任务经 Open Design 设计交接 | 切换工具、写提示词、清理会话和判断失败升级 |
 
 ## AI 使用方法（重要）
 
