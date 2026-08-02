@@ -8,18 +8,44 @@ import type { TaskRecord } from '@/types/task'
  * 不修改任务状态，不清理服务端日志。
  */
 
-/** /admin/logs 单条脱敏日志（与后端 LogEntry 对齐）。 */
+/** /admin/logs 单条脱敏日志（与后端 LogEvent 对齐）。 */
 export interface AdminLogEntry {
   id: number
   timestamp: number
   level: string
   category: string
   message: string
+  task_id?: string
+  batch_id?: string
+  workspace_id?: string
+  stage?: string
+  progress?: number
+  duration_ms?: number
+  retry_count?: number
+  details?: Record<string, unknown>
+  // ── S6 结构化诊断字段（可选，旧日志可能缺失）──────────────
+  event_code?: string
+  operation?: string
+  component?: string
+  outcome?: string
+  summary?: string
+  probable_cause?: string
+  suggested_action?: string
+  error_code?: string
+  retry_max?: number
+  engine?: string
+  provider?: string
+  model?: string
+  device?: string
+  correlation_id?: string
+  technical_detail?: string
 }
 
 export interface AdminLogsResponse {
   entries: AdminLogEntry[]
   latest_id: number
+  oldest_id: number
+  has_more_older: boolean
 }
 
 /** 任务活动项：由任务日志或生命周期派生。 */

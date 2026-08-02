@@ -114,8 +114,13 @@ class RuntimeLogBuffer:
         self._lock = threading.Lock()
         self._next_id = 1
 
-    def append(self, level: str, category: str, message: str) -> LogEntry:
-        """写入一条日志（写入前脱敏），返回生成的条目。"""
+    def append(self, level: str, category: str, message: str, **_context: object) -> LogEntry:
+        """写入一条日志（写入前脱敏），返回生成的条目。
+
+        S6：``**_context`` 承接 RuntimeLogHandler 传入的日志上下文键；
+        内存环形缓冲只保留既有五元组（R6-A 冻结契约），结构化上下文
+        由持久存储 RuntimeLogStore 落地。
+        """
         sanitized = sanitize_message(message)
         with self._lock:
             entry = LogEntry(
@@ -162,9 +167,14 @@ class RuntimeLogBuffer:
 # logging.Handler
 # --------------------------------------------------------------------------- #
 class LogSink(Protocol):
-    """RuntimeLogHandler 可写入的最小接口。"""
+    """RuntimeLogHandler 可写入的最小接口。
 
-    def append(self, level: str, category: str, message: str) -> object: ...
+    S6：handler 会把 contextvars 日志上下文作为 kwargs 一并传入；
+    持久存储（RuntimeLogStore）用它补齐 task_id/batch_id 等字段，
+    内存环形缓冲忽略这些上下文键，保持既有五元组契约。
+    """
+
+    def append(self, level: str, category: str, message: str, **kwargs: object) -> object: ...
 
 
 class RuntimeLogHandler(logging.Handler):
@@ -180,7 +190,9 @@ class RuntimeLogHandler(logging.Handler):
         except Exception:  # noqa: BLE001
             message = str(record.msg)
         try:
-            self.buffer.append(record.levelname, record.name, message)
+            from backend.app.services.log_context import get_log_context
+
+            self.buffer.append(record.levelname, record.name, message, **get_log_context())
         except Exception:  # noqa: BLE001
             # 观测 handler 绝不允许把异常抛回业务日志链路
             self.handleError(record)

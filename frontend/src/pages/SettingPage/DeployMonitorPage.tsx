@@ -13,6 +13,12 @@ import http from '@/services/client'
 
 import './deploy-monitor.css'
 
+/**
+ * S6 — 诊断日志。
+ *
+ * 与后端 LogEvent 对齐：结构化字段均为可选，旧日志缺少这些字段时
+ * 用 message 作为摘要，技术细节收进每条事件的可展开详情。
+ */
 interface LogEntry {
   id: number
   timestamp: string
@@ -27,6 +33,22 @@ interface LogEntry {
   duration_ms?: number
   retry_count?: number
   details?: { task_type?: string; task_title?: string; source_type?: string }
+  // ── S6 结构化诊断字段（可选）──────────────────────────────
+  event_code?: string
+  operation?: string
+  component?: string
+  outcome?: string
+  summary?: string
+  probable_cause?: string
+  suggested_action?: string
+  error_code?: string
+  retry_max?: number
+  engine?: string
+  provider?: string
+  model?: string
+  device?: string
+  correlation_id?: string
+  technical_detail?: string
 }
 
 interface LogsResponse {
@@ -35,8 +57,6 @@ interface LogsResponse {
   oldest_id: number
   has_more_older: boolean
 }
-
-type ActivityView = 'progress' | 'issues'
 
 const STAGE_LABELS: Record<string, string> = {
   PENDING: '等待开始',
@@ -52,7 +72,6 @@ const STAGE_LABELS: Record<string, string> = {
 }
 
 const LOG_POLL_MS = 2000
-const LIFECYCLE_STAGES = new Set(['created', 'started', 'succeeded', 'failed', 'cancelled', 'application_started'])
 
 /** 合并初始页、增量轮询和向前翻页结果，避免并发响应重复插入同一日志。 */
 export function mergeLogEntries(...groups: LogEntry[][]): LogEntry[] {
@@ -111,12 +130,13 @@ function formatDuration(value?: number) {
 }
 
 function stageLabel(stage?: string) {
-  if (!stage) return '应用运行'
+  if (!stage) return ''
   return STAGE_LABELS[stage.toUpperCase()] || stage
 }
 
-function isIssue(log: LogEntry) {
-  return log.level === 'ERROR' || log.level === 'WARNING'
+/** 人能理解的摘要：优先结构化 summary，旧日志回退到 message。 */
+function summaryOf(log: LogEntry): string {
+  return log.summary || log.message
 }
 
 function matchesScope(
@@ -133,10 +153,16 @@ function matchesScope(
   if (filters.task && log.task_id !== filters.task) return false
   if (filters.batch && log.batch_id !== filters.batch) return false
   if (filters.workspace && log.workspace_id !== filters.workspace) return false
-  if (
-    filters.keyword
-    && !log.message.toLowerCase().includes(filters.keyword.toLowerCase())
-  ) return false
+  if (filters.keyword) {
+    const keyword = filters.keyword.toLowerCase()
+    const haystack = [
+      summaryOf(log),
+      log.message,
+      log.probable_cause,
+      log.suggested_action,
+    ].filter(Boolean).join(' ').toLowerCase()
+    if (!haystack.includes(keyword)) return false
+  }
   return true
 }
 
@@ -144,7 +170,6 @@ export default function DeployMonitorPage() {
   const health = useHealthPulse(5000)
   const initialParams = useRef(new URLSearchParams(window.location.search))
   const [logs, setLogs] = useState<LogEntry[]>([])
-  const [view, setView] = useState<ActivityView>('progress')
   const [paused, setPaused] = useState(false)
   const [levelFilter, setLevelFilter] = useState(
     initialParams.current.get('level') || 'all',
@@ -165,11 +190,6 @@ export default function DeployMonitorPage() {
   const [exporting, setExporting] = useState(false)
   const latestIdRef = useRef(0)
   const oldestIdRef = useRef(0)
-  const logContainerRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    // S6: 设备状态轮询已移除，保留框架以便后续诊断用
-  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -190,7 +210,7 @@ export default function DeployMonitorPage() {
           : response.data.oldest_id
         setHasMore(response.data.has_more_older)
       } catch {
-        // 监控页仍可显示系统状态；日志会在下一轮继续尝试。
+        // 日志会在下一轮继续尝试。
       }
     }
     void loadInitial()
@@ -217,7 +237,7 @@ export default function DeployMonitorPage() {
           )
         }
       } catch {
-        // 增量失败不清空已经展示的活动。
+        // 增量失败不清空已经展示的事件。
       }
     }
     const timer = window.setInterval(tick, LOG_POLL_MS)
@@ -245,16 +265,8 @@ export default function DeployMonitorPage() {
     () => logs.filter((log) => matchesScope(log, scopeFilters)),
     [logs, scopeFilters],
   )
-  const progressLogs = useMemo(
-    () => scopedLogs.filter((log) => log.stage && !LIFECYCLE_STAGES.has(String(log.stage).toLowerCase()) && !isIssue(log)).slice().reverse(),
-    [scopedLogs],
-  )
-  const issueLogs = useMemo(
-    () => scopedLogs.filter(isIssue).slice().reverse(),
-    [scopedLogs],
-  )
-  const visibleActivity = view === 'progress' ? progressLogs : issueLogs
-  const recentScopedLogs = useMemo(() => scopedLogs.slice().reverse(), [scopedLogs])
+  // 最新事件始终在最上方
+  const visibleEvents = useMemo(() => scopedLogs.slice().reverse(), [scopedLogs])
   const taskOptions = useMemo(() => scopeOptions(logs, 'task_id', taskFilter), [logs, taskFilter])
   const batchOptions = useMemo(() => scopeOptions(logs, 'batch_id', batchFilter), [logs, batchFilter])
   const workspaceOptions = useMemo(() => scopeOptions(logs, 'workspace_id', workspaceFilter), [logs, workspaceFilter])
@@ -283,7 +295,6 @@ export default function DeployMonitorPage() {
   const loadOlder = async () => {
     if (!hasMore || oldestIdRef.current === 0) return
     try {
-      const previousHeight = logContainerRef.current?.scrollHeight || 0
       const response = await http.get<LogsResponse>('/admin/logs', {
         params: { before_id: oldestIdRef.current, limit: 100 },
       })
@@ -295,12 +306,6 @@ export default function DeployMonitorPage() {
         response.data.oldest_id,
       )
       setHasMore(response.data.has_more_older)
-      window.requestAnimationFrame(() => {
-        if (logContainerRef.current) {
-          logContainerRef.current.scrollTop +=
-            logContainerRef.current.scrollHeight - previousHeight
-        }
-      })
     } catch {
       // 保持当前列表，用户可再次尝试。
     }
@@ -335,7 +340,7 @@ export default function DeployMonitorPage() {
         <PageHeader
           eyebrow="RUNTIME · LOCAL"
           title="诊断日志"
-          description="结构化诊断事件：处理阶段、失败原因、建议动作；原始技术日志收在高级诊断中。"
+          description="每条事件优先展示摘要、可能原因与建议操作；原始模块名与技术细节收进事件详情。"
           actions={(
             <div className="monitor-health">
               <StatusBadge status={health.online ? 'success' : 'offline'}>
@@ -367,32 +372,77 @@ export default function DeployMonitorPage() {
             </button>
           )}
         >
-          <div className="monitor-view-tabs">
+          <div className="monitor-diagnostic-controls">
+            <select
+              aria-label="日志级别"
+              className="input"
+              value={levelFilter}
+              onChange={(event) => setLevelFilter(event.target.value)}
+            >
+              <option value="all">全部级别</option>
+              <option value="DEBUG">DEBUG</option>
+              <option value="INFO">INFO</option>
+              <option value="WARNING">WARNING</option>
+              <option value="ERROR">ERROR</option>
+            </select>
+            <select
+              aria-label="任务 ID"
+              className="input"
+              value={taskFilter}
+              onChange={(event) => setTaskFilter(event.target.value)}
+            >
+              <option value="">全部任务</option>
+              {taskOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+            <select
+              aria-label="批次 ID"
+              className="input"
+              value={batchFilter}
+              onChange={(event) => setBatchFilter(event.target.value)}
+            >
+              <option value="">全部批次</option>
+              {batchOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+            <select
+              aria-label="合集 ID"
+              className="input"
+              value={workspaceFilter}
+              onChange={(event) => setWorkspaceFilter(event.target.value)}
+            >
+              <option value="">全部合集</option>
+              {workspaceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+            <input
+              aria-label="关键词"
+              className="input"
+              value={keywordFilter}
+              onChange={(event) => setKeywordFilter(event.target.value)}
+              placeholder="关键词"
+            />
             <button
               type="button"
-              aria-pressed={view === 'progress'}
-              onClick={() => setView('progress')}
+              className="btn"
+              disabled={exporting}
+              onClick={() => void exportDiagnostics()}
             >
-              处理进度 ({progressLogs.length})
-            </button>
-            <button
-              type="button"
-              aria-pressed={view === 'issues'}
-              onClick={() => setView('issues')}
-            >
-              需要处理 ({issueLogs.length})
+              <Download className="size-4" />
+              {exporting ? '导出中…' : '导出诊断'}
             </button>
           </div>
+          <p className="monitor-privacy">
+            导出内容已自动脱敏，不包含 API 密钥和 Cookie。
+          </p>
+          {hasMore && (
+            <button type="button" className="btn" onClick={() => void loadOlder()}>
+              加载更早
+            </button>
+          )}
 
           <div className="monitor-activity-list">
-            {visibleActivity.length === 0 && (
-              <div className="monitor-empty">
-                {view === 'progress'
-                  ? '当前没有可展示的处理进度'
-                  : '当前没有需要处理的问题'}
-              </div>
+            {visibleEvents.length === 0 && (
+              <div className="monitor-empty">当前过滤条件下没有诊断事件</div>
             )}
-            {visibleActivity.map((log) => (
+            {visibleEvents.map((log) => (
               <article
                 key={log.id}
                 className="monitor-activity-card"
@@ -402,35 +452,42 @@ export default function DeployMonitorPage() {
                 <div className="monitor-activity-main">
                   <div className="monitor-activity-heading">
                     <div>
-                      <strong>{stageLabel(log.stage)}</strong>
+                      <strong>{summaryOf(log)}</strong>
                       <span>{formatTime(log.timestamp)}</span>
                     </div>
-                    {typeof log.progress === 'number' && (
-                      <b>{Math.round(log.progress * 100)}%</b>
-                    )}
+                    <b data-level={log.level}>{log.level}</b>
                   </div>
-                  {isIssue(log) && <p>{log.message}</p>}
-                  {log.details?.task_title && (
-                    <p className="monitor-task-title">
-                      {log.details.task_title}
-                      {log.details.source_type ? ` · ${log.details.source_type}` : ''}
-                    </p>
+                  {log.probable_cause && (
+                    <p className="monitor-cause">可能原因：{log.probable_cause}</p>
+                  )}
+                  {log.suggested_action && (
+                    <p className="monitor-action">建议操作：{log.suggested_action}</p>
                   )}
                   <div className="monitor-activity-meta">
+                    {stageLabel(log.stage) && <span>环节 {stageLabel(log.stage)}</span>}
+                    {log.details?.task_title && <span>{log.details.task_title}</span>}
                     {log.task_id && <span>任务 {log.task_id}</span>}
                     {log.batch_id && <span>批次 {log.batch_id}</span>}
-                    {typeof log.duration_ms === 'number' && (
+                    {log.workspace_id && <span>合集 {log.workspace_id}</span>}
+                    {log.correlation_id && <span>关联 {log.correlation_id}</span>}
+                    {typeof log.progress === 'number' && (
+                      <span>进度 {Math.round(log.progress * 100)}%</span>
+                    )}
+                    {typeof log.duration_ms === 'number' && formatDuration(log.duration_ms) && (
                       <span>本环节 {formatDuration(log.duration_ms)}</span>
                     )}
-                    {Boolean(log.retry_count) && (
-                      <span>已重试 {log.retry_count} 次</span>
+                    {typeof log.retry_count === 'number' && log.retry_count > 0 && (
+                      <span>
+                        已重试 {log.retry_count}
+                        {typeof log.retry_max === 'number' ? `/${log.retry_max}` : ''} 次
+                      </span>
                     )}
                   </div>
                   {typeof log.progress === 'number' && (
                     <div
                       className="monitor-progress"
                       role="progressbar"
-                      aria-label={`${stageLabel(log.stage)}进度`}
+                      aria-label={`${summaryOf(log)}进度`}
                       aria-valuemin={0}
                       aria-valuemax={100}
                       aria-valuenow={Math.round(log.progress * 100)}
@@ -438,94 +495,33 @@ export default function DeployMonitorPage() {
                       <span style={{ width: `${Math.round(log.progress * 100)}%` }} />
                     </div>
                   )}
+                  <details className="monitor-event-detail">
+                    <summary>技术详情</summary>
+                    <div className="monitor-event-detail-body">
+                      <div>级别：{log.level}</div>
+                      <div>模块：{log.category}</div>
+                      {log.stage && <div>阶段：{log.stage}</div>}
+                      {log.operation && <div>操作：{log.operation}</div>}
+                      {log.component && <div>组件：{log.component}</div>}
+                      {log.event_code && <div>事件代码：{log.event_code}</div>}
+                      {log.error_code && <div>错误代码：{log.error_code}</div>}
+                      {log.outcome && <div>结果：{log.outcome}</div>}
+                      {log.engine && <div>引擎：{log.engine}</div>}
+                      {log.provider && <div>供应商：{log.provider}</div>}
+                      {log.model && <div>模型：{log.model}</div>}
+                      {log.device && <div>设备：{log.device}</div>}
+                      {log.summary && log.summary !== log.message && (
+                        <div>原始日志：{log.message}</div>
+                      )}
+                      {log.technical_detail && (
+                        <code className="monitor-technical">{log.technical_detail}</code>
+                      )}
+                    </div>
+                  </details>
                 </div>
               </article>
             ))}
           </div>
-
-          <details className="monitor-diagnostics">
-          <summary>高级诊断日志</summary>
-          <div className="monitor-diagnostics-body">
-            <p>面向排错的原始事件。日常使用只需查看上方任务活动。</p>
-            <div className="monitor-diagnostic-controls">
-              <select
-                aria-label="日志级别"
-                className="input"
-                value={levelFilter}
-                onChange={(event) => setLevelFilter(event.target.value)}
-              >
-                <option value="all">全部级别</option>
-                <option value="DEBUG">DEBUG</option>
-                <option value="INFO">INFO</option>
-                <option value="WARNING">WARNING</option>
-                <option value="ERROR">ERROR</option>
-              </select>
-              <select
-                aria-label="任务 ID"
-                className="input"
-                value={taskFilter}
-                onChange={(event) => setTaskFilter(event.target.value)}
-              >
-                <option value="">全部任务</option>
-                {taskOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-              <select
-                aria-label="批次 ID"
-                className="input"
-                value={batchFilter}
-                onChange={(event) => setBatchFilter(event.target.value)}
-              >
-                <option value="">全部批次</option>
-                {batchOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-              <select
-                aria-label="合集 ID"
-                className="input"
-                value={workspaceFilter}
-                onChange={(event) => setWorkspaceFilter(event.target.value)}
-              >
-                <option value="">全部合集</option>
-                {workspaceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-              <input
-                aria-label="关键词"
-                className="input"
-                value={keywordFilter}
-                onChange={(event) => setKeywordFilter(event.target.value)}
-                placeholder="关键词"
-              />
-              <button
-                type="button"
-                className="btn"
-                disabled={exporting}
-                onClick={() => void exportDiagnostics()}
-              >
-                <Download className="size-4" />
-                {exporting ? '导出中…' : '导出诊断'}
-              </button>
-            </div>
-            <p className="monitor-privacy">
-              导出内容已自动脱敏，不包含 API 密钥和 Cookie。
-            </p>
-            {hasMore && (
-              <button type="button" className="btn" onClick={() => void loadOlder()}>
-                加载更早
-              </button>
-            )}
-            <div ref={logContainerRef} className="monitor-raw-logs">
-              {scopedLogs.length === 0 ? (
-                <div className="monitor-empty">暂无日志</div>
-              ) : recentScopedLogs.map((log) => (
-                <div key={log.id}>
-                  <time>{formatTime(log.timestamp)}</time>
-                  <b data-level={log.level}>{log.level}</b>
-                  <code>{log.category}</code>
-                  <span>{log.message}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          </details>
         </Section>
       </div>
     </main>

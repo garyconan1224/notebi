@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional, Protocol
 
 from backend.app.models.tasks import TERMINAL_STATUS_VALUES, TaskRecord, TaskStatus
+from backend.app.services.log_context import log_context
 from backend.app.services.task_store import TaskStore
 
 TaskHandler = Callable[[TaskRecord, "TaskRunner"], Dict[str, Any]]
@@ -287,7 +288,15 @@ class TaskRunner:
         started_record = self.store.get(task_id) or record
         self._emit_task_event(started_record, "started", "任务已开始")
         try:
-            result = handler(record, self)
+            # S6：任务生命周期入口绑定日志上下文——handler 内的任意
+            # logger/store 写入自动带上 task/batch/workspace ID；
+            # 退出 with 后 token 复位，线程池复用不会泄漏给下个任务。
+            with log_context(
+                task_id=record.task_id,
+                batch_id=record.batch_id or None,
+                workspace_id=record.project_id or None,
+            ):
+                result = handler(record, self)
             current = self.store.get(task_id)
             if current and current.cancel_requested:
                 # 取消终态保留取消时刻的真实进度：不传 progress 即沿用 store 现值，

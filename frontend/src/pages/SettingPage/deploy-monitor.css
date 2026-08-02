@@ -53,28 +53,12 @@
   color: var(--err);
 }
 
-.monitor-view-tabs {
-  display: flex;
-  width: fit-content;
-  gap: 4px;
-  padding: 4px;
-  border-radius: var(--r);
-  background: var(--bgalt);
+.monitor-activity-heading b[data-level='ERROR'] {
+  color: var(--err);
 }
 
-.monitor-view-tabs button {
-  min-height: 36px;
-  padding: 0 12px;
-  border-radius: var(--rs);
-  color: var(--fg2);
-  font-size: var(--sm);
-  font-weight: 500;
-}
-
-.monitor-view-tabs button[aria-pressed='true'] {
-  background: var(--srf);
-  color: var(--fg);
-  box-shadow: var(--sh1);
+.monitor-activity-heading b[data-level='WARNING'] {
+  color: var(--wrn);
 }
 
 .monitor-activity-list {
@@ -134,8 +118,13 @@
 
 .monitor-activity-main > p {
   margin-top: 7px;
-  color: var(--err);
+  color: var(--fg2);
   font-size: var(--sm);
+}
+
+.monitor-activity-card[data-level='ERROR'] .monitor-cause,
+.monitor-activity-card[data-level='WARNING'] .monitor-cause {
+  color: var(--err);
 }
 
 .monitor-activity-meta {
@@ -170,26 +159,36 @@
   text-align: center;
 }
 
-.monitor-diagnostics {
-  border: 1px solid var(--bdr);
-  border-radius: var(--rl);
-  background: var(--srf);
-  box-shadow: var(--sh1);
+.monitor-event-detail {
+  margin-top: 10px;
 }
 
-.monitor-diagnostics > summary {
-  padding: 16px 20px;
+.monitor-event-detail > summary {
+  width: fit-content;
   cursor: pointer;
-  color: var(--fg2);
-  font-weight: 600;
-}
-
-.monitor-diagnostics-body {
-  display: grid;
-  gap: 12px;
-  padding: 0 20px 20px;
   color: var(--mut);
   font-size: var(--xs);
+}
+
+.monitor-event-detail-body {
+  display: grid;
+  gap: 3px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: var(--r);
+  background: var(--bgalt);
+  color: var(--mut);
+  font-size: var(--xs);
+}
+
+.monitor-technical {
+  padding: 6px 8px;
+  border-radius: var(--rs);
+  background: var(--srf);
+  color: var(--fg2);
+  font-family: var(--fm);
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .monitor-diagnostic-controls {
@@ -206,35 +205,6 @@
 
 .monitor-privacy {
   color: var(--fg2);
-}
-
-.monitor-raw-logs {
-  max-height: 360px;
-  overflow-y: auto;
-  border-radius: var(--r);
-  background: var(--bgalt);
-  font-family: var(--fm);
-}
-
-.monitor-raw-logs > div {
-  display: grid;
-  grid-template-columns: 70px 62px 100px 1fr;
-  gap: 8px;
-  padding: 7px 10px;
-  border-bottom: 1px solid var(--bdr);
-  color: var(--fg2);
-}
-
-.monitor-raw-logs b[data-level='ERROR'] {
-  color: var(--err);
-}
-
-.monitor-raw-logs b[data-level='WARNING'] {
-  color: var(--wrn);
-}
-
-.monitor-raw-logs code {
-  color: var(--mut);
 }
 
 @media (max-width: 820px) {
@@ -259,13 +229,5 @@
 
   .monitor-diagnostic-controls {
     grid-template-columns: 1fr;
-  }
-
-  .monitor-raw-logs > div {
-    grid-template-columns: 64px 54px 1fr;
-  }
-
-  .monitor-raw-logs span {
-    grid-column: 1 / -1;
   }
 }

@@ -20,9 +20,28 @@ from typing import Any, Optional
 
 from pydantic import BaseModel
 
+from backend.app.services.log_context import get_log_context
+
 # 默认配置
 DEFAULT_MAX_BYTES = 50 * 1024 * 1024  # 50 MB
 DEFAULT_RETENTION_DAYS = 7
+# S6：结构化文本字段，写入前与 message 一样做密钥/路径脱敏
+_STRUCTURED_TEXT_FIELDS = (
+    "event_code",
+    "operation",
+    "component",
+    "outcome",
+    "summary",
+    "probable_cause",
+    "suggested_action",
+    "error_code",
+    "engine",
+    "provider",
+    "model",
+    "device",
+    "correlation_id",
+    "technical_detail",
+)
 _ALLOWED_DETAIL_KEYS = frozenset(
     {
         "platform",
@@ -38,7 +57,11 @@ _ALLOWED_DETAIL_KEYS = frozenset(
 
 
 class LogEvent(BaseModel):
-    """统一日志事件。"""
+    """统一日志事件。
+
+    S6：新增结构化诊断字段均为可选，旧 JSONL（缺少这些键）按 None 读取，
+    保证历史日志兼容。所有导出/查询路径输出前均已脱敏。
+    """
 
     id: int
     timestamp: datetime
@@ -52,6 +75,22 @@ class LogEvent(BaseModel):
     progress: Optional[float] = None
     duration_ms: Optional[int] = None
     retry_count: Optional[int] = None
+    # ── S6 结构化诊断字段（可选）─────────────────────────────
+    event_code: Optional[str] = None
+    operation: Optional[str] = None
+    component: Optional[str] = None
+    outcome: Optional[str] = None
+    summary: Optional[str] = None
+    probable_cause: Optional[str] = None
+    suggested_action: Optional[str] = None
+    error_code: Optional[str] = None
+    retry_max: Optional[int] = None
+    engine: Optional[str] = None
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    device: Optional[str] = None
+    correlation_id: Optional[str] = None
+    technical_detail: Optional[str] = None
     details: Optional[dict[str, Any]] = None
 
 
@@ -159,8 +198,28 @@ class RuntimeLogStore:
         duration_ms: Optional[int] = None,
         retry_count: Optional[int] = None,
         details: Optional[dict[str, Any]] = None,
+        event_code: Optional[str] = None,
+        operation: Optional[str] = None,
+        component: Optional[str] = None,
+        outcome: Optional[str] = None,
+        summary: Optional[str] = None,
+        probable_cause: Optional[str] = None,
+        suggested_action: Optional[str] = None,
+        error_code: Optional[str] = None,
+        retry_max: Optional[int] = None,
+        engine: Optional[str] = None,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+        device: Optional[str] = None,
+        correlation_id: Optional[str] = None,
+        technical_detail: Optional[str] = None,
     ) -> LogEvent:
-        """写入一条日志事件。"""
+        """写入一条日志事件。
+
+        - 显式未传的 task_id / batch_id / workspace_id / correlation_id
+          会从当前 contextvars 日志上下文自动补齐（显式参数优先）；
+        - message 与所有结构化文本字段写入前统一脱敏。
+        """
         # 脱敏
         from backend.app.services.runtime_log_buffer import sanitize_message
 
@@ -173,6 +232,34 @@ class RuntimeLogStore:
                 if key in _ALLOWED_DETAIL_KEYS
                 and isinstance(value, (str, int, float, bool, type(None)))
             }
+
+        # S6：上下文自动补齐 ID（显式参数优先）
+        context = get_log_context()
+        task_id = task_id or context.get("task_id")
+        batch_id = batch_id or context.get("batch_id")
+        workspace_id = workspace_id or context.get("workspace_id")
+        correlation_id = correlation_id or context.get("correlation_id")
+
+        # S6：结构化文本字段脱敏后收集（None 保持 None）
+        structured: dict[str, Any] = {}
+        for key, value in (
+            ("event_code", event_code),
+            ("operation", operation),
+            ("component", component),
+            ("outcome", outcome),
+            ("summary", summary),
+            ("probable_cause", probable_cause),
+            ("suggested_action", suggested_action),
+            ("error_code", error_code),
+            ("engine", engine),
+            ("provider", provider),
+            ("model", model),
+            ("device", device),
+            ("correlation_id", correlation_id),
+            ("technical_detail", technical_detail),
+        ):
+            if value is not None:
+                structured[key] = sanitize_message(str(value))
 
         with self._lock:
             event = LogEvent(
@@ -188,7 +275,9 @@ class RuntimeLogStore:
                 progress=progress,
                 duration_ms=duration_ms,
                 retry_count=retry_count,
+                retry_max=retry_max,
                 details=sanitized_details,
+                **structured,
             )
             self._next_id += 1
 
