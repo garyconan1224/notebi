@@ -1,5 +1,8 @@
+import { useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Check, Layers, Plus, Search } from 'lucide-react'
 import type { WorkspaceRecord } from '@/types/workspace'
+import { useDismissibleLayer } from '@/hooks/useDismissibleLayer'
 
 export interface WorkspacePickerProps {
   workspaceIds: string[]
@@ -46,6 +49,19 @@ export function WorkspacePicker({
   onWorkspaceIdsChange,
   hasOnCreateWorkspace,
 }: WorkspacePickerProps) {
+  const location = useLocation()
+  const popoverRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+
+  // 临时浮层统一关闭规则（计划 §1.1）：外部点击 / Escape / 路由变化关闭并还焦点。
+  useDismissibleLayer({
+    containerRef: popoverRef,
+    triggerRef,
+    open: workspacePickerOpen,
+    onClose: () => onWorkspacePickerOpenChange(false),
+    routeKey: location.pathname,
+  })
+
   return (
     <div className="m-section">
       <div className="eyebrow" style={{ marginBottom: 10 }}>② 合集归属</div>
@@ -89,6 +105,7 @@ export function WorkspacePicker({
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
             {onWorkspaceIdsChange && (availableWorkspaces?.length ?? 0) > 0 && (
               <button
+                ref={triggerRef}
                 type="button"
                 className="pp-add"
                 onClick={() => onWorkspacePickerOpenChange(!workspacePickerOpen)}
@@ -112,7 +129,7 @@ export function WorkspacePicker({
         </div>
 
         {workspacePickerOpen && onWorkspaceIdsChange && (
-          <div className="pp-popover modal-workspace-popover">
+          <div ref={popoverRef} className="pp-popover modal-workspace-popover">
             <div className="pp-search">
               <Search size={14} />
               <input

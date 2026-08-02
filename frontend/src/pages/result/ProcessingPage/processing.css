@@ -172,6 +172,18 @@
   place-items: center;
 }
 
+/* 封面加载失败时的稳定占位：保留深色底 + 平台图标提示 */
+.vm-processing-scope .proc-hero .thumb.thumb--fallback::before {
+  content: '🖼';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  opacity: 0.4;
+  z-index: 1;
+}
+
 .vm-processing-scope .proc-hero .thumb .thumb-placeholder-icon {
   color: var(--ink-4);
 }

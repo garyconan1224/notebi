@@ -28,7 +28,11 @@ export function itemTypeLabel(type?: string): string {
 export function normalizePreviewImageUrl(url?: string | null): string {
   const value = (url ?? '').trim()
   if (!value) return ''
-  return value.startsWith('//') ? `https:${value}` : value
+  // 协议相对地址补 https
+  if (value.startsWith('//')) return `https:${value}`
+  // 只允许 http/https，其他协议（javascript:, data: 等）返回空
+  if (!/^https?:\/\//i.test(value)) return ''
+  return value
 }
 
 export function previewImageFallback(url: string): string {
@@ -435,7 +439,9 @@ export function MaterialSourcePanel({
                     img.src = fallback
                     return
                   }
-                  img.style.display = 'none'
+                  // 封面加载失败显示稳定占位，不留空白
+                  img.style.visibility = 'hidden'
+                  img.parentElement?.classList.add('sniff-thumb--fallback')
                 }}
               />
             ) : (

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
-import { AlertTriangle, ArrowLeft, ArrowRight, ChevronDown, ChevronUp, Copy, Music, RotateCcw, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ArrowRight, ChevronDown, ChevronUp, ExternalLink, Music, RotateCcw, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { useTaskStore } from '@/store/taskStore'
@@ -311,15 +311,8 @@ export default function ProcessingPage() {
     return () => window.clearTimeout(timer)
   }, [isSuccess, resultIntent, resultItemType, resultPath, navigate, taskId])
 
-  const handleCopySource = async () => {
-    const text = url || window.location.href
-    try {
-      await navigator.clipboard?.writeText(text)
-      toast.success(url ? '已复制来源链接' : '已复制当前页面链接')
-    } catch {
-      toast.error('复制失败，请手动复制')
-    }
-  }
+  // 源链接是否为外部 http/https（本地文件不显示）
+  const isExternalUrl = /^https?:\/\//i.test(url)
 
   // 处理↔结果原地融合：note 任务完成 → 同一任务页内直接渲染结果（不跳页）
   if (isSuccess && resultIntent === 'note' && resultItemType !== 'audio' && workspaceId && itemId) {
@@ -336,10 +329,17 @@ export default function ProcessingPage() {
             </button>
             <div className="proc-top-title">{title}</div>
             <div className="proc-top-actions">
-              <button className="proc-top-btn" onClick={handleCopySource}>
-                <Copy size={12} />
-                复制链接
-              </button>
+              {isExternalUrl && (
+                <a
+                  className="proc-top-btn"
+                  href={url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <ExternalLink size={12} />
+                  打开原链接
+                </a>
+              )}
               <button className="proc-top-btn primary" onClick={handleViewResult} disabled={!hasUsableResult}>
                 查看结果
                 <ArrowRight size={12} />
@@ -356,8 +356,10 @@ export default function ProcessingPage() {
                   alt={title}
                   referrerPolicy="no-referrer"
                   onError={(e) => {
-                    // 封面加载失败（B 站 CDN 防盗链等）静默隐藏，露出黑底
-                    (e.target as HTMLImageElement).style.display = 'none'
+                    // 封面加载失败（B 站 CDN 防盗链等）显示稳定占位，不留空白
+                    const img = e.target as HTMLImageElement
+                    img.style.visibility = 'hidden'
+                    img.parentElement?.classList.add('thumb--fallback')
                   }}
                 />
               ) : (

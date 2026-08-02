@@ -52,6 +52,7 @@ const {
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => navigateMock,
+  useLocation: () => ({ pathname: '/library' }),
 }))
 
 vi.mock('@/services/workspaces', () => ({
