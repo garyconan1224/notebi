@@ -166,6 +166,7 @@ class ExactSearchService:
         query: str,
         *,
         workspace_ids: Optional[list[str]] = None,
+        item_refs: Optional[list[dict[str, str]]] = None,
         item_types: Optional[list[str]] = None,
         tags: Optional[list[str]] = None,
         top_k: int = 30,
@@ -180,6 +181,7 @@ class ExactSearchService:
             rows = self.index.search(
                 query,
                 workspace_ids=workspace_ids,
+                item_refs=item_refs,
                 item_types=item_types,
                 tags=tags,
                 limit=top_k,

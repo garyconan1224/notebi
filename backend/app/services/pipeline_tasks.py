@@ -813,14 +813,6 @@ def _run_subtitle_summary(
         transcript_text = ""
         transcript_segments: List[Dict[str, Any]] = []
         try:
-            from backend.app.services.asr_fast_whisper import (
-                is_fast_whisper_available,
-                transcribe_file_with_fast_whisper,
-            )
-            if not is_fast_whisper_available():
-                log("⚠️  本地 ASR 引擎未就绪，跳过转写")
-                return {"summary_path": "subtitle", "transcript": [], "summary_error": "ASR 引擎未就绪"}
-
             runner.set_progress(task_id, 0.96, "Whisper 转写中...")
             tcfg = load_settings().transcriber
             log(f"📄 Whisper 转写 | model={tcfg.whisper_model_size} device={tcfg.device}")
@@ -829,17 +821,47 @@ def _run_subtitle_summary(
                 mapped = 0.96 + 0.02 * max(0.0, min(1.0, ratio))
                 runner.set_progress(task_id, mapped, msg)
 
-            whisper_result = transcribe_file_with_fast_whisper(
-                str(audio_path),
-                model_name=tcfg.whisper_model_size or "base",
-                device=tcfg.device or "cpu",
-                language=tcfg.language or "",
-                initial_prompt=tcfg.initial_prompt or "",
-                log_callback=log,
-                progress_callback=_on_progress,
-                return_segments=True,
-            )
-            transcript_text, transcript_segments, whisper_duration = whisper_result
+            if tcfg.type in {"auto", "mlx-whisper"}:
+                from backend.app.services.asr_router import run_local_asr_with_fallback
+
+                transcript_text, transcript_segments, whisper_duration, _engine = run_local_asr_with_fallback(
+                    str(audio_path),
+                    model_name=tcfg.whisper_model_size or "base",
+                    language=tcfg.language or "",
+                    initial_prompt=tcfg.initial_prompt or "",
+                    log_callback=log,
+                    progress_callback=_on_progress,
+                    preferred_engine="" if tcfg.type == "auto" else tcfg.type,
+                    device=tcfg.device,
+                    cpu_threads=tcfg.cpu_threads,
+                    beam_size=tcfg.beam_size,
+                    vad_filter=tcfg.vad_filter,
+                )
+            else:
+                from backend.app.services.asr_fast_whisper import (
+                    is_fast_whisper_available,
+                    transcribe_file_with_fast_whisper,
+                )
+                from backend.app.services.asr_hardware import resolve_asr_device
+
+                if not is_fast_whisper_available():
+                    log("⚠️  本地 ASR 引擎未就绪，跳过转写")
+                    return {"summary_path": "subtitle", "transcript": [], "summary_error": "ASR 引擎未就绪"}
+                effective_device, device_reason = resolve_asr_device(tcfg.device, "fast-whisper")
+                log(f"📄 {device_reason}")
+                transcript_text, transcript_segments, whisper_duration = transcribe_file_with_fast_whisper(
+                    str(audio_path),
+                    model_name=tcfg.whisper_model_size or "base",
+                    device=effective_device,
+                    language=tcfg.language or "",
+                    initial_prompt=tcfg.initial_prompt or "",
+                    log_callback=log,
+                    progress_callback=_on_progress,
+                    return_segments=True,
+                    cpu_threads=tcfg.cpu_threads,
+                    beam_size=tcfg.beam_size,
+                    vad_filter=tcfg.vad_filter,
+                )
             log(f"✅ 转写完成 | {len(transcript_text)} 字符 / {len(transcript_segments)} 段 / {whisper_duration:.1f}s")
         except Exception as e:
             log(f"⚠️  Whisper 转写失败: {e}\n{tb.format_exc()}")
@@ -3025,9 +3047,9 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
                 def _on_log(msg: str) -> None:
                     runner.append_log(task_id, f"[转录] {msg}")
 
-                # 7.4: 视频路径也遵从当前引擎；fast-whisper 保留原生参数和线程模型，
-                # MLX 切换时才走统一回退路由，避免重复初始化 CTranslate2。
-                if tcfg.type == "mlx-whisper":
+                # 自动策略与 MLX 都走同一回退路由；Windows CUDA / CPU 的 fast-whisper
+                # 仍使用原生参数，避免重复初始化 CTranslate2。
+                if tcfg.type in {"auto", "mlx-whisper"}:
                     from backend.app.services.asr_router import run_local_asr_with_fallback
                     _text, _segments, _dur, _engine = run_local_asr_with_fallback(
                         video_file,
@@ -3039,9 +3061,16 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
                         initial_prompt=tcfg.initial_prompt or "",
                         log_callback=_on_log,
                         progress_callback=_on_progress,
-                        preferred_engine=tcfg.type,
+                        preferred_engine="" if tcfg.type == "auto" else tcfg.type,
+                        device=tcfg.device,
+                        cpu_threads=tcfg.cpu_threads,
+                        beam_size=tcfg.beam_size,
+                        vad_filter=tcfg.vad_filter,
                     )
                 else:
+                    from backend.app.services.asr_hardware import resolve_asr_device
+                    _device, _device_reason = resolve_asr_device(tcfg.device, "fast-whisper")
+                    runner.append_log(task_id, f"[转录] {_device_reason}")
                     _text, _segments, _dur = transcribe_file_with_fast_whisper(
                         video_file,
                         model_name=tcfg.whisper_model_size or "base",

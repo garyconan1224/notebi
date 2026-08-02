@@ -9,7 +9,7 @@ import {
 } from '@/services/download'
 
 /** 音频转写引擎类型 */
-export type TranscriberType = 'fast-whisper' | 'bcut' | 'kuaishou' | 'groq' | 'mlx-whisper'
+export type TranscriberType = 'auto' | 'fast-whisper' | 'bcut' | 'kuaishou' | 'groq' | 'mlx-whisper'
 
 /** Whisper 模型大小 */
 export type WhisperModelSize = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3' | 'large-v3-turbo'
@@ -19,7 +19,7 @@ export type PerformanceTier = 'low' | 'medium' | 'high'
 
 /** 音频转写配置 */
 export interface TranscriberConfig {
-  /** 转写引擎类型（fast-whisper/bcut/kuaishou/groq） */
+  /** 转写引擎类型（auto 会按 Apple MLX / Windows CUDA / CPU 自动选择） */
   type: TranscriberType
   /** Whisper 模型大小（仅适用于 fast-whisper） */
   whisperModelSize: WhisperModelSize
@@ -64,18 +64,6 @@ export interface DownloadConfig extends Record<string, unknown> {
   socketTimeout: number
 }
 
-/** 截图配置 */
-export interface ScreenshotConfig {
-  /** 默认抽帧间隔（秒） */
-  defaultInterval: number
-  /** 网格拼图尺寸 [列数, 行数] */
-  gridSize: [number, number]
-  /** JPEG 质量（1-100） */
-  jpegQuality: number
-  /** 是否自动嵌入笔记中 */
-  embedInNote: boolean
-}
-
 /** 用户偏好配置（全部持久化到 localStorage） */
 export interface ConfigState {
   /** 是否插入截图 */
@@ -112,8 +100,6 @@ export interface ConfigState {
 
   /** 音频转写配置 */
   transcriber: TranscriberConfig
-  /** 截图配置 */
-  screenshotSettings: ScreenshotConfig
   /** 性能档位 */
   performanceTier: PerformanceTier
 
@@ -194,23 +180,15 @@ const DEFAULT_CONFIG: Omit<ConfigState, ConfigStateActionKey> = {
 
   // 音频转写配置（本地 Faster Whisper 为默认，medium 模型，中文）
   transcriber: {
-    type: 'fast-whisper',
+    type: 'auto',
     whisperModelSize: 'medium',
     language: 'zh',
-    device: 'cpu',
+    device: 'auto',
     groqApiKey: '',
     initialPrompt: '',
     cpuThreads: 0,
     beamSize: 5,
     vadFilter: true,
-  },
-
-  // 截图配置（默认 6 秒间隔，3x3 网格，85% 质量，嵌入笔记）
-  screenshotSettings: {
-    defaultInterval: 6,
-    gridSize: [3, 3],
-    jpegQuality: 85,
-    embedInNote: true,
   },
 
   // 性能档位（默认中配）

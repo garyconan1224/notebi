@@ -61,6 +61,7 @@ const TEMPLATE_ORDER = new Map(
 interface NewSummaryModalProps {
   creating: boolean
   defaultTemplate?: string
+  defaultSummaryMode?: 'general' | 'speaker_aware'
   allowSpeakerAware?: boolean
   speakerAwareAvailable?: boolean
   templateCategory?: TemplateCategory
@@ -80,6 +81,7 @@ interface NewSummaryModalProps {
 export function NewSummaryModal({
   creating,
   defaultTemplate,
+  defaultSummaryMode = 'general',
   allowSpeakerAware = false,
   speakerAwareAvailable = true,
   templateCategory,
@@ -87,7 +89,7 @@ export function NewSummaryModal({
   onClose,
 }: NewSummaryModalProps) {
   const [template, setTemplate] = useState(defaultTemplate || 'standard')
-  const [summaryMode, setSummaryMode] = useState<'general' | 'speaker_aware'>('general')
+  const [summaryMode, setSummaryMode] = useState<'general' | 'speaker_aware'>(defaultSummaryMode)
   const [background, setBackground] = useState('')
   const [searchWeb, setSearchWeb] = useState(false)
   const [summaryLanguage, setSummaryLanguage] = useState('zh-Hans')

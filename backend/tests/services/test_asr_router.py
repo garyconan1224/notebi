@@ -66,6 +66,41 @@ class TestSelectAsrEngine:
 
 
 class TestRunLocalAsrWithFallback:
+    def test_auto_device_is_resolved_before_fast_whisper_runs(self, monkeypatch, tmp_path):
+        audio = tmp_path / "test.mp3"
+        audio.write_bytes(b"fake-audio")
+        captured: dict[str, object] = {}
+
+        monkeypatch.setattr(
+            "backend.app.services.asr_mlx_whisper.is_mlx_whisper_available",
+            lambda: False,
+        )
+        monkeypatch.setattr(
+            "backend.app.services.asr_fast_whisper.is_fast_whisper_available",
+            lambda: True,
+        )
+        monkeypatch.setattr(
+            "backend.app.services.asr_hardware.resolve_asr_device",
+            lambda requested, engine: ("cuda", "检测到 NVIDIA CUDA"),
+        )
+
+        def fake_fast(*_args, **kwargs):
+            captured.update(kwargs)
+            return "cuda text", [], 1.0
+
+        monkeypatch.setattr(
+            "backend.app.services.asr_fast_whisper.transcribe_file_with_fast_whisper",
+            fake_fast,
+        )
+
+        text, _segs, _duration, engine = run_local_asr_with_fallback(
+            str(audio), device="auto", preferred_engine="fast-whisper",
+        )
+
+        assert text == "cuda text"
+        assert engine == "fast-whisper"
+        assert captured["device"] == "cuda"
+
     def test_uses_mlx_when_available(self, monkeypatch, tmp_path):
         """mlx 可用时直接用 mlx，不走 fast-whisper"""
         audio = tmp_path / "test.mp3"

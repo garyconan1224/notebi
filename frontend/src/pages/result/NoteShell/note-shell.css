@@ -1468,14 +1468,14 @@
 }
 
 .nibi-note-splitter {
-  flex: 0 0 10px;
+  flex: 0 0 14px;
   align-self: stretch;
   position: relative;
   z-index: 3;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 -5px;
+  margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
@@ -1591,6 +1591,166 @@
 .nibi-note-inline-toc .sm-toc-item[data-active] a,
 .nibi-note-inline-toc .sm-toc-item a:hover {
   color: var(--acc, #ff8a36);
+}
+
+/* ── 视频总结的章节画面证据：结论旁只保留少量连续画面 ── */
+
+.note-chapter-evidence {
+  margin: 14px 0 4px;
+  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.1));
+  border-radius: 10px;
+  overflow: hidden;
+  background: color-mix(in oklch, var(--srf, #fff) 92%, var(--bgalt, #f7f4ee));
+}
+
+.note-chapter-evidence-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
+}
+
+.note-chapter-evidence-head > div {
+  display: grid;
+  gap: 2px;
+}
+
+.note-chapter-evidence-head strong {
+  color: var(--fg, #191410);
+  font-size: 12px;
+}
+
+.note-chapter-evidence-head span,
+.note-chapter-evidence-head small {
+  color: var(--mut, #7c7464);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.note-chapter-evidence-head small {
+  font-family: var(--fm, monospace);
+}
+
+.note-chapter-evidence-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.note-chapter-evidence-actions button {
+  padding: 3px 6px;
+  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.12));
+  border-radius: 5px;
+  background: transparent;
+  color: var(--acc, #c65b1f);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.note-chapter-evidence-actions button:disabled { cursor: wait; opacity: .65; }
+
+.note-chapter-evidence-list {
+  display: grid;
+}
+
+.note-chapter-evidence-card {
+  display: grid;
+  grid-template-columns: minmax(138px, 0.8fr) minmax(0, 1.2fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-top: 1px solid var(--bdr, rgba(25, 20, 16, 0.07));
+}
+
+.note-chapter-evidence-card:first-child { border-top: 0; }
+
+.note-chapter-evidence-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.note-chapter-evidence-copy time {
+  color: var(--acc, #ff8a36);
+  font-family: var(--fm, monospace);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.note-chapter-evidence-copy strong {
+  overflow: hidden;
+  color: var(--fg, #191410);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-chapter-evidence-copy p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--fg2, #4b463d);
+  font-size: 11px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.note-chapter-evidence-frames {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(70px, 1fr);
+  gap: 5px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.note-chapter-evidence-frames button {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--bgalt, #f7f4ee);
+  cursor: pointer;
+}
+
+.note-chapter-evidence-frames button:hover,
+.note-chapter-evidence-frames button:focus-visible {
+  border-color: var(--acc, #ff8a36);
+  outline: none;
+}
+
+.note-chapter-evidence-frames img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.note-chapter-evidence-frames span {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: var(--ov-scrim, rgba(0, 0, 0, 0.62));
+  color: var(--ov-ink, #fff);
+  font-family: var(--fm, monospace);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+@container note-right (max-width: 480px) {
+  .note-chapter-evidence-card { grid-template-columns: 1fr; }
+  .note-chapter-evidence-frames { grid-auto-columns: minmax(86px, 1fr); }
 }
 
 @container note-right (max-width: 440px) {
@@ -1779,7 +1939,7 @@
 }
 
 .nibi-note-left .note-progress {
-  height: 5px;
+  height: 8px;
   background: var(--bdr, rgba(25, 20, 16, 0.08));
   border-radius: 999px;
   position: relative;
@@ -1809,13 +1969,34 @@
   position: absolute;
   top: 50%;
   width: 2px;
-  height: 100%;
+  height: 12px;
   transform: translate(-1px, -50%);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 0 0 1px var(--bdr, rgba(25, 20, 16, 0.08));
   pointer-events: none;
 }
+
+.nibi-note-left .note-progress-ticks {
+  position: relative;
+  height: 16px;
+  margin-top: 5px;
+  pointer-events: none;
+}
+
+.nibi-note-left .note-progress-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  color: var(--mut, #7c7464);
+  font-family: var(--fm, monospace);
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.nibi-note-left .note-progress-tick[data-edge='start'] { transform: none; }
+.nibi-note-left .note-progress-tick[data-edge='end'] { transform: translateX(-100%); }
 
 .nibi-note-left .note-progress-hover {
   position: absolute;
@@ -2115,6 +2296,22 @@
   padding-top: 2px;
 }
 
+.nibi-note-tag-filter {
+  margin: 0 4px 4px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.nibi-note-tag-filter:focus-visible {
+  outline: 2px solid var(--acc, #ff8a36);
+  outline-offset: 2px;
+}
+
 /* ── Stage 2: 音频笔记形态 ───────────────────── */
 
 /* 音频沿用 NoteBi 统一笔记页的左右栏结构。 */
@@ -2131,6 +2328,28 @@
   padding: 10px 18px 8px;
   border-bottom: 1px solid var(--bdr, rgba(25, 20, 16, 0.07));
   background: var(--bgalt, #f7f4ee);
+}
+
+.nibi-audio-speaker-chips[data-collapsed="true"] {
+  padding: 6px 18px;
+}
+
+.nibi-audio-speaker-chips[data-collapsed="true"] > :not(.nibi-audio-speaker-toggle) {
+  display: none;
+}
+
+.nibi-audio-speaker-toggle {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--mut, #7c7464);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nibi-audio-speaker-toggle:hover {
+  color: var(--fg, #262018);
 }
 
 .nibi-audio-speaker-title {
@@ -2672,6 +2891,25 @@
   font-weight: 700;
 }
 
+.note-audio-chapters-head > div {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.note-audio-chapters-generate {
+  padding: 3px 6px;
+  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.12));
+  border-radius: 5px;
+  background: transparent;
+  color: var(--acc, #c65b1f);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.note-audio-chapters-generate:disabled { cursor: wait; opacity: .65; }
+
 .note-audio-chapter-track {
   display: grid;
   grid-auto-flow: column;
@@ -3148,6 +3386,46 @@
   background: var(--bgalt);
   font: 12px/1.65 var(--fm);
 }
+
+.note-history-compare-header,
+.note-history-compare-columns {
+  display: flex;
+  gap: 10px;
+}
+
+.note-history-compare-header {
+  align-items: start;
+  justify-content: space-between;
+}
+
+.note-history-compare-header h3 { margin-bottom: 3px !important; }
+.note-history-compare-header p { margin: 0; color: var(--mut); font-size: 12px; }
+
+.note-history-compare-columns { overflow: auto; }
+.note-history-compare-columns article {
+  display: block;
+  min-width: min(280px, 76vw);
+  flex: 1;
+}
+
+.note-history-compare-columns article > strong {
+  display: block;
+  margin: 10px 0 6px;
+  font-size: 12px;
+}
+
+.note-history-compare-columns pre {
+  margin: 0 0 6px;
+  padding: 8px;
+  overflow: auto;
+  white-space: pre-wrap;
+  border-radius: 6px;
+  background: var(--bgalt);
+  font: 11px/1.55 var(--fm);
+}
+
+.note-history-compare-columns pre.is-removed { background: color-mix(in oklab, #dc2626 12%, var(--bgalt)); }
+.note-history-compare-columns pre.is-added { background: color-mix(in oklab, #16a34a 12%, var(--bgalt)); }
 .nibi-note-save-actions {
   display: inline-flex;
   align-items: center;

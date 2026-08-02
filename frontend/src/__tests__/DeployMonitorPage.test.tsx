@@ -130,8 +130,10 @@ describe('DeployMonitorPage 标准日志', () => {
     fireEvent.click(issuesButton)
     const activitySection = issuesButton.closest('section')
     expect(activitySection).not.toBeNull()
-    expect(within(activitySection!).getByText('provider timeout')).toBeVisible()
-    expect(within(activitySection!).getByText('生成总结')).toBeVisible()
+    const activityList = activitySection!.querySelector('.monitor-activity-list')
+    expect(activityList).not.toBeNull()
+    expect(within(activityList!).getByText('provider timeout')).toBeVisible()
+    expect(within(activityList!).getByText('生成总结')).toBeVisible()
   })
 
   it('原始日志默认折叠在高级诊断', async () => {
@@ -151,6 +153,19 @@ describe('DeployMonitorPage 标准日志', () => {
     render(<DeployMonitorPage />)
     fireEvent.click(screen.getByText('高级诊断日志'))
     expect(screen.getByLabelText('日志级别')).toBeInTheDocument()
+  })
+
+  it('在同一事件流中把最新日志放在最前，并提供已知 ID 选择器', async () => {
+    render(<DeployMonitorPage />)
+    await screen.findByText('语音转写')
+    fireEvent.click(screen.getByText('高级诊断日志'))
+
+    const rawLogs = document.querySelector('.monitor-raw-logs')
+    expect(rawLogs?.firstElementChild?.textContent).toContain('provider timeout')
+    expect(screen.getByLabelText('任务 ID').tagName).toBe('SELECT')
+    expect(screen.getByLabelText('批次 ID').tagName).toBe('SELECT')
+    expect(screen.getByLabelText('任务 ID')).toHaveTextContent('t1')
+    expect(screen.getByText('任务活动与诊断')).toBeInTheDocument()
   })
 
   it('首次只按最新 200 条加载标准日志', async () => {

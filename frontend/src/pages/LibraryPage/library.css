@@ -426,6 +426,51 @@
     linear-gradient(135deg, oklch(95% 0.015 88), oklch(84% 0.018 92) 45%, oklch(72% 0.012 92));
 }
 
+.cover-controls {
+  position: absolute;
+  z-index: 4;
+  right: 9px;
+  bottom: 9px;
+  display: flex;
+  gap: 5px;
+  opacity: 0;
+  transform: translateY(3px);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.note-card:hover .cover-controls,
+.note-card:focus-within .cover-controls {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.cover-controls button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid oklch(100% 0 0 / .38);
+  border-radius: 8px;
+  background: oklch(0% 0 0 / .55);
+  color: oklch(100% 0 0);
+  cursor: pointer;
+}
+
+.cover-controls button:hover {
+  background: var(--acc);
+  border-color: var(--acc);
+}
+
+.cover-controls-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .collection-folder {
   position: absolute;
   left: 26px;

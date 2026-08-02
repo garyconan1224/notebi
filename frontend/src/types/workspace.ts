@@ -178,6 +178,16 @@ export type TranscriptTranslations = Record<
   Record<number, string> | TranscriptTranslationSegment[]
 >
 
+/** 由模型根据带时间戳字幕生成，时间已被后端对齐到真实字幕片段。 */
+export interface NoteChapter {
+  start: number
+  end: number
+  title: string
+  summary: string
+  keywords: string[]
+  source: 'llm' | 'fallback'
+}
+
 /** R0.2: GET /…/note 返回的完整 note 数据 */
 export interface ItemNote {
   frontmatter: Record<string, unknown>
@@ -187,6 +197,8 @@ export interface ItemNote {
   note_dir: string
   media: NoteMedia         // R3.1: 媒体 URL（实时从 results 提取）
   transcript: unknown      // R3.1: 转录数据（video/audio 时为 list）
+  chapters?: NoteChapter[]
+  chapter_meta?: { model_used?: string; generated_at?: string }
   translations?: TranscriptTranslations | null
   /** 音频说话人编号到用户名称的映射，刷新后用于字幕和总结入口回显。 */
   speaker_map?: Record<string, string>

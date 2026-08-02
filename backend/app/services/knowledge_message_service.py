@@ -36,6 +36,7 @@ class KnowledgeMessageService:
         *,
         question: str,
         workspace_ids: Optional[list[str]],
+        item_refs: Optional[list[dict[str, str]]] = None,
         top_k: int = 10,
         answer_version: int = 1,
     ) -> Generator[str, None, None]:
@@ -47,18 +48,25 @@ class KnowledgeMessageService:
             if workspace_ids is not None
             else list(conversation.default_scope)
         )
+        item_scope = (
+            list(item_refs)
+            if item_refs is not None
+            else list(conversation.default_item_refs)
+        )
         user = KnowledgeMessage(
             role="user",
             status="complete",
             content=question,
             query_text=question,
             scope_snapshot=scope,
+            scope_item_refs=item_scope,
         )
         assistant = KnowledgeMessage(
             role="assistant",
             status="retrieving",
             query_text=question,
             scope_snapshot=scope,
+            scope_item_refs=item_scope,
             answer_version=answer_version,
         )
         self.store.append_message(conversation_id, user)
@@ -78,6 +86,7 @@ class KnowledgeMessageService:
                 mode="smart",
                 top_k=top_k,
                 workspace_ids=scope or None,
+                item_refs=item_scope or None,
             )
             assistant.sources = [
                 KnowledgeSourceSnapshot.model_validate(source)

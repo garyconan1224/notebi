@@ -72,3 +72,54 @@ def test_knowledge_exact_route_rejects_unknown_workspace(
     )
 
     assert response.status_code == 422
+
+
+def test_knowledge_ask_accepts_a_single_note_scope(
+    retrieval_store: WorkspaceStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _Retrieval:
+        def search(self, **kwargs):
+            captured.update(kwargs)
+            return {"answer": "仅来自所选笔记", "sources": []}
+
+    monkeypatch.setattr(routes, "_workspace_store", retrieval_store)
+    monkeypatch.setattr(routes, "_retrieval", lambda: _Retrieval())
+    app = FastAPI()
+    app.include_router(routes.router)
+
+    response = TestClient(app).post("/knowledge/ask", json={
+        "question": "这篇笔记说了什么？",
+        "item_refs": [{"workspace_id": "ws_alpha", "item_id": "text-note"}],
+    })
+
+    assert response.status_code == 200
+    assert captured["item_refs"] == [{"workspace_id": "ws_alpha", "item_id": "text-note"}]
+
+
+def test_knowledge_exact_post_supports_a_single_note_scope(
+    retrieval_store: WorkspaceStore,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = RetrievalService(
+        store=retrieval_store,
+        exact_service=ExactSearchService(
+            store=retrieval_store,
+            database_path=tmp_path / "search.sqlite3",
+        ),
+    )
+    monkeypatch.setattr(routes, "_workspace_store", retrieval_store)
+    monkeypatch.setattr(routes, "_retrieval", lambda: service)
+    app = FastAPI()
+    app.include_router(routes.router)
+
+    response = TestClient(app).post("/knowledge/search", json={
+        "question": "独立编辑",
+        "item_refs": [{"workspace_id": "ws_alpha", "item_id": "text-note"}],
+    })
+
+    assert response.status_code == 200
+    assert {source["item_id"] for source in response.json()["sources"]} == {"text-note"}

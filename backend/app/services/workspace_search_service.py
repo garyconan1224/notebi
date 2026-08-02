@@ -297,6 +297,7 @@ def search_across_workspaces(
     query: str,
     top_k: int = 10,
     workspace_ids: Optional[List[str]] = None,
+    item_refs: Optional[List[Dict[str, str]]] = None,
     item_types: Optional[List[str]] = None,
     tags: Optional[List[str]] = None,
     api_key: Optional[str] = None,
@@ -310,14 +311,31 @@ def search_across_workspaces(
     store = store or WorkspaceStore()
     settings = load_settings()
     rerank_model = get_reranker_model_for_rag(settings)
-    if workspace_ids:
+    all_records = store.list_all(include_trashed=False)
+    workspace_scope = set(workspace_ids or [])
+    if workspace_scope:
         # 校验存在性，避免静默忽略
         missing = [wid for wid in workspace_ids if store.get(wid) is None]
         if missing:
             raise KeyError(f"workspace(s) not found: {','.join(missing)}")
-        target_ids = list(dict.fromkeys(workspace_ids))
+        target_ids = list(dict.fromkeys(workspace_ids or []))
     else:
-        target_ids = [r.workspace_id for r in store.list_all()]
+        target_ids = []
+
+    item_scope = {
+        (str(ref.get("workspace_id") or ""), str(ref.get("item_id") or ""))
+        for ref in item_refs or []
+        if str(ref.get("workspace_id") or "") and str(ref.get("item_id") or "")
+    }
+    if item_scope:
+        target_ids.extend(
+            record.workspace_id
+            for record in all_records
+            if any((record.workspace_id, item.item_id) in item_scope for item in record.items)
+        )
+    if not workspace_ids and not item_scope:
+        target_ids = [record.workspace_id for record in all_records]
+    target_ids = list(dict.fromkeys(target_ids))
 
     if not target_ids:
         return {"answer": "（暂无工作空间）", "sources": []}
@@ -346,6 +364,12 @@ def search_across_workspaces(
                 continue
             for r in raws:
                 info = smap.get(str(r.get("source_file") or "")) or {}
+                if (
+                    (workspace_scope or item_scope)
+                    and wid not in workspace_scope
+                    and (wid, str(info.get("item_id") or "")) not in item_scope
+                ):
+                    continue
                 if item_types and info.get("item_type") not in set(item_types):
                     continue
                 source_tags = set(info.get("tags") or [])

@@ -136,6 +136,42 @@ class ChatStore:
         summaries.sort(key=lambda s: s.last_at, reverse=True)
         return summaries
 
+    def delete_chat(self, workspace_id: str, chat_id: str) -> bool:
+        """删除一个会话的全部消息，保留同一 workspace 的其它 jsonl 行。"""
+        normalized_chat_id = (chat_id or "").strip()
+        if not normalized_chat_id:
+            return False
+        path = self._file(workspace_id)
+        if not path.exists():
+            return False
+        with self._lock:
+            try:
+                lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+            except OSError:
+                return False
+            kept: list[str] = []
+            deleted = False
+            for line in lines:
+                try:
+                    payload = json.loads(line)
+                except json.JSONDecodeError:
+                    # 不能因为删除一个会话而丢掉历史中的异常行。
+                    kept.append(line)
+                    continue
+                if isinstance(payload, dict) and payload.get("chat_id") == normalized_chat_id:
+                    deleted = True
+                    continue
+                kept.append(line)
+            if not deleted:
+                return False
+            temp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+            try:
+                temp.write_text("".join(kept), encoding="utf-8")
+                temp.replace(path)
+            finally:
+                temp.unlink(missing_ok=True)
+        return True
+
 
 _default_store = ChatStore()
 

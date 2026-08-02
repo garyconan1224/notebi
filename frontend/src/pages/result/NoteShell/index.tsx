@@ -12,13 +12,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Bold, BookOpenCheck, Brain, Camera, Check, ChevronDown, Code2, Download, ExternalLink, FileDown, FileText, FileType, History, Image, Italic, Link, List, ListOrdered, ListTodo, MessageCircle, Minus, Pause, Pencil, Play, Plus, Presentation, Quote, Sparkles, Strikethrough, Subtitles, Trash2, Type, Underline, X } from 'lucide-react'
+import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Bold, BookOpenCheck, Brain, Camera, Check, ChevronDown, Code2, Copy, Download, ExternalLink, FileDown, FileText, FileType, History, Image, Italic, Link, List, ListOrdered, ListTodo, MessageCircle, Minus, Pause, Pencil, Play, Plus, Presentation, Quote, RefreshCw, Sparkles, Strikethrough, Subtitles, Trash2, Type, Underline, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
 
-import { downloadItemNoteExport, downloadSubtitles, downloadTranscript, exportItemNoteObsidian, getItemNote, putItemNote, updateSpeakerMap, type ItemNoteExportFormat, type TranscriptExportMode } from '@/services/workspaces'
+import { createChapterSummaries, downloadItemNoteExport, downloadSubtitles, downloadTranscript, exportItemNoteObsidian, getItemNote, putItemNote, updateSpeakerMap, type ItemNoteExportFormat, type TranscriptExportMode } from '@/services/workspaces'
 import type { VideoResultTranscriptLine } from '@/services/workspaces'
-import type { ItemNote } from '@/types/workspace'
+import type { ItemNote, NoteChapter } from '@/types/workspace'
 import { createSummary, deleteSummary, listSummaries, renameSummary, updateSummaryContent, type ItemSummary } from '@/services/summaries'
 import { retryPipelineTask } from '@/services/pipeline'
 import { MarkdownToc, extractToc, slugify } from '@/components/MarkdownToc'
@@ -42,11 +42,18 @@ import { useLnEditorStore } from '@/store/lnEditorStore'
 import { useTaskStore } from '@/store/taskStore'
 import type { TaskRecord } from '@/types/task'
 import { SourceMdModal } from './SourceMdModal'
+import { NotionExportDialog } from './NotionExportDialog'
+import { FeishuExportDialog } from './FeishuExportDialog'
+import { ChapterEvidenceStrip } from './ChapterEvidenceStrip'
 import { withStatusToast } from '@/lib/statusToast'
 import { categorizeError } from '@/lib/errorCategories'
 
 type NoteExportBusy = ItemNoteExportFormat | 'markdown' | 'obsidian' | 'transcript_article' | 'transcript_speakers' | 'source_md'
 type NoteExportSource = 'current' | 'main' | 'transcript' | 'speaker_transcript' | 'source'
+type NoteExportFormatGroup = {
+  label: string
+  items: Array<{ icon: ReactNode; label: string; format: ItemNoteExportFormat }>
+}
 type OperationNoticeTone = 'loading' | 'success' | 'error' | 'info'
 type OperationNotice = {
   id: number
@@ -165,6 +172,7 @@ type AudioChapter = {
   title: string
   summary: string
   keywords: string[]
+  source?: 'llm' | 'fallback'
 }
 
 const AUDIO_KEYWORD_STOPWORDS = new Set([
@@ -291,6 +299,21 @@ function buildAudioChapters(transcript: VideoResultTranscriptLine[]): AudioChapt
       keywords,
     }
   })
+}
+
+function modelAudioChapters(chapters: NoteChapter[] | undefined): AudioChapter[] {
+  if (!Array.isArray(chapters)) return []
+  return chapters
+    .filter((chapter) => Number.isFinite(chapter.start) && typeof chapter.summary === 'string' && chapter.summary.trim())
+    .map((chapter) => ({
+      start: Math.max(0, Number(chapter.start)),
+      end: Math.max(Number(chapter.start), Number(chapter.end) || Number(chapter.start)),
+      title: chapter.title || '未命名章节',
+      summary: chapter.summary.trim(),
+      keywords: Array.isArray(chapter.keywords) ? chapter.keywords.filter(Boolean) : [],
+      source: chapter.source,
+    }))
+    .sort((left, right) => left.start - right.start)
 }
 
 function safeFilename(name: string): string {
@@ -429,24 +452,41 @@ function isCanceledExportError(error: unknown): boolean {
 
 interface TagChipsProps {
   tags: Record<string, unknown>
+  onTagSelect?: (dimension: string, value: string) => void
 }
 
 /** 把 frontmatter.tags（6 维系统标签 + custom_tags）渲染为 chips。 */
-function TagChips({ tags }: TagChipsProps) {
+function TagChips({ tags, onTagSelect }: TagChipsProps) {
   if (!tags || typeof tags !== 'object') return null
 
   const systemChips = SYSTEM_TAG_DIMENSIONS
     .filter((dim) => !!tags[dim.key])
     .map((dim) => (
-      <Badge key={dim.key} variant="secondary">
-        {dim.label} · {String(tags[dim.key])}
-      </Badge>
+      <button
+        key={dim.key}
+        type="button"
+        className="nibi-note-tag-filter"
+        onClick={() => onTagSelect?.(dim.key, String(tags[dim.key]))}
+        title={`按「${dim.label}」筛选合集`}
+      >
+        <Badge variant="secondary">
+          {dim.label} · {String(tags[dim.key])}
+        </Badge>
+      </button>
     ))
 
   const customRaw = tags.custom_tags
   const customChips = Array.isArray(customRaw)
     ? customRaw.map((ct: string) => (
-        <Badge key={ct} variant="outline">{ct}</Badge>
+        <button
+          key={ct}
+          type="button"
+          className="nibi-note-tag-filter"
+          onClick={() => onTagSelect?.('custom', ct)}
+          title={`按「${ct}」筛选合集`}
+        >
+          <Badge variant="outline">{ct}</Badge>
+        </button>
       ))
     : []
 
@@ -479,6 +519,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [note, setNote] = useState<ItemNote | null>(null)
   const [speakerMap, setSpeakerMap] = useState<Record<string, string>>({})
   const [speakerRoles, setSpeakerRoles] = useState<Record<string, string>>({})
+  const [speakerChipsExpanded, setSpeakerChipsExpanded] = useState(true)
   const [editingSpeakerId, setEditingSpeakerId] = useState<string | null>(null)
   const [editingSpeakerName, setEditingSpeakerName] = useState('')
   const [editingSpeakerRole, setEditingSpeakerRole] = useState('')
@@ -489,6 +530,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [exportOpen, setExportOpen] = useState(false)
   const [exportSource, setExportSource] = useState<NoteExportSource | null>(null)
   const [exportBusy, setExportBusy] = useState<NoteExportBusy | null>(null)
+  const [notionExportOpen, setNotionExportOpen] = useState(false)
+  const [feishuExportOpen, setFeishuExportOpen] = useState(false)
   const [immersiveOpen, setImmersiveOpen] = useState(false)
   const [sourceMdOpen, setSourceMdOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -505,8 +548,11 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [showNewSummaryModal, setShowNewSummaryModal] = useState(false)
   // AI 工具菜单常用模板快捷项预选值；undefined 表示用 note.summary_hint 默认模板
   const [newSummaryTemplate, setNewSummaryTemplate] = useState<string | undefined>(undefined)
+  const [newSummaryMode, setNewSummaryMode] = useState<'general' | 'speaker_aware' | undefined>(undefined)
   const [creatingSummary, setCreatingSummary] = useState(false)
   const [creatingSummaryTaskId, setCreatingSummaryTaskId] = useState<string | null>(null)
+  const [creatingChapters, setCreatingChapters] = useState(false)
+  const [creatingChapterTaskId, setCreatingChapterTaskId] = useState<string | null>(null)
   const [retryingAutoSummary, setRetryingAutoSummary] = useState(false)
   const [retryingSpeakerAnalysis, setRetryingSpeakerAnalysis] = useState(false)
   const [editorPrefsOpen, setEditorPrefsOpen] = useState(false)
@@ -721,6 +767,31 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     setCreatingSummaryTaskId(null)
     summaryCreationEpochRef.current = null
   }, [creatingSummaryTask, creatingSummaryTaskId, refreshSummaries, showOperationNotice])
+
+  const creatingChapterTask = pipelineTasks.find((task) => task.task_id === creatingChapterTaskId)
+  useEffect(() => {
+    if (!creatingChapterTaskId || !creatingChapterTask) return
+    const terminal = ['SUCCESS', 'FAILED', 'PARTIAL', 'CANCELLED'].includes(creatingChapterTask.status)
+    if (!terminal) {
+      const stage = creatingChapterTask.log?.at(-1)?.message || '正在整理字幕证据'
+      showOperationNotice(`正在生成章节摘要 · ${Math.round((creatingChapterTask.progress || 0) * 100)}% · ${stage}`, 'loading')
+      return
+    }
+    if (creatingChapterTask.status === 'SUCCESS') {
+      const chapters = (creatingChapterTask.result as Record<string, unknown>)?.chapters
+      if (Array.isArray(chapters)) {
+        setNote((current) => current ? { ...current, chapters: chapters as NoteChapter[] } : current)
+      }
+      showOperationNotice('模型章节摘要已生成', 'success')
+    } else {
+      showOperationNotice(
+        creatingChapterTask.error || (creatingChapterTask.status === 'CANCELLED' ? '章节摘要任务已取消' : '章节摘要生成失败'),
+        'error',
+      )
+    }
+    setCreatingChapters(false)
+    setCreatingChapterTaskId(null)
+  }, [creatingChapterTask, creatingChapterTaskId, showOperationNotice])
 
   const notePageStyle = useMemo<CSSProperties>(
     () => ({
@@ -1016,7 +1087,17 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     }
     return active
   }, [currentTime, transcriptLines])
-  const audioChapters = useMemo(() => buildAudioChapters(transcriptLines), [transcriptLines])
+  const generatedAudioChapters = useMemo(() => modelAudioChapters(note?.chapters), [note?.chapters])
+  const fallbackAudioChapters = useMemo(() => buildAudioChapters(transcriptLines), [transcriptLines])
+  const audioChapters = generatedAudioChapters.length > 0 ? generatedAudioChapters : fallbackAudioChapters
+  const hasModelChapters = generatedAudioChapters.length > 0
+  const videoEvidenceChapters = useMemo<NoteChapter[]>(() => {
+    if (Array.isArray(note?.chapters) && note.chapters.length > 0) return note.chapters
+    return fallbackAudioChapters.map((chapter) => ({
+      ...chapter,
+      source: 'fallback' as const,
+    }))
+  }, [fallbackAudioChapters, note?.chapters])
   const activeAudioChapterIdx = useMemo(() => {
     let activeIdx = -1
     for (let idx = 0; idx < audioChapters.length; idx += 1) {
@@ -1136,6 +1217,15 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => { doSave(md) }, 1500)
   }, [activeSummaryId, doSave, doSaveSummary])
+
+  const handleSaveAiAnswer = useCallback((answer: string) => {
+    const cleaned = answer.trim()
+    if (!cleaned) return
+    const heading = '## AI 问答补充'
+    const nextBody = `${editingBody.trim()}\n\n${heading}\n\n${cleaned}`.trim()
+    handleEditorChange(nextBody)
+    toast.success(activeSummaryId ? '已保存到当前 AI 总结' : '已保存到当前笔记')
+  }, [activeSummaryId, editingBody, handleEditorChange])
 
   // 组件卸载时清理定时器
   useEffect(() => {
@@ -1461,6 +1551,55 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     }
   }, [workspaceId, itemId, addPipelineTask, navigate, showOperationNotice])
 
+  const handleCopyActiveSummary = useCallback(async () => {
+    if (!activeSummaryId) return
+    try {
+      await navigator.clipboard.writeText(editingBody)
+      toast.success('已复制总结内容')
+    } catch {
+      toast.error('复制失败，请手动复制')
+    }
+  }, [activeSummaryId, editingBody])
+
+  const handleRegenerateActiveSummary = useCallback(() => {
+    const current = summaries.find((summary) => summary.summary_id === activeSummaryId)
+    if (!current) return
+    setNewSummaryTemplate(current.template)
+    setNewSummaryMode(current.summary_mode ?? 'general')
+    setShowNewSummaryModal(true)
+  }, [activeSummaryId, summaries])
+
+  const handleCreateChapterSummaries = useCallback(async () => {
+    setCreatingChapters(true)
+    showOperationNotice('正在创建章节摘要任务…', 'loading')
+    try {
+      const accepted = await createChapterSummaries(workspaceId, itemId)
+      setCreatingChapterTaskId(accepted.task_id)
+      const now = new Date().toISOString()
+      if (!useTaskStore.getState().getTask(accepted.task_id)) {
+        addPipelineTask({
+          task_id: accepted.task_id,
+          project_id: workspaceId,
+          task_type: 'chapters',
+          payload: { item_id: itemId, title: '模型章节摘要' },
+          status: 'PENDING',
+          progress: 0,
+          log: [],
+          result: {},
+          error: '',
+          retry_of: '',
+          cancel_requested: false,
+          created_at: now,
+          updated_at: now,
+        } satisfies TaskRecord)
+      }
+    } catch (err: unknown) {
+      setCreatingChapters(false)
+      const axiosData = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      showOperationNotice(axiosData || (err instanceof Error ? err.message : '章节摘要生成失败'), 'error')
+    }
+  }, [addPipelineTask, itemId, showOperationNotice, workspaceId])
+
   // 删除总结（从顶栏版本下拉触发）
   const handleDeleteSummary = useCallback(async (summaryId: string) => {
     try {
@@ -1706,11 +1845,53 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
       </div>
       {hasTags && (
         <div className="nibi-note-meta-tags">
-          <TagChips tags={tags} />
+          <TagChips
+            tags={tags}
+            onTagSelect={(dimension, value) => {
+              const query = new URLSearchParams({
+                [dimension === 'custom' ? 'tags.custom' : `tags.${dimension}`]: value,
+              })
+              navigate(`/workspaces?${query.toString()}`)
+            }}
+          />
         </div>
       )}
     </div>
   ) : null
+  const documentExportItems = [
+    { icon: <FileText size={15} />, label: 'Markdown', format: 'md' as const },
+    { icon: <FileText size={15} />, label: 'HTML', format: 'html' as const },
+    { icon: <FileDown size={15} />, label: 'PDF', format: 'pdf' as const },
+    { icon: <FileType size={15} />, label: 'Word', format: 'docx' as const },
+  ]
+  const presentationExportItems = [
+    { icon: <Image size={15} />, label: '长图', format: 'long_image' as const },
+    { icon: <Presentation size={15} />, label: 'PPT', format: 'pptx' as const },
+  ]
+  const exportFormatGroups: NoteExportFormatGroup[] = exportSource === 'current'
+    ? [
+        { label: '文档与打印', items: documentExportItems },
+        { label: '演示与阅读', items: presentationExportItems },
+      ]
+    : exportSource === 'main'
+      ? [
+          { label: '文档与打印', items: documentExportItems },
+          { label: '演示与阅读', items: presentationExportItems },
+          { label: '知识管理', items: [{ icon: <BookOpenCheck size={15} />, label: 'Obsidian 包', format: 'obsidian' }] },
+        ]
+      : exportSource === 'transcript'
+        ? [{
+            label: '字幕格式',
+            items: [
+              { icon: <FileText size={15} />, label: 'TXT 文章', format: 'transcript_txt' },
+              { icon: <Subtitles size={15} />, label: 'SRT 字幕', format: 'srt' },
+              { icon: <Subtitles size={15} />, label: 'VTT 字幕', format: 'vtt' },
+              { icon: <Subtitles size={15} />, label: 'ASS 字幕', format: 'ass' },
+            ],
+          }]
+        : exportSource === 'speaker_transcript'
+          ? [{ label: '转写文本', items: [{ icon: <Subtitles size={15} />, label: 'TXT（按说话人归组）', format: 'transcript_txt' }] }]
+          : [{ label: '原始素材', items: [{ icon: <FileText size={15} />, label: 'Markdown 源文件', format: 'md' }] }]
 
   // ── 提取正文 JSX（视频 / 非视频布局复用）──
   const noteContent = (
@@ -1855,6 +2036,36 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
             <Plus size={14} />
             {creatingSummary ? '生成中…' : '新建总结'}
           </button>
+          <button
+            data-testid="note-history-topbar"
+            className="nibi-note-bar-btn nibi-note-bar-btn--label"
+            type="button"
+            onClick={() => setHistoryOpen(true)}
+            title="查看和恢复正文历史版本"
+          >
+            <History size={14} />版本历史
+          </button>
+          {activeSummaryId && (
+            <>
+              <button
+                className="nibi-note-bar-btn nibi-note-bar-btn--label"
+                type="button"
+                onClick={() => void handleCopyActiveSummary()}
+                title="复制当前 AI 总结内容"
+              >
+                <Copy size={14} />复制总结
+              </button>
+              <button
+                className="nibi-note-bar-btn nibi-note-bar-btn--label"
+                type="button"
+                onClick={handleRegenerateActiveSummary}
+                disabled={creatingSummary}
+                title="按当前总结的模板重新生成"
+              >
+                <RefreshCw size={14} />重新生成总结
+              </button>
+            </>
+          )}
           <div style={{ position: 'relative' }} ref={editorPrefsRef}>
             <button className="nibi-note-bar-btn nibi-note-bar-btn--label" onClick={() => setEditorPrefsOpen((value) => !value)} title="正文设置">
               <Type size={14} /> Aa 设置<ChevronDown size={11} />
@@ -2035,6 +2246,29 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                         <span>原始素材</span>
                       </button>
                     )}
+                    <div className="nibi-note-export-group-label">同步到工作区</div>
+                    <button
+                      className="nibi-note-export-item"
+                      onClick={() => {
+                        setExportOpen(false)
+                        setNotionExportOpen(true)
+                      }}
+                      disabled={!!exportBusy || !currentBody.trim()}
+                    >
+                      <BookOpenCheck size={15} />
+                      <span>Notion（同步编辑器正文）</span>
+                    </button>
+                    <button
+                      className="nibi-note-export-item"
+                      onClick={() => {
+                        setExportOpen(false)
+                        setFeishuExportOpen(true)
+                      }}
+                      disabled={!!exportBusy || !currentBody.trim()}
+                    >
+                      <BookOpenCheck size={15} />
+                      <span>飞书（同步编辑器正文）</span>
+                    </button>
                   </>
                 ) : (
                   <>
@@ -2042,38 +2276,21 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                       <ArrowLeft size={13} /> 返回内容选择
                     </button>
                     <div className="nibi-note-export-group-label">选择格式</div>
-                    {(exportSource === 'current' ? [
-                      { icon: <FileText size={15} />, label: 'Markdown', format: 'md' as const },
-                      { icon: <FileText size={15} />, label: 'HTML', format: 'html' as const },
-                      { icon: <FileDown size={15} />, label: 'PDF', format: 'pdf' as const },
-                      { icon: <FileType size={15} />, label: 'Word', format: 'docx' as const },
-                      { icon: <Image size={15} />, label: '长图', format: 'long_image' as const },
-                      { icon: <Presentation size={15} />, label: 'PPT', format: 'pptx' as const },
-                    ] : exportSource === 'main' ? [
-                      { icon: <FileText size={15} />, label: 'Markdown', format: 'md' as const },
-                      { icon: <FileText size={15} />, label: 'HTML', format: 'html' as const },
-                      { icon: <FileDown size={15} />, label: 'PDF', format: 'pdf' as const },
-                      { icon: <FileType size={15} />, label: 'Word', format: 'docx' as const },
-                      { icon: <Image size={15} />, label: '长图', format: 'long_image' as const },
-                      { icon: <Presentation size={15} />, label: 'PPT', format: 'pptx' as const },
-                      { icon: <BookOpenCheck size={15} />, label: 'Obsidian 包', format: 'obsidian' as const },
-                    ] : exportSource === 'transcript' ? [
-                      { icon: <FileText size={15} />, label: 'TXT 文章', format: 'transcript_txt' as const },
-                      { icon: <Subtitles size={15} />, label: 'SRT 字幕', format: 'srt' as const },
-                      { icon: <Subtitles size={15} />, label: 'VTT 字幕', format: 'vtt' as const },
-                      { icon: <Subtitles size={15} />, label: 'ASS 字幕', format: 'ass' as const },
-                    ] : [
-                      { icon: <Subtitles size={15} />, label: 'TXT（按说话人归组）', format: 'transcript_txt' as const },
-                    ]).map((item) => (
-                      <button
-                        key={item.label}
-                        className="nibi-note-export-item"
-                        onClick={() => handleSelectedExportFormat(item.format)}
-                        disabled={!!exportBusy}
-                      >
-                        {item.icon}
-                        <span>{exportBusy === item.format ? '导出中…' : item.label}</span>
-                      </button>
+                    {exportFormatGroups.map((group) => (
+                      <div key={group.label}>
+                        <div className="nibi-note-export-group-label">{group.label}</div>
+                        {group.items.map((item) => (
+                          <button
+                            key={item.label}
+                            className="nibi-note-export-item"
+                            onClick={() => handleSelectedExportFormat(item.format)}
+                            disabled={!!exportBusy}
+                          >
+                            {item.icon}
+                            <span>{exportBusy === item.format ? '导出中…' : item.label}</span>
+                          </button>
+                        ))}
+                      </div>
                     ))}
                   </>
                 )}
@@ -2295,7 +2512,15 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                   </div>
                 )}
                 {speakerIds.length > 0 && (
-                  <div className="nibi-audio-speaker-chips" aria-label="视频说话人">
+                  <div className="nibi-audio-speaker-chips" aria-label="视频说话人" data-collapsed={!speakerChipsExpanded}>
+                    <button
+                      type="button"
+                      className="nibi-audio-speaker-toggle"
+                      aria-expanded={speakerChipsExpanded}
+                      onClick={() => setSpeakerChipsExpanded((expanded) => !expanded)}
+                    >
+                      {speakerChipsExpanded ? '隐藏说话人' : `显示说话人（${speakerIds.length}）`}
+                    </button>
                     <span className="nibi-audio-speaker-title">说话人</span>
                     {speakerIds.map((speakerId) => {
                       const displayName = speakerMap[speakerId] || speakerId.replace(/^SPEAKER_/, 'S')
@@ -2417,6 +2642,17 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                     </div>
                   )
                 })()}
+                {videoFrames.length > 0 && videoEvidenceChapters.length > 0 && (
+                  <ChapterEvidenceStrip
+                    chapters={videoEvidenceChapters}
+                    frames={videoFrames}
+                    onSeek={handleSeek}
+                    sourceLabel={hasModelChapters ? '模型章节' : '自动分段'}
+                    generateLabel={hasModelChapters ? '重新生成' : '模型生成'}
+                    generating={creatingChapters}
+                    onGenerate={() => void handleCreateChapterSummaries()}
+                  />
+                )}
                 {/* 正文（MilkdownEditor 渲染 h2/h3/p/ul/blockquote → 设计稿 .note-section 自动匹配） */}
                 <div className="note-section" style={{ marginTop: summaries.length > 0 ? 0 : 16 }}>
                   <div className="nibi-note-editor-panel">
@@ -2496,8 +2732,18 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
 	            {!isPip && audioChapters.length > 0 && (
 	              <div className="note-audio-chapters" aria-label="音频章节">
 	                <div className="note-audio-chapters-head">
-	                  <span>关键时间点</span>
-	                  <small>{audioChapters.length} 段</small>
+	                  <span>关键时间点{hasModelChapters ? ' · 模型摘要' : ' · 自动分段'}</span>
+	                  <div>
+	                    <small>{audioChapters.length} 段</small>
+	                    <button
+	                      type="button"
+	                      className="note-audio-chapters-generate"
+	                      onClick={() => void handleCreateChapterSummaries()}
+	                      disabled={creatingChapters}
+	                    >
+	                      {creatingChapters ? '生成中…' : hasModelChapters ? '重新生成' : '模型生成'}
+	                    </button>
+	                  </div>
 	                </div>
 	                <div className="note-audio-chapter-track">
 	                  {audioChapters.map((chapter, idx) => (
@@ -2505,7 +2751,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
 	                      key={`${chapter.start}-${chapter.title}`}
 	                      className={`note-audio-chapter${idx === activeAudioChapterIdx ? ' is-active' : ''}`}
 	                      onClick={() => handleSeek(chapter.start)}
-	                      title={`跳转到 ${formatTimecode(chapter.start)}`}
+	                      title={`跳转到 ${formatTimecode(chapter.start)}\n${chapter.title}\n${chapter.summary}`}
+	                      aria-label={`跳转到 ${formatTimecode(chapter.start)}：${chapter.title}。${chapter.summary}`}
 	                    >
 	                      <span className="note-audio-chapter-time">{formatTimecode(chapter.start)}</span>
 	                      <strong>{chapter.title}</strong>
@@ -2519,7 +2766,15 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
             {!isPip && transcriptLines.length > 0 ? (
                   <div id="audio-transcript" className="nibi-note-transcript-wrap">
                     {speakerIds.length > 0 ? (
-                      <div className="nibi-audio-speaker-chips" aria-label="说话人">
+                      <div className="nibi-audio-speaker-chips" aria-label="说话人" data-collapsed={!speakerChipsExpanded}>
+                        <button
+                          type="button"
+                          className="nibi-audio-speaker-toggle"
+                          aria-expanded={speakerChipsExpanded}
+                          onClick={() => setSpeakerChipsExpanded((expanded) => !expanded)}
+                        >
+                          {speakerChipsExpanded ? '隐藏说话人' : `显示说话人（${speakerIds.length}）`}
+                        </button>
                         <span className="nibi-audio-speaker-title">说话人</span>
                         {speakerIds.map((speakerId) => {
                           const displayName = speakerMap[speakerId] || speakerId.replace(/^SPEAKER_/, 'S')
@@ -3129,6 +3384,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
           open={askAiOpen}
           onOpenChange={setAskAiOpen}
           onWidthChange={setAskAiWidth}
+          onSaveAnswer={handleSaveAiAnswer}
           hideTrigger
         />
       )}
@@ -3168,6 +3424,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         <NewSummaryModal
           creating={creatingSummary}
           defaultTemplate={newSummaryTemplate ?? note.summary_hint?.default_template}
+          defaultSummaryMode={newSummaryMode}
           allowSpeakerAware={isAudioNote || (isVideoNote && speakerIds.length > 0)}
           speakerAwareAvailable={speakerIds.length > 0}
           templateCategory={isAudioNote ? 'style_audio' : 'style_video_with_frames'}
@@ -3175,6 +3432,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
           onClose={() => {
             setShowNewSummaryModal(false)
             setNewSummaryTemplate(undefined)
+            setNewSummaryMode(undefined)
           }}
         />
       )}
@@ -3184,6 +3442,34 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         onClose={() => setSourceMdOpen(false)}
         onDownload={handleDownloadSourceMd}
         downloading={exportBusy === 'source_md'}
+      />
+      <NotionExportDialog
+        open={notionExportOpen}
+        onOpenChange={setNotionExportOpen}
+        workspaceId={workspaceId}
+        itemId={itemId}
+        title={String((note.frontmatter as Record<string, unknown>)?.title ?? 'NoteBi 笔记')}
+        markdown={currentBody}
+        onSuccess={({ url }) => {
+          showOperationNotice('已导出到 Notion', 'success', {
+            actionLabel: '打开 Notion',
+            onAction: () => window.open(url, '_blank', 'noopener,noreferrer'),
+          })
+        }}
+      />
+      <FeishuExportDialog
+        open={feishuExportOpen}
+        onOpenChange={setFeishuExportOpen}
+        workspaceId={workspaceId}
+        itemId={itemId}
+        title={String((note.frontmatter as Record<string, unknown>)?.title ?? 'NoteBi 笔记')}
+        markdown={currentBody}
+        onSuccess={({ url }) => {
+          showOperationNotice('已导出到飞书', 'success', {
+            actionLabel: '打开飞书',
+            onAction: () => window.open(url, '_blank', 'noopener,noreferrer'),
+          })
+        }}
       />
       <NoteHistoryPanel
         open={historyOpen}

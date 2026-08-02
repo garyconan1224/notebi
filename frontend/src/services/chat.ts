@@ -76,6 +76,11 @@ export async function listChats(workspaceId: string): Promise<ChatSummary[]> {
   return res.data
 }
 
+/** 删除当前确认的一个会话；不会影响同一笔记其它对话。 */
+export async function deleteChat(workspaceId: string, chatId: string): Promise<void> {
+  await http.delete(`/workspaces/${workspaceId}/chat/${encodeURIComponent(chatId)}`)
+}
+
 export type ChatStreamEvent =
   | { type: 'delta'; text: string }
   | { type: 'done'; chat_id: string; message_id: string }

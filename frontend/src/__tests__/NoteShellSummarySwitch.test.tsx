@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import NoteShell from '@/pages/result/NoteShell'
@@ -127,6 +127,11 @@ const SUMMARY_V0: ItemSummary = {
   created_at: '2026-07-01T00:10:00Z',
 }
 
+function LocationProbe() {
+  const location = useLocation()
+  return <output data-testid="location-probe">{location.pathname}{location.search}</output>
+}
+
 function expectAnyEditorToContain(text: string) {
   expect(screen.getAllByTestId('note-editor').some((editor) => (
     editor.textContent?.includes(text)
@@ -174,6 +179,57 @@ describe('NoteShell summary switching', () => {
     expectAnyEditorToContain('总结正文')
     expect(screen.getByRole('button', { name: /标准总结 · V0/ })).not.toBeNull()
     expect(mocks.putItemNote).not.toHaveBeenCalled()
+  })
+
+  it('查看 AI 总结时提供复制和重新生成入口，主笔记不显示这两个动作', async () => {
+    render(
+      <MemoryRouter>
+        <NoteShell workspaceId="ws-1" itemId="item-1" />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => expectAnyEditorToContain('主笔记正文'))
+    expect(screen.queryByRole('button', { name: '复制总结' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '重新生成总结' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /主笔记 v1/ }))
+    fireEvent.click(screen.getByRole('button', { name: /V0/ }))
+
+    expect(screen.getByRole('button', { name: '复制总结' })).not.toBeNull()
+    expect(screen.getByRole('button', { name: '重新生成总结' })).not.toBeNull()
+  })
+
+  it('顶栏提供不依赖正文滚动位置的版本历史入口', async () => {
+    render(
+      <MemoryRouter>
+        <NoteShell workspaceId="ws-1" itemId="item-1" />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => expectAnyEditorToContain('主笔记正文'))
+
+    expect(document.querySelector('[data-testid="note-history-topbar"]')).not.toBeNull()
+  })
+
+  it('点击结果页标签会跳转到合集筛选', async () => {
+    mocks.getItemNote.mockResolvedValue({
+      ...MAIN_NOTE,
+      frontmatter: {
+        ...MAIN_NOTE.frontmatter,
+        tags: { content_type: '教程', custom_tags: ['AI'] },
+      },
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/workspaces/ws-1/items/item-1/note']}>
+        <NoteShell workspaceId="ws-1" itemId="item-1" />
+        <LocationProbe />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: '内容类型 · 教程' }))
+
+    expect(screen.getByTestId('location-probe').textContent).toBe('/workspaces?tags.content_type=%E6%95%99%E7%A8%8B')
   })
 
   it('总结版本菜单按素材级 V0、V1、V2 连续排序，不按模板分组排序', async () => {
@@ -270,6 +326,31 @@ describe('NoteShell summary switching', () => {
     )
 
     expect(await screen.findByText('3:36:00')).not.toBeNull()
+  })
+
+  it('优先展示模型生成的完整章节摘要，并保留重新生成入口', async () => {
+    mocks.getItemNote.mockResolvedValue({
+      ...AUDIO_NOTE,
+      chapters: [{
+        start: 0,
+        end: 60,
+        title: '环境准备',
+        summary: '先说明安装前需要完成的环境准备和检查步骤。',
+        keywords: ['环境', '检查'],
+        source: 'llm',
+      }],
+    })
+    mocks.listSummaries.mockResolvedValue([])
+
+    render(
+      <MemoryRouter>
+        <NoteShell workspaceId="ws-1" itemId="item-1" />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('关键时间点 · 模型摘要')).not.toBeNull()
+    expect(screen.getByText('先说明安装前需要完成的环境准备和检查步骤。')).not.toBeNull()
+    expect(screen.getByRole('button', { name: '重新生成' })).not.toBeNull()
   })
 
   it('音频导出菜单提供无时间轴文章和按说话人分组版本', async () => {
@@ -419,5 +500,23 @@ describe('NoteShell summary switching', () => {
       expect(mocks.updateSpeakerMap).toHaveBeenCalledWith('ws-1', 'item-1', { SPEAKER_00: '主持人' }, {})
       expectAnyEditorToContain('主持人 提出关键结论')
     })
+  })
+
+  it('allows speaker profiles to collapse without removing them', async () => {
+    mocks.getItemNote.mockResolvedValue({
+      ...AUDIO_NOTE,
+      transcript: [{ t_sec: 0, t_str: '00:00', text: '开场。', speaker: 'SPEAKER_00' }],
+    })
+
+    render(
+      <MemoryRouter>
+        <NoteShell workspaceId="ws-1" itemId="item-1" />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: '隐藏说话人' }))
+
+    expect(screen.getByRole('button', { name: '显示说话人（1）' })).not.toBeNull()
+    expect(screen.getByRole('button', { name: /S00/ }).closest('.nibi-audio-speaker-chips')?.getAttribute('data-collapsed')).toBe('true')
   })
 })

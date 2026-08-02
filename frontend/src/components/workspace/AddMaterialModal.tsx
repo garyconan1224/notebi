@@ -965,7 +965,7 @@ export function AddMaterialModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={`remix-modal-content${isBatchMode ? ' remix-modal-content--batch' : ''}`}
+        className={`!max-w-none remix-modal-content${isBatchMode ? ' remix-modal-content--batch' : ''}`}
         overlayClassName="remix-modal-backdrop"
         showCloseButton={false}
       >

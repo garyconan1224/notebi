@@ -171,9 +171,46 @@ describe('SearchPage', () => {
     })
   })
 
-  it('scope picker starts with all collections', async () => {
+  it('passes a selected single note without widening the collection scope', async () => {
+    vi.mocked(workspaces.listWorkspaces).mockResolvedValue([{
+      ...workspace,
+      items: [{
+        item_id: 'single-note',
+        type: 'text',
+        source: 'local',
+        source_value: 'manual',
+        name: '单篇测试笔记',
+        status: 'done',
+        preflight: { background_overrides: {}, models: {}, tasks: {} },
+        results: {},
+        related_task_ids: [],
+        tags: {},
+        created_at: '2026-07-25T00:00:00Z',
+        updated_at: '2026-07-25T00:00:00Z',
+      }],
+    }])
     render(<MemoryRouter><SearchPage /></MemoryRouter>)
-    expect(await screen.findByText('全部合集')).toBeTruthy()
+    await screen.findByText('索引已就绪')
+    fireEvent.click(screen.getByRole('button', { name: '知识库范围' }))
+    fireEvent.click(screen.getByRole('option', { name: /单篇测试笔记/ }))
+    fireEvent.change(screen.getByRole('textbox', { name: '知识库提问' }), {
+      target: { value: '只问这一篇' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '发送问题' }))
+
+    await waitFor(() => {
+      expect(stream.sendKnowledgeMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceIds: undefined,
+          itemRefs: [{ workspace_id: 'ws-1', item_id: 'single-note' }],
+        }),
+      )
+    })
+  })
+
+  it('scope picker starts with all notes', async () => {
+    render(<MemoryRouter><SearchPage /></MemoryRouter>)
+    expect(await screen.findByText('全部笔记')).toBeTruthy()
   })
 
   it('exact source card updates favorite state', async () => {

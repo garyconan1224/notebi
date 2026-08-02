@@ -36,6 +36,10 @@ it('renders child settings save and reset actions in the shared shell', () => {
     </MemoryRouter>,
   )
 
+  const saveBar = screen.getByRole('button', { name: '保存' }).closest('.settings-shared-savebar')
+  expect(saveBar).not.toBeNull()
+  expect(screen.getByRole('main')).not.toContainElement(saveBar)
+
   fireEvent.click(screen.getByRole('button', { name: '保存' }))
   fireEvent.click(screen.getByRole('button', { name: '重置' }))
 

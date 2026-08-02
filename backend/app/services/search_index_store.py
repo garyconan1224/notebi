@@ -147,6 +147,7 @@ class SearchIndexStore:
         query: str,
         *,
         workspace_ids: Optional[list[str]] = None,
+        item_refs: Optional[list[dict[str, str]]] = None,
         item_types: Optional[list[str]] = None,
         tags: Optional[list[str]] = None,
         limit: int = 30,
@@ -155,11 +156,27 @@ class SearchIndexStore:
 
         filters: list[str] = []
         params: list[Any] = []
+        scope_filters: list[str] = []
+        scope_params: list[Any] = []
         if workspace_ids:
-            filters.append(
+            scope_filters.append(
                 f"c.workspace_id IN ({','.join('?' for _ in workspace_ids)})"
             )
-            params.extend(workspace_ids)
+            scope_params.extend(workspace_ids)
+        if item_refs:
+            item_filters: list[str] = []
+            for ref in item_refs:
+                workspace_id = str(ref.get("workspace_id") or "")
+                item_id = str(ref.get("item_id") or "")
+                if not workspace_id or not item_id:
+                    continue
+                item_filters.append("(c.workspace_id = ? AND c.item_id = ?)")
+                scope_params.extend([workspace_id, item_id])
+            if item_filters:
+                scope_filters.append("(" + " OR ".join(item_filters) + ")")
+        if scope_filters:
+            filters.append("(" + " OR ".join(scope_filters) + ")")
+            params.extend(scope_params)
         if item_types:
             filters.append(
                 f"c.item_type IN ({','.join('?' for _ in item_types)})"

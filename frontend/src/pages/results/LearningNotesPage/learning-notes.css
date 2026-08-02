@@ -386,7 +386,7 @@
 }
 
 .vm-ln-scope .note-progress {
-  height: 5px;
+  height: 8px;
   background: var(--line);
   border-radius: 999px;
   position: relative;
@@ -415,13 +415,34 @@
   position: absolute;
   top: 50%;
   width: 2px;
-  height: 100%;
+  height: 12px;
   transform: translate(-1px, -50%);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.85);
   box-shadow: 0 0 0 1px color-mix(in oklch, var(--line) 80%, transparent);
   pointer-events: none;
 }
+
+.vm-ln-scope .note-progress-ticks {
+  position: relative;
+  height: 16px;
+  margin-top: 5px;
+  pointer-events: none;
+}
+
+.vm-ln-scope .note-progress-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  color: var(--ink-4);
+  font-family: var(--mono, var(--fm, monospace));
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.vm-ln-scope .note-progress-tick[data-edge='start'] { transform: none; }
+.vm-ln-scope .note-progress-tick[data-edge='end'] { transform: translateX(-100%); }
 
 .vm-ln-scope .note-progress-hover {
   position: absolute;
@@ -1093,6 +1114,18 @@
 
 .vm-ln-scope .ln-tr-row[data-speaker] {
   border-left: 2px solid var(--speaker-color);
+}
+
+.vm-ln-scope .ln-tr-row[data-speaker-tone='tinted'] {
+  background: color-mix(in oklch, var(--speaker-color) 7%, var(--bg));
+}
+
+.vm-ln-scope .ln-tr-row[data-speaker-tone='tinted']:hover {
+  background: color-mix(in oklch, var(--speaker-color) 12%, var(--bg));
+}
+
+.vm-ln-scope .ln-tr-row[data-speaker-tone='tinted'][data-active="true"] {
+  background: color-mix(in oklch, var(--speaker-color) 14%, var(--bg));
 }
 
 .vm-ln-scope .ln-tr-speaker-avatar {

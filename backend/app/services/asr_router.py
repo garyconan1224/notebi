@@ -85,6 +85,10 @@ def run_local_asr_with_fallback(
     log_callback: Optional[Callable[[str], None]] = None,
     progress_callback: Optional[Callable[[float, str], None]] = None,
     preferred_engine: str = "",
+    device: str = "auto",
+    cpu_threads: int = 0,
+    beam_size: int = 5,
+    vad_filter: bool = True,
 ) -> Tuple[str, List[Dict[str, Any]], float, str]:
     """按优先级尝试 ASR 引擎，返回 (text, segments, duration, engine_name)。
 
@@ -145,17 +149,23 @@ def run_local_asr_with_fallback(
                     is_fast_whisper_available,
                     transcribe_file_with_fast_whisper,
                 )
+                from backend.app.services.asr_hardware import resolve_asr_device
                 if is_fast_whisper_available():
                     tried.append("fast-whisper")
-                    _emit("🔍 选用 ASR 引擎：fast-whisper")
+                    effective_device, device_reason = resolve_asr_device(device, "fast-whisper")
+                    _emit(f"🔍 选用 ASR 引擎：fast-whisper（{device_reason}）")
                     result = transcribe_file_with_fast_whisper(
                         file_path,
                         model_name=model_name,
+                        device=effective_device,
                         language=language,
                         initial_prompt=initial_prompt,
                         log_callback=log_callback,
                         progress_callback=progress_callback,
                         return_segments=True,
+                        cpu_threads=cpu_threads,
+                        beam_size=beam_size,
+                        vad_filter=vad_filter,
                     )
                     text, segs, dur = result
                     if text.strip():

@@ -167,6 +167,8 @@ class WorkspaceItem:
     origin_content_id: Optional[str] = None
     legacy_item_id: str = ""
     name: str = ""  # 显示名（默认从 source 推导）
+    # 用户手动设置的封面图。空串时继续从下载缩略图 / 代表帧 / 首图自动派生。
+    cover_image: str = ""
     status: str = ItemStatus.PENDING.value
     preflight: PreflightConfig = field(default_factory=PreflightConfig)
     results: Dict[str, Any] = field(default_factory=dict)
@@ -219,6 +221,7 @@ class WorkspaceItem:
             ),
             legacy_item_id=str(data.get("legacy_item_id") or ""),
             name=str(data.get("name") or ""),
+            cover_image=str(data.get("cover_image") or ""),
             status=str(data.get("status") or ItemStatus.PENDING.value),
             preflight=PreflightConfig.from_dict(data.get("preflight") or {}),
             results=dict(data.get("results") or {}),
@@ -407,6 +410,8 @@ class WorkspaceRecord:
     kind: str = "note"
     source: str = "manual"  # "manual" | "inbox" | "bilibili_favorites" | "bilibili_multipart" | "bilibili_uploader"
     source_meta: Dict[str, Any] = field(default_factory=dict)  # 来源合集的元数据（B站收藏夹/分P/UP主）
+    # 用户手动设置的合集封面。空串时从素材封面自动派生。
+    cover_image: str = ""
     merged_notes: List[MergedNote] = field(default_factory=list)  # 合集级融合笔记
 
     def to_dict(self) -> Dict[str, Any]:
@@ -423,6 +428,7 @@ class WorkspaceRecord:
             "kind": self.kind,
             "source": self.source,
             "source_meta": self.source_meta,
+            "cover_image": self.cover_image,
             "merged_notes": [mn.to_dict() for mn in self.merged_notes],
         }
 
@@ -483,5 +489,6 @@ class WorkspaceRecord:
             kind=raw_kind,
             source=raw_source,
             source_meta=raw_source_meta,
+            cover_image=str(data.get("cover_image") or ""),
             merged_notes=[MergedNote.from_dict(mn) for mn in (data.get("merged_notes") or []) if isinstance(mn, dict)],
         )

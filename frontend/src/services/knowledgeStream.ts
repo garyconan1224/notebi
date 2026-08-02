@@ -1,5 +1,6 @@
 import type {
   KnowledgeMessage,
+  KnowledgeItemRef,
   KnowledgeSourceSnapshot,
   KnowledgeStreamEvent,
 } from '@/types/knowledgeConversation'
@@ -69,6 +70,7 @@ export interface SendKnowledgeMessageOptions {
   conversationId: string
   question: string
   workspaceIds?: string[]
+  itemRefs?: KnowledgeItemRef[]
   topK?: number
   signal?: AbortSignal
   onStatus?: (stage: 'retrieving' | 'generating', messageId: string) => void
@@ -92,6 +94,7 @@ export async function sendKnowledgeMessage(
         body: JSON.stringify({
           question: options.question,
           workspace_ids: options.workspaceIds,
+          item_refs: options.itemRefs,
           top_k: options.topK ?? 10,
         }),
         signal: options.signal,

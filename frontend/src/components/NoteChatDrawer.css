@@ -26,6 +26,59 @@
   text-align: center;
 }
 
+.note-chat-session-tools {
+  position: relative;
+  padding: 7px 10px 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.note-chat-session-actions,
+.note-chat-prompts,
+.note-chat-answer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.note-chat-session-actions button,
+.note-chat-prompts button,
+.note-chat-answer-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink-2);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+.note-chat-session-actions button { padding: 6px 7px; }
+.note-chat-prompts { padding: 7px 10px; border-bottom: 1px solid var(--line); }
+.note-chat-prompts button { padding: 5px 7px; background: var(--bg-sunken); }
+.note-chat-session-actions button:hover,
+.note-chat-prompts button:hover,
+.note-chat-answer-actions button:hover { color: var(--accent-2); border-color: var(--accent-2); }
+.note-chat-session-list {
+  position: absolute;
+  z-index: 3;
+  top: calc(100% + 2px);
+  left: 10px;
+  right: 10px;
+  max-height: 180px;
+  overflow: auto;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: var(--sh2);
+}
+.note-chat-session-list > li { list-style: none; }
+.note-chat-session-empty { display: block; padding: 8px; color: var(--ink-3); font-size: 12px; }
+.note-chat-session-list button { display: flex; width: 100%; justify-content: space-between; gap: 10px; padding: 8px; border: 0; border-radius: 5px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.note-chat-session-list button:hover { background: var(--bg-sunken); }
+.note-chat-session-list span { color: var(--ink-3); font-size: 11px; }
+
 .note-chat-messages {
   flex: 1;
   overflow: hidden;
@@ -69,6 +122,8 @@
 .note-chat-bubble-pending {
   opacity: 0.85;
 }
+.note-chat-answer-actions { margin: -5px 0 0 4px; }
+.note-chat-answer-actions button { padding: 4px 6px; }
 
 .note-chat-input-area {
   border-top: 1px solid var(--line);

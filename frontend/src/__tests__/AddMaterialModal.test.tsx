@@ -160,6 +160,18 @@ describe('AddMaterialModal', () => {
     })
   })
 
+  it('uses a wide dialog instead of inheriting the default max-w-lg limit', () => {
+    render(
+      <AddMaterialModal
+        open
+        onOpenChange={vi.fn()}
+        workspaceIds={[]}
+      />,
+    )
+
+    expect(document.querySelector('[data-slot="dialog-content"]')?.className).toContain('!max-w-none')
+  })
+
   it('切换到音频笔记后从 style_audio 加载风格模板', async () => {
     render(
       <AddMaterialModal

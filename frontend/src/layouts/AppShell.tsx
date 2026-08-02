@@ -61,6 +61,7 @@ function SidebarBtn({ icon: Icon, label, active, collapsed, onClick }: SidebarBt
     return (
       <button
         title={label}
+        aria-current={active ? 'page' : undefined}
         onClick={onClick}
         className={cn(
           'relative flex size-11 items-center justify-center rounded-xl transition-all duration-150',
@@ -80,6 +81,7 @@ function SidebarBtn({ icon: Icon, label, active, collapsed, onClick }: SidebarBt
   return (
     <button
       title={label}
+      aria-current={active ? 'page' : undefined}
       onClick={onClick}
       className={cn(
         'relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-150',

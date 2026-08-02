@@ -153,3 +153,12 @@ def list_chats(workspace_id: str) -> List[Dict[str, Any]]:
         }
         for s in _chat_store.list_chats(workspace_id)
     ]
+
+
+@router.delete("/{workspace_id}/chat/{chat_id}")
+def delete_chat(workspace_id: str, chat_id: str) -> Dict[str, bool]:
+    """删除用户确认的单个历史会话，不影响同一工作空间的其它会话。"""
+    _require_workspace(workspace_id)
+    if not _chat_store.delete_chat(workspace_id, chat_id):
+        raise HTTPException(status_code=404, detail="chat not found")
+    return {"deleted": True}

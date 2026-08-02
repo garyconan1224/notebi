@@ -86,6 +86,23 @@ def test_chat_turn_streams_and_persists(client: TestClient) -> None:
     assert len(chats) == 1 and chats[0]["chat_id"] == chat_id and chats[0]["message_count"] == 2
 
 
+def test_clear_chat_removes_only_the_active_conversation(client: TestClient) -> None:
+    first = client.post("/workspaces/ws_test_01/chat", json={"prompt": "第一轮"}).json()
+    second = client.post("/workspaces/ws_test_01/chat", json={"prompt": "第二轮"}).json()
+    _consume_sse(client, f"/workspaces/ws_test_01/chat/events?turn_id={first['turn_id']}")
+    _consume_sse(client, f"/workspaces/ws_test_01/chat/events?turn_id={second['turn_id']}")
+
+    cleared = client.delete(f"/workspaces/ws_test_01/chat/{first['chat_id']}")
+    assert cleared.status_code == 200
+    assert cleared.json() == {"deleted": True}
+    assert client.get(
+        f"/workspaces/ws_test_01/chat/messages?chat_id={first['chat_id']}"
+    ).json() == []
+    assert len(client.get(
+        f"/workspaces/ws_test_01/chat/messages?chat_id={second['chat_id']}"
+    ).json()) == 2
+
+
 def test_chat_workspace_not_found(client: TestClient) -> None:
     r = client.post("/workspaces/ws_nope/chat", json={"prompt": "hi"})
     assert r.status_code == 404

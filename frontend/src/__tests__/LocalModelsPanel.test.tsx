@@ -50,4 +50,24 @@ describe('LocalModelsPanel', () => {
     await waitFor(() => expect(mocks.downloadLocalModel).toHaveBeenCalledWith('fast-whisper:base'))
     expect(mocks.listLocalModels).toHaveBeenCalledTimes(2)
   })
+
+  it('explains how to authorize the gated Pyannote fallback before retrying', async () => {
+    mocks.listLocalModels.mockResolvedValue([
+      ...models,
+      {
+        model_id: 'pyannote', family: 'speaker-diarization', title: '说话人回退 · Pyannote Community-1',
+        description: '需要 Hugging Face Token 与模型许可', estimated_size_mb: 0, done_mb: 0, pending_mb: 0,
+        cached: false, compatible: true, cache_dir: '/tmp/hf', status: 'failed',
+        progress: 0, message: '下载失败', error: 'Cannot access gated repo', requires_token: true,
+      },
+    ])
+
+    render(<LocalModelsPanel />)
+
+    expect(await screen.findByText(/Community-1 的访问许可阻止了下载/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '打开模型授权页' })).toHaveAttribute(
+      'href',
+      'https://huggingface.co/pyannote/speaker-diarization-community-1',
+    )
+  })
 })

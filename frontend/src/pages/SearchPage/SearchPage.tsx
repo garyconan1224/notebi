@@ -20,6 +20,7 @@ import type { SearchResponse } from '@/services/search'
 import { listWorkspaces } from '@/services/workspaces'
 import type {
   KnowledgeConversation,
+  KnowledgeItemRef,
   KnowledgeMessage,
   KnowledgeSourceSnapshot,
 } from '@/types/knowledgeConversation'
@@ -31,6 +32,7 @@ import {
   loadPersistedScope,
   persistScope,
   type KnowledgeScope,
+  type KnowledgeScopeItemOption,
 } from './KnowledgeScopePicker'
 import { SearchResultView } from './SearchResultView'
 import { SourcePreviewPanel } from './SourcePreviewPanel'
@@ -38,7 +40,33 @@ import { SourcePreviewPanel } from './SourcePreviewPanel'
 import './search.css'
 
 function scopeIds(scope: KnowledgeScope): string[] | undefined {
-  return scope.type === 'all' ? undefined : [...new Set(scope.workspaceIds)]
+  if (scope.type === 'all') return undefined
+  const workspaceIds = [...new Set(scope.workspaceIds)]
+  return workspaceIds.length ? workspaceIds : undefined
+}
+
+function scopeItemRefs(scope: KnowledgeScope): KnowledgeItemRef[] | undefined {
+  return scope.type === 'all' || !scope.itemRefs?.length
+    ? undefined
+    : scope.itemRefs
+}
+
+function scopeItemsFor(
+  workspaces: WorkspaceRecord[],
+): KnowledgeScopeItemOption[] {
+  const seen = new Set<string>()
+  return workspaces.flatMap(workspace => workspace.items.map(item => ({
+    workspaceId: workspace.workspace_id,
+    itemId: item.item_id,
+    name: item.name || '未命名笔记',
+    workspaceName: workspace.name,
+    type: item.type,
+  }))).filter(item => {
+    const key = `${item.workspaceId}:${item.itemId}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 function newestAssistantSources(
@@ -67,6 +95,7 @@ export default function SearchPage() {
   const [scope, setScope] = useState<KnowledgeScope>({
     type: 'all',
     workspaceIds: [],
+    itemRefs: [],
   })
   const [mode, setMode] = useState<'smart' | 'exact'>('smart')
   const [query, setQuery] = useState('')
@@ -88,8 +117,13 @@ export default function SearchPage() {
       setActiveConversation(conversation)
       setScope(
         conversation.default_scope.length
-          ? { type: 'selected', workspaceIds: conversation.default_scope }
-          : { type: 'all', workspaceIds: [] },
+          || conversation.default_item_refs?.length
+          ? {
+            type: 'selected',
+            workspaceIds: conversation.default_scope,
+            itemRefs: conversation.default_item_refs ?? [],
+          }
+          : { type: 'all', workspaceIds: [], itemRefs: [] },
       )
       const sources = newestAssistantSources(conversation)
       setStreamSources(sources)
@@ -117,19 +151,28 @@ export default function SearchPage() {
         setStatus(currentStatus)
         setConversations(conversationPage.items)
         const validIds = new Set(records.map(record => record.workspace_id))
+        const itemOptions = scopeItemsFor(records)
         const urlIds = (searchParams.get('workspace_ids') ?? '')
           .split(',')
           .filter(id => validIds.has(id))
         const requestedNew = searchParams.get('new') === '1'
         if (requestedNew) {
           const nextScope: KnowledgeScope = urlIds.length
-            ? { type: 'selected', workspaceIds: [...new Set(urlIds)] }
-            : loadPersistedScope(records)
+            ? {
+              type: 'selected',
+              workspaceIds: [...new Set(urlIds)],
+              itemRefs: [],
+            }
+            : loadPersistedScope(records, itemOptions)
           setScope(nextScope)
-          const created = await createKnowledgeConversation(
-            '新会话',
-            scopeIds(nextScope) ?? [],
-          )
+          const nextItemRefs = scopeItemRefs(nextScope)
+          const created = nextItemRefs
+            ? await createKnowledgeConversation(
+              '新会话',
+              scopeIds(nextScope) ?? [],
+              nextItemRefs,
+            )
+            : await createKnowledgeConversation('新会话', scopeIds(nextScope) ?? [])
           setConversations(previous => [
             created,
             ...previous.filter(item => item.conversation_id !== created.conversation_id),
@@ -141,8 +184,13 @@ export default function SearchPage() {
           )
           setActiveConversation(full)
           const nextScope = full.default_scope.length
-            ? { type: 'selected' as const, workspaceIds: full.default_scope }
-            : loadPersistedScope(records)
+            || full.default_item_refs?.length
+            ? {
+              type: 'selected' as const,
+              workspaceIds: full.default_scope,
+              itemRefs: full.default_item_refs ?? [],
+            }
+            : loadPersistedScope(records, itemOptions)
           setScope(nextScope)
           const sources = newestAssistantSources(full)
           setStreamSources(sources)
@@ -150,8 +198,12 @@ export default function SearchPage() {
         } else {
           setScope(
             urlIds.length
-              ? { type: 'selected', workspaceIds: [...new Set(urlIds)] }
-              : loadPersistedScope(records),
+              ? {
+                type: 'selected',
+                workspaceIds: [...new Set(urlIds)],
+                itemRefs: [],
+              }
+              : loadPersistedScope(records, itemOptions),
           )
         }
       } catch (error) {
@@ -166,6 +218,7 @@ export default function SearchPage() {
     if (activeConversation) {
       void updateKnowledgeConversation(activeConversation.conversation_id, {
         defaultScope: scopeIds(next) ?? [],
+        defaultItemRefs: scopeItemRefs(next) ?? [],
       }).then(updated => {
         setActiveConversation(updated)
         setConversations(previous => previous.map(item => (
@@ -179,10 +232,10 @@ export default function SearchPage() {
 
   const createConversation = useCallback(async () => {
     try {
-      const created = await createKnowledgeConversation(
-        '新会话',
-        scopeIds(scope) ?? [],
-      )
+      const itemRefs = scopeItemRefs(scope)
+      const created = itemRefs
+        ? await createKnowledgeConversation('新会话', scopeIds(scope) ?? [], itemRefs)
+        : await createKnowledgeConversation('新会话', scopeIds(scope) ?? [])
       setConversations(previous => [
         created,
         ...previous.filter(item => item.conversation_id !== created.conversation_id),
@@ -222,8 +275,12 @@ export default function SearchPage() {
   const runQuery = useCallback(async () => {
     const question = query.trim()
     if (!question) return
-    if (scope.type === 'selected' && scope.workspaceIds.length === 0) {
-      toast.warning('请至少选择一个合集')
+    if (
+      scope.type === 'selected'
+      && scope.workspaceIds.length === 0
+      && (scope.itemRefs?.length ?? 0) === 0
+    ) {
+      toast.warning('请至少选择一个合集或笔记')
       return
     }
     setLastError('')
@@ -237,10 +294,10 @@ export default function SearchPage() {
 
     if (mode === 'exact') {
       try {
-        const result = await searchKnowledgeOriginals(
-          question,
-          scopeIds(scope),
-        )
+        const itemRefs = scopeItemRefs(scope)
+        const result = itemRefs
+          ? await searchKnowledgeOriginals(question, scopeIds(scope), itemRefs)
+          : await searchKnowledgeOriginals(question, scopeIds(scope))
         setExactResult(result)
         setStreamSources(result.sources)
         setActiveSourceId(result.sources[0]?.source_id ?? null)
@@ -268,6 +325,7 @@ export default function SearchPage() {
         conversationId: conversation.conversation_id,
         question,
         workspaceIds: scopeIds(scope),
+        itemRefs: scopeItemRefs(scope),
         signal: controller.signal,
         onStatus: stage => setPhase(stage),
         onSources: sources => {
@@ -363,6 +421,7 @@ export default function SearchPage() {
     ),
     [activeConversation, exactResult, streamSources],
   )
+  const scopeItems = useMemo(() => scopeItemsFor(workspaces), [workspaces])
 
   return (
     <div className="nibi-search-scope knowledge-workspace">
@@ -383,6 +442,7 @@ export default function SearchPage() {
           <div className="knowledge-toolbar-actions">
             <KnowledgeScopePicker
               workspaces={workspaces}
+              items={scopeItems}
               scope={scope}
               onChange={handleScopeChange}
             />
@@ -424,7 +484,7 @@ export default function SearchPage() {
           {!activeConversation && !pendingQuestion && !exactResult && (
             <div className="knowledge-welcome">
               <h2>从一个具体问题开始</h2>
-              <p>每轮都会按当前合集范围重新检索，并保存当时的来源快照。</p>
+              <p>每轮都会按当前合集或笔记范围重新检索，并保存当时的来源快照。</p>
             </div>
           )}
           {activeConversation?.messages.map(message => (
@@ -531,7 +591,11 @@ export default function SearchPage() {
           value={query}
           mode={mode}
           loading={loading}
-          disabled={scope.type === 'selected' && scope.workspaceIds.length === 0}
+          disabled={
+            scope.type === 'selected'
+            && scope.workspaceIds.length === 0
+            && (scope.itemRefs?.length ?? 0) === 0
+          }
           onChange={setQuery}
           onSubmit={() => void runQuery()}
           onStop={() => abortRef.current?.abort()}

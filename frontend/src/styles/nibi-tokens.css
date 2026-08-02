@@ -57,7 +57,11 @@
   --color-error:         oklch(56% 0.20 25);
   --color-error-light:   oklch(94% 0.04 25);
 
-  /* ── Radius ── */
+  /* ── Color: 身份色（B 东方颜料，类型点 / 说话人；值取自设计源原型 :root）── */
+  --color-id-kon:    oklch(39.6% 0.105 260);  /* 紺  = 视频 / 音频 */
+  --color-id-imayo:  oklch(48% 0.15 12);      /* 今様 = 图文 / 文本 */
+
+  /* ── Radius ─ */
   --radius: 10px;
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -126,6 +130,9 @@
   --wrnl: var(--color-warning-light);
   --err:  var(--color-error);
   --errl: var(--color-error-light);
+
+  --id-kon:   var(--color-id-kon);
+  --id-imayo: var(--color-id-imayo);
 
   --rs: var(--radius-sm);
   --r:  var(--radius-base);

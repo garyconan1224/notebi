@@ -145,9 +145,11 @@ export function SettingsShell() {
           </div>
         </aside>
 
-        {/* 右侧内容 */}
-        <main className="settings-content">
-          <Outlet />
+        {/* 右侧内容与独立保存栏 */}
+        <div className="settings-main">
+          <main className="settings-content">
+            <Outlet />
+          </main>
           {!childOwnsSaveBar && (saveBar.onSave || saveBar.onReset) && (
             <div className="settings-header-actions settings-shared-savebar">
               <span className="text-xs text-[var(--mut)]">
@@ -171,7 +173,7 @@ export function SettingsShell() {
               </button>
             </div>
           )}
-        </main>
+        </div>
       </div>
     </div>
   )

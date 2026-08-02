@@ -14,12 +14,19 @@ export type KnowledgeSourceSnapshot = Partial<SearchSource> & {
   title?: string
 }
 
+/** A note must carry its collection ID because linked copies can share an item ID. */
+export interface KnowledgeItemRef {
+  workspace_id: string
+  item_id: string
+}
+
 export interface KnowledgeMessage {
   message_id: string
   role: 'user' | 'assistant'
   status: KnowledgeMessageStatus
   content: string
   scope_snapshot: string[]
+  scope_item_refs: KnowledgeItemRef[]
   query_text: string
   answer_version: number
   citations: string[]
@@ -38,6 +45,7 @@ export interface KnowledgeConversation {
   conversation_id: string
   title: string
   default_scope: string[]
+  default_item_refs: KnowledgeItemRef[]
   messages: KnowledgeMessage[]
   created_at: string
   updated_at: string

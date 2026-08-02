@@ -14,7 +14,7 @@ export interface TranscriberConfigPayload extends Record<string, unknown> {
   type: TranscriberType
   whisper_model_size: WhisperModelSize
   language: string
-  device: 'cpu' | 'cuda' | 'mps'
+  device: 'auto' | 'cpu' | 'cuda' | 'mps'
   groq_api_key: string
   /** ASR 初始提示词（Faster Whisper 前置 prompt） */
   initial_prompt: string
@@ -65,6 +65,7 @@ export async function updateTranscriberConfig(
  */
 export function getAvailableTranscriberTypes() {
   const baseTypes = [
+    { value: 'auto', label: '自动选择（推荐）' },
     { value: 'fast-whisper', label: 'Faster Whisper（本地）' },
     { value: 'bcut', label: '必剪（在线）' },
     { value: 'kuaishou', label: '快手（在线）' },
@@ -105,6 +106,24 @@ export interface WhisperModelsStatusResponse {
   models: WhisperModelStatus[]
 }
 
+/** 后端运行时的硬件探测结果；不包含驱动路径、环境变量或设备序列号。 */
+export interface AsrHardwareStatus {
+  platform: string
+  architecture: string
+  strategy: string
+  cuda_devices: number
+  mlx_available: boolean
+  recommended_engine: 'mlx-whisper' | 'fast-whisper'
+  recommended_device: 'cpu' | 'cuda' | 'mps'
+  recommendation: string
+  fallback: string
+}
+
+export async function fetchAsrHardwareStatus(): Promise<AsrHardwareStatus> {
+  const res = await http.get<AsrHardwareStatus>('/transcriber_config/hardware')
+  return res.data
+}
+
 /**
  * 查询所有 Whisper 模型的本地缓存状态。
  *
@@ -123,6 +142,7 @@ export function getDeviceOptions(
   engineType?: string,
 ): Array<{ value: TranscriberConfigPayload['device']; label: string }> {
   const opts: Array<{ value: TranscriberConfigPayload['device']; label: string }> = [
+    { value: 'auto', label: '自动（按当前硬件推荐）' },
     { value: 'cpu', label: 'CPU' },
     { value: 'cuda', label: 'NVIDIA CUDA' },
   ]

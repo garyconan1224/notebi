@@ -26,9 +26,6 @@ vi.mock('sonner', () => ({
 vi.mock('@/pages/SettingPage/PerformanceTierPage', () => ({
   default: () => <div>性能档位内容</div>,
 }))
-vi.mock('@/pages/SettingPage/ScreenshotPage', () => ({
-  default: () => <div>截帧设置内容</div>,
-}))
 vi.mock('@/pages/SettingPage/TranscriberPage', () => ({
   default: () => <div>转写设置内容</div>,
 }))
@@ -63,6 +60,16 @@ describe('AnalysisDefaultsPage task defaults', () => {
     expect(screen.getByLabelText('总结输出语言')).toHaveValue('zh-Hans')
     expect(screen.queryByText(/音乐|BPM|Suno|Udio/)).not.toBeInTheDocument()
     expect(screen.queryByText(/模型选择|视觉模型/)).not.toBeInTheDocument()
+  })
+
+  it('不再暴露没有后端消费者的截帧设置，画面分析默认值仍由任务默认勾选管理', async () => {
+    render(<AnalysisDefaultsPage />)
+
+    expect(screen.queryByRole('tab', { name: '截帧设置' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('tab', { name: '任务默认勾选' }))
+    expect(await screen.findByLabelText('视频画面分析与笔记配图')).toBeInTheDocument()
+    expect(screen.getByLabelText('默认截帧间隔')).toBeInTheDocument()
   })
 
   it('允许保存自定义的总结输出语言', async () => {

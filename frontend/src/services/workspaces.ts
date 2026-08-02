@@ -210,6 +210,49 @@ export async function updateWorkspace(
   return res.data
 }
 
+type CoverUploadResponse = { cover_url: string }
+
+/** 上传合集手动封面；传空不覆盖，恢复自动使用 resetWorkspaceCover。 */
+export async function uploadWorkspaceCover(
+  workspaceId: string,
+  file: File,
+): Promise<CoverUploadResponse> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await http.post<CoverUploadResponse>(`${BASE}/${workspaceId}/cover`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return res.data
+}
+
+export async function resetWorkspaceCover(workspaceId: string): Promise<WorkspaceRecord> {
+  const res = await http.delete<WorkspaceRecord>(`${BASE}/${workspaceId}/cover`)
+  return res.data
+}
+
+export async function uploadItemCover(
+  workspaceId: string,
+  itemId: string,
+  file: File,
+): Promise<CoverUploadResponse> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await http.post<CoverUploadResponse>(
+    `${BASE}/${workspaceId}/items/${itemId}/cover`,
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  )
+  return res.data
+}
+
+export async function resetItemCover(
+  workspaceId: string,
+  itemId: string,
+): Promise<WorkspaceRecord> {
+  const res = await http.delete<WorkspaceRecord>(`${BASE}/${workspaceId}/items/${itemId}/cover`)
+  return res.data
+}
+
 /** DELETE /workspaces/{id} — 删除合集；其中笔记会保留在收纳箱或其它合集。 */
 export interface DeleteWorkspaceResult {
   trashed: boolean
@@ -1177,6 +1220,26 @@ export async function getItemNote(
   return res.data as ItemNote
 }
 
+export interface ChapterSummaryTaskAccepted {
+  status: 'accepted'
+  task_id: string
+  workspace_id: string
+  item_id: string
+}
+
+/** 排队生成一次可追溯的模型章节摘要；不会在打开笔记时隐式调用模型。 */
+export async function createChapterSummaries(
+  workspaceId: string,
+  itemId: string,
+  options: { provider_id?: string; model?: string } = {},
+): Promise<ChapterSummaryTaskAccepted> {
+  const res = await http.post<ChapterSummaryTaskAccepted>(
+    `${BASE}/${workspaceId}/items/${itemId}/chapters`,
+    { provider_id: options.provider_id ?? '', model: options.model ?? '' },
+  )
+  return res.data
+}
+
 /** R1.1: PUT /workspaces/{id}/items/{itemId}/note — 写入 note 正文（保留 frontmatter） */
 export async function putItemNote(
   workspaceId: string,
@@ -1253,6 +1316,64 @@ export async function exportItemNoteObsidian(
     signal,
   })
   return res.data as Blob
+}
+
+export interface NotionExportResult {
+  page_id: string
+  url: string
+}
+
+/** Creates one Notion child page. The access token is sent only for this request. */
+export async function exportItemNoteToNotion(
+  workspaceId: string,
+  itemId: string,
+  payload: {
+    accessToken: string
+    parentPageId: string
+    title: string
+    markdown: string
+  },
+): Promise<NotionExportResult> {
+  const res = await http.post<NotionExportResult>(
+    `${BASE}/${workspaceId}/items/${itemId}/note/export/notion`,
+    {
+      access_token: payload.accessToken,
+      parent_page_id: payload.parentPageId,
+      title: payload.title,
+      markdown: payload.markdown,
+    },
+    { timeout: 60000 },
+  )
+  return res.data
+}
+
+export interface FeishuExportResult {
+  document_id: string
+  url: string
+}
+
+/** Creates one Feishu document. The access token is sent only for this request. */
+export async function exportItemNoteToFeishu(
+  workspaceId: string,
+  itemId: string,
+  payload: {
+    accessToken: string
+    folderToken?: string
+    title: string
+    markdown: string
+  },
+): Promise<FeishuExportResult> {
+  const res = await http.post<FeishuExportResult>(
+    `${BASE}/${workspaceId}/items/${itemId}/note/export/feishu`,
+    {
+      access_token: payload.accessToken,
+      folder_token: payload.folderToken ?? '',
+      title: payload.title,
+      markdown: payload.markdown,
+    },
+    { timeout: 60000 },
+  )
+  return res.data
 }
 
 export type ItemNoteExportFormat =

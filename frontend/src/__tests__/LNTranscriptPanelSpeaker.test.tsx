@@ -1,3 +1,4 @@
+import '@testing-library/jest-dom'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -29,7 +30,9 @@ describe('LNTranscriptPanel speaker presentation', () => {
       />,
     )
 
-    expect(container.querySelector('.ln-tr-row[data-speaker="SPEAKER_00"]')).not.toBeNull()
+    const row = container.querySelector('.ln-tr-row[data-speaker="SPEAKER_00"]')
+    expect(row).not.toBeNull()
+    expect(row).toHaveAttribute('data-speaker-tone', 'tinted')
     expect(container.querySelector('.ln-tr-speaker-avatar')).not.toBeNull()
     expect(screen.getByText('主持人')).not.toBeNull()
   })

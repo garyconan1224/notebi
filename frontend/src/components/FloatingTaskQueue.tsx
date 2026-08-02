@@ -276,6 +276,11 @@ export function FloatingTaskQueue() {
 
   if (total === 0) return null
 
+  // 首页由 WorkbenchPage 的「正在处理」活动条承担即时进度，浮窗在首页不重复出现（R6）。
+  // 任务中心 `/tasks` 及其子路由（如 `/tasks/batches/:id`）本身就是任务全量视图，
+  // 浮窗与之重复且会遮挡操作，统一隐藏（S7.6）。
+  if (location.pathname === '/' || location.pathname.startsWith('/tasks')) return null
+
   const activeRows = rows.filter((r) => !isTaskTerminal(r.status))
   const erroredRows = rows.filter((r) => r.status === 'FAILED')
 

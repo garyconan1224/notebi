@@ -56,6 +56,7 @@ class KnowledgeMessage(BaseModel):
     status: MessageStatus
     content: str = ""
     scope_snapshot: List[str] = Field(default_factory=list)
+    scope_item_refs: List[Dict[str, str]] = Field(default_factory=list)
     query_text: str = ""
     answer_version: int = 1
     citations: List[str] = Field(default_factory=list)
@@ -70,6 +71,7 @@ class KnowledgeConversation(BaseModel):
     conversation_id: str = Field(default_factory=lambda: str(uuid4()))
     title: str = "新会话"
     default_scope: List[str] = Field(default_factory=list)
+    default_item_refs: List[Dict[str, str]] = Field(default_factory=list)
     messages: List[KnowledgeMessage] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)

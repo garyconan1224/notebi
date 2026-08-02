@@ -19,7 +19,7 @@ const {
   navigateMock: vi.fn(),
   pauseBatchMock: vi.fn(),
   retryMock: vi.fn(),
-  routeState: { pathname: '/' },
+  routeState: { pathname: '/library' },
 }))
 
 vi.mock('react-router-dom', () => ({
@@ -75,7 +75,9 @@ const makeRunningAnchor = (): TaskRecord => makeTask({
 
 describe('FloatingTaskQueue v2', () => {
   beforeEach(() => {
-    routeState.pathname = '/'
+    // 默认放在普通非首页路径：浮窗在首页 `/` 与任务中心 `/tasks` 前缀下按产品规则隐藏，
+    // 旧用例需要浮窗渲染，因此默认路由必须是非首页、非任务中心路径。
+    routeState.pathname = '/library'
     navigateMock.mockReset()
     cancelMock.mockReset()
     cancelBatchMock.mockReset()
@@ -329,6 +331,43 @@ describe('FloatingTaskQueue v2', () => {
     render(<FloatingTaskQueue />)
 
     expect(screen.queryByRole('button', { name: /任务/ })).toBeNull()
+  })
+
+  it('首页 `/` 有运行中任务也不渲染浮窗（由活动条承担进度）', () => {
+    routeState.pathname = '/'
+    useTaskStore.setState({
+      tasks: [makeRunningAnchor()],
+    })
+
+    render(<FloatingTaskQueue />)
+
+    expect(screen.queryByRole('button', { name: /任务/ })).toBeNull()
+  })
+
+  it('任务中心 `/tasks` 及子路由 `/tasks/batches/:id` 隐藏浮窗', () => {
+    useTaskStore.setState({
+      tasks: [makeRunningAnchor()],
+    })
+
+    routeState.pathname = '/tasks'
+    const { unmount } = render(<FloatingTaskQueue />)
+    expect(screen.queryByRole('button', { name: /任务/ })).toBeNull()
+    unmount()
+
+    routeState.pathname = '/tasks/batches/batch-1'
+    render(<FloatingTaskQueue />)
+    expect(screen.queryByRole('button', { name: /任务/ })).toBeNull()
+  })
+
+  it('普通非首页路径有运行中任务时浮窗正常显示', () => {
+    routeState.pathname = '/library'
+    useTaskStore.setState({
+      tasks: [makeRunningAnchor()],
+    })
+
+    render(<FloatingTaskQueue />)
+
+    expect(screen.getByRole('button', { name: /任务/ })).toBeTruthy()
   })
 
   it('当前 processing 路由任务显示查看中标记', () => {

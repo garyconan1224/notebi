@@ -136,30 +136,6 @@
     "socketTimeoutLabel": "Connection Timeout (seconds)",
     "socketTimeoutHint": "Network connection timeout, range 5-300 seconds, default 30"
   },
-  "screenshot": {
-    "title": "Video Screenshot",
-    "subtitle": "Configure default parameters for frame extraction, montage and vision understanding",
-    "saved": "Screenshot configuration saved",
-    "saveFailed": "Failed to save screenshot configuration",
-    "interval": {
-      "title": "Default Frame Interval",
-      "description": "How often (in seconds) to extract a key frame"
-    },
-    "grid": {
-      "title": "Grid Montage Size",
-      "description": "Select grid size. 3x3 is recommended for balanced performance and quality",
-      "totalFrames": "{{count}} frames total",
-      "invalid": "Grid size must be an integer between 1 and 10"
-    },
-    "quality": {
-      "title": "Image Quality",
-      "description": "Higher quality results in larger file sizes"
-    },
-    "embed": {
-      "title": "Auto Embed in Notes",
-      "description": "Whether to automatically include screenshot grids when generating notes"
-    }
-  },
   "transcriber": {
     "title": "Audio Transcription",
     "subtitle": "Configure speech recognition engine and default parameters (ASR Provider)",
@@ -177,6 +153,7 @@
       },
       "description": {
         "subtitle": "Choose a transcription engine that fits your device and workflow.",
+        "auto": "Detect this machine automatically: MLX on Apple Silicon, NVIDIA CUDA on Windows, then CPU fallback",
         "fastWhisper": "Free local transcription, fast but requires local resources, supports offline mode",
         "bcut": "Bilibili's online service, no local resources needed, requires internet",
         "kuaishou": "Kuaishou online service, no local resources needed, requires internet",

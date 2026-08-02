@@ -18,10 +18,13 @@ export interface LibraryItem {
   updated_at: string
   duration_seconds: number | null
   thumbnail: string | null
+  cover_is_manual?: boolean
   description?: string
   favorite?: boolean
   results_summary: { has_summary: boolean; has_transcript: boolean }
   primary_task_status: string | null
+  /** 当前素材处理链中实际负责状态的任务；排除总结派生任务。 */
+  primary_task_id?: string | null
   preflight?: { intent?: string; [key: string]: unknown }
   tags?: ItemTags
   related_task_ids?: string[]
@@ -40,6 +43,7 @@ export interface LibraryWorkspace {
   items_count: number
   items_count_by_type: Record<string, number>
   cover_thumbnail: string | null
+  cover_is_manual?: boolean
   updated_at: string
   status: string
 }

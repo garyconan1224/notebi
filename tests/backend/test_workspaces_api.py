@@ -13,6 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import httpx
 from fastapi.testclient import TestClient
 
 # ── 测试用隔离 App ────────────────────────────────────────────────────────────
@@ -104,6 +105,172 @@ def test_list_workspaces_derived_fields_present(client: TestClient) -> None:
     assert ws["last_active_at"] == ws["updated_at"]
 
 
+def test_create_chapter_summary_task_is_linked_to_audio_item(client: TestClient) -> None:
+    workspace_id = client.post("/workspaces", json={"name": "章节任务"}).json()["workspace_id"]
+    item_id = client.post(
+        f"/workspaces/{workspace_id}/items",
+        json={"type": "audio", "source": "url", "source_value": "https://example.com/a.mp3"},
+    ).json()["items"][0]["item_id"]
+    ws_module._store.update_item(workspace_id, item_id, results={
+        "transcript_segments": [{"start": 0, "text": "这是可以生成章节的字幕。"}],
+    })
+    ws_module._pipeline_runner.create_task.return_value = SimpleNamespace(task_id="chapters-1")
+
+    response = client.post(f"/workspaces/{workspace_id}/items/{item_id}/chapters", json={})
+
+    assert response.status_code == 202
+    assert response.json()["task_id"] == "chapters-1"
+    assert "chapters-1" in ws_module._store.get(workspace_id).items[0].related_task_ids
+
+
+def test_export_current_note_to_notion_uses_session_token_only(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace_id = client.post("/workspaces", json={"name": "Notion"}).json()["workspace_id"]
+    item_id = client.post(
+        f"/workspaces/{workspace_id}/items",
+        json={"type": "text", "source": "local", "source_value": "manual"},
+    ).json()["items"][0]["item_id"]
+    captured: dict[str, object] = {}
+
+    def fake_post(url: str, **kwargs):
+        captured["url"] = url
+        captured.update(kwargs)
+        return httpx.Response(200, json={"id": "notion-page", "url": "https://notion.so/page"})
+
+    monkeypatch.setattr(ws_module.httpx, "post", fake_post)
+    response = client.post(
+        f"/workspaces/{workspace_id}/items/{item_id}/note/export/notion",
+        json={
+            "access_token": "secret-token",
+            "parent_page_id": "parent-page",
+            "title": "产品笔记",
+            "markdown": "# 产品笔记\n\n正文",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"page_id": "notion-page", "url": "https://notion.so/page"}
+    assert captured["url"] == "https://api.notion.com/v1/pages"
+    assert captured["headers"] == {
+        "Authorization": "Bearer secret-token",
+        "Notion-Version": "2026-03-11",
+        "Content-Type": "application/json",
+    }
+    assert captured["json"] == {
+        "parent": {"page_id": "parent-page"},
+        "properties": {
+            "title": {"title": [{"type": "text", "text": {"content": "产品笔记"}}]},
+        },
+        "markdown": "# 产品笔记\n\n正文",
+    }
+
+
+def test_export_to_notion_accepts_a_parent_page_link(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace_id = client.post("/workspaces", json={"name": "Notion 链接"}).json()["workspace_id"]
+    item_id = client.post(
+        f"/workspaces/{workspace_id}/items",
+        json={"type": "text", "source": "local", "source_value": "manual"},
+    ).json()["items"][0]["item_id"]
+    captured: dict[str, object] = {}
+
+    def fake_post(url: str, **kwargs):
+        captured.update(kwargs)
+        return httpx.Response(200, json={"id": "notion-page", "url": "https://notion.so/page"})
+
+    monkeypatch.setattr(ws_module.httpx, "post", fake_post)
+    response = client.post(
+        f"/workspaces/{workspace_id}/items/{item_id}/note/export/notion",
+        json={
+            "access_token": "secret-token",
+            "parent_page_id": "https://www.notion.so/Parent-0123456789abcdef0123456789abcdef?pvs=4",
+            "title": "产品笔记",
+            "markdown": "正文",
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["json"] == {
+        "parent": {"page_id": "01234567-89ab-cdef-0123-456789abcdef"},
+        "properties": {
+            "title": {"title": [{"type": "text", "text": {"content": "产品笔记"}}]},
+        },
+        "markdown": "正文",
+    }
+
+
+def test_export_current_note_to_feishu_creates_structured_document_with_session_token_only(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace_id = client.post("/workspaces", json={"name": "飞书"}).json()["workspace_id"]
+    item_id = client.post(
+        f"/workspaces/{workspace_id}/items",
+        json={"type": "text", "source": "local", "source_value": "manual"},
+    ).json()["items"][0]["item_id"]
+    calls: list[dict[str, object]] = []
+
+    def fake_post(url: str, **kwargs):
+        calls.append({"url": url, **kwargs})
+        if url.endswith("/documents"):
+            return httpx.Response(200, json={
+                "code": 0,
+                "data": {"document": {"document_id": "docx-note"}},
+            })
+        return httpx.Response(200, json={"code": 0, "data": {"children": []}})
+
+    monkeypatch.setattr(ws_module.httpx, "post", fake_post)
+    response = client.post(
+        f"/workspaces/{workspace_id}/items/{item_id}/note/export/feishu",
+        json={
+            "access_token": "tenant-token",
+            "folder_token": "folder-token",
+            "title": "产品笔记",
+            "markdown": "# 核心结论\n\n- 保留结构\n\n> 这是一条引用",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "document_id": "docx-note",
+        "url": "https://feishu.cn/docx/docx-note",
+    }
+    assert calls[0] == {
+        "url": "https://open.feishu.cn/open-apis/docx/v1/documents",
+        "headers": {
+            "Authorization": "Bearer tenant-token",
+            "Content-Type": "application/json; charset=utf-8",
+        },
+        "json": {"title": "产品笔记", "folder_token": "folder-token"},
+        "timeout": 30.0,
+    }
+    assert calls[1]["url"] == (
+        "https://open.feishu.cn/open-apis/docx/v1/documents/docx-note/blocks/docx-note/children"
+    )
+    assert calls[1]["headers"] == calls[0]["headers"]
+    assert calls[1]["json"] == {
+        "index": -1,
+        "children": [
+            {
+                "block_type": 3,
+                "heading1": {"elements": [{"text_run": {"content": "核心结论"}}]},
+            },
+            {
+                "block_type": 12,
+                "bullet": {"elements": [{"text_run": {"content": "保留结构"}}]},
+            },
+            {
+                "block_type": 15,
+                "quote": {"elements": [{"text_run": {"content": "这是一条引用"}}]},
+            },
+        ],
+    }
+
+
 def test_batch_add_to_workspace_creates_shared_membership_not_copy(client: TestClient) -> None:
     source = client.post("/workspaces", json={"name": "来源"}).json()["workspace_id"]
     target = client.post("/workspaces", json={"name": "目标"}).json()["workspace_id"]
@@ -152,6 +319,56 @@ def test_get_workspace_derived_fields_present(client: TestClient) -> None:
 
     for key in ("current_step", "items_count_by_type", "cover_thumbnail", "last_active_at"):
         assert key in ws, f"缺少字段: {key}"
+
+
+def test_manual_collection_and_item_cover_can_fall_back_to_automatic(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """封面默认自动派生；手动上传覆盖后可分别恢复自动策略。"""
+    monkeypatch.setattr(ws_module, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(ws_module, "WORKSPACE_UPLOAD_ROOT", tmp_path / "workspaces")
+
+    workspace_id = client.post("/workspaces", json={"name": "封面测试"}).json()["workspace_id"]
+    item = client.post(
+        f"/workspaces/{workspace_id}/items",
+        json={"type": "text", "source": "local", "source_value": "note.md", "name": "素材"},
+    ).json()["items"][0]
+    item_id = item["item_id"]
+
+    item_cover = client.post(
+        f"/workspaces/{workspace_id}/items/{item_id}/cover",
+        files={"file": ("item-cover.png", io.BytesIO(b"not-a-real-png"), "image/png")},
+    )
+    assert item_cover.status_code == 200
+    item_cover_url = item_cover.json()["cover_url"]
+    assert item_cover_url.startswith(f"/static/workspaces/{workspace_id}/covers/")
+
+    detail = client.get(f"/workspaces/{workspace_id}").json()
+    assert detail["cover_thumbnail"] == item_cover_url
+    assert detail["cover_is_manual"] is False
+    assert detail["items"][0]["thumbnail"] == item_cover_url
+    assert detail["items"][0]["cover_is_manual"] is True
+
+    collection_cover = client.post(
+        f"/workspaces/{workspace_id}/cover",
+        files={"file": ("collection-cover.webp", io.BytesIO(b"not-a-real-webp"), "image/webp")},
+    )
+    assert collection_cover.status_code == 200
+    collection_cover_url = collection_cover.json()["cover_url"]
+
+    detail = client.get(f"/workspaces/{workspace_id}").json()
+    assert detail["cover_thumbnail"] == collection_cover_url
+    assert detail["cover_is_manual"] is True
+
+    assert client.delete(f"/workspaces/{workspace_id}/cover").status_code == 200
+    assert client.delete(f"/workspaces/{workspace_id}/items/{item_id}/cover").status_code == 200
+    detail = client.get(f"/workspaces/{workspace_id}").json()
+    assert detail["cover_thumbnail"] is None
+    assert detail["cover_is_manual"] is False
+    assert detail["items"][0]["thumbnail"] is None
+    assert detail["items"][0]["cover_is_manual"] is False
 
 
 def test_resolve_batch_source_multi_url(client: TestClient) -> None:
@@ -906,7 +1123,7 @@ def test_library_with_data(client: TestClient) -> None:
         "item_id", "workspace_id", "workspace_name", "type", "source",
         "source_value", "name", "status", "created_at", "updated_at",
         "duration_seconds", "thumbnail", "results_summary", "primary_task_status",
-        "related_task_ids",
+        "primary_task_id", "related_task_ids",
     }
     for it in body["items"]:
         assert required_keys.issubset(it.keys()), f"缺字段: {required_keys - set(it.keys())}"
@@ -1027,6 +1244,7 @@ def test_library_uses_task_overlay_for_duration_and_thumbnail(
     assert item_out["thumbnail"] == "/static/videos/cover.jpg"
     assert item_out["results_summary"]["has_summary"] is True
     assert item_out["primary_task_status"] == TaskStatus.SUCCESS.value
+    assert item_out["primary_task_id"] == "analyze-task"
     assert item_out["related_task_ids"] == ["download-task", "analyze-task"]
 
 

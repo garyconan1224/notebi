@@ -9,6 +9,8 @@ import {
   type LocalModelStatus,
 } from '@/services/localModels'
 
+const PYANNOTE_ACCESS_URL = 'https://huggingface.co/pyannote/speaker-diarization-community-1'
+
 function formatSize(size: number): string {
   if (!size) return '大小由模型运行时确认'
   return size >= 1024 ? `${(size / 1024).toFixed(1)} GB` : `${Math.round(size)} MB`
@@ -112,6 +114,15 @@ export default function LocalModelsPanel() {
                     <strong>{model.title}</strong>
                     <p>{model.description}</p>
                     <small>缓存：{model.cache_dir} · {formatSize(model.estimated_size_mb)}</small>
+                    {model.model_id === 'pyannote' && !ready && (
+                      <small className="local-model-guidance">
+                        {model.status === 'failed'
+                          ? 'Community-1 的访问许可阻止了下载。'
+                          : '下载前需要使用当前 Hugging Face Token 所属账号接受 Community-1 访问许可。'}
+                        <a href={PYANNOTE_ACCESS_URL} target="_blank" rel="noreferrer">打开模型授权页</a>
+                        {'，完成后刷新状态并重新下载。'}
+                      </small>
+                    )}
                     {model.status === 'downloading' && (
                       <div className="local-model-progress" role="progressbar" aria-label={`${model.title}下载进度`} aria-valuenow={Math.round(model.progress * 100)}>
                         <span style={{ width: `${Math.round(model.progress * 100)}%` }} />

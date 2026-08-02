@@ -29,6 +29,7 @@ import re
 import shutil
 import sqlite3
 import threading
+import time
 import uuid
 import zipfile
 from datetime import datetime, timezone
@@ -91,6 +92,7 @@ from backend.app.services.speaker_labels import (
     apply_speaker_renames,
 )
 from backend.app.services.summary_generator import generate_summary
+from backend.app.services.chapter_summaries import generate_chapter_summaries
 from backend.app.services.summary_templates import list_template_ids
 from backend.app.services.video_result_demo import build_demo_video_result
 from backend.app.services.workspace_search_service import _jump_url, search_one_workspace
@@ -154,6 +156,44 @@ def _handle_summary_task(record: TaskRecord, runner: Any) -> Dict[str, Any]:
 
 
 _pipeline_runner.register("summary", _handle_summary_task)
+
+
+def _handle_chapter_summary_task(record: TaskRecord, runner: Any) -> Dict[str, Any]:
+    """Generate persistent LLM chapter summaries without creating another note version."""
+    payload = record.payload or {}
+    workspace_id = str(payload.get("workspace_id") or record.project_id)
+    item_id = str(payload.get("item_id") or "")
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise RuntimeError(f"workspace not found: {workspace_id}")
+    item = _find_item(rec, item_id)
+    if item.type not in {ItemType.AUDIO.value, ItemType.VIDEO.value}:
+        raise RuntimeError("章节摘要仅支持音频或视频素材")
+    runner.set_progress(record.task_id, 0.12, "正在整理字幕证据")
+    owner_workspace_id = _canonical_note_owner(workspace_id, item_id)
+    transcript = _note_transcript(item.results or {}, note_dir(owner_workspace_id, item_id))
+    chapters, model_used = generate_chapter_summaries(
+        transcript,
+        provider_id=str(payload.get("provider_id") or ""),
+        model=str(payload.get("model") or ""),
+    )
+    runner.set_progress(record.task_id, 0.9, "正在保存章节摘要")
+    results = dict(item.results or {})
+    results["chapter_summaries"] = chapters
+    results["chapter_summaries_meta"] = {
+        "model_used": model_used,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _store.update_item(workspace_id, item_id, results=results)
+    return {
+        "chapters": chapters,
+        "model_used": model_used,
+        "workspace_id": workspace_id,
+        "item_id": item_id,
+    }
+
+
+_pipeline_runner.register("chapters", _handle_chapter_summary_task)
 
 
 def _handle_note_artifact_task(record: TaskRecord, runner: Any) -> Dict[str, Any]:
@@ -740,8 +780,10 @@ _pipeline_runner.register_success_callback("note", _on_note_success_write_title)
 
 WORKSPACE_UPLOAD_ROOT: Path = DATA_DIR / "workspaces"
 MAX_UPLOAD_BYTES = 500 * 1024 * 1024
+MAX_COVER_UPLOAD_BYTES = 10 * 1024 * 1024
 UPLOAD_CHUNK_BYTES = 1024 * 1024
 _SAFE_UPLOAD_NAME_RE = re.compile(r"[^A-Za-z0-9._\u4e00-\u9fff\-]+")
+_COVER_IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif"})
 _EXTENSION_TYPE_MAP: Dict[str, str] = {
     ".mp4": ItemType.VIDEO.value,
     ".mov": ItemType.VIDEO.value,
@@ -1101,11 +1143,57 @@ def _infer_upload_item_type(filename: str, content_type: Optional[str]) -> str:
     )
 
 
+def _ensure_cover_image_upload(file: UploadFile) -> None:
+    """封面只接受静态位图，避免把文档或 SVG 当作可在浏览器执行的资源。"""
+    suffix = Path(file.filename or "").suffix.lower()
+    mime = (file.content_type or "").lower()
+    if suffix not in _COVER_IMAGE_EXTENSIONS or mime not in {
+        "image/jpeg", "image/png", "image/webp", "image/gif",
+    }:
+        raise HTTPException(
+            status_code=400,
+            detail="cover must be a JPG, PNG, WebP, or GIF image",
+        )
+
+
+async def _save_cover_upload(workspace_id: str, prefix: str, file: UploadFile) -> Path:
+    _ensure_cover_image_upload(file)
+    cover_dir = WORKSPACE_UPLOAD_ROOT / workspace_id / "covers"
+    cover_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = _sanitize_upload_name(file.filename or "cover.png")
+    dest = _unique_upload_path(cover_dir, f"{prefix}-{safe_name}")
+    total_bytes = 0
+    try:
+        with dest.open("wb") as out:
+            while True:
+                chunk = await file.read(UPLOAD_CHUNK_BYTES)
+                if not chunk:
+                    break
+                total_bytes += len(chunk)
+                if total_bytes > MAX_COVER_UPLOAD_BYTES:
+                    raise HTTPException(status_code=413, detail="cover image exceeds 10MB limit")
+                out.write(chunk)
+        if total_bytes == 0:
+            raise HTTPException(status_code=400, detail="cover image cannot be empty")
+        return dest
+    except HTTPException:
+        dest.unlink(missing_ok=True)
+        raise
+    except OSError as err:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail=f"cover upload failed: {err}") from err
+    finally:
+        await file.close()
+
+
 # ── 派生字段计算（Phase 1A，v1.1 §2.2）────────────────────
 
 
 def _cover_thumbnail(rec: WorkspaceRecord) -> Optional[str]:
     """从合集内第一个可用 item 缩略图提取合集封面，找不到返回 None。"""
+    manual_cover = _cover_asset_url(rec.cover_image)
+    if manual_cover:
+        return manual_cover
     for item in rec.items:
         overlay = _sync_item_with_tasks(item) or {}
         results = overlay.get("results") or item.results or {}
@@ -1241,11 +1329,13 @@ def _enrich_workspace(rec: WorkspaceRecord) -> Dict[str, Any]:
             item_dict.update(overlay)
         results = item_dict.get("results") or {}
         item_dict["thumbnail"] = _item_thumbnail(item_obj, results)
+        item_dict["cover_is_manual"] = bool(_cover_asset_url(item_obj.cover_image))
         item_dict["primary_view"] = _compute_primary_view(item_obj, results)
         item_dict["favorite"] = item_obj.item_id in rec.favorites
     d["current_step"] = _current_step(rec)
     d["items_count_by_type"] = _items_count_by_type(rec)
     d["cover_thumbnail"] = _cover_thumbnail(rec)
+    d["cover_is_manual"] = bool(_cover_asset_url(rec.cover_image))
     d["last_active_at"] = rec.updated_at
     return d
 
@@ -1958,6 +2048,9 @@ def _item_duration_seconds(
 
 def _item_thumbnail(item: WorkspaceItem, results: dict = None) -> Optional[str]:
     """从 item.results（或传入的 merged results）提取缩略图路径，转为 /static/ URL。"""
+    manual_cover = _cover_asset_url(item.cover_image)
+    if manual_cover:
+        return manual_cover
     results = results or item.results or {}
     path = None
     if results.get("cover_thumbnail"):
@@ -2003,6 +2096,16 @@ def _item_thumbnail(item: WorkspaceItem, results: dict = None) -> Optional[str]:
     if vt and isinstance(vt, str) and vt.startswith(("http://", "https://")):
         return vt
     return None
+
+
+def _cover_asset_url(value: str) -> str:
+    """将保存的手动封面路径转换为前端可用 URL；旧数据或失效文件安全回退。"""
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    if raw.startswith(("http://", "https://")):
+        return raw
+    return to_static_url(raw)
 
 
 def _item_display_name(
@@ -2101,8 +2204,8 @@ def _item_card_description(item: WorkspaceItem, results: dict) -> str:
     return "素材已收纳，可继续整理、收藏或加入合集。"
 
 
-def _item_primary_task_status(item: WorkspaceItem) -> Optional[str]:
-    """返回最新素材任务状态；总结子任务不参与笔记可用性判断。"""
+def _item_primary_task(item: WorkspaceItem) -> Optional[Any]:
+    """返回最新素材任务；总结子任务不参与笔记可用性与进度判断。"""
     if not item.related_task_ids:
         return None
     latest = None
@@ -2114,7 +2217,17 @@ def _item_primary_task_status(item: WorkspaceItem) -> Optional[str]:
             continue
         if latest is None or task.updated_at > latest.updated_at:
             latest = task
-    return latest.status if latest else None
+    return latest
+
+
+def _item_primary_task_status(item: WorkspaceItem) -> Optional[str]:
+    primary_task = _item_primary_task(item)
+    return primary_task.status if primary_task else None
+
+
+def _item_primary_task_id(item: WorkspaceItem) -> Optional[str]:
+    primary_task = _item_primary_task(item)
+    return primary_task.task_id if primary_task else None
 
 
 
@@ -2221,6 +2334,7 @@ def get_library(
                     "has_transcript": bool(results.get("transcript")),
                 },
                 "primary_task_status": _item_primary_task_status(item),
+                "primary_task_id": _item_primary_task_id(item),
                 "related_task_ids": list(item.related_task_ids),
                 "preflight": item.preflight.to_dict() if hasattr(item, 'preflight') else {},
                 "tags": item.tags or {},
@@ -2522,6 +2636,33 @@ def update_workspace(workspace_id: str, req: WorkspaceUpdateRequest) -> Dict[str
         raise HTTPException(status_code=400, detail="no fields to update")
     try:
         rec = _store.update(workspace_id, **payload)
+    except KeyError as err:
+        raise HTTPException(status_code=404, detail=str(err)) from err
+    return _enrich_workspace(rec)
+
+
+@router.post("/{workspace_id}/cover")
+async def upload_workspace_cover(
+    workspace_id: str,
+    file: UploadFile = File(...),
+) -> Dict[str, Any]:
+    """上传合集手动封面；不会删除旧文件，避免在写入失败时丢失原封面。"""
+    if _store.get(workspace_id) is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    dest = await _save_cover_upload(workspace_id, "collection", file)
+    try:
+        rec = _store.update(workspace_id, cover_image=str(dest.resolve()))
+    except KeyError as err:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(status_code=404, detail=str(err)) from err
+    return {"cover_url": _cover_asset_url(rec.cover_image), "workspace": _enrich_workspace(rec)}
+
+
+@router.delete("/{workspace_id}/cover")
+def reset_workspace_cover(workspace_id: str) -> Dict[str, Any]:
+    """清除手动覆盖，恢复素材自动拼图/缩略图策略。"""
+    try:
+        rec = _store.update(workspace_id, cover_image="")
     except KeyError as err:
         raise HTTPException(status_code=404, detail=str(err)) from err
     return _enrich_workspace(rec)
@@ -2834,6 +2975,35 @@ async def upload_item(
             pass
         raise HTTPException(status_code=404, detail=str(err)) from err
     return rec.to_dict()
+
+
+@router.post("/{workspace_id}/items/{item_id}/cover")
+async def upload_item_cover(
+    workspace_id: str,
+    item_id: str,
+    file: UploadFile = File(...),
+) -> Dict[str, Any]:
+    """上传单条素材的手动封面，覆盖自动缩略图但不改变素材本体。"""
+    if _store.get(workspace_id) is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    dest = await _save_cover_upload(workspace_id, f"item-{item_id}", file)
+    try:
+        rec = _store.update_item(workspace_id, item_id, cover_image=str(dest.resolve()))
+    except KeyError as err:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(status_code=404, detail=str(err)) from err
+    item = _find_item(rec, item_id)
+    return {"cover_url": _cover_asset_url(item.cover_image), "workspace": _enrich_workspace(rec)}
+
+
+@router.delete("/{workspace_id}/items/{item_id}/cover")
+def reset_item_cover(workspace_id: str, item_id: str) -> Dict[str, Any]:
+    """清除素材手动封面，恢复下载缩略图、代表帧或首图。"""
+    try:
+        rec = _store.update_item(workspace_id, item_id, cover_image="")
+    except KeyError as err:
+        raise HTTPException(status_code=404, detail=str(err)) from err
+    return _enrich_workspace(rec)
 
 
 @router.delete("/{workspace_id}/items/{item_id}")
@@ -4994,6 +5164,13 @@ class SummaryCreateRequest(BaseModel):
     summary_language_custom: str = Field("", max_length=35, description="自定义 BCP-47 语言标签")
 
 
+class ChapterSummaryCreateRequest(BaseModel):
+    """Optional per-run model override for concise chapter summaries."""
+
+    provider_id: str = Field("", max_length=120)
+    model: str = Field("", max_length=200)
+
+
 _SUMMARY_OUTPUT_LANGUAGES = {"source", "zh-Hans", "zh-Hant", "en", "ja", "ko", "custom"}
 
 
@@ -5044,6 +5221,61 @@ def _summary_source_present(results: Dict[str, Any]) -> bool:
             "image_infos",
         )
     )
+
+
+@router.post("/{workspace_id}/items/{item_id}/chapters", status_code=202)
+def create_chapter_summary_task(
+    workspace_id: str,
+    item_id: str,
+    req: ChapterSummaryCreateRequest,
+) -> Dict[str, Any]:
+    """Queue one explicit model call for subtitle chapter summaries.
+
+    This is deliberately user-triggered instead of happening when the note page
+    opens, so viewing an existing result never creates a surprise model charge.
+    """
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    item = _find_item(rec, item_id)
+    if item.type not in {ItemType.AUDIO.value, ItemType.VIDEO.value}:
+        raise HTTPException(status_code=409, detail="章节摘要仅支持音频或视频素材")
+    owner_workspace_id = _canonical_note_owner(workspace_id, item_id)
+    if not _note_transcript(item.results or {}, note_dir(owner_workspace_id, item_id)):
+        raise HTTPException(status_code=409, detail="当前素材没有可用于生成章节的字幕")
+    try:
+        task = _pipeline_runner.create_task(
+            workspace_id,
+            "chapters",
+            {
+                "workspace_id": workspace_id,
+                "item_id": item_id,
+                "provider_id": req.provider_id,
+                "model": req.model,
+                "title": f"{item.name} · 章节摘要",
+            },
+        )
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=f"创建章节摘要任务失败: {err}") from err
+    if task.task_id not in item.related_task_ids:
+        try:
+            _store.update_item(
+                workspace_id,
+                item_id,
+                related_task_ids=[*item.related_task_ids, task.task_id],
+            )
+        except Exception as err:
+            try:
+                _pipeline_runner.store.delete(task.task_id)
+            except Exception:
+                pass
+            raise HTTPException(status_code=500, detail=f"关联章节摘要任务失败: {err}") from err
+    return {
+        "status": "accepted",
+        "task_id": task.task_id,
+        "workspace_id": workspace_id,
+        "item_id": item_id,
+    }
 
 
 class NoteArtifactCreateRequest(BaseModel):
@@ -5603,6 +5835,8 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
         "note_dir": str(nd),
         "media": media,
         "transcript": transcript,
+        "chapters": results.get("chapter_summaries") or [],
+        "chapter_meta": results.get("chapter_summaries_meta") or {},
         "translations": results.get("translations", {}),
         # 音频说话人改名需要随 /note 回显，保证刷新后字幕和总结入口仍使用用户名称。
         "speaker_map": results.get("speaker_map", {}) if item_type in {"audio", "video"} else {},
@@ -5923,6 +6157,314 @@ def export_item_note(
         source_md=source_md,
         format=format,
     )
+
+
+class NotionExportRequest(BaseModel):
+    """Session-only Notion credentials for one user-triggered export."""
+
+    access_token: str = Field(min_length=1, max_length=1000)
+    parent_page_id: str = Field(min_length=1, max_length=1000)
+    title: str = Field(min_length=1, max_length=2000)
+    markdown: str = Field(min_length=1, max_length=500_000)
+
+
+_NOTION_PAGE_ID_PATTERN = re.compile(
+    r"(?<![0-9a-f])(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{32})(?![0-9a-f])",
+    re.IGNORECASE,
+)
+
+
+def _notion_parent_page_id(raw: str) -> str:
+    """Accept a copied Notion page ID or the complete page link from the UI."""
+
+    matches = list(_NOTION_PAGE_ID_PATTERN.finditer(raw))
+    if not matches:
+        return raw.strip()
+    return str(uuid.UUID(matches[-1].group(0)))
+
+
+def _notion_export_error(response: httpx.Response) -> HTTPException:
+    if response.status_code == 401:
+        detail = "Notion 认证失败：请检查集成令牌。"
+    elif response.status_code == 403:
+        detail = "Notion 没有该父页面的写入权限：请先将页面共享给你的集成。"
+    elif response.status_code == 429:
+        detail = "Notion 正在限流，请稍后重试。"
+    else:
+        detail = f"Notion 导出失败（HTTP {response.status_code}）。"
+    return HTTPException(status_code=502, detail=detail)
+
+
+@router.post("/{workspace_id}/items/{item_id}/note/export/notion")
+def export_current_note_to_notion(
+    workspace_id: str,
+    item_id: str,
+    req: NotionExportRequest,
+) -> Dict[str, str]:
+    """Create one child page in Notion from the currently displayed Markdown.
+
+    The access token is deliberately request-only: it is not written to settings,
+    workspace JSON, task records, or application logs.
+    """
+
+    record = _store.get(workspace_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    _find_item(record, item_id)
+
+    payload = {
+        "parent": {"page_id": _notion_parent_page_id(req.parent_page_id)},
+        "properties": {
+            "title": {
+                "title": [{"type": "text", "text": {"content": req.title.strip()}}],
+            },
+        },
+        "markdown": req.markdown,
+    }
+    try:
+        response = httpx.post(
+            "https://api.notion.com/v1/pages",
+            headers={
+                "Authorization": f"Bearer {req.access_token}",
+                "Notion-Version": "2026-03-11",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=30.0,
+        )
+    except httpx.HTTPError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="无法连接 Notion，请检查网络后重试。",
+        ) from error
+    if response.status_code < 200 or response.status_code >= 300:
+        raise _notion_export_error(response)
+    try:
+        data = response.json()
+        page_id = str(data["id"])
+        url = str(data["url"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise HTTPException(status_code=502, detail="Notion 返回了无效的页面信息。") from error
+    return {"page_id": page_id, "url": url}
+
+
+class FeishuExportRequest(BaseModel):
+    """Request-only Feishu credential and document destination for one export."""
+
+    access_token: str = Field(min_length=1, max_length=4096)
+    folder_token: str = Field(default="", max_length=1000)
+    title: str = Field(min_length=1, max_length=800)
+    markdown: str = Field(min_length=1, max_length=500_000)
+
+
+_FEISHU_BLOCK_TYPES: Dict[str, tuple[int, str]] = {
+    "text": (2, "text"),
+    "heading1": (3, "heading1"),
+    "heading2": (4, "heading2"),
+    "heading3": (5, "heading3"),
+    "heading4": (6, "heading4"),
+    "heading5": (7, "heading5"),
+    "heading6": (8, "heading6"),
+    "heading7": (9, "heading7"),
+    "heading8": (10, "heading8"),
+    "heading9": (11, "heading9"),
+    "bullet": (12, "bullet"),
+    "ordered": (13, "ordered"),
+    "code": (14, "code"),
+    "quote": (15, "quote"),
+}
+
+
+def _feishu_inline_text(markdown: str) -> str:
+    """Convert the safe, text-like subset of Markdown to Feishu text runs."""
+
+    text = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", lambda match: (
+        f"图片：{match.group(1) or '未命名图片'}（{match.group(2)}）"
+    ), markdown)
+    text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1（\2）", text)
+    return text.replace("**", "").replace("__", "").replace("~~", "").replace("`", "").strip()
+
+
+def _feishu_text_block(kind: str, text: str) -> Dict[str, Any]:
+    block_type, block_key = _FEISHU_BLOCK_TYPES[kind]
+    return {
+        "block_type": block_type,
+        block_key: {"elements": [{"text_run": {"content": text}}]},
+    }
+
+
+def _feishu_blocks_from_markdown(markdown: str) -> List[Dict[str, Any]]:
+    """Preserve the useful Markdown structure supported by Feishu block APIs."""
+
+    blocks: List[Dict[str, Any]] = []
+    paragraph: List[str] = []
+    code_lines: List[str] = []
+    in_code_block = False
+
+    def append_text(kind: str, raw: str) -> None:
+        text = _feishu_inline_text(raw)
+        if not text:
+            return
+        # A text run is intentionally kept small, so one exceptionally long
+        # paragraph cannot make the whole export fail.
+        for start in range(0, len(text), 2_000):
+            blocks.append(_feishu_text_block(kind, text[start:start + 2_000]))
+
+    def flush_paragraph() -> None:
+        if paragraph:
+            append_text("text", "\n".join(paragraph))
+            paragraph.clear()
+
+    def flush_code() -> None:
+        if code_lines:
+            append_text("code", "\n".join(code_lines))
+            code_lines.clear()
+
+    for raw_line in markdown.replace("\r\n", "\n").split("\n"):
+        stripped = raw_line.strip()
+        if stripped.startswith("```"):
+            flush_paragraph()
+            if in_code_block:
+                flush_code()
+            in_code_block = not in_code_block
+            continue
+        if in_code_block:
+            code_lines.append(raw_line)
+            continue
+        if not stripped:
+            flush_paragraph()
+            continue
+
+        heading = re.match(r"^(#{1,9})\s+(.+)$", stripped)
+        if heading:
+            flush_paragraph()
+            append_text(f"heading{len(heading.group(1))}", heading.group(2))
+            continue
+        if re.fullmatch(r"(?:-{3,}|\*{3,}|_{3,})", stripped):
+            flush_paragraph()
+            blocks.append({"block_type": 22, "divider": {}})
+            continue
+        bullet = re.match(r"^[-*+]\s+(.+)$", stripped)
+        if bullet:
+            flush_paragraph()
+            append_text("bullet", bullet.group(1))
+            continue
+        ordered = re.match(r"^\d+[.)]\s+(.+)$", stripped)
+        if ordered:
+            flush_paragraph()
+            append_text("ordered", ordered.group(1))
+            continue
+        quote_line = re.match(r"^>\s?(.*)$", stripped)
+        if quote_line:
+            flush_paragraph()
+            append_text("quote", quote_line.group(1))
+            continue
+        paragraph.append(stripped)
+
+    if in_code_block:
+        flush_code()
+    flush_paragraph()
+    return blocks
+
+
+def _feishu_export_error(response: httpx.Response) -> HTTPException:
+    code: int | None = None
+    message = ""
+    try:
+        payload = response.json()
+        code = int(payload.get("code")) if isinstance(payload, dict) and payload.get("code") is not None else None
+        message = str(payload.get("msg") or "") if isinstance(payload, dict) else ""
+    except (TypeError, ValueError):
+        pass
+    if response.status_code in (401, 403) or code == 1770032:
+        detail = "飞书没有写入权限：请检查访问令牌、应用的“创建及编辑新版文档”权限和目标文件夹授权。"
+    elif response.status_code == 429 or code == 99991400:
+        detail = "飞书正在限流，请稍后重试。"
+    elif response.status_code == 404 or code == 1770039:
+        detail = "飞书目标文件夹不存在，或当前令牌无权访问它。"
+    else:
+        suffix = f"（{message}）" if message else ""
+        detail = f"飞书导出失败（HTTP {response.status_code}）{suffix}"
+    return HTTPException(status_code=502, detail=detail)
+
+
+def _feishu_response_data(response: httpx.Response) -> Dict[str, Any]:
+    if response.status_code < 200 or response.status_code >= 300:
+        raise _feishu_export_error(response)
+    try:
+        payload = response.json()
+    except ValueError as error:
+        raise HTTPException(status_code=502, detail="飞书返回了无效响应。") from error
+    if not isinstance(payload, dict) or payload.get("code") != 0:
+        raise _feishu_export_error(response)
+    data = payload.get("data")
+    return data if isinstance(data, dict) else {}
+
+
+@router.post("/{workspace_id}/items/{item_id}/note/export/feishu")
+def export_current_note_to_feishu(
+    workspace_id: str,
+    item_id: str,
+    req: FeishuExportRequest,
+) -> Dict[str, str]:
+    """Create a Feishu document and append structured blocks from current Markdown.
+
+    The token only exists in this request; it is not persisted in settings,
+    workspace JSON, task records, or application logs.
+    """
+
+    record = _store.get(workspace_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    _find_item(record, item_id)
+
+    headers = {
+        "Authorization": f"Bearer {req.access_token.strip()}",
+        "Content-Type": "application/json; charset=utf-8",
+    }
+    create_payload: Dict[str, str] = {"title": req.title.strip()}
+    if req.folder_token.strip():
+        create_payload["folder_token"] = req.folder_token.strip()
+    try:
+        create_response = httpx.post(
+            "https://open.feishu.cn/open-apis/docx/v1/documents",
+            headers=headers,
+            json=create_payload,
+            timeout=30.0,
+        )
+    except httpx.HTTPError as error:
+        raise HTTPException(status_code=502, detail="无法连接飞书，请检查网络后重试。") from error
+    create_data = _feishu_response_data(create_response)
+    try:
+        document_id = str(create_data["document"]["document_id"])
+    except (KeyError, TypeError) as error:
+        raise HTTPException(status_code=502, detail="飞书没有返回新文档 ID。") from error
+
+    blocks = _feishu_blocks_from_markdown(req.markdown)
+    for index in range(0, len(blocks), 50):
+        if index:
+            # Feishu limits document writes to three requests per second. The
+            # first document creation and first block batch may share a second,
+            # so wait before every following batch.
+            time.sleep(0.5)
+        try:
+            block_response = httpx.post(
+                f"https://open.feishu.cn/open-apis/docx/v1/documents/{document_id}/blocks/{document_id}/children",
+                headers=headers,
+                json={"index": -1, "children": blocks[index:index + 50]},
+                timeout=30.0,
+            )
+        except httpx.HTTPError as error:
+            raise HTTPException(
+                status_code=502,
+                detail="飞书文档已创建，但内容写入时网络中断；请在飞书中删除空文档后重试。",
+            ) from error
+        _feishu_response_data(block_response)
+
+    return {
+        "document_id": document_id,
+        "url": f"https://feishu.cn/docx/{document_id}",
+    }
 
 
 # ── InlineFrames（学习模式视频按需补图）───────────────────────────

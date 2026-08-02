@@ -550,7 +550,7 @@
   font-size: 10px;
 }
 
-@media (max-width: 700px) {
+@media (max-width: 768px) {
   .batch-source-row {
     grid-template-columns: 22px 64px minmax(0, 1fr);
   }
@@ -1644,6 +1644,11 @@ body.nibi-sidebar-compact .note-grid:not([class*="note-grid--cols-"]) { --nibi-c
   margin-top: 6px;
   flex: 0 0 auto;
 }
+/* 身份色：紺=视频/音频，今様=图文/文本（B 东方颜料，公共层；资料库/首页/收藏夹共享，按根节点 data-kind 命中；合集点沿用 library.css 既有方块样式，不在此覆盖） */
+[data-kind="video"] .note-type-dot,
+[data-kind="audio"] .note-type-dot { background: var(--id-kon); }
+[data-kind="image"] .note-type-dot,
+[data-kind="text"]  .note-type-dot { background: var(--id-imayo); }
 
 .note-summary {
   font-size: var(--xs);
@@ -1814,5 +1819,39 @@ body.nibi-sidebar-compact .note-grid:not([class*="note-grid--cols-"]) { --nibi-c
   .btn:hover,
   .nibi-card:hover {
     transform: none !important;
+  }
+}
+
+/* ── Motion vocabulary (nb-rise / nb-page-in / nb-pulse) ──
+   入场阶梯：列表项加 class="nb-rise" 并设 style="--i:<index>"（封顶 8，CSS 侧再用 min() 兜底）。
+   页面进入：路由根容器加 class="nb-page-in"。运行态指示器加 class="nb-pulse"。
+   JSX 接入为独立激活步骤，本处仅落地词汇与 reduced-motion 兜底。 */
+@keyframes nb-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes nb-page {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes nb-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+.nb-rise {
+  animation: nb-rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: min(calc(var(--i, 0) * 45ms), 360ms);
+}
+.nb-page-in {
+  animation: nb-page 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.nb-pulse {
+  animation: nb-pulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nb-rise,
+  .nb-page-in,
+  .nb-pulse {
+    animation: none !important;
   }
 }

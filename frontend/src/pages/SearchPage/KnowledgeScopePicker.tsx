@@ -1,37 +1,75 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, Search as SearchIcon } from 'lucide-react'
+import type { KnowledgeItemRef } from '@/types/knowledgeConversation'
 import type { WorkspaceRecord } from '@/types/workspace'
 
 export type ScopeType = 'all' | 'selected'
 
+export interface KnowledgeScopeItemOption {
+  workspaceId: string
+  itemId: string
+  name: string
+  workspaceName: string
+  type: string
+}
+
 export interface KnowledgeScope {
   type: ScopeType
   workspaceIds: string[]
+  itemRefs: KnowledgeItemRef[]
 }
 
 interface KnowledgeScopePickerProps {
   workspaces: WorkspaceRecord[]
+  items: KnowledgeScopeItemOption[]
   scope: KnowledgeScope
   onChange: (scope: KnowledgeScope) => void
 }
 
 const SCOPE_STORAGE_KEY = 'nibi_knowledge_scope'
 
-/** 从 localStorage 恢复范围，过滤已不存在的 workspace ID */
-export function loadPersistedScope(workspaces: WorkspaceRecord[]): KnowledgeScope {
+function uniqueItemRefs(itemRefs: KnowledgeItemRef[]): KnowledgeItemRef[] {
+  const seen = new Set<string>()
+  return itemRefs.filter((item) => {
+    const key = `${item.workspace_id}:${item.item_id}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return Boolean(item.workspace_id && item.item_id)
+  })
+}
+
+/** 从 localStorage 恢复范围，并过滤已删除的合集和笔记。 */
+export function loadPersistedScope(
+  workspaces: WorkspaceRecord[],
+  items: KnowledgeScopeItemOption[] = [],
+): KnowledgeScope {
   try {
     const raw = localStorage.getItem(SCOPE_STORAGE_KEY)
-    if (!raw) return { type: 'all', workspaceIds: [] }
-    const parsed = JSON.parse(raw) as { type?: string; workspaceIds?: string[] }
-    if (parsed.type === 'selected' && Array.isArray(parsed.workspaceIds)) {
-      const validIds = new Set(workspaces.map(w => w.workspace_id))
-      const filtered = [...new Set(parsed.workspaceIds.filter(id => validIds.has(id)))]
-      if (filtered.length === 0) return { type: 'all', workspaceIds: [] }
-      return { type: 'selected', workspaceIds: filtered }
+    if (!raw) return { type: 'all', workspaceIds: [], itemRefs: [] }
+    const parsed = JSON.parse(raw) as {
+      type?: string
+      workspaceIds?: string[]
+      itemRefs?: KnowledgeItemRef[]
     }
-    return { type: 'all', workspaceIds: [] }
+    if (parsed.type !== 'selected') {
+      return { type: 'all', workspaceIds: [], itemRefs: [] }
+    }
+    const validIds = new Set(workspaces.map(workspace => workspace.workspace_id))
+    const workspaceIds = [...new Set(
+      (parsed.workspaceIds ?? []).filter(id => validIds.has(id)),
+    )]
+    const validItemKeys = new Set(
+      items.map(item => `${item.workspaceId}:${item.itemId}`),
+    )
+    const itemRefs = uniqueItemRefs(parsed.itemRefs ?? []).filter(ref => (
+      validItemKeys.has(`${ref.workspace_id}:${ref.item_id}`)
+    ))
+    if (workspaceIds.length === 0 && itemRefs.length === 0) {
+      return { type: 'all', workspaceIds: [], itemRefs: [] }
+    }
+    return { type: 'selected', workspaceIds, itemRefs }
   } catch {
-    return { type: 'all', workspaceIds: [] }
+    return { type: 'all', workspaceIds: [], itemRefs: [] }
   }
 }
 
@@ -41,34 +79,58 @@ export function persistScope(scope: KnowledgeScope): void {
   } catch { /* ignore quota errors */ }
 }
 
-/** 范围摘要文案 */
-export function scopeSummary(scope: KnowledgeScope, workspaces: WorkspaceRecord[]): string {
-  if (scope.type === 'all') return '全部合集'
-  if (scope.workspaceIds.length === 0) return '请选择合集'
-  if (scope.workspaceIds.length === 1) {
-    const ws = workspaces.find(w => w.workspace_id === scope.workspaceIds[0])
-    return ws?.name ?? '已选 1 个合集'
+/** 范围摘要文案。合集和单篇笔记按并集检索。 */
+export function scopeSummary(
+  scope: KnowledgeScope,
+  workspaces: WorkspaceRecord[],
+  items: KnowledgeScopeItemOption[] = [],
+): string {
+  if (scope.type === 'all') return '全部笔记'
+  const itemRefs = scope.itemRefs ?? []
+  const count = scope.workspaceIds.length + itemRefs.length
+  if (count === 0) return '请选择范围'
+  if (count === 1 && scope.workspaceIds.length === 1) {
+    const workspace = workspaces.find(item => item.workspace_id === scope.workspaceIds[0])
+    return workspace?.name ?? '已选 1 个合集'
   }
-  return `已选 ${scope.workspaceIds.length} 个合集`
+  if (count === 1 && itemRefs.length === 1) {
+    const ref = itemRefs[0]
+    const item = items.find(option => (
+      option.workspaceId === ref.workspace_id && option.itemId === ref.item_id
+    ))
+    return item ? `笔记：${item.name}` : '已选 1 篇笔记'
+  }
+  return `已选 ${scope.workspaceIds.length} 个合集、${itemRefs.length} 篇笔记`
 }
 
-export function KnowledgeScopePicker({ workspaces, scope, onChange }: KnowledgeScopePickerProps) {
+export function KnowledgeScopePicker({
+  workspaces,
+  items,
+  scope,
+  onChange,
+}: KnowledgeScopePickerProps) {
   const [open, setOpen] = useState(false)
   const [filter, setFilter] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const filtered = useMemo(() => {
-    const q = filter.trim().toLowerCase()
-    if (!q) return workspaces
-    return workspaces.filter(w => w.name.toLowerCase().includes(q))
-  }, [workspaces, filter])
+  const query = filter.trim().toLowerCase()
+  const filteredWorkspaces = useMemo(() => (
+    !query ? workspaces : workspaces.filter(workspace => (
+      workspace.name.toLowerCase().includes(query)
+    ))
+  ), [query, workspaces])
+  const filteredItems = useMemo(() => (
+    !query ? items : items.filter(item => (
+      item.name.toLowerCase().includes(query)
+      || item.workspaceName.toLowerCase().includes(query)
+    ))
+  ), [items, query])
 
-  // Click outside to close
   useEffect(() => {
     if (!open) return
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+    const handler = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setOpen(false)
       }
     }
@@ -76,49 +138,67 @@ export function KnowledgeScopePicker({ workspaces, scope, onChange }: KnowledgeS
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
-  // Esc to close
   useEffect(() => {
     if (!open) return
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [open])
 
-  // Focus search input when opened
   useEffect(() => {
-    if (open) {
-      setFilter('')
-      requestAnimationFrame(() => inputRef.current?.focus())
-    }
+    if (!open) return
+    setFilter('')
+    requestAnimationFrame(() => inputRef.current?.focus())
   }, [open])
 
-  const toggleWorkspace = useCallback((id: string) => {
-    const current = scope.workspaceIds
-    const next = current.includes(id)
-      ? current.filter(x => x !== id)
-      : [...current, id]
-    onChange({ type: 'selected', workspaceIds: next })
-  }, [scope, onChange])
+  const selectedItemRefs = scope.itemRefs ?? []
+
+  const toggleWorkspace = useCallback((workspaceId: string) => {
+    const workspaceIds = scope.workspaceIds.includes(workspaceId)
+      ? scope.workspaceIds.filter(id => id !== workspaceId)
+      : [...scope.workspaceIds, workspaceId]
+    onChange({ type: 'selected', workspaceIds, itemRefs: selectedItemRefs })
+  }, [onChange, scope])
+
+  const toggleItem = useCallback((item: KnowledgeScopeItemOption) => {
+    const exists = selectedItemRefs.some(ref => (
+      ref.workspace_id === item.workspaceId && ref.item_id === item.itemId
+    ))
+    const nextItemRefs = exists
+      ? selectedItemRefs.filter(ref => (
+        ref.workspace_id !== item.workspaceId || ref.item_id !== item.itemId
+      ))
+      : [...selectedItemRefs, {
+        workspace_id: item.workspaceId,
+        item_id: item.itemId,
+      }]
+    onChange({
+      type: 'selected',
+      workspaceIds: scope.workspaceIds,
+      itemRefs: nextItemRefs,
+    })
+  }, [onChange, scope])
 
   const selectAll = useCallback(() => {
-    onChange({ type: 'all', workspaceIds: [] })
+    onChange({ type: 'all', workspaceIds: [], itemRefs: [] })
   }, [onChange])
 
   const clearSelection = useCallback(() => {
-    onChange({ type: 'selected', workspaceIds: [] })
+    onChange({ type: 'selected', workspaceIds: [], itemRefs: [] })
   }, [onChange])
 
   const isAll = scope.type === 'all'
-  const summary = scopeSummary(scope, workspaces)
+  const summary = scopeSummary(scope, workspaces, items)
+  const selectedCount = scope.workspaceIds.length + selectedItemRefs.length
 
   return (
     <div className="scope-picker" ref={containerRef}>
       <button
         type="button"
         className="scope-picker-trigger"
-        onClick={() => setOpen(v => !v)}
+        onClick={() => setOpen(value => !value)}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label="知识库范围"
@@ -128,15 +208,15 @@ export function KnowledgeScopePicker({ workspaces, scope, onChange }: KnowledgeS
       </button>
 
       {open && (
-        <div className="scope-picker-popover" role="listbox" aria-label="选择合集范围">
+        <div className="scope-picker-popover" role="listbox" aria-label="选择知识库范围">
           <div className="scope-picker-search">
             <SearchIcon size={13} />
             <input
               ref={inputRef}
               value={filter}
-              onChange={e => setFilter(e.target.value)}
-              placeholder="搜索合集…"
-              aria-label="搜索合集"
+              onChange={event => setFilter(event.target.value)}
+              placeholder="搜索合集或笔记…"
+              aria-label="搜索合集或笔记"
             />
           </div>
 
@@ -147,41 +227,65 @@ export function KnowledgeScopePicker({ workspaces, scope, onChange }: KnowledgeS
               onClick={selectAll}
               data-active={isAll}
             >
-              全选（全部合集）
+              全部笔记
             </button>
             <button
               type="button"
               className="scope-picker-action-btn"
               onClick={clearSelection}
+              disabled={isAll || selectedCount === 0}
             >
               清空
             </button>
           </div>
 
-          <ul className="scope-picker-list">
-            {filtered.map(ws => {
-              const checked = isAll || scope.workspaceIds.includes(ws.workspace_id)
+          <div className="scope-picker-list">
+            <div className="scope-picker-section-label">合集</div>
+            {filteredWorkspaces.map(workspace => {
+              const checked = isAll || scope.workspaceIds.includes(workspace.workspace_id)
               return (
-                <li key={ws.workspace_id}>
-                  <button
-                    type="button"
-                    className="scope-picker-item"
-                    role="option"
-                    aria-selected={checked}
-                    onClick={() => toggleWorkspace(ws.workspace_id)}
-                  >
-                    <span className="scope-picker-check">
-                      {checked && <Check size={13} />}
-                    </span>
-                    <span className="scope-picker-name">{ws.name}</span>
-                  </button>
-                </li>
+                <button
+                  key={workspace.workspace_id}
+                  type="button"
+                  className="scope-picker-item"
+                  role="option"
+                  aria-selected={checked}
+                  onClick={() => toggleWorkspace(workspace.workspace_id)}
+                >
+                  <span className="scope-picker-check">
+                    {checked && <Check size={13} />}
+                  </span>
+                  <span className="scope-picker-name">{workspace.name}</span>
+                  <span className="scope-picker-meta">合集</span>
+                </button>
               )
             })}
-            {filtered.length === 0 && (
-              <li className="scope-picker-empty">无匹配合集</li>
+            <div className="scope-picker-section-label">单个笔记</div>
+            {filteredItems.map(item => {
+              const checked = isAll || selectedItemRefs.some(ref => (
+                ref.workspace_id === item.workspaceId && ref.item_id === item.itemId
+              ))
+              return (
+                <button
+                  key={`${item.workspaceId}:${item.itemId}`}
+                  type="button"
+                  className="scope-picker-item"
+                  role="option"
+                  aria-selected={checked}
+                  onClick={() => toggleItem(item)}
+                >
+                  <span className="scope-picker-check">
+                    {checked && <Check size={13} />}
+                  </span>
+                  <span className="scope-picker-name">{item.name}</span>
+                  <span className="scope-picker-meta">{item.workspaceName}</span>
+                </button>
+              )
+            })}
+            {filteredWorkspaces.length === 0 && filteredItems.length === 0 && (
+              <div className="scope-picker-empty">无匹配合集或笔记</div>
             )}
-          </ul>
+          </div>
         </div>
       )}
     </div>

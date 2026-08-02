@@ -31,25 +31,40 @@ class KnowledgeAskRequest(BaseModel):
     question: str = Field(..., min_length=1)
     top_k: int = Field(default=10, ge=1, le=30)
     workspace_ids: Optional[List[str]] = None
+    item_refs: Optional[List["KnowledgeItemRef"]] = None
+
+
+class KnowledgeExactSearchRequest(KnowledgeAskRequest):
+    """Structured exact-search input for scopes that include individual notes."""
 
 
 class KnowledgeRebuildRequest(BaseModel):
     force: bool = False
 
 
+class KnowledgeItemRef(BaseModel):
+    """One note in its collection context; item IDs alone are not enough for linked copies."""
+
+    workspace_id: str = Field(min_length=1)
+    item_id: str = Field(min_length=1)
+
+
 class ConversationCreateRequest(BaseModel):
     title: str = "新会话"
     default_scope: List[str] = Field(default_factory=list)
+    default_item_refs: List[KnowledgeItemRef] = Field(default_factory=list)
 
 
 class ConversationPatchRequest(BaseModel):
     title: Optional[str] = None
     default_scope: Optional[List[str]] = None
+    default_item_refs: Optional[List[KnowledgeItemRef]] = None
 
 
 class ConversationMessageRequest(BaseModel):
     question: str = Field(..., min_length=1)
     workspace_ids: Optional[List[str]] = None
+    item_refs: Optional[List[KnowledgeItemRef]] = None
     top_k: int = Field(default=10, ge=1, le=30)
 
 
@@ -65,6 +80,25 @@ def _validate_scope(workspace_ids: Optional[List[str]]) -> List[str]:
             status_code=422,
             detail=f"unknown workspace_ids: {','.join(missing)}",
         )
+    return normalized
+
+
+def _validate_item_refs(item_refs: Optional[List[KnowledgeItemRef]]) -> List[Dict[str, str]]:
+    normalized: List[Dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for ref in item_refs or []:
+        key = (ref.workspace_id, ref.item_id)
+        if key in seen:
+            continue
+        try:
+            _workspace_store.get_item(ref.workspace_id, ref.item_id)
+        except KeyError as err:
+            raise HTTPException(
+                status_code=422,
+                detail=f"unknown item_ref: {ref.workspace_id}/{ref.item_id}",
+            ) from err
+        seen.add(key)
+        normalized.append({"workspace_id": ref.workspace_id, "item_id": ref.item_id})
     return normalized
 
 
@@ -101,11 +135,13 @@ def knowledge_rebuild(req: KnowledgeRebuildRequest | None = None) -> Dict[str, A
 def knowledge_ask(req: KnowledgeAskRequest) -> Dict[str, Any]:
     try:
         scope = _validate_scope(req.workspace_ids)
+        item_refs = _validate_item_refs(req.item_refs)
         return _retrieval().search(
             query=req.question,
             mode="smart",
             top_k=req.top_k,
             workspace_ids=scope or None,
+            item_refs=item_refs or None,
         )
     except RuntimeError as err:
         raise HTTPException(status_code=409, detail=str(err)) from err
@@ -141,6 +177,24 @@ def knowledge_exact_search(
     )
 
 
+@router.post("/search")
+def knowledge_exact_search_post(
+    req: KnowledgeExactSearchRequest,
+) -> Dict[str, Any]:
+    scope = _validate_scope(req.workspace_ids)
+    item_refs = _validate_item_refs(req.item_refs)
+    try:
+        return _retrieval().search(
+            query=req.question,
+            mode="exact",
+            top_k=req.top_k,
+            workspace_ids=scope or None,
+            item_refs=item_refs or None,
+        )
+    except (KeyError, ValueError) as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
 @router.get("/conversations")
 def list_conversations(
     keyword: str = Query(default="", max_length=200),
@@ -163,8 +217,13 @@ def list_conversations(
 @router.post("/conversations")
 def create_conversation(req: ConversationCreateRequest) -> Dict[str, Any]:
     scope = _validate_scope(req.default_scope)
+    item_refs = _validate_item_refs(req.default_item_refs)
     return _conversation_payload(
-        _conversation_store.create(title=req.title, default_scope=scope)
+        _conversation_store.create(
+            title=req.title,
+            default_scope=scope,
+            default_item_refs=item_refs,
+        )
     )
 
 
@@ -186,10 +245,16 @@ def patch_conversation(
         if req.default_scope is not None
         else None
     )
+    item_refs = (
+        _validate_item_refs(req.default_item_refs)
+        if req.default_item_refs is not None
+        else None
+    )
     conversation = _conversation_store.update(
         conversation_id,
         title=req.title,
         default_scope=scope,
+        default_item_refs=item_refs,
     )
     if conversation is None:
         raise HTTPException(status_code=404, detail="conversation not found")
@@ -216,6 +281,11 @@ def stream_conversation_message(
         if req.workspace_ids is not None
         else list(conversation.default_scope)
     )
+    item_refs = (
+        _validate_item_refs(req.item_refs)
+        if req.item_refs is not None
+        else list(conversation.default_item_refs)
+    )
     service = KnowledgeMessageService(
         store=_conversation_store,
         retrieval=_retrieval(),
@@ -225,6 +295,7 @@ def stream_conversation_message(
             conversation_id,
             question=req.question.strip(),
             workspace_ids=scope,
+            item_refs=item_refs,
             top_k=req.top_k,
         ),
         media_type="application/x-ndjson",
@@ -258,6 +329,7 @@ def regenerate_conversation_message(
             mode="smart",
             top_k=10,
             workspace_ids=original.scope_snapshot or None,
+            item_refs=original.scope_item_refs or None,
         )
     except (KeyError, ValueError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
@@ -271,6 +343,7 @@ def regenerate_conversation_message(
         content=str(result.get("answer") or ""),
         query_text=original.query_text,
         scope_snapshot=list(original.scope_snapshot),
+        scope_item_refs=list(original.scope_item_refs),
         answer_version=max(
             (
                 message.answer_version

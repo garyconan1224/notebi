@@ -1,5 +1,6 @@
 import { LangSwitcher } from '@/components/LangSwitcher'
 import ThemeSwitcher from '@/components/ThemeSwitcher'
+import { AccentPalettePicker } from '@/components/AccentPalettePicker'
 
 export function GeneralSettingsPage() {
   return (
@@ -32,6 +33,15 @@ export function GeneralSettingsPage() {
             </div>
             <div className="settings-row-control">
               <ThemeSwitcher />
+            </div>
+          </div>
+          <div className="settings-row">
+            <div className="settings-row-label">
+              <strong>强调配色</strong>
+              <span>只改变按钮、选中态和重点标记，不改变内容类型颜色</span>
+            </div>
+            <div className="settings-row-control">
+              <AccentPalettePicker />
             </div>
           </div>
         </div>

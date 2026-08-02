@@ -136,30 +136,6 @@
     "socketTimeoutLabel": "连接超时（秒）",
     "socketTimeoutHint": "网络连接超时时间，范围 5-300 秒，默认 30"
   },
-  "screenshot": {
-    "title": "视频截图",
-    "subtitle": "配置抽帧、拼图与视觉理解的默认参数",
-    "saved": "截图配置已保存",
-    "saveFailed": "截图配置保存失败",
-    "interval": {
-      "title": "默认抽帧间隔",
-      "description": "每多少秒抽取一帧关键画面"
-    },
-    "grid": {
-      "title": "网格拼图大小",
-      "description": "选择网格尺寸，推荐 3x3 用于平衡性能与质量",
-      "totalFrames": "总共 {{count}} 帧",
-      "invalid": "网格大小必须为 1-10 的整数"
-    },
-    "quality": {
-      "title": "图片质量",
-      "description": "越高的质量会产生更大的文件"
-    },
-    "embed": {
-      "title": "自动嵌入笔记",
-      "description": "生成笔记时是否自动包含截图网格"
-    }
-  },
   "transcriber": {
     "title": "音频转写",
     "subtitle": "配置语音识别引擎及默认参数（ASR Provider）",
@@ -177,6 +153,7 @@
       },
       "description": {
         "subtitle": "选择适合设备与场景的转写引擎。",
+        "auto": "自动识别当前机器：Apple 芯片优先 MLX，Windows 优先 NVIDIA CUDA，不可用时使用 CPU",
         "fastWhisper": "免费本地转写，速度快但需本地资源，支持离线使用",
         "bcut": "必剪在线服务，无需本地资源，需网络连接",
         "kuaishou": "快手在线服务，无需本地资源，需网络连接",

@@ -22,9 +22,10 @@ SETTINGS_PATH: Path = SETTINGS_DIR / "settings.json"
 
 ProviderKind = Literal["openai_compatible", "anthropic"]
 ProviderCapability = Literal["chat", "vision", "embedding", "rerank"]
-TranscriberType = Literal["fast-whisper", "bcut", "kuaishou", "groq", "mlx-whisper"]
+TranscriberType = Literal["auto", "fast-whisper", "bcut", "kuaishou", "groq", "mlx-whisper"]
 
 _ALLOWED_TRANSCRIBER_TYPES: tuple[TranscriberType, ...] = (
+    "auto",
     "fast-whisper",
     "bcut",
     "kuaishou",
@@ -40,10 +41,10 @@ class TranscriberConfig:
     字段与前端 configStore.TranscriberConfig 对齐（采用下划线命名，前端侧转驼峰）。
     """
 
-    type: TranscriberType = "fast-whisper"
+    type: TranscriberType = "auto"
     whisper_model_size: str = "medium"
     language: str = "auto"
-    device: str = "cpu"
+    device: str = "auto"
     groq_api_key: str = ""
     initial_prompt: str = ""
     # R4.8: ASR 加速参数
@@ -55,13 +56,13 @@ class TranscriberConfig:
     def from_dict(cls, data: Any) -> "TranscriberConfig":
         if not isinstance(data, dict):
             return cls()
-        raw_type = str(data.get("type") or "fast-whisper").strip()
-        t: TranscriberType = raw_type if raw_type in _ALLOWED_TRANSCRIBER_TYPES else "fast-whisper"  # type: ignore[assignment]
+        raw_type = str(data.get("type") or "auto").strip()
+        t: TranscriberType = raw_type if raw_type in _ALLOWED_TRANSCRIBER_TYPES else "auto"  # type: ignore[assignment]
         return cls(
             type=t,
             whisper_model_size=str(data.get("whisper_model_size") or "medium"),
             language=str(data.get("language") or "zh"),
-            device=str(data.get("device") or "cpu"),
+            device=str(data.get("device") or "auto"),
             groq_api_key=str(data.get("groq_api_key") or ""),
             initial_prompt=str(data.get("initial_prompt") or ""),
             cpu_threads=int(data.get("cpu_threads") or 0),

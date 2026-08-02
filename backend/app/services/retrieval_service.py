@@ -125,6 +125,7 @@ class RetrievalService:
         mode: str = "smart",
         top_k: int = 10,
         workspace_ids: Optional[List[str]] = None,
+        item_refs: Optional[List[Dict[str, str]]] = None,
         item_types: Optional[List[str]] = None,
         tags: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
@@ -134,6 +135,7 @@ class RetrievalService:
             result = self.exact_service.search(
                 query,
                 workspace_ids=workspace_ids,
+                item_refs=item_refs,
                 item_types=item_types,
                 tags=tags,
                 top_k=top_k,
@@ -147,12 +149,14 @@ class RetrievalService:
                 mode="smart",
                 top_k=top_k,
                 workspace_ids=workspace_ids,
+                item_refs=item_refs,
                 item_types=item_types,
                 tags=tags,
             )
             exact = self.exact_service.search(
                 query,
                 workspace_ids=workspace_ids,
+                item_refs=item_refs,
                 item_types=item_types,
                 tags=tags,
                 top_k=top_k,
@@ -174,6 +178,7 @@ class RetrievalService:
             query=query,
             top_k=top_k,
             workspace_ids=workspace_ids,
+            item_refs=item_refs,
             item_types=item_types,
             tags=tags,
             store=self.store,

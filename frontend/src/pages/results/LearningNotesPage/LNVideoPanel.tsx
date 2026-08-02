@@ -57,6 +57,29 @@ function formatTs(sec: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
+export interface TimelineTick {
+  sec: number
+  label: string
+  position: number
+}
+
+const TIMELINE_TICK_INTERVALS = [5, 10, 15, 30, 60, 120, 300, 600, 900, 1800]
+
+/** Generate 4–6 readable time marks, always ending at the actual media duration. */
+export function buildTimelineTicks(duration: number): TimelineTick[] {
+  if (!Number.isFinite(duration) || duration <= 0) return []
+  const interval = TIMELINE_TICK_INTERVALS.find((candidate) => candidate >= duration / 5)
+    ?? TIMELINE_TICK_INTERVALS[TIMELINE_TICK_INTERVALS.length - 1]
+  const seconds = [0]
+  for (let sec = interval; sec < duration; sec += interval) seconds.push(sec)
+  if (seconds[seconds.length - 1] !== duration) seconds.push(duration)
+  return seconds.map((sec) => ({
+    sec,
+    label: formatTs(sec),
+    position: Number(((sec / duration) * 100).toFixed(4)),
+  }))
+}
+
 const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2]
 
 function formatSpeed(s: number): string {
@@ -450,6 +473,20 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
                   {hoverTime != null && formatTs(hoverTime)}
                 </div>
               </div>
+              {duration > 0 && (
+                <div className="note-progress-ticks" aria-hidden="true">
+                  {buildTimelineTicks(duration).map((tick, index, ticks) => (
+                    <span
+                      key={tick.sec}
+                      className="note-progress-tick"
+                      data-edge={index === 0 ? 'start' : index === ticks.length - 1 ? 'end' : undefined}
+                      style={{ left: `${tick.position}%` }}
+                    >
+                      {tick.label}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </>

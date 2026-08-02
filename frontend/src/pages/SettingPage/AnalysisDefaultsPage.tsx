@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import ScreenshotPage from './ScreenshotPage'
 import TranscriberPage from './TranscriberPage'
 import PerformanceTierPage from './PerformanceTierPage'
 import LocalModelsPanel from './LocalModelsPanel'
@@ -14,13 +13,12 @@ import {
   type TaskDefaults,
 } from '@/services/taskDefaults'
 
-type TabKey = 'performance' | 'display' | 'screenshot' | 'transcriber' | 'local-models' | 'defaults' | 'audio-errors'
+type TabKey = 'performance' | 'display' | 'transcriber' | 'local-models' | 'defaults' | 'audio-errors'
 
 /**
  * 分析默认偏好（SPEC §3.5 第 4 页）。
  *
- * 合并原 ScreenshotPage + TranscriberPage + 任务勾选默认偏好
- * 为一个设置页，内部用 Tabs 切换子视图。
+ * 将转写、性能档位和任务勾选默认偏好集中在同一页，内部用 Tabs 切换子视图。
  *
  * 保存/重置入口：子页面继续通过 useSettingsShellStore 推送 SaveBar；
  * 本组件订阅 store 并在页头渲染 settings-save-btn / settings-reset-btn。
@@ -85,12 +83,6 @@ export default function AnalysisDefaultsPage() {
           显示偏好
         </TabBtn>
         <TabBtn
-          active={tab === 'screenshot'}
-          onClick={() => setTab('screenshot')}
-        >
-          {t('layout.menu.screenshot', '截帧设置')}
-        </TabBtn>
-        <TabBtn
           active={tab === 'transcriber'}
           onClick={() => setTab('transcriber')}
         >
@@ -120,7 +112,6 @@ export default function AnalysisDefaultsPage() {
       <div>
         {tab === 'performance' && <PerformanceTierPage />}
         {tab === 'display' && <DisplayDefaultsPanel />}
-        {tab === 'screenshot' && <ScreenshotPage />}
         {tab === 'transcriber' && <TranscriberPage />}
         {tab === 'local-models' && <LocalModelsPanel />}
         {tab === 'defaults' && <TaskDefaultsPanel />}

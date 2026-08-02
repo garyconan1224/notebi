@@ -403,6 +403,7 @@ export default function LNTranscriptPanel({
                 className="ln-tr-row"
                 data-active={i === activeIdx}
                 data-speaker={detailedSpeaker ? line.speaker : undefined}
+                data-speaker-tone={detailedSpeaker ? 'tinted' : undefined}
                 style={detailedSpeaker
                   ? { '--speaker-color': speakerColor(String(line.speaker)) } as CSSProperties
                   : undefined}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { LibraryWorkspace, LibraryItem } from '@/services/library'
 import { SYSTEM_TAG_DIMENSIONS } from '@/constants/tagDimensions'
+import { CoverControls } from './CoverControls'
 
 const TYPE_TONE: Record<string, { badge: string; label: string }> = {
   video: { badge: 'collection-mini--video', label: 'VIDEO' },
@@ -67,6 +68,8 @@ interface WorkspaceCardProps {
   onToggleSelect?: (workspaceId: string) => void
   onDelete?: (workspaceId: string) => void
   onRename?: (workspaceId: string, name: string) => Promise<void>
+  onUploadCover?: (workspaceId: string, file: File) => void
+  onResetCover?: (workspaceId: string) => void
 }
 
 export function WorkspaceCard({
@@ -77,6 +80,8 @@ export function WorkspaceCard({
   onToggleSelect,
   onDelete,
   onRename,
+  onUploadCover,
+  onResetCover,
 }: WorkspaceCardProps) {
   const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
@@ -159,6 +164,13 @@ export function WorkspaceCard({
               </svg>
             </button>
           )
+        )}
+        {!selectMode && onUploadCover && onResetCover && (
+          <CoverControls
+            manual={Boolean(workspace.cover_is_manual)}
+            onUpload={(file) => onUploadCover(workspace.workspace_id, file)}
+            onReset={() => onResetCover(workspace.workspace_id)}
+          />
         )}
 
         {coverThumbnail ? (

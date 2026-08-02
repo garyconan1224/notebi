@@ -26,6 +26,7 @@ from backend.app.services.asr_fast_whisper import (
     _scan_model_cache_bytes,
     is_model_cached,
 )
+from backend.app.services.asr_hardware import get_asr_hardware_status
 from backend.app.services.local_model_manager import (
     activate_local_model,
     list_local_models,
@@ -47,6 +48,7 @@ _WHISPER_MODEL_SIZES: tuple[str, ...] = (
 
 # 与 shared.settings_store._ALLOWED_TRANSCRIBER_TYPES 保持一致
 _ALLOWED_TYPES: tuple[str, ...] = (
+    "auto",
     "fast-whisper",
     "bcut",
     "kuaishou",
@@ -61,7 +63,7 @@ class TranscriberConfigUpdateRequest(BaseModel):
     全部字段可选：缺省则沿用现值；空串视为清空字符串字段。
     """
 
-    type: Optional[Literal["fast-whisper", "bcut", "kuaishou", "groq", "mlx-whisper"]] = Field(
+    type: Optional[Literal["auto", "fast-whisper", "bcut", "kuaishou", "groq", "mlx-whisper"]] = Field(
         default=None,
         description="转写引擎类型；传入值不在白名单时 422",
     )
@@ -163,6 +165,12 @@ def get_whisper_models_status() -> Dict[str, Any]:
             }
         )
     return {"cache_dir": str(_hf_hub_cache_dir()), "models": models}
+
+
+@router.get("/transcriber_config/hardware")
+def get_transcriber_hardware_status() -> Dict[str, Any]:
+    """返回自动 ASR 策略及运行时可用硬件，不泄露驱动路径或环境变量。"""
+    return get_asr_hardware_status()
 
 
 @router.get("/local_models")

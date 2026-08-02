@@ -2,6 +2,7 @@ import { http } from './client'
 import type { SearchResponse } from './search'
 import type {
   KnowledgeConversation,
+  KnowledgeItemRef,
   KnowledgeMessage,
 } from '@/types/knowledgeConversation'
 
@@ -48,6 +49,7 @@ export async function askKnowledge(
   question: string,
   topK = 10,
   workspaceIds?: string[],
+  itemRefs?: KnowledgeItemRef[],
 ): Promise<KnowledgeAskResponse> {
   const res = await http.post<KnowledgeAskResponse>(
     '/knowledge/ask',
@@ -55,6 +57,7 @@ export async function askKnowledge(
       question,
       top_k: topK,
       workspace_ids: workspaceIds?.length ? workspaceIds : undefined,
+      item_refs: itemRefs?.length ? itemRefs : undefined,
     },
     { timeout: 180000 },
   )
@@ -73,10 +76,12 @@ export async function listKnowledgeConversations(
 export async function createKnowledgeConversation(
   title = '新会话',
   defaultScope: string[] = [],
+  defaultItemRefs: KnowledgeItemRef[] = [],
 ): Promise<KnowledgeConversation> {
   const res = await http.post('/knowledge/conversations', {
     title,
     default_scope: defaultScope,
+    default_item_refs: defaultItemRefs,
   })
   return res.data
 }
@@ -92,13 +97,18 @@ export async function getKnowledgeConversation(
 
 export async function updateKnowledgeConversation(
   conversationId: string,
-  patch: { title?: string; defaultScope?: string[] },
+  patch: {
+    title?: string
+    defaultScope?: string[]
+    defaultItemRefs?: KnowledgeItemRef[]
+  },
 ): Promise<KnowledgeConversation> {
   const res = await http.patch(
     `/knowledge/conversations/${encodeURIComponent(conversationId)}`,
     {
       title: patch.title,
       default_scope: patch.defaultScope,
+      default_item_refs: patch.defaultItemRefs,
     },
   )
   return res.data
@@ -126,14 +136,14 @@ export async function regenerateKnowledgeMessage(
 export async function searchKnowledgeOriginals(
   query: string,
   workspaceIds?: string[],
+  itemRefs?: KnowledgeItemRef[],
   topK = 30,
 ): Promise<SearchResponse> {
-  const res = await http.get('/knowledge/search', {
-    params: {
-      query,
-      workspace_ids: workspaceIds,
-      top_k: topK,
-    },
+  const res = await http.post<SearchResponse>('/knowledge/search', {
+    question: query,
+    workspace_ids: workspaceIds?.length ? workspaceIds : undefined,
+    item_refs: itemRefs?.length ? itemRefs : undefined,
+    top_k: topK,
   })
   return res.data
 }

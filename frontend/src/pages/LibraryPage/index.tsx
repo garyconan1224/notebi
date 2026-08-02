@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Trash2, Plus, Inbox, Filter, FolderInput, FolderPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { fetchLibrary, deleteItem, batchDeleteItems, batchAddItemsToWorkspace, type LibraryItem, type LibraryResponse, type LibraryWorkspace } from '@/services/library'
-import { createWorkspace, deleteWorkspace, updateWorkspace, favoriteItem, unfavoriteItem } from '@/services/workspaces'
+import { createWorkspace, deleteWorkspace, updateWorkspace, favoriteItem, unfavoriteItem, uploadWorkspaceCover, resetWorkspaceCover, uploadItemCover, resetItemCover } from '@/services/workspaces'
 import { useLibraryStore, type SortBy } from '@/store/libraryStore'
 import { useTaskStore } from '@/store/taskStore'
 import { FilterChips } from './FilterChips'
@@ -549,6 +549,46 @@ export default function LibraryPage() {
     }
   }, [load])
 
+  const handleUploadWorkspaceCover = useCallback(async (workspaceId: string, file: File) => {
+    try {
+      await uploadWorkspaceCover(workspaceId, file)
+      toast.success('合集封面已更新')
+      await load()
+    } catch {
+      toast.error('合集封面上传失败，请选择 JPG、PNG、WebP 或 GIF 图片')
+    }
+  }, [load])
+
+  const handleResetWorkspaceCover = useCallback(async (workspaceId: string) => {
+    try {
+      await resetWorkspaceCover(workspaceId)
+      toast.success('已恢复自动合集封面')
+      await load()
+    } catch {
+      toast.error('恢复自动合集封面失败，请重试')
+    }
+  }, [load])
+
+  const handleUploadItemCover = useCallback(async (item: LibraryItem, file: File) => {
+    try {
+      await uploadItemCover(item.workspace_id, item.item_id, file)
+      toast.success('素材封面已更新')
+      await load()
+    } catch {
+      toast.error('素材封面上传失败，请选择 JPG、PNG、WebP 或 GIF 图片')
+    }
+  }, [load])
+
+  const handleResetItemCover = useCallback(async (item: LibraryItem) => {
+    try {
+      await resetItemCover(item.workspace_id, item.item_id)
+      toast.success('已恢复自动素材封面')
+      await load()
+    } catch {
+      toast.error('恢复自动素材封面失败，请重试')
+    }
+  }, [load])
+
   const handleToggleFavorite = useCallback(async (item: LibraryItem) => {
     try {
       if (item.favorite) {
@@ -711,6 +751,8 @@ export default function LibraryPage() {
                     onToggleSelect={toggleWorkspaceSelect}
                     onDelete={handleDeleteWorkspace}
                     onRename={handleRenameWorkspace}
+                    onUploadCover={handleUploadWorkspaceCover}
+                    onResetCover={handleResetWorkspaceCover}
                   />
                 ) : (
                   <ItemCard
@@ -721,6 +763,8 @@ export default function LibraryPage() {
                     onToggleSelect={toggleSelect}
                     onDelete={handleDeleteOne}
                     onToggleFavorite={handleToggleFavorite}
+                    onUploadCover={handleUploadItemCover}
+                    onResetCover={handleResetItemCover}
                   />
                 )
               ))}

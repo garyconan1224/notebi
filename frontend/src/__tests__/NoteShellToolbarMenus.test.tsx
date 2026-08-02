@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -148,6 +148,24 @@ describe('NoteShell 导出菜单信息架构（阶段 A1）', () => {
     expect(screen.getByRole('button', { name: 'VTT 字幕' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'ASS 字幕' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'PDF' })).not.toBeInTheDocument()
+  })
+
+  it('按用途分组笔记与字幕导出格式', async () => {
+    await renderNoteShell()
+    fireEvent.click(screen.getByRole('button', { name: '导出' }))
+    fireEvent.click(screen.getByRole('button', { name: /^主笔记$/ }))
+
+    const exportMenu = document.querySelector('.nibi-note-export-menu')
+    expect(exportMenu).not.toBeNull()
+    const menu = within(exportMenu as HTMLElement)
+    expect(menu.getByText('文档与打印')).toBeInTheDocument()
+    expect(menu.getByText('演示与阅读')).toBeInTheDocument()
+    expect(menu.getByText('知识管理')).toBeInTheDocument()
+    expect(menu.getByRole('button', { name: 'Obsidian 包' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '返回内容选择' }))
+    fireEvent.click(screen.getByRole('button', { name: /转写文本$/ }))
+    expect(within(document.querySelector('.nibi-note-export-menu') as HTMLElement).getByText('字幕格式')).toBeInTheDocument()
   })
 
   it('原始素材在导出菜单中，顶栏不再有独立原始素材按钮', async () => {

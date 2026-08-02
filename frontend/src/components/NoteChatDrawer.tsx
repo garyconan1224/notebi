@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Loader2, MessageCircle, Send, X } from 'lucide-react'
+import { Copy, History, Loader2, MessageCircle, Plus, Save, Send, Trash2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -7,8 +7,11 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   type ChatMessage,
   createChatTurn,
+  deleteChat,
+  listChats,
   listChatMessages,
   subscribeChatTurn,
+  type ChatSummary,
 } from '@/services/chat'
 import { toast } from 'sonner'
 import './NoteChatDrawer.css'
@@ -27,6 +30,8 @@ export interface NoteChatDrawerProps {
   onClose?: () => void
   /** 父级已有标题时隐藏内部标题，避免停靠面板重复显示“问 AI”。 */
   showHeader?: boolean
+  /** 结果页将回答追加到当前正在编辑的主笔记或总结版本。 */
+  onSaveAnswer?: (answer: string) => void
 }
 
 /**
@@ -42,15 +47,30 @@ export default function NoteChatDrawer({
   mode = 'drawer',
   onClose,
   showHeader = true,
+  onSaveAnswer,
 }: NoteChatDrawerProps) {
   const [open, setOpen] = useState(mode === 'inline') // inline 模式默认打开
   const [chatId, setChatId] = useState<string | null>(null)
   const [history, setHistory] = useState<ChatMessage[]>([])
+  const [chatSummaries, setChatSummaries] = useState<ChatSummary[]>([])
+  const [sessionsOpen, setSessionsOpen] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [streamText, setStreamText] = useState('')
   const [input, setInput] = useState('')
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
+
+  const refreshChatSummaries = useCallback(async () => {
+    try {
+      setChatSummaries(await listChats(workspaceId))
+    } catch {
+      // 历史会话不可用不应阻塞当前提问。
+    }
+  }, [workspaceId])
+
+  useEffect(() => {
+    if (open) void refreshChatSummaries()
+  }, [open, refreshChatSummaries])
 
   useEffect(() => {
     if (!open || !chatId) return
@@ -97,6 +117,7 @@ export default function NoteChatDrawer({
         item_ids: itemIds,
       })
       setChatId(turn.chat_id)
+      void refreshChatSummaries()
 
       cleanupRef.current?.()
       cleanupRef.current = subscribeChatTurn(workspaceId, turn.turn_id, {
@@ -108,6 +129,7 @@ export default function NoteChatDrawer({
           } catch { /* ignore */ }
           setStreamText('')
           setStreaming(false)
+          void refreshChatSummaries()
         },
         onError: (msg) => {
           toast.error(`聊天出错：${msg}`)
@@ -121,7 +143,7 @@ export default function NoteChatDrawer({
       setStreaming(false)
       setHistory((h) => h.filter((m) => m.message_id !== optimisticUser.message_id))
     }
-  }, [input, streaming, workspaceId, chatId, systemPrompt, itemIds])
+  }, [input, streaming, workspaceId, chatId, systemPrompt, itemIds, refreshChatSummaries])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -134,6 +156,39 @@ export default function NoteChatDrawer({
     if (mode === 'drawer') {
       setOpen(false)
       onClose?.()
+    }
+  }
+
+  const handleStartNewChat = () => {
+    cleanupRef.current?.()
+    cleanupRef.current = null
+    setChatId(null)
+    setHistory([])
+    setStreamText('')
+    setInput('')
+    setSessionsOpen(false)
+  }
+
+  const handleClearActiveChat = async () => {
+    if (!chatId || streaming) return
+    if (!window.confirm('清空当前会话后无法恢复。确认继续吗？')) return
+    try {
+      await deleteChat(workspaceId, chatId)
+      handleStartNewChat()
+      await refreshChatSummaries()
+      toast.success('当前会话已清空')
+    } catch {
+      toast.error('清空当前会话失败，请重试')
+    }
+  }
+
+  const handleCopyAnswer = async (answer: string) => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable')
+      await navigator.clipboard.writeText(answer)
+      toast.success('回答已复制')
+    } catch {
+      toast.error('复制失败，请手动选择文本')
     }
   }
 
@@ -155,6 +210,54 @@ export default function NoteChatDrawer({
 
       <div className="note-chat-scope-hint">{scopeHint}</div>
 
+      <div className="note-chat-session-tools">
+        <div className="note-chat-session-actions">
+          <button type="button" onClick={() => setSessionsOpen((value) => !value)} aria-label="历史会话">
+            <History size={13} /> 历史{chatSummaries.length ? ` (${chatSummaries.length})` : ''}
+          </button>
+          <button type="button" onClick={handleStartNewChat} aria-label="新建会话">
+            <Plus size={13} /> 新建
+          </button>
+          {chatId && (
+            <button type="button" onClick={() => void handleClearActiveChat()} aria-label="清空当前会话" disabled={streaming}>
+              <Trash2 size={13} /> 清空
+            </button>
+          )}
+        </div>
+        {sessionsOpen && (
+          <ul className="note-chat-session-list" aria-label="历史会话列表">
+            {chatSummaries.length === 0 ? (
+              <li className="note-chat-session-empty">还没有历史会话</li>
+            ) : chatSummaries.map((summary) => (
+              <li key={summary.chat_id}>
+                <button
+                  type="button"
+                  aria-label={`打开会话 ${summary.chat_id}`}
+                  onClick={() => {
+                    setChatId(summary.chat_id)
+                    setHistory([])
+                    setSessionsOpen(false)
+                  }}
+                >
+                  <strong>{new Date(summary.last_at).toLocaleString()}</strong>
+                  <span>{summary.message_count} 条消息</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="note-chat-prompts" aria-label="推荐问题">
+        {[
+          ['总结核心观点', '请用 3 到 5 条总结这篇笔记的核心观点，并标出对应证据。'],
+          ['解释关键概念', '请解释这篇笔记里的关键概念，并用素材中的例子说明。'],
+          ['整理行动项', '请整理可执行的行动项、前置条件和风险；没有依据时明确说明。'],
+        ].map(([label, prompt]) => (
+          <button key={label} type="button" onClick={() => setInput(prompt)}>{label}</button>
+        ))}
+      </div>
+
       <ScrollArea className="note-chat-messages">
         <div ref={scrollRef} className="note-chat-messages-inner">
           {history.length === 0 && !streaming && (
@@ -163,7 +266,13 @@ export default function NoteChatDrawer({
             </p>
           )}
           {history.map((m) => (
-            <Bubble key={m.message_id} role={m.role} content={m.content} />
+            <Bubble
+              key={m.message_id}
+              role={m.role}
+              content={m.content}
+              onCopy={handleCopyAnswer}
+              onSave={onSaveAnswer}
+            />
           ))}
           {streaming && (
             <Bubble role="assistant" content={streamText} pending />
@@ -178,6 +287,7 @@ export default function NoteChatDrawer({
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="输入消息…"
+            aria-label="输入问题"
             rows={2}
             className="note-chat-textarea"
             disabled={streaming}
@@ -227,9 +337,11 @@ interface BubbleProps {
   role: ChatMessage['role']
   content: string
   pending?: boolean
+  onCopy?: (answer: string) => void
+  onSave?: (answer: string) => void
 }
 
-function Bubble({ role, content, pending }: BubbleProps) {
+function Bubble({ role, content, pending, onCopy, onSave }: BubbleProps) {
   const isUser = role === 'user'
   return (
     <div className={cn('note-chat-bubble-row', isUser && 'note-chat-bubble-user')}>
@@ -242,6 +354,12 @@ function Bubble({ role, content, pending }: BubbleProps) {
       >
         {content || (pending ? '…' : '')}
       </div>
+      {!isUser && !pending && content && (onCopy || onSave) && (
+        <div className="note-chat-answer-actions">
+          {onCopy && <button type="button" aria-label="复制回答" onClick={() => void onCopy(content)}><Copy size={12} />复制</button>}
+          {onSave && <button type="button" aria-label="保存为笔记" onClick={() => onSave(content)}><Save size={12} />保存</button>}
+        </div>
+      )}
     </div>
   )
 }

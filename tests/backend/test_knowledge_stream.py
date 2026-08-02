@@ -15,7 +15,7 @@ class _Retrieval:
     def __init__(self) -> None:
         self.scopes: list[list[str] | None] = []
 
-    def search(self, *, query, mode, top_k, workspace_ids):
+    def search(self, *, query, mode, top_k, workspace_ids, item_refs=None):
         self.scopes.append(workspace_ids)
         source_id = f"source-{workspace_ids[0] if workspace_ids else 'all'}"
         return {
@@ -105,3 +105,42 @@ def test_stream_failure_keeps_sources_and_marks_message_failed(
     assert persisted is not None
     assert persisted.messages[-1].status == "failed"
     assert persisted.messages[-1].sources == []
+
+
+def test_stream_keeps_single_note_scope_for_retrieval_and_history(
+    tmp_path: Path,
+) -> None:
+    class ItemScopedRetrieval:
+        def __init__(self) -> None:
+            self.item_refs: list[list[dict[str, str]] | None] = []
+
+        def search(self, **kwargs):
+            self.item_refs.append(kwargs.get("item_refs"))
+            return {
+                "answer": "仅来自所选笔记",
+                "sources": [],
+                "citations": [],
+                "answer_status": "complete",
+                "evidence_status": {"sufficient": True},
+            }
+
+    store = KnowledgeConversationStore(tmp_path / "conversations")
+    conversation = store.create()
+    retrieval = ItemScopedRetrieval()
+    service = KnowledgeMessageService(store=store, retrieval=retrieval)
+    item_refs = [{"workspace_id": "w1", "item_id": "i1"}]
+
+    _events(service.stream(
+        conversation.conversation_id,
+        question="只查这篇",
+        workspace_ids=[],
+        item_refs=item_refs,
+    ))
+
+    assert retrieval.item_refs == [item_refs]
+    persisted = store.get(conversation.conversation_id)
+    assert persisted is not None
+    assert [message.scope_item_refs for message in persisted.messages] == [
+        item_refs,
+        item_refs,
+    ]

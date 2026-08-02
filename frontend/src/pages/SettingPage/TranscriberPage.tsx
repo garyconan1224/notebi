@@ -11,7 +11,9 @@ import {
   getWhisperModelSizes,
   getDeviceOptions,
   getLanguageOptions,
+  fetchAsrHardwareStatus,
   fetchWhisperModelsStatus,
+  type AsrHardwareStatus,
   type TranscriberConfigPayload,
   type WhisperModelStatus,
 } from '@/services/transcriber'
@@ -79,7 +81,7 @@ const TranscriberPage = () => {
       type: transcriber.type,
       whisper_model_size: transcriber.whisperModelSize,
       language: transcriber.language,
-      device: transcriber.device as 'cpu' | 'cuda' | 'mps',
+      device: transcriber.device as 'auto' | 'cpu' | 'cuda' | 'mps',
       groq_api_key: transcriber.groqApiKey,
       initial_prompt: transcriber.initialPrompt,
       cpu_threads: transcriber.cpuThreads,
@@ -97,6 +99,7 @@ const TranscriberPage = () => {
   // 任一模型处于 pending_mb > 0 的下载中状态时，自动 3s 轮询刷新。
   const [modelStatuses, setModelStatuses] = useState<WhisperModelStatus[]>([])
   const [cacheDir, setCacheDir] = useState<string>('')
+  const [hardwareStatus, setHardwareStatus] = useState<AsrHardwareStatus | null>(null)
 
   const refreshModelStatuses = useCallback(async () => {
     try {
@@ -109,13 +112,21 @@ const TranscriberPage = () => {
   }, [])
 
   useEffect(() => {
-    if (draft.type !== 'fast-whisper') return
+    if (draft.type !== 'fast-whisper' && draft.type !== 'auto') return
     refreshModelStatuses()
   }, [draft.type, refreshModelStatuses])
 
+  useEffect(() => {
+    let cancelled = false
+    fetchAsrHardwareStatus()
+      .then((status) => { if (!cancelled) setHardwareStatus(status) })
+      .catch(() => { if (!cancelled) setHardwareStatus(null) })
+    return () => { cancelled = true }
+  }, [])
+
   // 任一模型正在下载（pending_mb > 0）时启动 3 秒轮询；全部稳定后停止
   useEffect(() => {
-    if (draft.type !== 'fast-whisper') return
+    if (draft.type !== 'fast-whisper' && draft.type !== 'auto') return
     const hasDownloading = modelStatuses.some((m) => m.pending_mb > 0)
     if (!hasDownloading) return
     const timer = setInterval(refreshModelStatuses, 3000)
@@ -154,7 +165,7 @@ const TranscriberPage = () => {
         type: draft.type,
         whisper_model_size: draft.whisper_model_size,
         language: draft.language,
-        device: draft.device as 'cpu' | 'cuda' | 'mps',
+        device: draft.device as 'auto' | 'cpu' | 'cuda' | 'mps',
         groq_api_key: draft.groq_api_key,
         initial_prompt: draft.initial_prompt,
         cpu_threads: draft.cpu_threads,
@@ -204,12 +215,13 @@ const TranscriberPage = () => {
 
   // 获取引擎的本地/在线徽章
   const getEngineType = (type: TranscriberType): 'local' | 'online' => {
-    return ['fast-whisper', 'mlx-whisper'].includes(type) ? 'local' : 'online'
+    return ['auto', 'fast-whisper', 'mlx-whisper'].includes(type) ? 'local' : 'online'
   }
 
   // 获取引擎描述文案的 key
   const getEngineDescriptionKey = (type: TranscriberType): string => {
     const keyMap: Record<TranscriberType, string> = {
+      auto: 'auto',
       'fast-whisper': 'fastWhisper',
       'mlx-whisper': 'mlxWhisper',
       'bcut': 'bcut',
@@ -223,7 +235,7 @@ const TranscriberPage = () => {
   useEffect(() => {
     if (draft.type === 'mlx-whisper' && !isMac) {
       toast.warning(t('transcriber.mlxNotAvailable'))
-      patch({ type: 'fast-whisper' })
+      patch({ type: 'auto' })
     }
     // fast-whisper 不支持 mps，自动回退到 cpu
     if (draft.type === 'fast-whisper' && draft.device === 'mps') {
@@ -281,7 +293,7 @@ const TranscriberPage = () => {
         </div>
 
         {/* 在线引擎 ToS 提示（仅当选中在线引擎时显示） */}
-        {draft.type !== 'fast-whisper' && draft.type !== 'mlx-whisper' && (
+        {draft.type !== 'auto' && draft.type !== 'fast-whisper' && draft.type !== 'mlx-whisper' && (
           <div className="mt-4">
             <Alert variant="default" className="border-amber-200 bg-amber-50">
               <AlertCircle className="size-4 text-amber-700" />
@@ -293,7 +305,7 @@ const TranscriberPage = () => {
         )}
 
         {/* 两种本地 Whisper 引擎共用规格选择；下载中心负责分别展示缓存状态。 */}
-        {(draft.type === 'fast-whisper' || draft.type === 'mlx-whisper') && (
+        {(draft.type === 'auto' || draft.type === 'fast-whisper' || draft.type === 'mlx-whisper') && (
           <div className="mt-6 border-t pt-6">
             <FieldRow
               htmlFor="whisper-model-size"
@@ -312,7 +324,7 @@ const TranscriberPage = () => {
                 })}
               >
                 {getWhisperModelSizes().map((size) => {
-                  const status = draft.type === 'fast-whisper'
+                  const status = draft.type === 'fast-whisper' || draft.type === 'auto'
                     ? modelStatuses.find((m) => m.name === size)
                     : undefined
                   return (
@@ -325,12 +337,25 @@ const TranscriberPage = () => {
             </FieldRow>
 
             {/* Faster Whisper 的缓存状态由原有探测接口提供；MLX 详情在本地模型中心。 */}
-            {draft.type === 'fast-whisper' && cacheDir && (
+            {(draft.type === 'fast-whisper' || draft.type === 'auto') && cacheDir && (
               <p className="mt-2 text-xs text-muted-foreground">
                 模型缓存目录：<code className="rounded bg-muted px-1 py-0.5 text-[11px]">{cacheDir}</code>
               </p>
             )}
           </div>
+        )}
+
+        {draft.type === 'auto' && hardwareStatus && (
+          <Alert className="mt-4 border-sky-200 bg-sky-50">
+            <Cpu className="size-4 text-sky-700" />
+            <AlertDescription className="text-sm text-sky-900">
+              <strong>自动硬件策略 · {hardwareStatus.platform} {hardwareStatus.architecture}</strong>
+              <br />
+              {hardwareStatus.recommendation}
+              <br />
+              <span className="text-xs text-sky-800">不可用时回退：{hardwareStatus.fallback}</span>
+            </AlertDescription>
+          </Alert>
         )}
 
         {/* Groq API Key（仅 groq） */}
@@ -428,7 +453,7 @@ const TranscriberPage = () => {
       </Section>
 
       {/* ── Section · 转录加速（R4.8）── */}
-      {draft.type === 'fast-whisper' && (
+      {(draft.type === 'auto' || draft.type === 'fast-whisper') && (
         <Section
           icon={<Zap className="size-4" />}
           title="转录加速"

@@ -11,6 +11,7 @@ import {
   formatDuration,
   extractDomain,
 } from './libraryHelpers'
+import { CoverControls } from './CoverControls'
 
 const TYPE_LABEL: Record<string, string> = {
   video: 'VIDEO',
@@ -35,9 +36,11 @@ interface ItemCardProps {
   onToggleSelect?: (itemId: string, workspaceId: string) => void
   onDelete?: (item: LibraryItem) => void
   onToggleFavorite?: (item: LibraryItem) => void
+  onUploadCover?: (item: LibraryItem, file: File) => void
+  onResetCover?: (item: LibraryItem) => void
 }
 
-export function ItemCard({ item, selected, selectMode, onToggleSelect, onDelete, onToggleFavorite }: ItemCardProps) {
+export function ItemCard({ item, selected, selectMode, onToggleSelect, onDelete, onToggleFavorite, onUploadCover, onResetCover }: ItemCardProps) {
   const navigate = useNavigate()
   const state = primaryStatusToState(item.primary_task_status)
   const stateLabel = STATE_LABEL[state] || 'queued'
@@ -80,7 +83,7 @@ export function ItemCard({ item, selected, selectMode, onToggleSelect, onDelete,
     } else if (isDone) {
       navigate(resolveItemRoute(item.workspace_id, item))
     } else {
-      const tid = item.related_task_ids?.[0] ?? ''
+      const tid = item.primary_task_id ?? item.related_task_ids?.[item.related_task_ids.length - 1] ?? ''
       if (tid) {
         navigate(`/processing/${tid}`)
       } else {
@@ -179,6 +182,13 @@ export function ItemCard({ item, selected, selectMode, onToggleSelect, onDelete,
             </>
           )}
         </div>
+        {!selectMode && onUploadCover && onResetCover && (
+          <CoverControls
+            manual={Boolean(item.cover_is_manual)}
+            onUpload={(file) => onUploadCover(item, file)}
+            onReset={() => onResetCover(item)}
+          />
+        )}
       </div>
 
       {/* Body */}

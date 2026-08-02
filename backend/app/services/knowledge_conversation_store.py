@@ -64,10 +64,12 @@ class KnowledgeConversationStore:
         *,
         title: str = "新会话",
         default_scope: Optional[list[str]] = None,
+        default_item_refs: Optional[list[dict[str, str]]] = None,
     ) -> KnowledgeConversation:
         conversation = KnowledgeConversation(
             title=title.strip() or "新会话",
             default_scope=list(dict.fromkeys(default_scope or [])),
+            default_item_refs=list(default_item_refs or []),
         )
         return self.save(conversation)
 
@@ -105,6 +107,7 @@ class KnowledgeConversationStore:
         *,
         title: Optional[str] = None,
         default_scope: Optional[list[str]] = None,
+        default_item_refs: Optional[list[dict[str, str]]] = None,
     ) -> Optional[KnowledgeConversation]:
         with self._lock:
             conversation = self._cache.get(conversation_id)
@@ -115,6 +118,8 @@ class KnowledgeConversationStore:
                 updated.title = title.strip() or "新会话"
             if default_scope is not None:
                 updated.default_scope = list(dict.fromkeys(default_scope))
+            if default_item_refs is not None:
+                updated.default_item_refs = list(default_item_refs)
             updated.updated_at = _now()
             return self.save(updated)
 

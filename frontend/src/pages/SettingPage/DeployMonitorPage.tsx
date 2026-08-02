@@ -74,6 +74,27 @@ export function mergeLogEntries(...groups: LogEntry[][]): LogEntry[] {
   return [...byId.values()].sort((left, right) => left.id - right.id)
 }
 
+type LogScopeField = 'task_id' | 'batch_id' | 'workspace_id'
+
+function scopeOptionLabel(log: LogEntry, field: LogScopeField, value: string): string {
+  if (field === 'task_id' && log.details?.task_title) {
+    return `${log.details.task_title} · ${value}`
+  }
+  return value
+}
+
+function scopeOptions(logs: LogEntry[], field: LogScopeField, selected: string) {
+  const options = new Map<string, string>()
+  for (const log of [...logs].reverse()) {
+    const value = log[field]
+    if (value && !options.has(value)) {
+      options.set(value, scopeOptionLabel(log, field, value))
+    }
+  }
+  if (selected && !options.has(selected)) options.set(selected, selected)
+  return [...options].map(([value, label]) => ({ value, label }))
+}
+
 function formatBytes(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -278,6 +299,10 @@ export default function DeployMonitorPage() {
     [scopedLogs],
   )
   const visibleActivity = view === 'progress' ? progressLogs : issueLogs
+  const recentScopedLogs = useMemo(() => scopedLogs.slice().reverse(), [scopedLogs])
+  const taskOptions = useMemo(() => scopeOptions(logs, 'task_id', taskFilter), [logs, taskFilter])
+  const batchOptions = useMemo(() => scopeOptions(logs, 'batch_id', batchFilter), [logs, batchFilter])
+  const workspaceOptions = useMemo(() => scopeOptions(logs, 'workspace_id', workspaceFilter), [logs, workspaceFilter])
 
   useEffect(() => {
     const params = new URLSearchParams()
@@ -409,8 +434,8 @@ export default function DeployMonitorPage() {
         </Section>
 
         <Section
-          title="任务活动"
-          description="按实际处理环节解释运行事件，不显示内部日志类别。"
+          title="任务活动与诊断"
+          description="处理事件与排错日志来自同一条实时事件流；最新事件始终在最上方。"
           action={(
             <button
               type="button"
@@ -499,9 +524,8 @@ export default function DeployMonitorPage() {
               </article>
             ))}
           </div>
-        </Section>
 
-        <details className="monitor-diagnostics">
+          <details className="monitor-diagnostics">
           <summary>高级诊断日志</summary>
           <div className="monitor-diagnostics-body">
             <p>面向排错的原始事件。日常使用只需查看上方任务活动。</p>
@@ -518,27 +542,33 @@ export default function DeployMonitorPage() {
                 <option value="WARNING">WARNING</option>
                 <option value="ERROR">ERROR</option>
               </select>
-              <input
+              <select
                 aria-label="任务 ID"
                 className="input"
                 value={taskFilter}
                 onChange={(event) => setTaskFilter(event.target.value)}
-                placeholder="任务 ID"
-              />
-              <input
+              >
+                <option value="">全部任务</option>
+                {taskOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+              <select
                 aria-label="批次 ID"
                 className="input"
                 value={batchFilter}
                 onChange={(event) => setBatchFilter(event.target.value)}
-                placeholder="批次 ID"
-              />
-              <input
+              >
+                <option value="">全部批次</option>
+                {batchOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+              <select
                 aria-label="合集 ID"
                 className="input"
                 value={workspaceFilter}
                 onChange={(event) => setWorkspaceFilter(event.target.value)}
-                placeholder="合集 ID"
-              />
+              >
+                <option value="">全部合集</option>
+                {workspaceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
               <input
                 aria-label="关键词"
                 className="input"
@@ -567,7 +597,7 @@ export default function DeployMonitorPage() {
             <div ref={logContainerRef} className="monitor-raw-logs">
               {scopedLogs.length === 0 ? (
                 <div className="monitor-empty">暂无日志</div>
-              ) : scopedLogs.map((log) => (
+              ) : recentScopedLogs.map((log) => (
                 <div key={log.id}>
                   <time>{formatTime(log.timestamp)}</time>
                   <b data-level={log.level}>{log.level}</b>
@@ -577,7 +607,8 @@ export default function DeployMonitorPage() {
               ))}
             </div>
           </div>
-        </details>
+          </details>
+        </Section>
       </div>
     </main>
   )

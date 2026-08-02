@@ -53,6 +53,33 @@ def test_exact_search_supports_two_character_chinese_and_filters(
     assert {source["item_type"] for source in result["sources"]} == {"video"}
 
 
+def test_exact_search_unions_collection_and_single_note_scopes(
+    retrieval_store: WorkspaceStore,
+    tmp_path: Path,
+) -> None:
+    service = ExactSearchService(
+        store=retrieval_store,
+        database_path=tmp_path / "search.sqlite3",
+    )
+    service.rebuild()
+
+    result = service.search(
+        "产品",
+        workspace_ids=["ws_alpha"],
+        item_refs=[{"workspace_id": "ws_beta", "item_id": "legacy-shared-item"}],
+    )
+
+    assert {source["workspace_id"] for source in result["sources"]} == {
+        "ws_alpha",
+        "ws_beta",
+    }
+    assert all(
+        source["workspace_id"] == "ws_alpha"
+        or source["item_id"] == "legacy-shared-item"
+        for source in result["sources"]
+    )
+
+
 def test_exact_search_falls_back_when_fts5_is_unavailable(
     retrieval_store: WorkspaceStore,
     tmp_path: Path,

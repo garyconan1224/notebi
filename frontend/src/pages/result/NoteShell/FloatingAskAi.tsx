@@ -18,6 +18,7 @@ interface FloatingAskAiProps {
   onOpenChange?: (open: boolean) => void
   onWidthChange?: (width: number) => void
   hideTrigger?: boolean
+  onSaveAnswer?: (answer: string) => void
 }
 
 const MIN_WIDTH = 340
@@ -32,6 +33,7 @@ export function FloatingAskAi({
   onOpenChange,
   onWidthChange,
   hideTrigger = false,
+  onSaveAnswer,
 }: FloatingAskAiProps) {
   const [internalOpen, setInternalOpen] = useState(false)
   const [width, setWidth] = useState(400)
@@ -113,6 +115,7 @@ export function FloatingAskAi({
               scopeHint={scopeHint}
               mode="inline"
               showHeader={false}
+              onSaveAnswer={onSaveAnswer}
             />
           </div>
         </aside>
