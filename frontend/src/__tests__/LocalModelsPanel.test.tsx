@@ -37,11 +37,33 @@ describe('LocalModelsPanel', () => {
   it('列出本地模型、状态和缓存目录', async () => {
     render(<LocalModelsPanel />)
     expect(await screen.findByText('Faster Whisper · base')).toBeInTheDocument()
-    expect(screen.getAllByText(/缓存：\/tmp\/hf/)).toHaveLength(2)
+    // 缓存路径在折叠区城内，仍在 DOM 中
+    expect(screen.getAllByText(/\/tmp\/hf/)).toHaveLength(2)
     expect(screen.getByText('待下载')).toBeInTheDocument()
     const buttons = screen.getAllByRole('button', { name: '下载' })
     expect(buttons[0]).toBeEnabled()
     expect(buttons[1]).toBeDisabled()
+  })
+
+  it('S5: 模型按用途分组显示组标题', async () => {
+    render(<LocalModelsPanel />)
+    const headers = await screen.findAllByText('语音转写')
+    expect(headers.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('S5: 已下载未启用时显示“使用”按钮而非灰色“已下载”', async () => {
+    mocks.listLocalModels.mockResolvedValue([
+      {
+        model_id: 'fast-whisper:base', family: 'fast-whisper', title: 'Faster Whisper · base',
+        description: '本地转写', estimated_size_mb: 145, done_mb: 145, pending_mb: 0,
+        cached: true, compatible: true, cache_dir: '/tmp/hf', status: 'ready',
+        progress: 1, message: '已就绪', error: '', active: false,
+      },
+    ])
+    render(<LocalModelsPanel />)
+    // 应显示“使用”按钮而非灰色“已下载”
+    expect(await screen.findByRole('button', { name: '使用' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: '已下载' })).toBeNull()
   })
 
   it('只在点击下载后请求后台下载并刷新状态', async () => {

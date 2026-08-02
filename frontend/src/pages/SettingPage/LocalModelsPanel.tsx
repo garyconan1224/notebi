@@ -11,6 +11,20 @@ import {
 
 const PYANNOTE_ACCESS_URL = 'https://huggingface.co/pyannote/speaker-diarization-community-1'
 
+/** S5: 模型家族 → 用途分组标题 */
+const FAMILY_PURPOSE: Record<string, string> = {
+  'fast-whisper': '语音转写',
+  'mlx-whisper': '语音转写',
+  'speaker-diarization': '说话人识别',
+  'wespeaker': '说话人识别',
+  'sherpa': '说话人识别',
+  'paddleocr': '图片文字识别',
+}
+
+function purposeLabel(family: string): string {
+  return FAMILY_PURPOSE[family] ?? family
+}
+
 function formatSize(size: number): string {
   if (!size) return '大小由模型运行时确认'
   return size >= 1024 ? `${(size / 1024).toFixed(1)} GB` : `${Math.round(size)} MB`
@@ -105,6 +119,7 @@ export default function LocalModelsPanel() {
         </div>
         {byFamily.map((group) => (
           <div className="local-model-family" key={group[0].family}>
+            <div className="local-model-purpose-header">{purposeLabel(group[0].family)}</div>
             {group.map((model) => {
               const ready = model.status === 'ready' || model.cached
               const isBusy = busyId === model.model_id || model.status === 'downloading'
@@ -113,7 +128,10 @@ export default function LocalModelsPanel() {
                   <div>
                     <strong>{model.title}</strong>
                     <p>{model.description}</p>
-                    <small>缓存：{model.cache_dir} · {formatSize(model.estimated_size_mb)}</small>
+                    <details className="local-model-details">
+                      <summary>技术详情</summary>
+                      <small>缓存：{model.cache_dir} · {formatSize(model.estimated_size_mb)}</small>
+                    </details>
                     {model.model_id === 'pyannote' && !ready && (
                       <small className="local-model-guidance">
                         {model.status === 'failed'
@@ -140,17 +158,19 @@ export default function LocalModelsPanel() {
                         disabled={!ready || isBusy || model.active}
                         onClick={() => void activate(model)}
                       >
-                        {model.active ? '已启用' : '切换使用'}
+                        {model.active ? '使用中' : '使用'}
                       </button>
                     )}
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={!model.compatible || ready || isBusy || model.status === 'needs_token'}
-                      onClick={() => void startDownload(model)}
-                    >
-                      <Download size={14} /> {isBusy ? '下载中…' : ready ? '已下载' : '下载'}
-                    </button>
+                    {!ready && (
+                      <button
+                        type="button"
+                        className="btn"
+                        disabled={!model.compatible || isBusy || model.status === 'needs_token'}
+                        onClick={() => void startDownload(model)}
+                      >
+                        <Download size={14} /> {isBusy ? '下载中…' : model.status === 'failed' ? '重试' : '下载'}
+                      </button>
+                    )}
                   </div>
                 </article>
               )
