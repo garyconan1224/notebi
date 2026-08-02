@@ -379,8 +379,8 @@ export default function DeployMonitorPage() {
       <div className="deploy-monitor-shell">
         <PageHeader
           eyebrow="RUNTIME · LOCAL"
-          title="运行监控"
-          description="先看任务进行到哪个环节、哪里需要处理；原始技术日志收在高级诊断中。"
+          title="诊断日志"
+          description="结构化诊断事件：处理阶段、失败原因、建议动作；原始技术日志收在高级诊断中。"
           actions={(
             <div className="monitor-health">
               <StatusBadge status={health.online ? 'success' : 'offline'}>
@@ -397,44 +397,7 @@ export default function DeployMonitorPage() {
         />
 
         <Section
-          title="设备状态"
-          description="CPU、内存和磁盘每 5 秒更新一次。"
-          icon={<Activity className="size-4" />}
-          collapsible
-        >
-          {statsError ? (
-            <div className="monitor-error">{statsError}</div>
-          ) : (
-            <div className="monitor-stats">
-              <article>
-                <Cpu className="size-4" />
-                <span>CPU 使用率</span>
-                <strong>{stats ? `${stats.cpu.percent.toFixed(1)}%` : '—'}</strong>
-              </article>
-              <article>
-                <MemoryStick className="size-4" />
-                <span>内存使用率</span>
-                <strong>
-                  {stats
-                    ? `${formatBytes(stats.memory.used)} / ${formatBytes(stats.memory.total)}`
-                    : '—'}
-                </strong>
-              </article>
-              <article>
-                <HardDrive className="size-4" />
-                <span>磁盘使用率</span>
-                <strong>
-                  {stats
-                    ? `${stats.disk.percent.toFixed(1)}%`
-                    : '—'}
-                </strong>
-              </article>
-            </div>
-          )}
-        </Section>
-
-        <Section
-          title="任务活动与诊断"
+          title="诊断事件"
           description="处理事件与排错日志来自同一条实时事件流；最新事件始终在最上方。"
           action={(
             <button

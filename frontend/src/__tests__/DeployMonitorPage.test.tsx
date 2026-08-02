@@ -97,18 +97,16 @@ describe('DeployMonitorPage 标准日志', () => {
     expect(screen.getByText(/v0\.4\.0/)).toBeInTheDocument()
   })
 
-  it('显示系统指标', async () => {
+  it('S6: 不再显示设备状态卡片', async () => {
     render(<DeployMonitorPage />)
-    await waitFor(() => {
-      expect(screen.getByText('CPU 使用率')).toBeInTheDocument()
-      expect(screen.getByText('内存使用率')).toBeInTheDocument()
-      expect(screen.getByText('磁盘使用率')).toBeInTheDocument()
-    })
+    await screen.findByText('诊断日志')
+    expect(screen.queryByText('CPU 使用率')).not.toBeInTheDocument()
+    expect(screen.queryByText('内存使用率')).not.toBeInTheDocument()
   })
 
-  it('显示运行监控，不再把日志类别作为主导航', async () => {
+  it('显示诊断日志，不再把日志类别作为主导航', async () => {
     render(<DeployMonitorPage />)
-    expect(screen.getByText('运行监控')).toBeInTheDocument()
+    expect(screen.getByText('诊断日志')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /处理进度/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /需要处理/ })).toBeInTheDocument()
     expect(screen.queryByLabelText('日志类别')).not.toBeInTheDocument()
@@ -165,7 +163,7 @@ describe('DeployMonitorPage 标准日志', () => {
     expect(screen.getByLabelText('任务 ID').tagName).toBe('SELECT')
     expect(screen.getByLabelText('批次 ID').tagName).toBe('SELECT')
     expect(screen.getByLabelText('任务 ID')).toHaveTextContent('t1')
-    expect(screen.getByText('任务活动与诊断')).toBeInTheDocument()
+    expect(screen.getByText('诊断事件')).toBeInTheDocument()
   })
 
   it('首次只按最新 200 条加载标准日志', async () => {
@@ -183,7 +181,7 @@ describe('DeployMonitorPage 标准日志', () => {
   it('URL 中的 batch 和 level 初始化过滤器', async () => {
     window.history.replaceState({}, '', '/settings/monitor?batch_id=b1&level=ERROR')
     render(<DeployMonitorPage />)
-    await screen.findByText('运行监控')
+    await screen.findByText('诊断日志')
     fireEvent.click(screen.getByText('高级诊断日志'))
     expect(screen.getByLabelText('日志级别')).toHaveValue('ERROR')
     expect(screen.getByLabelText('批次 ID')).toHaveValue('b1')

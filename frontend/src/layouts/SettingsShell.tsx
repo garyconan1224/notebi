@@ -93,7 +93,7 @@ export function SettingsShell() {
     {
       label: '诊断与关于',
       items: [
-        { path: '/settings/monitor', icon: <Monitor size={16} />, label: '运行监控' },
+        { path: '/settings/monitor', icon: <Monitor size={16} />, label: '诊断日志' },
         { path: '/settings/about', icon: <Info size={16} />, label: '关于 NoteBi' },
       ],
     },
