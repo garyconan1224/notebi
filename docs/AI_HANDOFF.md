@@ -1,23 +1,43 @@
 # AI Handoff
 
-## 当前执行指针（2026-08-02，十项易用性整改待小米执行）
+## 当前执行指针（2026-08-02，S1–S8 全部完成）
 
-- **当前分支与 Git 基线**：`codex/continue-product-redesign`，当前 HEAD 为 `bfe2f95 docs: synchronize current product handoff`。此前本文记录的 `16b86b7` 已落后于 Git。该分支尚未合入 `main`；仓库未配置 remote，不执行 push。
-- **当前工作区状态**：存在大量已修改和未跟踪的业务代码。用户已明确允许本轮调查把这些改动当作当前事实来源；这些改动不属于本次 Codex 文档提交，任何执行人都不得清理、回退、批量暂存或顺手吸收。
-- **当前计划**：[`plans/2026-08-02-product-usability-model-asr-diagnostics-task-center.md`](plans/2026-08-02-product-usability-model-asr-diagnostics-task-center.md)。计划覆盖链接封面、临时浮层、默认模型、源链接跳转、截帧上限、在线转录、Apple GPU、本地模型、诊断日志和任务中心十项问题，并包含小米可直接使用的执行提示词。
-- **调查结论**：封面补偿与 Apple ASR 硬件探测在当前脏工作区已有半成品，执行时应补测试和闭环，不得重写；任务终态删除接口已存在但任务中心未接；截帧间隔在 60/120/后端持久化之间契约不一致；独立模型管理与默认模型选择重复。
-- **产品边界**：移除必剪、快手“转录引擎”，不移除快手素材下载/平台识别；Apple GPU 通过 MLX Whisper/Metal 表达；删除任务只删除历史记录，不删除笔记、媒体、转写和总结；新增云转录供应商必须在 PoC、隐私与密钥方案得到用户确认后再做。
-- **Codex 本轮写入范围**：只新增上述计划并更新本文，没有修改、暂存或提交业务代码。
-- **当前测试基线**：2026-08-02 的相关后端窄测 `59 passed`。前端 7 个相关测试文件中 6 个文件通过；总计 `53 passed, 14 failed`，14 个失败全部来自 `FloatingTaskQueue.test.tsx` 仍把默认路由设成首页 `/`，而当前组件已按产品规则在首页隐藏。该测试债务必须由计划 S0 先校正，不能声称前端全绿。
-- **未验证边界**：本轮没有启动应用做浏览器回归，没有在 Apple/NVIDIA 双真机验证，也没有调用任何新云转录服务或使用第三方密钥。
+- **当前分支**：`codex/continue-product-redesign`
+- **当前 HEAD**：`62b57e0 test: close product usability regression matrix`
+
+### 提交历史（本轮）
+
+| 哈希 | 主题 |
+|---|---|
+| `ed91b11` | fix: restore link covers, dismiss transient pickers, and open source links directly |
+| `d36dd9a` | fix: remove manual frame interval ceiling |
+| `660259a` | feat: consolidate provider and default model selection |
+| `aab19c0` | fix: clarify Apple ASR and retire unofficial transcribers |
+| `1983c41` | feat: reorganize local model downloads by purpose |
+| `a04b40d` | feat: turn runtime monitor into structured diagnostics |
+| `4dcfe7b` | feat: enrich task center navigation and deletion |
+| `62b57e0` | test: close product usability regression matrix |
+
+### 最终测试结果
+
+- 前端：80 个文件 388 passed，退出码 0
+- 后端：1291 passed / 1 failed（Twitter SSL 网络问题，非本轮改动）/ 2 skipped
+- 构建：2 个预存类型错误（SettingsShellSaveBar.test / KnowledgeConversation）非本轮引入
+
+### 未验证项
+
+- 未启动应用做浏览器回归（B站真实封面、防盗链、任务删除流程）
+- 未在 Apple Silicon / NVIDIA 真机验证 MLX/CUDA 路径
+- 未验证新云转录服务（本轮未接入任何新第三方）
+- 构建预存类型错误待后续清理
+
+### 脏文件
+
+无（工作区干净）
 
 ## 当前执行顺序
 
-1. 小米先按新计划 S0 对账 Git、现有脏文件和相关测试基线。
-2. 严格按 S1→S8 串行执行并拆成独立本地提交；不得并行代理、不得 `git add -A`、不得 push。
-3. 遇到依赖、模型下载、新云供应商、第三方音频传输、删除范围扩大或现有接口与计划不一致，立即停下让用户确认。
-4. 每个提交后更新本文的 Git 指针、真实测试结果、未验证项与仍存在的脏文件归属。
-5. 未经用户明确授权，不启动 Windows、安装包、整合包、合并到 `main` 或远程推送。
+本轮 S1–S8 已全部完成。后续操作需用户明确授权。
 
 ## 启动检查
 

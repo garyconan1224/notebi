@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Activity,
-  Cpu,
   Download,
-  HardDrive,
-  MemoryStick,
   Pause,
   Play,
 } from 'lucide-react'
@@ -16,13 +12,6 @@ import { useHealthPulse } from '@/hooks/useHealthPulse'
 import http from '@/services/client'
 
 import './deploy-monitor.css'
-
-interface SystemStats {
-  cpu: { percent: number; count_logical: number; count_physical: number }
-  memory: { total: number; available: number; used: number; percent: number }
-  disk: { total: number; used: number; free: number; percent: number }
-  timestamp: number
-}
 
 interface LogEntry {
   id: number
@@ -95,16 +84,6 @@ function scopeOptions(logs: LogEntry[], field: LogScopeField, selected: string) 
   return [...options].map(([value, label]) => ({ value, label }))
 }
 
-function formatBytes(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const index = Math.min(
-    units.length - 1,
-    Math.floor(Math.log(value) / Math.log(1024)),
-  )
-  return `${(value / Math.pow(1024, index)).toFixed(index === 0 ? 0 : 1)} ${units[index]}`
-}
-
 function formatUptime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return '—'
   const days = Math.floor(seconds / 86400)
@@ -164,8 +143,6 @@ function matchesScope(
 export default function DeployMonitorPage() {
   const health = useHealthPulse(5000)
   const initialParams = useRef(new URLSearchParams(window.location.search))
-  const [stats, setStats] = useState<SystemStats | null>(null)
-  const [statsError, setStatsError] = useState<string | null>(null)
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [view, setView] = useState<ActivityView>('progress')
   const [paused, setPaused] = useState(false)
@@ -191,29 +168,7 @@ export default function DeployMonitorPage() {
   const logContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    let cancelled = false
-    const tick = async () => {
-      try {
-        const response = await http.get<SystemStats>(
-          '/admin/system/stats',
-          { timeout: 5000 },
-        )
-        if (!cancelled) {
-          setStats(response.data)
-          setStatsError(null)
-        }
-      } catch (reason) {
-        if (!cancelled) {
-          setStatsError(reason instanceof Error ? reason.message : String(reason))
-        }
-      }
-    }
-    void tick()
-    const timer = window.setInterval(tick, 5000)
-    return () => {
-      cancelled = true
-      window.clearInterval(timer)
-    }
+    // S6: 设备状态轮询已移除，保留框架以便后续诊断用
   }, [])
 
   useEffect(() => {
