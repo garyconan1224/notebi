@@ -153,3 +153,19 @@ def test_large_frame_interval_accepted(client: TestClient, interval: int) -> Non
     # GET 回读一致
     read_back = client.get("/task_defaults")
     assert read_back.json()["frame_interval_sec"] == interval
+
+
+def test_frame_interval_beyond_32bit_round_trip(client: TestClient) -> None:
+    """Task A: 超过 2**31 的正整数 PATCH→GET→落盘 round-trip 不变（无硬编码上限）。"""
+    huge = 2**31 + 12345
+
+    patched = client.patch("/task_defaults", json={"frame_interval_sec": huge})
+    read_back = client.get("/task_defaults")
+
+    assert patched.status_code == 200
+    assert patched.json()["frame_interval_sec"] == huge
+    assert read_back.json()["frame_interval_sec"] == huge
+    saved = json.loads(
+        client.app.state.task_defaults_settings_path.read_text(encoding="utf-8")
+    )
+    assert saved["task_defaults"]["frame_interval_sec"] == huge

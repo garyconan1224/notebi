@@ -113,6 +113,54 @@ describe('AnalysisDefaultsPage task defaults', () => {
     expect(successMock).toHaveBeenCalledWith('任务默认值已保存并读回验证')
   })
 
+  it('超大正整数保存 round-trip；空值编辑不污染 draft', async () => {
+    const huge = 2 ** 40
+    getTaskDefaultsMock
+      .mockResolvedValueOnce(SAVED)
+      .mockResolvedValueOnce({ ...SAVED, frame_interval_sec: huge })
+    updateTaskDefaultsMock.mockResolvedValue({ ...SAVED, frame_interval_sec: huge })
+    render(<AnalysisDefaultsPage />)
+    fireEvent.click(screen.getByRole('tab', { name: '任务默认勾选' }))
+    const interval = await screen.findByLabelText('默认截帧间隔') as HTMLInputElement
+
+    // 空值编辑：不立即强制回默认，blur 回退到最后有效保存值
+    fireEvent.change(interval, { target: { value: '' } })
+    expect(interval.value).toBe('')
+    fireEvent.blur(interval)
+    expect(interval.value).toBe('12')
+
+    fireEvent.change(interval, { target: { value: String(huge) } })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => {
+      expect(updateTaskDefaultsMock).toHaveBeenCalledWith({
+        ...SAVED,
+        frame_interval_sec: huge,
+      })
+    })
+    expect(successMock).toHaveBeenCalledWith('任务默认值已保存并读回验证')
+  })
+
+  it('快捷选项一键设置常用截帧间隔并保存', async () => {
+    getTaskDefaultsMock
+      .mockResolvedValueOnce(SAVED)
+      .mockResolvedValueOnce({ ...SAVED, frame_interval_sec: 60 })
+    updateTaskDefaultsMock.mockResolvedValue({ ...SAVED, frame_interval_sec: 60 })
+    render(<AnalysisDefaultsPage />)
+    fireEvent.click(screen.getByRole('tab', { name: '任务默认勾选' }))
+    await screen.findByLabelText('默认截帧间隔')
+
+    fireEvent.click(screen.getByRole('button', { name: '60 秒' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => {
+      expect(updateTaskDefaultsMock).toHaveBeenCalledWith({
+        ...SAVED,
+        frame_interval_sec: 60,
+      })
+    })
+  })
+
   it('S2: 截帧间隔可输入 300 和 600，无上限截断', async () => {
     getTaskDefaultsMock
       .mockResolvedValueOnce(SAVED)

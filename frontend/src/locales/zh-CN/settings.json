@@ -143,7 +143,13 @@
     "saveFailed": "转写配置保存失败",
     "engine": {
       "title": "转写引擎",
-      "description": "选择音频转写使用的引擎",
+      "description": {
+        "subtitle": "选择适合设备与场景的转写引擎。",
+        "auto": "自动识别当前机器：Apple Silicon 优先 MLX/Metal，Windows NVIDIA 优先 CUDA，否则使用 CPU",
+        "fastWhisper": "免费本地转写，速度快但需本地资源，支持离线使用",
+        "groq": "Groq 云服务，快速高效，需提供 API Key",
+        "mlxWhisper": "Apple Silicon 优化版本，仅适用于 Mac 系列芯片"
+      },
       "type": "引擎类型",
       "modelSize": "Whisper 模型",
       "groqApiKey": "Groq API Key",
@@ -151,18 +157,7 @@
         "local": "本地",
         "online": "在线"
       },
-      "description": {
-        "subtitle": "选择适合设备与场景的转写引擎。",
-        "auto": "自动识别当前机器：Apple 芯片优先 MLX，Windows 优先 NVIDIA CUDA，不可用时使用 CPU",
-        "fastWhisper": "免费本地转写，速度快但需本地资源，支持离线使用",
-        "bcut": "必剪在线服务，无需本地资源，需网络连接",
-        "kuaishou": "快手在线服务，无需本地资源，需网络连接",
-        "groq": "Groq 云服务，快速高效，需提供 API Key",
-        "mlxWhisper": "Apple Silicon 优化版本，仅适用于 Mac 系列芯片"
-      },
       "tosWarning": {
-        "bcut": "使用必剪在线服务，你的音频将被发送至必剪服务器进行处理。请确保你已阅读并同意必剪的服务条款与隐私政策。",
-        "kuaishou": "使用快手在线服务，你的音频将被发送至快手服务器进行处理。请确保你已阅读并同意快手的服务条款与隐私政策。",
         "groq": "使用 Groq 云服务，你的音频将被发送至 Groq 服务器进行处理。请确保你已阅读并同意 Groq 的服务条款与隐私政策。"
       }
     },

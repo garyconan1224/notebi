@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { createTaskBatch, previewTaskBatch } from '@/services/taskBatches'
 import type { BatchPreviewItem } from '@/types/taskBatch'
 import { getTaskDefaults } from '@/services/taskDefaults'
+import { PositiveIntInput } from '@/components/ui/positive-int-input'
 
 export default function BatchCreatePage() {
   const navigate = useNavigate()
@@ -115,7 +116,15 @@ export default function BatchCreatePage() {
           <label className="flex gap-2"><input aria-label="区分说话人" type="checkbox" checked={diarize} onChange={(e) => { settingsEditedRef.current = true; setDiarize(e.target.checked) }} />区分说话人</label>
           <label className="block">说话人数<select aria-label="说话人数" className="mt-1 w-full rounded border p-2" disabled={!diarize} value={speakerCount} onChange={(e) => { settingsEditedRef.current = true; setSpeakerCount(e.target.value) }}><option value="auto">自动判断</option>{[2, 3, 4, 5].map((count) => <option key={count} value={count}>{count} 人</option>)}</select></label>
           <label className="flex gap-2"><input aria-label="画面分析" type="checkbox" checked={frameAnalysis} onChange={(e) => { settingsEditedRef.current = true; setFrameAnalysis(e.target.checked) }} />画面分析</label>
-          <label className="block">截帧间隔<input aria-label="截帧间隔" className="mt-1 w-full rounded border p-2" type="number" min={1} value={frameInterval} onChange={(e) => { settingsEditedRef.current = true; setFrameInterval(Number(e.target.value)) }} /></label>
+          <label className="block">截帧间隔
+            <PositiveIntInput
+              aria-label="截帧间隔"
+              className="mt-1 w-full rounded border p-2"
+              value={frameInterval}
+              quickOptions={[5, 10, 30, 60]}
+              onChange={(next) => { settingsEditedRef.current = true; setFrameInterval(next) }}
+            />
+          </label>
           <div className="max-h-72 overflow-y-auto rounded border">
             {items.length === 0 ? <div className="p-5 text-center text-sm">预览后可逐项选择跳过、复制或重新处理</div> : items.map((item, index) => (
               <div key={item.batch_item_id} className="flex items-center gap-2 border-b p-2 text-sm">

@@ -207,3 +207,85 @@ def test_task_defaults_missing_fields_keep_current_behavior(
     assert task_defaults.frame_interval_sec == 5
     assert task_defaults.diarize is False
     assert task_defaults.speaker_count is None
+
+
+# ── Task A: 截帧间隔「任意正整数」契约（无硬编码上限）─────────────────────────
+
+
+def test_task_defaults_from_dict_positive_int_contract() -> None:
+    """超过 2**31 的正整数原样保留；0、负数、非数值回退默认 5。"""
+    from shared.settings_store import TaskDefaultsConfig
+
+    huge = 2**31 + 12345
+    assert TaskDefaultsConfig.from_dict({"frame_interval_sec": huge}).frame_interval_sec == huge
+    assert TaskDefaultsConfig.from_dict({"frame_interval_sec": 2**40}).frame_interval_sec == 2**40
+    assert TaskDefaultsConfig.from_dict({"frame_interval_sec": 1}).frame_interval_sec == 1
+    assert TaskDefaultsConfig.from_dict({"frame_interval_sec": 0}).frame_interval_sec == 5
+    assert TaskDefaultsConfig.from_dict({"frame_interval_sec": -5}).frame_interval_sec == 5
+    assert TaskDefaultsConfig.from_dict({"frame_interval_sec": "abc"}).frame_interval_sec == 5
+    assert TaskDefaultsConfig.from_dict({"frame_interval_sec": None}).frame_interval_sec == 5
+
+
+def test_frame_interval_beyond_32bit_round_trips_through_store(
+    settings_path: Path,
+) -> None:
+    """超大正整数写入后读回不变（save → load round-trip）。"""
+    from shared.settings_store import SettingsStore
+
+    huge = 2**40  # 远超旧版 2**31 clamp 边界
+    settings_path.write_text(
+        json.dumps({"task_defaults": {"frame_interval_sec": huge}}),
+        encoding="utf-8",
+    )
+    store = SettingsStore(settings_path)
+
+    loaded = store.load()
+    assert loaded.task_defaults.frame_interval_sec == huge
+
+    store.save(loaded)
+    assert SettingsStore(settings_path).load().task_defaults.frame_interval_sec == huge
+
+
+# ── Task B: 退役转录引擎（bcut/kuaishou）兼容迁移到 auto ──────────────────────
+
+
+def test_migrate_transcriber_type_is_the_single_migration_gate() -> None:
+    """退役引擎与未知值统一经 migrate_transcriber_type 迁移到 auto；白名单原样保留。"""
+    from shared.settings_store import (
+        _ALLOWED_TRANSCRIBER_TYPES,
+        _RETIRED_TRANSCRIBER_TYPES,
+        migrate_transcriber_type,
+    )
+
+    assert _RETIRED_TRANSCRIBER_TYPES == {"bcut", "kuaishou"}
+    for retired in _RETIRED_TRANSCRIBER_TYPES:
+        assert migrate_transcriber_type(retired) == "auto"
+    assert migrate_transcriber_type("cloud-v9") == "auto"
+    assert migrate_transcriber_type("") == "auto"
+    assert migrate_transcriber_type(None) == "auto"
+    for valid in _ALLOWED_TRANSCRIBER_TYPES:
+        assert migrate_transcriber_type(valid) == valid
+
+
+def test_retired_transcriber_configs_migrate_to_auto_on_load(
+    settings_path: Path,
+) -> None:
+    """已有配置文件中退役引擎读取时迁移到 auto，其他字段保留。"""
+    from shared.settings_store import SettingsStore, _RETIRED_TRANSCRIBER_TYPES
+
+    for retired in sorted(_RETIRED_TRANSCRIBER_TYPES):
+        settings_path.write_text(
+            json.dumps(
+                {
+                    "transcriber": {
+                        "type": retired,
+                        "whisper_model_size": "small",
+                        "language": "zh",
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        loaded = SettingsStore(settings_path).load().transcriber
+        assert loaded.type == "auto"
+        assert loaded.whisper_model_size == "small"

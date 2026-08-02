@@ -7,6 +7,7 @@ import LocalModelsPanel from './LocalModelsPanel'
 import { useSettingsShellStore } from '@/store/settingsShellStore'
 import { CARD_COLUMN_OPTIONS, useLibraryStore, type CardColumns } from '@/store/libraryStore'
 import { AUDIO_ERROR_GUIDANCE } from '@/lib/errorCategories'
+import { PositiveIntInput } from '@/components/ui/positive-int-input'
 import {
   getTaskDefaults,
   updateTaskDefaults,
@@ -337,15 +338,14 @@ function TaskDefaultsPanel() {
             <strong>默认截帧间隔</strong>
             <p>视频画面分析时每隔多少秒取一帧，正整数秒，无上限。</p>
           </span>
-          <input
+          <PositiveIntInput
             aria-label="默认截帧间隔"
             className="settings-native-select"
-            type="number"
-            min={1}
             value={draft.frame_interval_sec}
-            onChange={(event) => setDraft((current) => ({
+            quickOptions={[5, 10, 30, 60]}
+            onChange={(next) => setDraft((current) => ({
               ...current,
-              frame_interval_sec: Number(event.target.value),
+              frame_interval_sec: next,
             }))}
           />
         </label>

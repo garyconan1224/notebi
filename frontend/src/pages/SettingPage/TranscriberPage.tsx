@@ -290,8 +290,8 @@ const TranscriberPage = () => {
           })}
         </div>
 
-        {/* 在线引擎 ToS 提示（仅当选中在线引擎时显示） */}
-        {draft.type !== 'auto' && draft.type !== 'fast-whisper' && draft.type !== 'mlx-whisper' && (
+        {/* 在线引擎 ToS 提示（退役的 bcut/kuaishou 已迁移至 auto，现存在线引擎仅 groq） */}
+        {draft.type === 'groq' && (
           <div className="mt-4">
             <Alert variant="default" className="border-amber-200 bg-amber-50">
               <AlertCircle className="size-4 text-amber-700" />
@@ -425,28 +425,54 @@ const TranscriberPage = () => {
             </select>
           </FieldRow>
 
-          {/* 设备选择 */}
-          <FieldRow
-            htmlFor="device"
-            label={t('transcriber.device.label')}
-            hint={t('transcriber.device.description')}
-            dirty={dirty.device}
-          >
-            <select
-              id="device"
-              className={nativeSelectClassName}
-              value={draft.device}
-              onChange={(e) => patch({
-                device: e.target.value as TranscriberConfigPayload['device'],
-              })}
+          {/* 设备区域：按引擎分流。
+              - fast-whisper：手动选择 auto/CPU/CUDA（CUDA 按真实硬件探测禁用）；
+              - mlx-whisper：Metal 由 MLX 框架自动管理，固定说明，不给通用选择器；
+              - auto：跟随上方自动硬件策略；
+              - groq：云端转写，设备选项无效，不展示。 */}
+          {draft.type === 'fast-whisper' && (
+            <FieldRow
+              htmlFor="device"
+              label={t('transcriber.device.label')}
+              hint="CUDA 仅在探测到可用 NVIDIA 显卡时可选；不可用时自动使用 CPU。"
+              dirty={dirty.device}
             >
-              {getDeviceOptions(draft.type).map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
+              <select
+                id="device"
+                className={nativeSelectClassName}
+                value={draft.device === 'mps' ? 'cpu' : draft.device}
+                onChange={(e) => patch({
+                  device: e.target.value as TranscriberConfigPayload['device'],
+                })}
+              >
+                {getDeviceOptions('fast-whisper', hardwareStatus ?? { cuda_devices: 0 }).map((opt) => (
+                  <option key={opt.value} value={opt.value} disabled={opt.disabled}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </FieldRow>
+          )}
+          {draft.type === 'mlx-whisper' && (
+            <FieldRow
+              label={t('transcriber.device.label')}
+              hint="MLX Whisper 仅在 Apple 设备上运行，无需手动选择设备。"
+            >
+              <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
+                Apple GPU · Metal（由 MLX 自动管理）
+              </div>
+            </FieldRow>
+          )}
+          {draft.type === 'auto' && (
+            <FieldRow
+              label={t('transcriber.device.label')}
+              hint="自动模式按上方硬件探测结果选择设备，无需手动指定。"
+            >
+              <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
+                跟随自动硬件策略
+              </div>
+            </FieldRow>
+          )}
         </div>
       </Section>
 

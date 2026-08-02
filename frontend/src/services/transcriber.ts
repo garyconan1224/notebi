@@ -134,21 +134,28 @@ export async function fetchWhisperModelsStatus(): Promise<WhisperModelsStatusRes
 }
 
 /**
- * 获取设备选项
+ * 设备选项（按引擎类型分流）。
+ *
+ * 仅 Faster Whisper 暴露手动设备选择：auto / CPU / CUDA，其中 CUDA 按后端硬件探测
+ * 的真实支持状态禁用。MLX Whisper 的 Metal 设备由 MLX 框架自动管理、auto 跟随硬件
+ * 策略、groq 在云端转写——三者均不展示通用设备选择器（返回空数组，由页面渲染对应说明）。
  */
+export interface DeviceOption {
+  value: TranscriberConfigPayload['device']
+  label: string
+  disabled: boolean
+}
+
 export function getDeviceOptions(
   engineType?: string,
-): Array<{ value: TranscriberConfigPayload['device']; label: string }> {
-  const opts: Array<{ value: TranscriberConfigPayload['device']; label: string }> = [
-    { value: 'auto', label: '自动（按当前硬件推荐）' },
-    { value: 'cpu', label: 'CPU' },
-    { value: 'cuda', label: 'NVIDIA CUDA' },
+  hardware?: Pick<AsrHardwareStatus, 'cuda_devices'>,
+): DeviceOption[] {
+  if (engineType !== 'fast-whisper') return []
+  return [
+    { value: 'auto', label: '自动（按当前硬件推荐）', disabled: false },
+    { value: 'cpu', label: 'CPU', disabled: false },
+    { value: 'cuda', label: 'NVIDIA CUDA', disabled: (hardware?.cuda_devices ?? 0) <= 0 },
   ]
-  // mps 仅 mlx-whisper 支持；fast-whisper (CTranslate2) 不支持 MPS
-  if (engineType === 'mlx-whisper') {
-    opts.push({ value: 'mps', label: 'Apple Metal (MPS)' })
-  }
-  return opts
 }
 
 /**

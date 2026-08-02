@@ -611,3 +611,73 @@ def test_delete_running_batch_fails(client: TestClient) -> None:
 
     del_resp = client.delete(f"/pipeline/batches/{batch_id}")
     assert del_resp.status_code == 409
+
+
+def test_create_batch_accepts_frame_interval_above_legacy_hour_cap(
+    client: TestClient,
+) -> None:
+    """Task A: 批量截帧间隔移除 3600 硬上限，仅要求正整数；单位与下游 interval_sec 不变。"""
+    response = client.post(
+        "/pipeline/batches",
+        json={
+            "name": "long interval",
+            "workspace_id": "ws-1",
+            "start": False,
+            "settings": {"frame_interval": 7200},
+            "items": [
+                {
+                    "batch_item_id": "long-1",
+                    "source_url": "https://example.com/long",
+                    "action": "process",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    snapshot = response.json()["settings_snapshot"]
+    assert snapshot["frame_interval"] == 7200
+    payload = snapshot["item_payloads"]["long-1"]
+    assert payload["preflight"]["frame_prompt"]["interval_sec"] == 7200
+
+
+def test_create_batch_zero_frame_interval_falls_back_to_default(
+    client: TestClient,
+) -> None:
+    """0 沿用旧契约：or 5 回退安全默认，不报错。"""
+    response = client.post(
+        "/pipeline/batches",
+        json={
+            "name": "zero interval",
+            "workspace_id": "ws-1",
+            "start": False,
+            "settings": {"frame_interval": 0},
+            "items": [
+                {
+                    "batch_item_id": "zero-1",
+                    "source_url": "https://example.com/zero",
+                    "action": "process",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["settings_snapshot"]["frame_interval"] == 5
+
+
+def test_create_batch_rejects_negative_frame_interval(client: TestClient) -> None:
+    """负数非正整数，必须 422。"""
+    response = client.post(
+        "/pipeline/batches",
+        json={
+            "name": "negative interval",
+            "workspace_id": "ws-1",
+            "settings": {"frame_interval": -5},
+            "items": [
+                {"source_url": "https://example.com/1", "action": "process"},
+            ],
+        },
+    )
+
+    assert response.status_code == 422

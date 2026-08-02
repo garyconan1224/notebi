@@ -350,8 +350,11 @@ def create_batch(req: BatchCreateRequest) -> Dict[str, Any]:
         frame_interval = int(effective_settings.get("frame_interval") or 5)
     except (TypeError, ValueError) as error:
         raise HTTPException(status_code=422, detail="frame_interval 必须是整数") from error
-    if not 1 <= frame_interval <= 3600:
-        raise HTTPException(status_code=422, detail="frame_interval 必须在 1 到 3600 秒之间")
+    if frame_interval < 1:
+        raise HTTPException(status_code=422, detail="frame_interval 必须是正整数")
+    # 回写校验后的有效值，保证 settings_snapshot 与实际执行的 interval_sec 一致
+    # （如 0 经 or 5 回退为默认 5）。
+    effective_settings["frame_interval"] = frame_interval
 
     workspace_store = get_workspace_store()
     target_workspace_id = req.workspace_id.strip()

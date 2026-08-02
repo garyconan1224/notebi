@@ -143,7 +143,13 @@
     "saveFailed": "Failed to save transcription settings",
     "engine": {
       "title": "Transcription Engine",
-      "description": "Select the engine to use for audio transcription",
+      "description": {
+        "subtitle": "Choose a transcription engine that fits your device and workflow.",
+        "auto": "Detect this machine automatically: Apple Silicon prefers MLX/Metal, Windows with NVIDIA prefers CUDA, otherwise CPU",
+        "fastWhisper": "Free local transcription, fast but requires local resources, supports offline mode",
+        "groq": "Groq cloud service, fast and efficient, requires API Key",
+        "mlxWhisper": "Apple Silicon optimized version, only available for Mac chipsets"
+      },
       "type": "Engine Type",
       "modelSize": "Whisper Model",
       "groqApiKey": "Groq API Key",
@@ -151,18 +157,7 @@
         "local": "Local",
         "online": "Online"
       },
-      "description": {
-        "subtitle": "Choose a transcription engine that fits your device and workflow.",
-        "auto": "Detect this machine automatically: MLX on Apple Silicon, NVIDIA CUDA on Windows, then CPU fallback",
-        "fastWhisper": "Free local transcription, fast but requires local resources, supports offline mode",
-        "bcut": "Bilibili's online service, no local resources needed, requires internet",
-        "kuaishou": "Kuaishou online service, no local resources needed, requires internet",
-        "groq": "Groq cloud service, fast and efficient, requires API Key",
-        "mlxWhisper": "Apple Silicon optimized version, only available for Mac chipsets"
-      },
       "tosWarning": {
-        "bcut": "By using Bilibili's online service, your audio will be sent to Bilibili's servers for processing. Please ensure you have read and agreed to Bilibili's Terms of Service and Privacy Policy.",
-        "kuaishou": "By using Kuaishou's online service, your audio will be sent to Kuaishou's servers for processing. Please ensure you have read and agreed to Kuaishou's Terms of Service and Privacy Policy.",
         "groq": "By using Groq's cloud service, your audio will be sent to Groq's servers for processing. Please ensure you have read and agreed to Groq's Terms of Service and Privacy Policy."
       }
     },

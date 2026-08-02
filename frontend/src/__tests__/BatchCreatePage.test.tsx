@@ -115,3 +115,56 @@ describe('BatchCreatePage', () => {
     }))
   })
 })
+
+describe('BatchCreatePage 截帧间隔编辑（任意正整数契约）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    previewMock.mockResolvedValue({
+      total: 1,
+      items: [{
+        batch_item_id: 'i1',
+        source_url: 'https://example.com/1',
+        status: 'new',
+        existing_workspace_id: '',
+        suggested_action: 'process',
+      }],
+    })
+    createMock.mockResolvedValue({ batch_id: 'b1' })
+    getTaskDefaultsMock.mockResolvedValue({
+      summary_template: 'standard',
+      video_frame_analysis: true,
+      frame_interval_sec: 5,
+      diarize: false,
+      speaker_count: null,
+    })
+  })
+
+  it('清空输入不变成 0，blur 回退最后有效值', async () => {
+    render(<MemoryRouter><BatchCreatePage /></MemoryRouter>)
+    const interval = await screen.findByLabelText('截帧间隔') as HTMLInputElement
+    expect(interval).toHaveValue(5)
+
+    fireEvent.change(interval, { target: { value: '' } })
+    expect(interval.value).toBe('')
+    fireEvent.blur(interval)
+    expect(interval.value).toBe('5')
+  })
+
+  it('超大正整数原样进入批量提交 payload', async () => {
+    render(<MemoryRouter><BatchCreatePage /></MemoryRouter>)
+    const interval = await screen.findByLabelText('截帧间隔') as HTMLInputElement
+
+    fireEvent.change(interval, { target: { value: String(2 ** 40) } })
+    fireEvent.change(screen.getByLabelText('素材来源'), {
+      target: { value: 'https://example.com/1' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '预览素材' }))
+    expect(await screen.findByText('https://example.com/1')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '开始生成笔记' }))
+
+    await waitFor(() => expect(createMock).toHaveBeenCalled())
+    expect(createMock.mock.calls[0][0]).toEqual(expect.objectContaining({
+      settings: expect.objectContaining({ frame_interval: 2 ** 40 }),
+    }))
+  })
+})

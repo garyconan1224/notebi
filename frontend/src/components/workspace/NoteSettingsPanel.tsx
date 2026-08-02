@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { PositiveIntInput } from '@/components/ui/positive-int-input'
 import { computeAutoInterval, estimateFrames, formatDuration } from './MaterialSourcePanel'
 
 /* ─── types ─── */
@@ -263,15 +264,12 @@ export function NoteSettingsPanel({
                       </div>
                       <label className="capture-interval">
                         <span>每</span>
-                        <input
-                          type="number"
-                          min={1}
+                        <PositiveIntInput
+                          aria-label="截帧间隔秒数"
                           value={activeInterval}
                           disabled={captureMode === 'auto'}
-                          onChange={(e) => {
-                            const next = Number(e.target.value)
-                            onFrameIntervalChange(Number.isFinite(next) && next >= 1 ? Math.round(next) : 5)
-                          }}
+                          quickOptions={[5, 10, 30, 60]}
+                          onChange={onFrameIntervalChange}
                         />
                         <span>秒</span>
                       </label>

@@ -35,6 +35,19 @@ _ALLOWED_TRANSCRIBER_TYPES: tuple[TranscriberType, ...] = (
 _RETIRED_TRANSCRIBER_TYPES: frozenset[str] = frozenset({"bcut", "kuaishou"})
 
 
+def migrate_transcriber_type(raw: Any) -> TranscriberType:
+    """转录引擎值的唯一迁移入口。
+
+    - 白名单内的值原样保留；
+    - 退役引擎（见 ``_RETIRED_TRANSCRIBER_TYPES``：bcut / kuaishou）与任何未知值
+      统一迁移到 ``auto``。只做现有配置兼容迁移，不恢复退役引擎 UI 或云转录路径。
+    """
+    candidate = str(raw or "auto").strip()
+    if candidate in _ALLOWED_TRANSCRIBER_TYPES:
+        return candidate  # type: ignore[return-value]
+    return "auto"
+
+
 @dataclass(frozen=True)
 class TranscriberConfig:
     """音频转写引擎偏好（跨端生效，落 AppSettings）。
@@ -57,8 +70,7 @@ class TranscriberConfig:
     def from_dict(cls, data: Any) -> "TranscriberConfig":
         if not isinstance(data, dict):
             return cls()
-        raw_type = str(data.get("type") or "auto").strip()
-        t: TranscriberType = raw_type if raw_type in _ALLOWED_TRANSCRIBER_TYPES else "auto"  # type: ignore[assignment]
+        t = migrate_transcriber_type(data.get("type"))
         return cls(
             type=t,
             whisper_model_size=str(data.get("whisper_model_size") or "medium"),
@@ -164,12 +176,8 @@ class TaskDefaultsConfig:
         if not isinstance(data, dict):
             return cls()
         summary_template = str(data.get("summary_template") or "standard").strip()
-        frame_interval_sec = _clamp_int(
-            data.get("frame_interval_sec"),
-            5,
-            1,
-            2**31,  # S2: 手动截帧间隔不设人为上限，只要求正整数
-        )
+        # 任意正整数契约：不设硬编码上限；0、负数、非数值回退安全默认。
+        frame_interval_sec = _positive_int(data.get("frame_interval_sec"), 5)
         raw_speaker_count = data.get("speaker_count")
         speaker_count = (
             _clamp_int(raw_speaker_count, 2, 2, 5)
@@ -255,6 +263,15 @@ def _clamp_int(value: Any, default: int, lo: int, hi: int) -> int:
     if n > hi:
         return hi
     return n
+
+
+def _positive_int(value: Any, default: int) -> int:
+    """任意正整数契约：正整数原样返回（无上限）；0、负数、非数值回退默认。"""
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return default
+    return n if n >= 1 else default
 
 
 @dataclass(frozen=True)
