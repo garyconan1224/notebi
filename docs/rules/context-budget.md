@@ -2,7 +2,7 @@
 
 > 本文件由 `CLAUDE.md` §7 索引指向。AI 用 `rg -n "^##" docs/rules/context-budget.md` 查目录后再 `sed -n` 读片段，**不要整文件读**。
 >
-> 适用范围：本节约束 **Claude Code 终端版**（含 ccswitch 接 DS）。**不要求 Codex、Claude Desktop 或其他工具照此限制**，其他工具可按各自能力选择更合适的验证方式。
+> 适用范围：本节约束 **Claude Code 终端版**（当前由 CC Switch 路由到千问）。**不要求 Codex、Claude Desktop 或其他工具照此限制**，其他工具可按各自能力选择更合适的验证方式。
 >
 > 目标：保留能力但减少无效上下文。不要用"禁用工具"替代验证；要按下面顺序选最低成本且足够强的证据。
 
@@ -64,7 +64,7 @@
 
 ## 6. `/clear` 接力
 
-用户会经常 `/clear`。Claude Code 终端在长任务、跨文件实现、或用户准备 `/clear` 前，**维护本地 checkpoint**：`.claude/current-task.md`。这个文件**只放接力信息，不进 git**。
+**不同问题、互不依赖的批次和每个新 Claude Code 任务必须先 `/clear` 或启动全新会话；只有同一问题返修可以保留上下文。** Claude Code 终端在长任务、跨文件实现、或准备 `/clear` 前，维护本地 checkpoint：`.claude/current-task.md`。这个文件**只放接力信息，不进 git**。
 
 checkpoint 保持短小，只写：
 
@@ -84,6 +84,6 @@ checkpoint 保持短小，只写：
 
 ## 7. 会话边界
 
-**一个会话只做一个明确子任务**。完成子任务后先测试、总结、commit 或等用户确认，再开新会话继续下一项。
+**一个会话只做一个明确子任务**。完成子任务后先测试、总结、commit；下一项若不是同一问题返修，先 `/clear` 或退出后开新会话。启动前确认旧进程已经停止，同一工作区只保留一个代码执行者。
 
 **不要把 L1/L2/L3、临时 debug、视觉 QA、文档同步连续塞进同一个上下文**。

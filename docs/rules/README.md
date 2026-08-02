@@ -11,10 +11,10 @@
 | [`git-workflow.md`](git-workflow.md) | Git 行为 / commit 颗粒度 / 分支策略 / push 暂缓 / 工具串行交接 / 用户卡住处理 | 准备 commit、merge、新开会话前 |
 | [`code-style.md`](code-style.md) | Python / TypeScript 代码风格 + UI 设计规范 + 测试要求 | 写代码 / 改 UI / 加测试前 |
 | [`business-contract.md`](business-contract.md) | 业务规格契约：状态机、级联依赖、阈值、可跳过策略、存储清理 | 改 pipeline、前置配置、状态流转、阈值时 |
-| [`model-strategy.md`](model-strategy.md) | 模型选择四档决策树（Opus / Sonnet / xiaomi mimo 2.5pro / 桌面 Haiku） | 判断当前任务用哪档模型时（用户决定，AI 仅在被问时查） |
+| [`model-strategy.md`](model-strategy.md) | Codex 调查计划 / Claude Code + 千问执行 / Codex 审查与失败接管 | 判断任务由谁调查、执行和接管时 |
 | [`project-map.md`](project-map.md) | 项目架构（后端 router / 前端路由 / shared）+ 常用命令 + 端口 + CodeGraph MCP | 新人入门、改路由、找模块入口 |
-| [`mimo-onboarding.md`](mimo-onboarding.md) | **mimo 执行加速协议**：启动 60s + 低 token 读取 + codegraph + fallback + 红线 | mimo（CC 终端默认）每次新会话先读 |
-| [`agent-roles.md`](agent-roles.md) | **三角色协作**：Claude 桌面计划 / 小米终端执行 / Codex 审查 + 接力提示词模板 | 切换工具、写提示词、判断是否升级给 Claude/Codex 执行 |
+| [`mimo-onboarding.md`](mimo-onboarding.md) | **千问执行加速协议**（旧文件名保留）：启动 60s + 低 token 读取 + fallback + 红线 | 千问（Claude Code 默认执行者）每次新会话先读 |
+| [`agent-roles.md`](agent-roles.md) | **Codex / 千问协作**：Codex 计划、千问执行、Codex 审查、两次失败接管 | 切换工具、写提示词、清理会话和判断失败升级 |
 
 ## AI 使用方法（重要）
 

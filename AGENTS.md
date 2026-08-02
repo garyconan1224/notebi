@@ -11,7 +11,7 @@ Follow [`CLAUDE.md` §2 Startup Reading](CLAUDE.md#2-每次启动先做). Codex 
 
 1. `CLAUDE.md` top rules — role boundaries and startup policy
 2. `docs/AI_HANDOFF.md` first 80 lines — current pointer
-3. `docs/rules/agent-roles.md` — Claude / mimo / Codex handoff contract
+3. `docs/rules/agent-roles.md` — Codex / Claude Code + Qwen handoff contract
 4. The specific commit, plan file, or paths named by the user
 
 **Deprecated, do not read for current decisions**: `docs/archive/*`, `docs/conversation-inputs/*`.
@@ -24,20 +24,24 @@ Read `docs/PRODUCT_DECISIONS.md` only when product boundaries matter. Historical
 
 ## Codex Role Boundary (Important, MUST read)
 
-**默认情况下，Codex 只负责 inspection、testing、branch comparison 和 next-step suggestions，不写新业务功能。若用户在当前任务中明确授权 Codex 执行，则只可在该任务计划写明的范围内实现，并继续遵守停点求证规则。**
+**默认情况下，Codex 负责调查、实测、计划和完成后的独立审查；具体代码执行优先交给 Claude Code 中的千问。若同一问题交给千问连续两次仍未解决，视为用户已授权 Codex 在原任务范围内直接接管修复，并继续遵守停点求证规则。**
 
 ### Codex Can Do
 
 - Run tests: `pytest tests/backend -q`, `cd frontend && pnpm test`
+- Investigate live code/runtime evidence and write executable plans with acceptance criteria
+- Start Claude Code + Qwen in a user-visible terminal, monitor progress, and independently review its commit
 - Compare branch diffs: `git diff main..<branch>` with textual review
 - Lint and build checks: `pnpm lint`, `pnpm build`
 - Read `docs/AI_HANDOFF.md`, `docs/PRODUCT_DECISIONS.md`, and the current named plan to suggest next steps
-- Find and report potential issues (bugs, type errors, missing tests) — **but do not auto-fix**
+- Find and report potential issues (bugs, type errors, missing tests)
+- Directly fix the same unresolved issue after two failed Qwen attempts, with narrow tests and no scope expansion
 - Compare multiple agent branches, point out differences, let the user decide which to adopt
 
 ### Codex Must NOT Do（除非用户对当前任务明确授权）
 
 - ❌ **在未获得当前任务明确授权时写新业务功能**（API endpoints、frontend pages、data models 等）
+- ❌ 在千问尚未对同一问题完成两次失败尝试前，跳过默认接力直接实现具体业务功能（用户当前轮明确要求 Codex 直接执行除外）
 - ❌ Commit directly to the `main` branch
 - ❌ Apply / cherry-pick another agent's stash or commit
 - ❌ Treat another agent's worktree branch as `main` for rebasing
@@ -58,6 +62,10 @@ git branch --show-current
 ```
 
 **Single-Agent Serial Principle (since 2026-05-18)**: This project no longer runs agents in parallel. If `git status` shows uncommitted changes that don't belong to the current task, or the current branch doesn't match expectations — **stop immediately and ask the user**, do not continue.
+
+**Visible Terminal + Fresh Session**: Prefer the Codex right-side/integrated terminal for Claude Code so the user can watch progress. If unavailable, open a foreground Terminal window. Before every new unrelated Claude Code task, run `/clear` or start a fresh Claude session; confirm the previous process has stopped. Preserve context only for retries of the same issue.
+
+**Two-Attempt Takeover**: After each Qwen commit, Codex independently reviews it. Return the first failed review to Qwen with concrete evidence. If the same root cause or acceptance item is still unresolved after the second Qwen attempt, Codex fixes it directly; do not send a third retry.
 
 **用户明确授权后的停点规则**：即使本轮允许 Codex 执行，只要实际代码、数据结构、接口、依赖、范围或产品行为与计划不一致，也必须立即停下，用中文列出事实和选项，等待用户确认；不得自行想当然。
 

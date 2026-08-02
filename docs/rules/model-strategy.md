@@ -1,96 +1,45 @@
-# 模型选择策略（四档决策树）
+# 模型与执行者选择策略
 
-> 本文件由 `CLAUDE.md` §7 索引指向。**用户决定用哪档模型时查阅，AI 仅在被问到时引用。**
+> NoteBi 的默认链固定为：Codex 调查/计划 → Claude Code + 千问执行 → Codex 审查。用户明确改变工具时才偏离。
 >
-> Last updated: 2026-05-29（DS → xiaomi mimo 2.5pro，ccswitch 中转沿用）
+> Last updated: 2026-08-02（xiaomi mimo → Qwen）
 
----
+## 1. Codex：调查、计划和最终裁判
 
-## 背景
+以下工作默认由 Codex 自己完成，不交给千问猜：
 
-用户同时使用：
+- 当前 Git / 运行状态对账
+- 根因调查、接口和调用链追踪
+- 产品选项、风险与取舍说明
+- 可执行计划、验收标准和给千问的单任务提示词
+- Claude Code 完成后的独立 diff / 测试 / 浏览器证据审查
 
-- **Claude 桌面版 Code / Claude Desktop**：用于计划、调查、拆任务。用户通常选择 Opus，Effort 用 Medium 或 Low。
-- **Claude Code 终端 + ccswitch 接 xiaomi mimo 2.5pro**：用于实际执行代码、测试、commit。终端界面可能显示 Opus / Sonnet / max effort，但底层经 ccswitch 路由到小米模型，不等同于桌面付费 Opus。
+如果用户只说“调查、审核、计划、看看怎么解决”，Codex 保持只读，不自动进入业务实现。
 
-**ccswitch 是透明中转代理**：在 Claude Code 终端里选 Sonnet / Opus 角色 → ccswitch 自动路由到 `xiaomi-mimo-2.5pro`。因此不要只根据终端 UI 的 Opus/max 字样判断成本；真正需要控制的是任务范围、读取量、subagent 数量和输出长度。**mimo 当前没有 flash 等小档**——单行 typo / 极简兜底回退到桌面 Haiku 4.5。
+## 2. Claude Code + 千问：具体执行默认
 
-**按以下顺序判断，命中即停**：
+涉及改代码、补测试、跑命令、commit 的具体执行，默认由 Codex 在 Claude Code 中调用千问完成。
 
----
+当前机器已确认：Claude Code 的 `opus` 别名经 CC Switch 路由到 `qwen3.8-max-preview`。这是易变配置，每次新会话应安全核对映射；不要根据 Claude Code UI 的别名推断真实模型，也不要输出 API token。
 
-## 档 1 — Claude 桌面版 Opus（付费）：复杂计划 + 升级触发
+千问只接收已经确定的一个子任务：先红后绿、最小修改、相关验证、一个 commit。不让千问重新做产品规划或把多个无关问题塞进同一会话。
 
-**任一命中即用**：
+## 3. 失败升级规则
 
-- 跨后端 + 前端 + 状态机的复杂阶段
-- 跨文件改动 ≥ 5
-- schema 迁移 + 老数据兼容
-- 加密 / 鉴权 / API key
-- SSE / WebSocket / 状态机一致性
-- 三轨时间轴 / RAG 检索逻辑设计
-- AI 自己说"不太确定哪个方案对"
+1. 千问第一次完成后，Codex 独立审查。
+2. 同一问题第一次不通过：带具体证据退回千问返修。
+3. 同一问题第二次仍不通过：Codex 直接实现和验证，不再第三次退回。
+4. 不同根因或不同验收项重新计数。
+5. schema、数据迁移、权限、安全、依赖安装和新产品取舍不因“两次失败”自动放宽，仍需用户确认。
 
----
+## 4. 会话与终端
 
-## 档 2 — Sonnet 4.6（桌面，付费）：中等复杂多文件
+- 同一问题返修可以 resume。
+- 不同问题或新 Claude Code 任务必须先 `/clear`，或退出后启动全新会话。
+- 新会话前确认旧进程停止并重新对账 Git。
+- 优先使用用户可见的 Codex 右侧/集成终端；不可用时打开前台 Terminal，不静默后台执行。
+- 严格串行，不让两个模型同时改同一工作区。
 
-- 多文件 CRUD（3–5 个文件）
-- 组件级前端开发（新建 React 组件 + 接 API）
-- 需要严谨业务理解但不烧脑的任务
+## 5. 成本不是降低验证的理由
 
----
-
-## 档 3 — xiaomi mimo 2.5pro（Claude Code 终端 + ccswitch，便宜优先）：日常执行默认
-
-**这一档是日常执行默认**。在 Claude Code 终端里选 Sonnet 或 Opus 角色，ccswitch 自动路由到 `xiaomi-mimo-2.5pro`。**能用就用，不要因为"mimo 可能不够强"而升到桌面 Sonnet/Opus 浪费 Claude 付费额度**。
-
-**适用场景**：
-
-- git 操作（add / commit / merge / branch / 清理 worktree；**不要 push**，按 CLAUDE.md §4 红线）
-- 跑终端命令验证（pytest happy path、pnpm build、curl 测接口、启动 dev server）
-- 文档改写（README / docs/*.md / 注释润色 / CLAUDE.md 维护）
-- 模板代码（pytest happy path、CRUD 路由骨架、Pydantic schema）
-- CSS token 翻译、Tailwind 配置调整
-- 重复性改写（i18n key 抽取、批量 import 修改）
-- 单文件简单查询 / 解释代码
-- 查文档（fastapi / vite / tailwind 用法）
-
-**mimo 的工具能力**：Bash / Read / Write / Edit / Grep / Glob 全套都能用，可独立完成 commit、跑测试、改文件。
-
-**mimo 不擅长 → 升档 1 Opus**：
-
-- 跨 5+ 文件架构
-- 复杂状态机推理
-- 加密鉴权细节
-- RAG / SSE 一致性
-
----
-
-## 档 4 — 桌面 Haiku 4.5：极简兜底
-
-- 单行修改 / typo
-- 短得不值得用 mimo 的任务（< 2 分钟）
-- mimo 当前没有 flash 档，所以兜底直接回退到**桌面 Haiku 4.5**
-
-> ⚠️ **不要让 Haiku 当日常默认**：能力弱，多文件 CRUD / 组件级前端会翻车。日常默认必须 mimo 2.5pro。
-
----
-
-## Phase 启动速查
-
-开工前对照 `docs/AI_HANDOFF.md`、当前任务计划 + 本文件四档决策：
-
-- **当前阶段（2026-05-29）**：R21.P3.S3 followup 已 merge 进 main；下一步**音频 + 视频端到端闭环打通**（用户 5/29 决议）。
-- **可选下一步**：N7b 路径3 视频大模型（Gemini，待 API）/ N8b librosa 后端 / R20 笔记多格式导出 / R22 并行 / R23 性能档位 / [C] AI 导演 / [D] 开源。
-- **简单阶段**（纯前后端 CRUD / 文档 / 模板代码）：mimo 2.5pro（Claude Code 终端 + ccswitch），**不开 worktree**。
-- **复杂阶段**（[C] AI 导演 / 跨状态机 SSE / 加密鉴权 / RAG）：先由 Claude 桌面版 Opus 做计划；若小米执行失败两轮或风险过高，再升级执行者。
-
-### 决策速查表
-
-| 任务特征 | 推荐模型 |
-|---|---|
-| 复杂 / SSE / 状态机 / 加密 | Opus 4.7 |
-| 中等多文件 CRUD | Sonnet 4.6 |
-| git / 测试 / 文档 / 模板 | xiaomi mimo 2.5pro（ccswitch）|
-| 单行 typo | 桌面 Haiku 4.5 |
+千问负责执行不代表可以少验证。真实代码、Git、退出码和运行结果始终优先于执行器总结；Codex 必须独立抽查，风险高时跑 build、全量或浏览器回归。

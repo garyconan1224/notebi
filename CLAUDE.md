@@ -27,7 +27,7 @@ git branch --show-current
 
 1. 本文件顶部规则。
 2. `docs/AI_HANDOFF.md` 前 80 行。
-3. `docs/rules/agent-roles.md`，用于确认 Claude / 小米 / Codex 接力边界。
+3. `docs/rules/agent-roles.md`，用于确认 Codex / Claude Code + 千问接力边界。
 4. 用户明确点名的计划文件或代码文件。
 
 `git log` 是事实来源。若 `AI_HANDOFF.md` 顶部与最近 commit 冲突，先报告漂移并请求确认，不要按旧文档继续。
@@ -36,29 +36,23 @@ git branch --show-current
 
 ---
 
-## 3. 三角色边界
+## 3. Codex / 千问协作铁律
 
 默认协作链：
 
-1. Claude 桌面版 Code：计划、调查、拆任务、写给小米的执行提示词。
-2. Claude Code 终端 + 小米 v2.5pro：实际改代码、跑测试、commit。
-3. Codex：默认验收审查，判断通过 / 不通过 / 需要补充验证。
+1. **Codex**：负责调查、实测、根因分析、产品/技术计划和可执行验收标准。
+2. **Claude Code 终端 + 千问**：只按 Codex 已确认的任务执行具体修改、测试和 commit；当前由 CC Switch 路由到千问模型，每次新会话先核对实际模型映射。
+3. **Codex**：Claude Code 完成后独立审查 diff、测试和运行证据，给出通过 / 不通过 / 需要补充验证。
 
-用户在当前任务中的执行授权以 `docs/AI_HANDOFF.md` 顶部和当前对话为准，不把临时授权长期写死在规则文件中。
+具体执行默认交给 Claude Code 中的千问，不让千问重新做产品规划。执行类计划落地为 `docs/plans/*.md`（背景 / 根因 / 修复方案 / 涉及文件 / 验收 / 给千问的执行须知与红线）；完成并合入后删除计划文件，历史从 Git 提交读取。
 
-执行类任务的详细计划落地为 `docs/plans/*.md`（背景 / 根因 / 修复方案 / 涉及文件 / 验收 / 给小米的执行须知与红线）；完成并合入后删除计划文件，历史从 Git 标签或提交读取。
+审查不通过时，把 Codex 的具体问题、失败测试和验收差距退回千问修一次；**同一个问题连续两次仍未解决，Codex 直接接管并修复，不再第三次来回转交**。这里的“同一个问题”按同一根因或同一验收项计数；新发现的独立问题重新计数。Codex 接管后仍遵守风险求证、TDD、干净工作区和不主动 push 的规则。
 
-调研与计划按难度分层：**复杂 / 大方向 / 需多处判断**的根因分析与方案设计归 Claude（必要时 Codex 审）——Claude 自己跑代码、看数据定位，不把实测甩给用户；**简单 / 单点 / 根因已明确**的可交小米出计划 + 执行。小米做调研或计划时**必须附上自己跑出的数据证据，不许只看代码猜**；遇到需判断、与现状不符处回报 Claude。**产品决策（功能取舍 / 交互方案）一律由用户拍板**，Claude 与小米只列选项。
+**会话隔离**：同一问题的返修可以保留上下文；不同问题、互不依赖的子任务，以及每次新建 Claude Code 执行任务前，必须先 `/clear` 或退出后启动全新会话。新会话启动前确认旧 Claude Code 进程已停止、工作区状态已对账，禁止两个执行器并行修改同一工作区。
 
-Claude 桌面版默认不做执行者工作：
+**可见终端优先**：Codex 调用 Claude Code 时，优先使用用户可见的右侧/集成终端；当前界面无法直接写入时，打开前台可见 Terminal 窗口。除非用户明确同意或可见终端不可用，不要把长执行静默放在后台。每批至少在开始、红灯、绿灯、commit 四个节点汇报进度。
 
-- 不直接 `Edit` 业务代码。
-- 不 `git add` / `git commit`。
-- 不跑长 Playwright 或全量测试。
-- 不用长会话连续接多个任务；context 超过 50% 时，输出短 handoff 后开新会话。
-- 只读少量关键文件；需要读超过 5 个文件时，先说明原因和范围。
-
-终端配置不要和桌面窗口混淆：`CLAUDE_CODE_EFFORT_LEVEL=max` 主要是 Claude Code CLI / 小米执行环境的配置；Claude 桌面当前使用什么模型和 effort，以桌面 UI 底部显示为准。桌面版只有疑难规划或复杂审查才用 Opus，普通计划优先用更轻模型。
+产品决策（功能取舍 / 交互方案）仍由用户拍板；Codex 和千问只给事实、选项与建议。
 
 需要完整模板时再读 [`docs/rules/agent-roles.md`](docs/rules/agent-roles.md)。
 
@@ -139,10 +133,10 @@ Claude 桌面版默认不做执行者工作：
 | Git 行为 / commit / push | [`docs/rules/git-workflow.md`](docs/rules/git-workflow.md) |
 | Python / TypeScript / UI / 测试风格 | [`docs/rules/code-style.md`](docs/rules/code-style.md) |
 | pipeline / 状态机 / 阈值 / 清理策略 | [`docs/rules/business-contract.md`](docs/rules/business-contract.md) |
-| 模型选择：Opus / Sonnet / 小米 / Haiku | [`docs/rules/model-strategy.md`](docs/rules/model-strategy.md) |
+| 模型选择：Codex 规划 / Claude Code + 千问执行 | [`docs/rules/model-strategy.md`](docs/rules/model-strategy.md) |
 | 项目结构 / router / 端口 / 常用命令 | [`docs/rules/project-map.md`](docs/rules/project-map.md) |
-| 小米终端执行加速协议 | [`docs/rules/mimo-onboarding.md`](docs/rules/mimo-onboarding.md) |
-| Claude 桌面 / 小米 / Codex 接力 | [`docs/rules/agent-roles.md`](docs/rules/agent-roles.md) |
+| 千问终端执行加速协议（沿用旧文件名） | [`docs/rules/mimo-onboarding.md`](docs/rules/mimo-onboarding.md) |
+| Codex / Claude Code + 千问接力 | [`docs/rules/agent-roles.md`](docs/rules/agent-roles.md) |
 
 产物目录约定：
 
@@ -155,6 +149,6 @@ Claude 桌面版默认不做执行者工作：
 
 - 是否用中文，并解释了关键操作？
 - 是否只读了必要片段，而不是整文件扫全项目？
-- 是否遵守了 Claude 桌面 / 小米终端 / Codex 的角色边界？
+- 是否遵守了 Codex 调查计划 / 千问执行 / Codex 审查与两次失败接管边界？
 - 是否触发风险求证项？若触发，是否已经停下来问用户？
 - 是否避免了无关重构、危险命令、主动 push 和脏树 commit 审查？
