@@ -3711,3 +3711,64 @@
     display: none;
   }
 }
+
+/* ════ Q6：共享正文编辑工具栏 ════
+   窄窗水平滚动为声明豁免容器（同 .frames）。 */
+.ed-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--bdrs, rgba(25, 20, 16, 0.12)) transparent;
+  flex-shrink: 0;
+}
+
+.ed-toolbar-paragraph {
+  flex-shrink: 0;
+  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.12));
+  border-radius: var(--rs, 6px);
+  background: var(--srf, #fff);
+  color: var(--fg2, #3d3929);
+  font-size: 12px;
+  padding: 3px 6px;
+  cursor: pointer;
+}
+
+.ed-toolbar-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: var(--bdr, rgba(25, 20, 16, 0.12));
+  flex-shrink: 0;
+}
+
+.ed-toolbar-btn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: var(--rs, 6px);
+  background: transparent;
+  color: var(--fg2, #3d3929);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ed-toolbar-btn:hover:not(:disabled) {
+  background: var(--bgalt, #f7f3ec);
+  color: var(--fg, #191410);
+}
+
+.ed-toolbar-btn.is-active {
+  background: var(--accl, rgba(37, 99, 235, 0.08));
+  color: var(--acc-text, var(--acc, #2563eb));
+}
+
+.ed-toolbar-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}

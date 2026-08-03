@@ -208,6 +208,7 @@ describe('NoteShell 文本编辑器工具栏（S4）', () => {
       orderedList: false,
       taskList: false,
       codeBlock: false,
+      headingLevel: 0,
       canBold: true,
       canItalic: true,
       canStrike: true,
@@ -219,6 +220,7 @@ describe('NoteShell 文本编辑器工具栏（S4）', () => {
       canOrderedList: true,
       canTaskList: true,
       canCodeBlock: true,
+      canClearFormat: false,
     })
 
     await renderNoteShell(TEXT_NOTE)
@@ -227,7 +229,11 @@ describe('NoteShell 文本编辑器工具栏（S4）', () => {
     expect(bold).not.toBeDisabled()
     expect(bold).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: '斜体' })).not.toBeDisabled()
-    expect(screen.getByRole('button', { name: '二级标题' })).not.toBeDisabled()
+    // Q6：H2 开关升级为段落下拉（正文/H1/H2/H3）
+    const paragraph = screen.getByRole('combobox', { name: '段落格式' })
+    expect(paragraph).not.toBeDisabled()
+    fireEvent.change(paragraph, { target: { value: '2' } })
+    expect(runFormat).toHaveBeenCalledWith('heading', '2')
     expect(screen.getByRole('button', { name: '无序列表' })).not.toBeDisabled()
     expect(screen.getByRole('button', { name: '删除线' })).not.toBeDisabled()
     expect(screen.getByRole('button', { name: '链接' })).not.toBeDisabled()

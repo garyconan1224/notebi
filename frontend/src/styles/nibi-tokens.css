@@ -227,3 +227,272 @@
 :root.dark[data-accent="sage"]     { --color-accent-light: oklch(20% 0.03 155); }
 :root.dark[data-accent="terra"]    { --color-accent-light: oklch(22% 0.03 35); }
 :root.dark[data-accent="lavender"] { --color-accent-light: oklch(22% 0.03 295); }
+
+/* ═══════════════════════════════════════════════
+   Q6：四套完整主题包（D6）
+   选择器叠加，不引入第二套表面事实源；短名不变。
+   品牌朱橙 --brand 恒定，不随主题/模式翻转。
+   ═══════════════════════════════════════════════ */
+
+:root {
+  /* 品牌常量（§0）：只出现在 Lockup/发丝线/空状态 logo */
+  --brand:      oklch(62% 0.205 45);
+  --brand-deep: oklch(50% 0.20 42);
+  /* 新增语义名默认值（paper light），各主题块内覆盖 */
+  --srf2:      oklch(98% 0.004 80);
+  --acc-text:  oklch(44% 0.19 42);
+  --acc-bright: oklch(64% 0.20 48);
+  --info:      oklch(46% 0.12 262);
+  /* 字体三槽位（Q6）：默认回退到既有字体，设置里改即 setProperty 覆盖 */
+  --font-ui:  var(--fb);
+  --font-cap: var(--fb);
+  --font-sum: var(--fb);
+}
+
+/* ── 东方颜料身份/说话人色（§2），明度随模式校正 ── */
+:root, :root[data-mode='light'] {
+  --spk-1: oklch(46% 0.12 262);  /* 紺 */
+  --spk-2: oklch(48% 0.13 24);   /* 朱 */
+  --spk-3: oklch(42% 0.11 152);  /* 松葉 */
+  --spk-4: oklch(46% 0.11 298);  /* 藤 */
+  --spk-5: oklch(44% 0.12 78);   /* 黄土 */
+  --spk-6: oklch(46% 0.12 228);  /* 藍 */
+}
+:root.dark, :root[data-mode='dark'] {
+  --spk-1: oklch(74% 0.11 262);
+  --spk-2: oklch(72% 0.12 24);
+  --spk-3: oklch(72% 0.10 152);
+  --spk-4: oklch(76% 0.10 298);
+  --spk-5: oklch(76% 0.11 78);
+  --spk-6: oklch(76% 0.11 228);
+}
+
+/* ── 主题 1：Paper Editorial（基线·浅色优先）── */
+:root, :root[data-theme='paper'] {
+  --color-bg:        oklch(97.5% 0.006 85);
+  --color-bg-alt:    oklch(95% 0.009 80);
+  --color-surface:   oklch(100% 0 0);
+  --color-fg:        oklch(18% 0.012 60);
+  --color-fg-2:      oklch(40% 0.012 60);
+  --color-muted:     oklch(46% 0.01 60);
+  --color-border:    oklch(90% 0.008 80);
+  --color-border-s:  oklch(82% 0.012 80);
+  --color-sidebar:   oklch(95% 0.009 80);
+  --color-accent:        oklch(52% 0.205 42);
+  --color-accent-hover:  oklch(46% 0.21 42);
+  --color-accent-light:  oklch(95% 0.05 50);
+  --color-accent-fg:     oklch(100% 0 0);
+  --srf2:      oklch(98% 0.004 80);
+  --acc-text:  oklch(44% 0.19 42);
+  --acc-bright: oklch(64% 0.20 48);
+  --info:      oklch(46% 0.12 262);
+  --color-success:       oklch(52% 0.14 150);
+  --color-success-light: oklch(94% 0.04 150);
+  --color-warning:       oklch(50% 0.14 72);
+  --color-warning-light: oklch(95% 0.05 78);
+  --color-error:         oklch(54% 0.20 25);
+  --color-error-light:   oklch(94% 0.05 25);
+}
+:root[data-theme='paper'][data-mode='dark'],
+:root.dark[data-theme='paper'] {
+  --color-bg:        oklch(15.5% 0.012 60);
+  --color-bg-alt:    oklch(13.5% 0.012 60);
+  --color-surface:   oklch(20.5% 0.014 60);
+  --color-fg:        oklch(92% 0.006 70);
+  --color-fg-2:      oklch(70% 0.01 70);
+  --color-muted:     oklch(64% 0.01 70);
+  --color-border:    oklch(27% 0.012 60);
+  --color-border-s:  oklch(34% 0.014 60);
+  --color-sidebar:   oklch(13.5% 0.012 60);
+  --color-accent:        oklch(66% 0.19 46);
+  --color-accent-hover:  oklch(72% 0.19 46);
+  --color-accent-light:  oklch(24% 0.05 50);
+  --color-accent-fg:     oklch(15% 0.03 40);
+  --srf2:      oklch(24% 0.016 60);
+  --acc-text:  oklch(74% 0.17 46);
+  --acc-bright: oklch(74% 0.19 48);
+  --info:      oklch(74% 0.11 262);
+  --color-success:       oklch(70% 0.13 150);
+  --color-success-light: oklch(22% 0.04 150);
+  --color-warning:       oklch(78% 0.13 75);
+  --color-warning-light: oklch(24% 0.05 75);
+  --color-error:         oklch(68% 0.19 25);
+  --color-error-light:   oklch(24% 0.05 25);
+}
+
+/* ── 主题 2：Graphite Focus（深色优先·中性专注）── */
+:root[data-theme='graphite'] {
+  --color-bg:        oklch(96% 0.004 90);
+  --color-bg-alt:    oklch(93% 0.005 90);
+  --color-surface:   oklch(99% 0.003 90);
+  --color-fg:        oklch(16% 0.01 80);
+  --color-fg-2:      oklch(42% 0.01 80);
+  --color-muted:     oklch(46% 0.008 80);
+  --color-border:    oklch(88% 0.005 90);
+  --color-border-s:  oklch(80% 0.007 90);
+  --color-sidebar:   oklch(93% 0.005 90);
+  --color-accent:        oklch(56% 0.16 68);
+  --color-accent-hover:  oklch(50% 0.17 68);
+  --color-accent-light:  oklch(95% 0.04 70);
+  --color-accent-fg:     oklch(100% 0 0);
+  --srf2:      oklch(96.5% 0.004 90);
+  --acc-text:  oklch(44% 0.16 68);
+  --acc-bright: oklch(66% 0.16 70);
+  --info:      oklch(46% 0.12 262);
+  --color-success:       oklch(48% 0.13 150);
+  --color-success-light: oklch(94% 0.04 150);
+  --color-warning:       oklch(50% 0.14 72);
+  --color-warning-light: oklch(95% 0.05 78);
+  --color-error:         oklch(52% 0.19 25);
+  --color-error-light:   oklch(94% 0.05 25);
+}
+:root[data-theme='graphite'][data-mode='dark'],
+:root.dark[data-theme='graphite'] {
+  --color-bg:        oklch(15% 0.005 250);
+  --color-bg-alt:    oklch(13% 0.005 250);
+  --color-surface:   oklch(20% 0.006 250);
+  --color-fg:        oklch(90% 0.004 90);
+  --color-fg-2:      oklch(66% 0.006 90);
+  --color-muted:     oklch(64% 0.006 90);
+  --color-border:    oklch(26% 0.006 250);
+  --color-border-s:  oklch(32% 0.008 250);
+  --color-sidebar:   oklch(13% 0.005 250);
+  --color-accent:        oklch(68% 0.15 70);
+  --color-accent-hover:  oklch(74% 0.16 70);
+  --color-accent-light:  oklch(24% 0.04 70);
+  --color-accent-fg:     oklch(15% 0.02 60);
+  --srf2:      oklch(24% 0.008 250);
+  --acc-text:  oklch(78% 0.14 72);
+  --acc-bright: oklch(78% 0.15 72);
+  --info:      oklch(74% 0.11 262);
+  --color-success:       oklch(70% 0.13 150);
+  --color-success-light: oklch(20% 0.04 150);
+  --color-warning:       oklch(80% 0.13 75);
+  --color-warning-light: oklch(22% 0.05 75);
+  --color-error:         oklch(68% 0.18 25);
+  --color-error-light:   oklch(22% 0.05 25);
+}
+
+/* ── 主题 3：Sage Study（浅色优先·静读）── */
+:root[data-theme='sage'] {
+  --color-bg:        oklch(97% 0.008 145);
+  --color-bg-alt:    oklch(94.5% 0.012 140);
+  --color-surface:   oklch(99.5% 0.005 140);
+  --color-fg:        oklch(20% 0.014 150);
+  --color-fg-2:      oklch(44% 0.014 150);
+  --color-muted:     oklch(46% 0.012 150);
+  --color-border:    oklch(89% 0.012 145);
+  --color-border-s:  oklch(81% 0.016 145);
+  --color-sidebar:   oklch(94.5% 0.012 140);
+  --color-accent:        oklch(46% 0.13 152);
+  --color-accent-hover:  oklch(40% 0.14 152);
+  --color-accent-light:  oklch(93% 0.04 152);
+  --color-accent-fg:     oklch(100% 0 0);
+  --srf2:      oklch(97% 0.008 140);
+  --acc-text:  oklch(38% 0.12 152);
+  --acc-bright: oklch(56% 0.12 152);
+  --info:      oklch(46% 0.12 262);
+  --color-success:       oklch(44% 0.13 165);
+  --color-success-light: oklch(93% 0.04 160);
+  --color-warning:       oklch(50% 0.14 72);
+  --color-warning-light: oklch(95% 0.05 78);
+  --color-error:         oklch(54% 0.20 25);
+  --color-error-light:   oklch(94% 0.05 25);
+}
+:root[data-theme='sage'][data-mode='dark'],
+:root.dark[data-theme='sage'] {
+  --color-bg:        oklch(15% 0.012 150);
+  --color-bg-alt:    oklch(13% 0.012 150);
+  --color-surface:   oklch(20% 0.014 150);
+  --color-fg:        oklch(90% 0.008 140);
+  --color-fg-2:      oklch(68% 0.01 140);
+  --color-muted:     oklch(64% 0.01 140);
+  --color-border:    oklch(27% 0.012 150);
+  --color-border-s:  oklch(33% 0.014 150);
+  --color-sidebar:   oklch(13% 0.012 150);
+  --color-accent:        oklch(66% 0.12 152);
+  --color-accent-hover:  oklch(72% 0.12 152);
+  --color-accent-light:  oklch(23% 0.04 152);
+  --color-accent-fg:     oklch(15% 0.03 150);
+  --srf2:      oklch(24% 0.016 150);
+  --acc-text:  oklch(74% 0.11 152);
+  --acc-bright: oklch(72% 0.12 152);
+  --info:      oklch(74% 0.11 262);
+  --color-success:       oklch(70% 0.12 160);
+  --color-success-light: oklch(22% 0.04 160);
+  --color-warning:       oklch(78% 0.13 75);
+  --color-warning-light: oklch(24% 0.05 75);
+  --color-error:         oklch(68% 0.19 25);
+  --color-error-light:   oklch(24% 0.05 25);
+}
+
+/* ── 主题 4：Midnight Studio（深色优先·夜作/视频）── */
+:root[data-theme='midnight'] {
+  --color-bg:        oklch(96% 0.008 250);
+  --color-bg-alt:    oklch(93% 0.01 250);
+  --color-surface:   oklch(99% 0.006 250);
+  --color-fg:        oklch(18% 0.02 255);
+  --color-fg-2:      oklch(44% 0.02 255);
+  --color-muted:     oklch(46% 0.016 250);
+  --color-border:    oklch(88% 0.01 250);
+  --color-border-s:  oklch(80% 0.014 250);
+  --color-sidebar:   oklch(93% 0.01 250);
+  --color-accent:        oklch(56% 0.18 38);
+  --color-accent-hover:  oklch(50% 0.19 38);
+  --color-accent-light:  oklch(95% 0.05 40);
+  --color-accent-fg:     oklch(100% 0 0);
+  --srf2:      oklch(96.5% 0.008 250);
+  --acc-text:  oklch(46% 0.18 38);
+  --acc-bright: oklch(66% 0.18 42);
+  --info:      oklch(46% 0.12 228);
+  --color-success:       oklch(48% 0.13 150);
+  --color-success-light: oklch(94% 0.04 150);
+  --color-warning:       oklch(50% 0.14 72);
+  --color-warning-light: oklch(95% 0.05 78);
+  --color-error:         oklch(52% 0.19 25);
+  --color-error-light:   oklch(94% 0.05 25);
+}
+:root[data-theme='midnight'][data-mode='dark'],
+:root.dark[data-theme='midnight'] {
+  --color-bg:        oklch(14% 0.022 255);
+  --color-bg-alt:    oklch(12% 0.022 255);
+  --color-surface:   oklch(19% 0.024 255);
+  --color-fg:        oklch(91% 0.01 90);
+  --color-fg-2:      oklch(68% 0.014 90);
+  --color-muted:     oklch(64% 0.014 250);
+  --color-border:    oklch(27% 0.02 255);
+  --color-border-s:  oklch(34% 0.024 255);
+  --color-sidebar:   oklch(12% 0.022 255);
+  --color-accent:        oklch(68% 0.18 38);
+  --color-accent-hover:  oklch(74% 0.18 38);
+  --color-accent-light:  oklch(25% 0.06 40);
+  --color-accent-fg:     oklch(15% 0.03 30);
+  --srf2:      oklch(23% 0.026 255);
+  --acc-text:  oklch(78% 0.16 40);
+  --acc-bright: oklch(78% 0.18 42);
+  --info:      oklch(76% 0.11 228);
+  --color-success:       oklch(70% 0.13 150);
+  --color-success-light: oklch(22% 0.05 150);
+  --color-warning:       oklch(80% 0.13 75);
+  --color-warning-light: oklch(24% 0.05 75);
+  --color-error:         oklch(70% 0.18 22);
+  --color-error-light:   oklch(24% 0.05 22);
+}
+
+/* ── 字体槽位消费（Q6）：界面 / 字幕 / 总结 ── */
+body {
+  font-family: var(--font-ui);
+}
+/* 字幕/转录行与说话人标签用字幕槽 */
+.ln-tr-text,
+.ln-tr-speaker-name,
+.nibi-speaker-row,
+.note-subtitle {
+  font-family: var(--font-cap);
+}
+/* Milkdown 编辑器正文 / 目录 / AI 卡正文用总结槽（思维导图节点除外） */
+.note-milkdown .milkdown .ProseMirror,
+.note-milkdown .milkdown,
+.nibi-note-immersive-article {
+  font-family: var(--font-sum);
+}

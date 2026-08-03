@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Bold, BookOpenCheck, Brain, Camera, Check, ChevronDown, Code2, Copy, Download, ExternalLink, FileDown, FileText, FileType, History, Image, Italic, Link, List, ListOrdered, ListTodo, MessageCircle, Minus, Pause, Pencil, Play, Plus, Presentation, Quote, RefreshCw, Sparkles, Strikethrough, Subtitles, Trash2, Type, Underline, X } from 'lucide-react'
+import { ArrowLeft, Bold, BookOpenCheck, Brain, Camera, Check, ChevronDown, Code2, Copy, Download, ExternalLink, FileDown, FileText, FileType, History, Image, Italic, List, MessageCircle, Minus, Pause, Pencil, Play, Plus, Presentation, RefreshCw, Sparkles, Strikethrough, Subtitles, Trash2, Type, Underline, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -28,6 +28,7 @@ import { SYSTEM_TAG_DIMENSIONS } from '@/constants/tagDimensions'
 import { inferContentTags } from '@/lib/contentTags'
 import NoteMediaCompanion, { type NoteMediaCompanionHandle } from './NoteMediaCompanion'
 import MilkdownEditor from './MilkdownEditor'
+import EditorToolbar from './EditorToolbar'
 import LNVideoPanel, { type LNVideoPanelHandle } from '@/pages/results/LearningNotesPage/LNVideoPanel'
 import LNTranscriptPanel from '@/pages/results/LearningNotesPage/LNTranscriptPanel'
 import NoteAudioPanel, { type NoteAudioPanelHandle } from './NoteAudioPanel'
@@ -559,8 +560,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [editorPrefs, setEditorPrefs] = useState<NoteEditorPrefs>(readEditorPrefs)
   const pipelineTasks = useTaskStore((state) => state.tasks)
   const addPipelineTask = useTaskStore((state) => state.addTask)
-  const editorFormatting = useLnEditorStore((state) => state.formattingState)
-  const applyEditorFormat = useLnEditorStore((state) => state.applyFormat)
 
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [savedAt, setSavedAt] = useState<string>('')
@@ -1699,29 +1698,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     handleWrapSelection('**', '**', '加粗')
   }, [handleWrapSelection])
 
-  const handleToolbarMouseDown = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
-    // 工具栏拿到焦点会清掉 Milkdown 选区；阻止默认聚焦后再执行命令。
-    event.preventDefault()
-  }, [])
-
-  const handleApplyEditorFormat = useCallback((
-    format: Parameters<typeof applyEditorFormat>[0],
-    value?: string,
-  ) => {
-    const applied = value === undefined
-      ? applyEditorFormat(format)
-      : applyEditorFormat(format, value)
-    if (!applied) {
-      toast.error('当前选区无法应用该格式')
-    }
-  }, [applyEditorFormat])
-
-  const handleApplyLink = useCallback(() => {
-    const url = window.prompt('输入链接地址', 'https://')
-    if (!url?.trim()) return
-    handleApplyEditorFormat('link', url.trim())
-  }, [handleApplyEditorFormat])
-
   // ─── loading / error ───
   if (loading) {
     return (
@@ -1942,6 +1918,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   // ── 提取正文 JSX（视频 / 非视频布局复用）──
   const noteContent = (
     <div className="nibi-note-editor-panel">
+      <EditorToolbar />
       <MilkdownEditor key={milkdownKey} markdown={editingBody} onMarkdownChange={handleEditorChange} onSeek={handleSeek} />
     </div>
   )
@@ -2632,6 +2609,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 {/* 正文（MilkdownEditor 渲染 h2/h3/p/ul/blockquote → 设计稿 .note-section 自动匹配） */}
                 <div className="note-section" style={{ marginTop: summaries.length > 0 ? 0 : 16 }}>
                   <div className="nibi-note-editor-panel">
+                    {/* Q6：四类笔记共用同一编辑工具栏 */}
+                    <EditorToolbar />
                     <MilkdownEditor key={milkdownKey} markdown={editingBody} onMarkdownChange={handleEditorChange} onSeek={handleSeek} />
                   </div>
                 </div>
@@ -2847,6 +2826,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 {/* 正文 */}
                 <div id="audio-note" className="note-section" style={{ marginTop: summaries.length > 0 ? 0 : 16 }}>
                   <div className="nibi-note-editor-panel">
+                    {/* Q6：四类笔记共用同一编辑工具栏 */}
+                    <EditorToolbar />
                     <MilkdownEditor key={milkdownKey} markdown={editingBody} onMarkdownChange={handleEditorChange} onSeek={handleSeek} />
                   </div>
                 </div>
@@ -2966,6 +2947,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 {/* 正文 */}
                 <div className="note-section" style={{ marginTop: summaries.length > 0 ? 0 : 16 }}>
                   <div className="nibi-note-editor-panel">
+                    {/* Q6：四类笔记共用同一编辑工具栏 */}
+                    <EditorToolbar />
                     <MilkdownEditor key={milkdownKey} markdown={editingBody} onMarkdownChange={handleEditorChange} onSeek={handleSeek} />
                   </div>
                 </div>
@@ -2984,173 +2967,12 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
 
           {/* ── 左栏：工具栏 + 编辑器 ── */}
           <div className="nibi-note-left nibi-text-left">
-            <div className="nibi-text-toolbar" role="toolbar" aria-label="正文格式">
-              <button
-                className="btn-ghost"
-                type="button"
-                aria-label="加粗"
-                aria-pressed={editorFormatting.bold}
-                disabled={!editorFormatting.canBold}
-                title="加粗"
-                onMouseDown={handleToolbarMouseDown}
-                onClick={() => handleApplyEditorFormat('bold')}
-              >
-                <Bold size={14} aria-hidden="true" />
-              </button>
-              <button
-                className="btn-ghost"
-                type="button"
-                aria-label="斜体"
-                aria-pressed={editorFormatting.italic}
-                disabled={!editorFormatting.canItalic}
-                title="斜体"
-                onMouseDown={handleToolbarMouseDown}
-                onClick={() => handleApplyEditorFormat('italic')}
-              >
-                <Italic size={14} aria-hidden="true" />
-              </button>
-              <button
-                className="btn-ghost"
-                type="button"
-                aria-label="删除线"
-                aria-pressed={editorFormatting.strike}
-                disabled={!editorFormatting.canStrike}
-                title="删除线"
-                onMouseDown={handleToolbarMouseDown}
-                onClick={() => handleApplyEditorFormat('strike')}
-              >
-                <Strikethrough size={14} aria-hidden="true" />
-              </button>
-              <button
-                className="btn-ghost"
-                type="button"
-                aria-label="链接"
-                aria-pressed={editorFormatting.link}
-                disabled={!editorFormatting.canLink}
-                title="链接"
-                onMouseDown={handleToolbarMouseDown}
-                onClick={handleApplyLink}
-              >
-                <Link size={14} aria-hidden="true" />
-              </button>
-              <button
-                className="btn-ghost"
-                type="button"
-                aria-label="二级标题"
-                aria-pressed={editorFormatting.heading}
-                disabled={!editorFormatting.canHeading}
-                title="二级标题"
-                onMouseDown={handleToolbarMouseDown}
-                onClick={() => handleApplyEditorFormat('heading')}
-              >
-                H2
-              </button>
-              <button
-                className="btn-ghost"
-                type="button"
-                aria-label="引用"
-                aria-pressed={editorFormatting.blockquote}
-                disabled={!editorFormatting.canBlockquote}
-                title="引用"
-                onMouseDown={handleToolbarMouseDown}
-                onClick={() => handleApplyEditorFormat('blockquote')}
-              >
-                <Quote size={14} aria-hidden="true" />
-              </button>
-              <button
-                className="btn-ghost"
-                type="button"
-                aria-label="无序列表"
-                aria-pressed={editorFormatting.bulletList}
-                disabled={!editorFormatting.canBulletList}
-                title="无序列表"
-                onMouseDown={handleToolbarMouseDown}
-                onClick={() => handleApplyEditorFormat('bulletList')}
-              >
-                <List size={14} aria-hidden="true" />
-              </button>
-              <button
-                className="btn-ghost"
-                type="button"
-                aria-label="有序列表"
-                aria-pressed={editorFormatting.orderedList}
-                disabled={!editorFormatting.canOrderedList}
-                title="有序列表"
-                onMouseDown={handleToolbarMouseDown}
-                onClick={() => handleApplyEditorFormat('orderedList')}
-              >
-                <ListOrdered size={14} aria-hidden="true" />
-              </button>
-              <button
-                className="btn-ghost"
-                type="button"
-                aria-label="待办列表"
-                aria-pressed={editorFormatting.taskList}
-                disabled={!editorFormatting.canTaskList}
-                title="待办列表"
-                onMouseDown={handleToolbarMouseDown}
-                onClick={() => handleApplyEditorFormat('taskList')}
-              >
-                <ListTodo size={14} aria-hidden="true" />
-              </button>
-              <button
-                className="btn-ghost"
-                type="button"
-                aria-label="行内代码"
-                aria-pressed={editorFormatting.inlineCode}
-                disabled={!editorFormatting.canInlineCode}
-                title="行内代码"
-                onMouseDown={handleToolbarMouseDown}
-                onClick={() => handleApplyEditorFormat('inlineCode')}
-              >
-                {'</>'}
-              </button>
-              <button
-                className="btn-ghost"
-                type="button"
-                aria-label="代码块"
-                aria-pressed={editorFormatting.codeBlock}
-                disabled={!editorFormatting.canCodeBlock}
-                title="代码块"
-                onMouseDown={handleToolbarMouseDown}
-                onClick={() => handleApplyEditorFormat('codeBlock')}
-              >
-                <Code2 size={14} aria-hidden="true" />
-              </button>
-              <span className="nibi-text-toolbar-divider" aria-hidden="true" />
-              <button
-                className="btn-ghost"
-                type="button"
-                aria-label="左对齐"
-                aria-pressed={editorPrefs.textAlign === 'left'}
-                title="左对齐"
-                onClick={() => updateEditorPrefs({ textAlign: 'left' })}
-              >
-                <AlignLeft size={14} aria-hidden="true" />
-              </button>
-              <button
-                className="btn-ghost"
-                type="button"
-                aria-label="居中"
-                aria-pressed={editorPrefs.textAlign === 'center'}
-                title="居中"
-                onClick={() => updateEditorPrefs({ textAlign: 'center' })}
-              >
-                <AlignCenter size={14} aria-hidden="true" />
-              </button>
-              <button
-                className="btn-ghost"
-                type="button"
-                aria-label="右对齐"
-                aria-pressed={editorPrefs.textAlign === 'right'}
-                title="右对齐"
-                onClick={() => updateEditorPrefs({ textAlign: 'right' })}
-              >
-                <AlignRight size={14} aria-hidden="true" />
-              </button>
-            </div>
             <div className="nibi-text-editor-content">
               <div className="nibi-note-editor-panel">
+                <EditorToolbar
+                  textAlign={editorPrefs.textAlign}
+                  onTextAlignChange={(align) => updateEditorPrefs({ textAlign: align })}
+                />
                 <MilkdownEditor
                   key={milkdownKey}
                   markdown={editingBody}

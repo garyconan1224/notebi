@@ -1,6 +1,7 @@
 import { lift, setBlockType, toggleMark, wrapIn } from '@milkdown/prose/commands'
 import { liftListItem, wrapInList } from '@milkdown/prose/schema-list'
-import type { Command, EditorState, Transaction } from '@milkdown/prose/state'
+import type { Command, Transaction } from '@milkdown/prose/state'
+import { EditorState, Selection, TextSelection } from '@milkdown/prose/state'
 import type { EditorView } from '@milkdown/prose/view'
 
 export type EditorFormat =
@@ -15,6 +16,7 @@ export type EditorFormat =
   | 'orderedList'
   | 'taskList'
   | 'codeBlock'
+  | 'clearFormat'
 
 export interface EditorFormattingState {
   bold: boolean
@@ -23,6 +25,8 @@ export interface EditorFormattingState {
   inlineCode: boolean
   link: boolean
   heading: boolean
+  /** Q6：当前选区所在标题层级；0 = 正文或非同级标题 */
+  headingLevel: 0 | 1 | 2 | 3
   blockquote: boolean
   bulletList: boolean
   orderedList: boolean
@@ -39,6 +43,7 @@ export interface EditorFormattingState {
   canOrderedList: boolean
   canTaskList: boolean
   canCodeBlock: boolean
+  canClearFormat: boolean
 }
 
 export const EMPTY_EDITOR_FORMATTING_STATE: EditorFormattingState = {
@@ -48,6 +53,7 @@ export const EMPTY_EDITOR_FORMATTING_STATE: EditorFormattingState = {
   inlineCode: false,
   link: false,
   heading: false,
+  headingLevel: 0,
   blockquote: false,
   bulletList: false,
   orderedList: false,
@@ -64,6 +70,7 @@ export const EMPTY_EDITOR_FORMATTING_STATE: EditorFormattingState = {
   canOrderedList: false,
   canTaskList: false,
   canCodeBlock: false,
+  canClearFormat: false,
 }
 
 function markIsActive(state: EditorState, markName: string): boolean {
@@ -76,21 +83,39 @@ function markIsActive(state: EditorState, markName: string): boolean {
   return state.doc.rangeHasMark(from, to, mark)
 }
 
-function selectedTextblocksAreHeading(state: EditorState): boolean {
+function headingLevelOf(state: EditorState): 0 | 1 | 2 | 3 {
   const heading = state.schema.nodes.heading
-  if (!heading) return false
+  if (!heading) return 0
   const { empty, from, to, $from } = state.selection
   if (empty) {
-    return $from.parent.type === heading && $from.parent.attrs.level === 2
+    const parent = $from.parent
+    if (parent.type === heading) {
+      const level = Number(parent.attrs.level)
+      if (level >= 1 && level <= 3) return level as 1 | 2 | 3
+    }
+    return 0
   }
   let found = false
-  let allHeadings = true
+  let commonLevel: number | null = null
   state.doc.nodesBetween(from, to, (node) => {
     if (!node.isTextblock) return
     found = true
-    if (node.type !== heading || node.attrs.level !== 2) allHeadings = false
+    if (node.type !== heading) {
+      commonLevel = null
+      return false
+    }
+    const level = Number(node.attrs.level)
+    if (commonLevel === null) commonLevel = level
+    else if (commonLevel !== level) commonLevel = 0
+    return false
   })
-  return found && allHeadings
+  if (!found || commonLevel === null || commonLevel === 0) return 0
+  if (commonLevel >= 1 && commonLevel <= 3) return commonLevel as 1 | 2 | 3
+  return 0
+}
+
+function selectedTextblocksAreHeading(state: EditorState): boolean {
+  return headingLevelOf(state) > 0
 }
 
 function selectionIsInBulletList(state: EditorState): boolean {
@@ -155,6 +180,69 @@ function taskListCommand(state: EditorState): Command | null {
   }
 }
 
+/**
+ * Q6：清除格式——段落化 + 去除 marks + 反复 lift 出列表/引用。
+ * 选区为空（无内容可清）时返回不可执行，工具栏据此禁用。
+ */
+function clearFormattingCommand(state: EditorState): Command | null {
+  const paragraph = state.schema.nodes.paragraph
+  if (!paragraph) return null
+  const listItem = state.schema.nodes.list_item
+  return (currentState, dispatch) => {
+    const schema = currentState.schema
+    let tr = currentState.tr
+    let anyChange = false
+
+    const run = (cmd: Command): boolean => {
+      const safePos = Math.min(tr.selection.from, tr.doc.content.size)
+      const selection = Selection.findFrom(tr.doc.resolve(safePos), 1, true)
+        ?? TextSelection.create(tr.doc, safePos)
+      const temp = EditorState.create({ doc: tr.doc, selection, schema })
+      let sub: Transaction | null = null
+      const ok = cmd(temp, (transaction) => {
+        sub = transaction
+      })
+      // TS 不跟踪闭包内赋值，显式回转型别
+      const applied = sub as Transaction | null
+      if (!ok || !applied || applied.steps.length === 0) return false
+      for (const step of applied.steps) tr.step(step)
+      return true
+    }
+
+    if (run(setBlockType(paragraph))) anyChange = true
+
+    const { from, to } = tr.selection
+    if (from < to) {
+      for (const markName of Object.keys(schema.marks)) {
+        const mark = schema.marks[markName]
+        if (tr.doc.rangeHasMark(from, to, mark)) {
+          const removeCommand: Command = (markState, markDispatch) => {
+            const markTr = markState.tr.removeMark(from, to, mark)
+            markDispatch?.(markTr)
+            return true
+          }
+          if (run(removeCommand)) anyChange = true
+        }
+      }
+    }
+
+    for (let index = 0; index < 6; index += 1) {
+      if (!run(lift)) break
+      anyChange = true
+    }
+    if (listItem) {
+      for (let index = 0; index < 6; index += 1) {
+        if (!run(liftListItem(listItem))) break
+        anyChange = true
+      }
+    }
+
+    if (!anyChange) return false
+    dispatch?.(tr)
+    return true
+  }
+}
+
 function commandForFormat(
   state: EditorState,
   format: EditorFormat,
@@ -184,9 +272,21 @@ function commandForFormat(
     const heading = state.schema.nodes.heading
     const paragraph = state.schema.nodes.paragraph
     if (!heading || !paragraph) return null
-    return selectedTextblocksAreHeading(state)
+    // Q6：value 指定目标层级（'1'/'2'/'3'），'0' = 转回正文；
+    // 无 value 时保留旧行为（二级标题开/关），兼容既有调用点。
+    const level = Number.parseInt(value, 10)
+    if (Number.isNaN(level)) {
+      return selectedTextblocksAreHeading(state)
+        ? setBlockType(paragraph)
+        : setBlockType(heading, { level: 2 })
+    }
+    if (level <= 0) {
+      return setBlockType(paragraph)
+    }
+    const target = Math.min(3, Math.max(1, level))
+    return headingLevelOf(state) === target
       ? setBlockType(paragraph)
-      : setBlockType(heading, { level: 2 })
+      : setBlockType(heading, { level: target })
   }
   if (format === 'blockquote') {
     const blockquote = state.schema.nodes.blockquote
@@ -202,6 +302,7 @@ function commandForFormat(
       : setBlockType(codeBlock)
   }
   if (format === 'taskList') return taskListCommand(state)
+  if (format === 'clearFormat') return clearFormattingCommand(state)
   if (format === 'orderedList') {
     const orderedList = state.schema.nodes.ordered_list
     const listItem = state.schema.nodes.list_item
@@ -231,14 +332,17 @@ export function getEditorFormattingState(state: EditorState): EditorFormattingSt
     orderedList: commandForFormat(state, 'orderedList'),
     taskList: commandForFormat(state, 'taskList'),
     codeBlock: commandForFormat(state, 'codeBlock'),
+    clearFormat: commandForFormat(state, 'clearFormat'),
   }
+  const level = headingLevelOf(state)
   return {
     bold: markIsActive(state, 'strong'),
     italic: markIsActive(state, 'emphasis'),
     strike: markIsActive(state, 'strike_through'),
     inlineCode: markIsActive(state, 'inlineCode'),
     link: markIsActive(state, 'link'),
-    heading: selectedTextblocksAreHeading(state),
+    heading: level > 0,
+    headingLevel: level,
     blockquote: selectionIsInNode(state, 'blockquote'),
     bulletList: selectionIsInBulletList(state),
     orderedList: selectionIsInNode(state, 'ordered_list'),
@@ -255,6 +359,7 @@ export function getEditorFormattingState(state: EditorState): EditorFormattingSt
     canOrderedList: Boolean(commands.orderedList?.(state)),
     canTaskList: Boolean(commands.taskList?.(state)),
     canCodeBlock: Boolean(commands.codeBlock?.(state)),
+    canClearFormat: Boolean(commands.clearFormat?.(state)),
   }
 }
 

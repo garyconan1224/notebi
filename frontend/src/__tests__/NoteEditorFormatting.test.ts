@@ -147,3 +147,68 @@ describe('NoteShell editor formatting commands', () => {
     expect(marks[0].attrs.href).toBe('https://example.com')
   })
 })
+
+describe('Q6 标题层级与清除格式', () => {
+  it('正文可升为 H1/H3，再执行同层级降回正文（round-trip）', () => {
+    const doc = schema.node('doc', null, [paragraph('标题内容')])
+    const selected = stateWithDoc(doc, 1)
+
+    const h1 = applyEditorFormatToState(selected, 'heading', '1')
+    expect(h1).not.toBeNull()
+    expect(h1!.doc.child(0).type.name).toBe('heading')
+    expect(h1!.doc.child(0).attrs.level).toBe(1)
+    expect(getEditorFormattingState(h1!).headingLevel).toBe(1)
+
+    const h1Back = applyEditorFormatToState(h1!, 'heading', '1')
+    expect(h1Back!.doc.child(0).type.name).toBe('paragraph')
+    expect(getEditorFormattingState(h1Back!).headingLevel).toBe(0)
+
+    const h3 = applyEditorFormatToState(selected, 'heading', '3')
+    expect(h3!.doc.child(0).attrs.level).toBe(3)
+    expect(getEditorFormattingState(h3!).heading).toBe(true)
+  })
+
+  it('选中文本可用「正文」选项从标题降回段落', () => {
+    const doc = schema.node('doc', null, [
+      schema.node('heading', { level: 2 }, schema.text('已是标题')),
+    ])
+    const selected = stateWithDoc(doc, 2)
+
+    const toParagraph = applyEditorFormatToState(selected, 'heading', '0')
+    expect(toParagraph!.doc.child(0).type.name).toBe('paragraph')
+  })
+
+  it('无 value 时保留旧的二级标题开/关行为', () => {
+    const doc = schema.node('doc', null, [paragraph('兼容路径')])
+    const selected = stateWithDoc(doc, 1)
+
+    const toggled = applyEditorFormatToState(selected, 'heading')
+    expect(toggled!.doc.child(0).attrs.level).toBe(2)
+  })
+
+  it('清除格式去掉加粗与标题，恢复为普通段落', () => {
+    const boldText = schema.text('带格式', [schema.marks.strong.create()])
+    const doc = schema.node('doc', null, [
+      schema.node('heading', { level: 2 }, boldText),
+    ])
+    const selected = stateWithDoc(doc, 1, doc.content.size - 1)
+
+    const cleared = applyEditorFormatToState(selected, 'clearFormat')
+    expect(cleared).not.toBeNull()
+    expect(cleared!.doc.child(0).type.name).toBe('paragraph')
+    expect(cleared!.doc.rangeHasMark(0, cleared!.doc.content.size, schema.marks.strong)).toBe(false)
+  })
+
+  it('清除格式把列表项抬升为普通段落', () => {
+    const doc = schema.node('doc', null, [
+      schema.node('bullet_list', null, [
+        schema.node('list_item', null, [paragraph('列表内容')]),
+      ]),
+    ])
+    const selected = stateWithDoc(doc, 3)
+
+    const cleared = applyEditorFormatToState(selected, 'clearFormat')
+    expect(cleared).not.toBeNull()
+    expect(cleared!.doc.child(0).type.name).toBe('paragraph')
+  })
+})
