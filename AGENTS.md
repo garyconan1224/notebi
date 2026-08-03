@@ -26,6 +26,8 @@ Read `docs/PRODUCT_DECISIONS.md` only when product boundaries matter. Historical
 
 **默认情况下，Codex 负责调查、实测、计划和完成后的独立审查；具体代码执行优先交给 Claude Code 中的千问。若同一问题交给千问连续两次仍未解决，视为用户已授权 Codex 在原任务范围内直接接管修复，并继续遵守停点求证规则。**
 
+**计划 / 调查门槛**：当用户要求先计划、先调查或尚未明确授权执行时，Codex 只用本地代码、文档、运行证据和必要的定向测试；不得启动 Claude Code + 千问、调用 Open Design、重启外部工具或生成完整设计稿。先提交证据、待确认选择、批次、验收与执行提示词；只有用户明确说“执行 / 按计划做”后，才按需启动千问。该已授权批次确有 UI 需求时，才为该批、该页面调用 Open Design。用户当前轮明确要求将外部工具用于计划本身时除外。
+
 ### Codex Can Do
 
 - Run tests: `pytest tests/backend -q`, `cd frontend && pnpm test`
