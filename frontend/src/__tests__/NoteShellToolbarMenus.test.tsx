@@ -126,10 +126,11 @@ describe('NoteShell 导出菜单信息架构（阶段 A1）', () => {
     await renderNoteShell()
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
 
-    expect(screen.getByText('选择内容')).toBeInTheDocument()
+    // Q3 / D2：内容按域分组；未选 AI 总结时不出现重复的「主笔记」来源
+    expect(screen.getByText('笔记')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /当前显示内容/ })).toBeInTheDocument()
-    // 顶栏版本按钮也叫「主笔记」，这里只断言导出菜单内的内容来源项
-    expect(within(document.querySelector('.nibi-note-export-menu') as HTMLElement).getByRole('button', { name: /^主笔记$/ })).toBeInTheDocument()
+    const menu = within(document.querySelector('.nibi-note-export-menu') as HTMLElement)
+    expect(menu.queryByRole('button', { name: /^主笔记$/ })).toBeNull()
     expect(screen.queryByText('Markdown')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /当前显示内容/ }))
@@ -142,7 +143,7 @@ describe('NoteShell 导出菜单信息架构（阶段 A1）', () => {
   it('转写菜单项不包含笔记标题', async () => {
     await renderNoteShell()
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
-    fireEvent.click(screen.getByRole('button', { name: /转写文本$/ }))
+    fireEvent.click(screen.getByRole('button', { name: /转写文本 \/ 字幕/ }))
 
     expect(screen.getByRole('button', { name: 'TXT 文章' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'SRT 字幕' })).toBeInTheDocument()
@@ -154,7 +155,8 @@ describe('NoteShell 导出菜单信息架构（阶段 A1）', () => {
   it('按用途分组笔记与字幕导出格式', async () => {
     await renderNoteShell()
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
-    fireEvent.click(within(document.querySelector('.nibi-note-export-menu') as HTMLElement).getByRole('button', { name: /^主笔记$/ }))
+    // Q3 / D2：未选总结时「当前显示内容」即主笔记，格式组内含 Obsidian 包
+    fireEvent.click(screen.getByRole('button', { name: /当前显示内容/ }))
 
     const exportMenu = document.querySelector('.nibi-note-export-menu')
     expect(exportMenu).not.toBeNull()
@@ -165,7 +167,7 @@ describe('NoteShell 导出菜单信息架构（阶段 A1）', () => {
     expect(menu.getByRole('button', { name: 'Obsidian 包' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '返回内容选择' }))
-    fireEvent.click(screen.getByRole('button', { name: /转写文本$/ }))
+    fireEvent.click(screen.getByRole('button', { name: /转写文本 \/ 字幕/ }))
     expect(within(document.querySelector('.nibi-note-export-menu') as HTMLElement).getByText('字幕格式')).toBeInTheDocument()
   })
 
@@ -319,5 +321,59 @@ describe('NoteShell AI 工具菜单（S3）', () => {
     ]) {
       expect(screen.getByRole('button', { name: new RegExp(label) })).toBeInTheDocument()
     }
+  })
+})
+
+describe('Q3 媒体导出与转写选项', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.downloadTranscript.mockResolvedValue(undefined)
+    useLnEditorStore.getState().resetFormatting()
+  })
+
+  const VIDEO_NOTE: ItemNote = {
+    frontmatter: { title: '测试视频', type: 'video', version: 1, created_at: '2026-07-01T00:00:00Z' },
+    source_md: '',
+    note_md: '---\ntitle: 测试视频\ntype: video\nversion: 1\n---\n\n视频正文',
+    summaries: [],
+    note_dir: '',
+    media: { video: { url: '/static/v.mp4', duration: 60 } },
+    transcript: [{ t_sec: 0, t_str: '00:00', text: '字幕内容' }],
+  }
+
+  it('视频笔记导出菜单包含媒体域（原视频 / 软字幕 / 烧录）', async () => {
+    await renderNoteShell(VIDEO_NOTE)
+    fireEvent.click(screen.getByRole('button', { name: '导出' }))
+
+    expect(screen.getByText('媒体')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /原视频（不重新编码）/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /视频 \+ 软字幕（SRT）/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /视频 \+ 软字幕（VTT）/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /烧录字幕到视频/ })).toBeInTheDocument()
+  })
+
+  it('音频笔记不显示媒体域（无视频可导出）', async () => {
+    await renderNoteShell()
+    fireEvent.click(screen.getByRole('button', { name: '导出' }))
+    expect(screen.queryByText('媒体')).toBeNull()
+    expect(screen.getByText('转录与字幕')).toBeInTheDocument()
+  })
+
+  it('转写格式步骤提供「区分说话人」选项（不再作为独立内容源）', async () => {
+    await renderNoteShell(VIDEO_NOTE)
+    fireEvent.click(screen.getByRole('button', { name: '导出' }))
+
+    // 一级菜单不再有独立的「转写文本（区分说话人）」来源
+    expect(screen.queryByRole('button', { name: /转写文本（区分说话人）/ })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /转写文本 \/ 字幕/ }))
+    const toggle = screen.getByText('区分说话人')
+    expect(toggle).toBeInTheDocument()
+  })
+
+  it('笔记域提供写入 Obsidian 入口', async () => {
+    await renderNoteShell(VIDEO_NOTE)
+    fireEvent.click(screen.getByRole('button', { name: '导出' }))
+    expect(screen.getByRole('button', { name: /写入 Obsidian/ })).toBeInTheDocument()
   })
 })

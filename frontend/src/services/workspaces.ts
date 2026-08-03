@@ -1419,3 +1419,96 @@ export async function downloadItemNoteExport(
   a.remove()
   URL.revokeObjectURL(url)
 }
+
+/* ── Q3 / D4：媒体导出（原视频 / 软字幕 / 烧录）────────────── */
+
+function filenameFromDisposition(disposition: string | undefined, fallback: string): string {
+  if (!disposition) return fallback
+  const match = disposition.match(/filename\*=(?:UTF-8''|")?([^";]+)/i)
+  return match ? decodeURIComponent(match[1]) : fallback
+}
+
+async function downloadBlobResponse(data: Blob, disposition: string | undefined, fallback: string): Promise<void> {
+  const filename = filenameFromDisposition(disposition, fallback)
+  const url = URL.createObjectURL(data)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+/** GET media-export?kind=original — 流式复制本地媒体（绝不重编码） */
+export async function downloadOriginalMedia(
+  workspaceId: string,
+  itemId: string,
+  fallbackFilename: string,
+): Promise<void> {
+  const res = await http.get(`${BASE}/${workspaceId}/items/${itemId}/media-export`, {
+    params: { kind: 'original' },
+    responseType: 'blob',
+  })
+  await downloadBlobResponse(res.data as Blob, res.headers['content-disposition'] as string | undefined, fallbackFilename)
+}
+
+/** GET media-export?kind=softsub — 媒体 + 字幕打包 zip */
+export async function downloadSoftSubMedia(
+  workspaceId: string,
+  itemId: string,
+  subtitleFormat: 'srt' | 'vtt' | 'ass',
+  fallbackFilename: string,
+): Promise<void> {
+  const res = await http.get(`${BASE}/${workspaceId}/items/${itemId}/media-export`, {
+    params: { kind: 'softsub', subtitle_format: subtitleFormat },
+    responseType: 'blob',
+  })
+  await downloadBlobResponse(res.data as Blob, res.headers['content-disposition'] as string | undefined, fallbackFilename)
+}
+
+export interface BurnSubtitleResult {
+  task_id: string
+  status: string
+}
+
+/** POST media-export/burn — 后台 ffmpeg 烧录字幕任务 */
+export async function startBurnSubtitles(
+  workspaceId: string,
+  itemId: string,
+  options: { subtitle_format?: 'srt' | 'ass'; font_name?: string; font_size?: number } = {},
+): Promise<BurnSubtitleResult> {
+  const res = await http.post<BurnSubtitleResult>(
+    `${BASE}/${workspaceId}/items/${itemId}/media-export/burn`,
+    options,
+  )
+  return res.data
+}
+
+/* ── Q3 / D3：Obsidian 直写 ────────────────────────────────── */
+
+export interface ObsidianVaultExportResult {
+  path: string
+  relative: string
+  created: boolean
+  overwritten: boolean
+}
+
+/** POST note/export/obsidian-vault — 直接写入本地 Obsidian vault */
+export async function exportNoteToObsidianVault(
+  workspaceId: string,
+  itemId: string,
+  body: {
+    vault_path: string
+    subdir?: string
+    on_conflict?: 'rename' | 'overwrite'
+    source_kind?: 'main' | 'summary'
+    summary_id?: string
+  },
+): Promise<ObsidianVaultExportResult> {
+  const res = await http.post<ObsidianVaultExportResult>(
+    `${BASE}/${workspaceId}/items/${itemId}/note/export/obsidian-vault`,
+    body,
+  )
+  return res.data
+}

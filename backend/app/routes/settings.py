@@ -37,12 +37,22 @@ _FONT_SIGNATURES: Dict[str, tuple[bytes, ...]] = {
 }
 
 
+class ObsidianSettings(BaseModel):
+    vault_path: Optional[str] = Field(default=None, max_length=2000)
+    subdir: Optional[str] = Field(default=None, max_length=500)
+    direct_write: Optional[bool] = None
+
+
 class AppearancePatch(BaseModel):
     theme: Optional[Literal["paper", "graphite", "sage", "midnight"]] = None
     mode: Optional[Literal["light", "dark", "system"]] = None
     fonts: Optional[Dict[str, Optional[str]]] = Field(
         default=None,
         description="三槽位字体 family：ui / cap / sum；null 表示回退默认链",
+    )
+    obsidian: Optional[ObsidianSettings] = Field(
+        default=None,
+        description="Q3/D3：Obsidian 直写目的地配置（非秘密；token 不保存）",
     )
 
 
@@ -66,6 +76,8 @@ def patch_settings(body: AppearancePatch) -> Dict[str, Any]:
                 detail=f"未知字体槽位: {sorted(unknown)}（仅支持 {list(FONT_SLOTS)}）",
             )
         patch["fonts"] = body.fonts
+    if body.obsidian is not None:
+        patch["obsidian"] = body.obsidian.model_dump(exclude_none=True)
     return update_settings(patch)
 
 

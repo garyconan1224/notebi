@@ -12,11 +12,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Bold, BookOpenCheck, Brain, Camera, Check, ChevronDown, Code2, Copy, Download, ExternalLink, FileDown, FileText, FileType, History, Image, Italic, List, MessageCircle, Minus, Pause, Pencil, Play, Plus, Presentation, RefreshCw, Sparkles, Strikethrough, Subtitles, Trash2, Type, Underline, X } from 'lucide-react'
+import { ArrowLeft, Bold, BookOpenCheck, Brain, Camera, Check, ChevronDown, Code2, Copy, Download, ExternalLink, FileDown, FileText, FileType, Film, History, Image, Italic, List, MessageCircle, Minus, Pause, Pencil, Play, Plus, Presentation, RefreshCw, Sparkles, Strikethrough, Subtitles, Trash2, Type, Underline, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
 
-import { createChapterSummaries, downloadItemNoteExport, downloadSubtitles, downloadTranscript, exportItemNoteObsidian, getItemNote, putItemNote, updateSpeakerMap, type ItemNoteExportFormat, type TranscriptExportMode } from '@/services/workspaces'
+import { createChapterSummaries, downloadItemNoteExport, downloadOriginalMedia, downloadSoftSubMedia, downloadSubtitles, downloadTranscript, exportItemNoteObsidian, exportNoteToObsidianVault, getItemNote, putItemNote, startBurnSubtitles, updateSpeakerMap, type ItemNoteExportFormat, type TranscriptExportMode } from '@/services/workspaces'
+import { fetchSettings } from '@/services/settings'
 import type { VideoResultTranscriptLine } from '@/services/workspaces'
 import type { ItemNote, NoteChapter } from '@/types/workspace'
 import { createSummary, deleteSummary, listSummaries, renameSummary, updateSummaryContent, type ItemSummary } from '@/services/summaries'
@@ -530,6 +531,10 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [exportOpen, setExportOpen] = useState(false)
   const [exportSource, setExportSource] = useState<NoteExportSource | null>(null)
   const [exportBusy, setExportBusy] = useState<NoteExportBusy | null>(null)
+  // Q3：转写导出的「区分说话人」选项（选项而非独立内容源）
+  const [transcriptWithSpeaker, setTranscriptWithSpeaker] = useState(false)
+  // Q3：媒体导出进行中状态
+  const [mediaExporting, setMediaExporting] = useState<string | null>(null)
   const [notionExportOpen, setNotionExportOpen] = useState(false)
   const [feishuExportOpen, setFeishuExportOpen] = useState(false)
   const [immersiveOpen, setImmersiveOpen] = useState(false)
@@ -1496,9 +1501,12 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
       return
     }
     if (exportSource === 'transcript') {
-      if (format === 'transcript_txt') void handleExportTranscript('article')
+      // Q3：区分说话人是转写下的选项，不再是独立内容源
+      if (format === 'transcript_txt') {
+        void handleExportTranscript(transcriptWithSpeaker ? 'speaker_grouped' : 'article')
+      }
       if (format === 'srt' || format === 'vtt' || format === 'ass') {
-        void downloadSubtitles(workspaceId, itemId, format).then(() => {
+        void downloadSubtitles(workspaceId, itemId, format, transcriptWithSpeaker).then(() => {
           showOperationNotice(`${format.toUpperCase()} 字幕已开始下载`, 'success')
           setExportOpen(false)
         }).catch(() => showOperationNotice('字幕导出失败，请重试', 'error'))
@@ -1513,6 +1521,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     setSourceMdOpen(true)
   }, [
     exportSource,
+    transcriptWithSpeaker,
     handleDownloadNoteExport,
     handleExportCurrentHtml,
     handleExportMarkdown,
@@ -1522,6 +1531,89 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     showOperationNotice,
     workspaceId,
   ])
+
+  // ── Q3 / D4：媒体导出 ──────────────────────────────────────
+  const exportBaseName = useCallback(() => {
+    const rawTitle = String(((note?.frontmatter ?? {}) as Record<string, unknown>).title ?? '')
+    return rawTitle.replace(/[/\\:*?"<>|]/g, '_').trim().slice(0, 60) || 'media'
+  }, [note])
+
+  const handleExportOriginalMedia = useCallback(async () => {
+    setMediaExporting('original')
+    try {
+      await downloadOriginalMedia(workspaceId, itemId, `${exportBaseName()}.mp4`)
+      showOperationNotice('原视频已开始下载（原样复制，未重新编码）', 'success')
+      setExportOpen(false)
+    } catch {
+      showOperationNotice('本地视频不存在或尚未下载完成，无法导出原视频', 'error')
+    } finally {
+      setMediaExporting(null)
+    }
+  }, [workspaceId, itemId, exportBaseName, showOperationNotice])
+
+  const handleExportSoftSub = useCallback(async (format: 'srt' | 'vtt' | 'ass') => {
+    setMediaExporting(`softsub-${format}`)
+    try {
+      await downloadSoftSubMedia(workspaceId, itemId, format, `${exportBaseName()}-softsub.zip`)
+      showOperationNotice('视频 + 软字幕包已开始下载', 'success')
+      setExportOpen(false)
+    } catch {
+      showOperationNotice('缺少本地视频或字幕，无法打包软字幕', 'error')
+    } finally {
+      setMediaExporting(null)
+    }
+  }, [workspaceId, itemId, exportBaseName, showOperationNotice])
+
+  const handleStartBurn = useCallback(async () => {
+    setMediaExporting('burn')
+    try {
+      // 字幕字体/字号读取 Q6 字幕槽位设置（缺省交给后端 ffmpeg 默认样式）
+      let fontName = ''
+      try {
+        const settings = await fetchSettings()
+        const capFont = settings.fonts?.cap
+        if (capFont) fontName = capFont.split(',')[0].replace(/['"]/g, '').trim()
+      } catch {
+        // 设置不可用时用默认样式，不阻断烧录
+      }
+      const result = await startBurnSubtitles(workspaceId, itemId, {
+        subtitle_format: 'srt',
+        font_name: fontName,
+      })
+      showOperationNotice(`烧录任务已开始（${result.task_id}），可在任务中心查看进度`, 'success')
+      setExportOpen(false)
+    } catch {
+      showOperationNotice('无法开始烧录：缺少本地视频/字幕或未安装 ffmpeg', 'error')
+    } finally {
+      setMediaExporting(null)
+    }
+  }, [workspaceId, itemId, showOperationNotice])
+
+  // ── Q3 / D3：Obsidian 直写（vault 目的地来自设置）──────────
+  const handleObsidianDirectWrite = useCallback(async () => {
+    setMediaExporting('obsidian-vault')
+    try {
+      const settings = await fetchSettings()
+      const vaultPath = settings.obsidian?.vault_path
+      if (!vaultPath) {
+        showOperationNotice('尚未配置 Obsidian vault 路径，请到 设置 → 常规与外观 配置', 'error')
+        return
+      }
+      const result = await exportNoteToObsidianVault(workspaceId, itemId, {
+        vault_path: vaultPath,
+        subdir: settings.obsidian?.subdir || '',
+        on_conflict: 'rename',
+        source_kind: activeSummaryId ? 'summary' : 'main',
+        summary_id: activeSummaryId ?? undefined,
+      })
+      showOperationNotice(`已写入 Obsidian：${result.relative}`, 'success')
+      setExportOpen(false)
+    } catch {
+      showOperationNotice('写入 Obsidian 失败：请检查 vault 路径与目录权限', 'error')
+    } finally {
+      setMediaExporting(null)
+    }
+  }, [workspaceId, itemId, activeSummaryId, showOperationNotice])
 
   // VN4.3 新建总结（从 AI 工具菜单触发，复用 NewSummaryModal）
   const handleCreateSummary = useCallback(async (opts: {
@@ -1894,6 +1986,10 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     ? [
         { label: '文档与打印', items: documentExportItems },
         { label: '演示与阅读', items: presentationExportItems },
+        // Q3 / D2：未选中 AI 总结时，当前内容即主笔记，导出选项含 Obsidian 包
+        ...(!activeSummaryId
+          ? [{ label: '知识管理', items: [{ icon: <BookOpenCheck size={15} />, label: 'Obsidian 包', format: 'obsidian' as ItemNoteExportFormat }] }]
+          : []),
       ]
     : exportSource === 'main'
       ? [
@@ -2242,25 +2338,15 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
               <div className="nibi-note-export-menu">
                 {!exportSource ? (
                   <>
-                    <div className="nibi-note-export-group-label">选择内容</div>
+                    <div className="nibi-note-export-group-label">笔记</div>
                     <button className="nibi-note-export-item" onClick={() => setExportSource('current')} disabled={!!exportBusy}>
                       <FileText size={15} />
                       <span>当前显示内容{activeSummaryId ? '（AI 总结）' : ''}</span>
                     </button>
-                    <button className="nibi-note-export-item" onClick={() => setExportSource('main')} disabled={!!exportBusy}>
-                      <BookOpenCheck size={15} />
-                      <span>主笔记</span>
-                    </button>
-                    {(isVideoNote || isAudioNote) && (
-                      <button className="nibi-note-export-item" onClick={() => setExportSource('transcript')} disabled={!!exportBusy}>
-                        <Subtitles size={15} />
-                        <span>转写文本</span>
-                      </button>
-                    )}
-                    {(isVideoNote || isAudioNote) && (
-                      <button className="nibi-note-export-item" onClick={() => setExportSource('speaker_transcript')} disabled={!!exportBusy}>
-                        <Subtitles size={15} />
-                        <span>转写文本（区分说话人）</span>
+                    {activeSummaryId && (
+                      <button className="nibi-note-export-item" onClick={() => setExportSource('main')} disabled={!!exportBusy}>
+                        <BookOpenCheck size={15} />
+                        <span>主笔记</span>
                       </button>
                     )}
                     {note.source_md && (
@@ -2269,7 +2355,41 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                         <span>原始素材</span>
                       </button>
                     )}
+                    {(isVideoNote || isAudioNote) && (
+                      <>
+                        <div className="nibi-note-export-group-label">转录与字幕</div>
+                        <button className="nibi-note-export-item" onClick={() => setExportSource('transcript')} disabled={!!exportBusy}>
+                          <Subtitles size={15} />
+                          <span>转写文本 / 字幕</span>
+                        </button>
+                      </>
+                    )}
+                    {isVideoNote && (
+                      <>
+                        <div className="nibi-note-export-group-label">媒体</div>
+                        <button className="nibi-note-export-item" onClick={() => void handleExportOriginalMedia()} disabled={!!mediaExporting}>
+                          <Download size={15} />
+                          <span>{mediaExporting === 'original' ? '导出中…' : '原视频（不重新编码）'}</span>
+                        </button>
+                        <button className="nibi-note-export-item" onClick={() => void handleExportSoftSub('srt')} disabled={!!mediaExporting}>
+                          <Subtitles size={15} />
+                          <span>{mediaExporting === 'softsub-srt' ? '打包中…' : '视频 + 软字幕（SRT）'}</span>
+                        </button>
+                        <button className="nibi-note-export-item" onClick={() => void handleExportSoftSub('vtt')} disabled={!!mediaExporting}>
+                          <Subtitles size={15} />
+                          <span>{mediaExporting === 'softsub-vtt' ? '打包中…' : '视频 + 软字幕（VTT）'}</span>
+                        </button>
+                        <button className="nibi-note-export-item" onClick={() => void handleStartBurn()} disabled={!!mediaExporting}>
+                          <Film size={15} />
+                          <span>{mediaExporting === 'burn' ? '提交中…' : '烧录字幕到视频（后台任务）'}</span>
+                        </button>
+                      </>
+                    )}
                     <div className="nibi-note-export-group-label">同步到工作区</div>
+                    <button className="nibi-note-export-item" onClick={() => void handleObsidianDirectWrite()} disabled={!!mediaExporting}>
+                      <BookOpenCheck size={15} />
+                      <span>{mediaExporting === 'obsidian-vault' ? '写入中…' : '写入 Obsidian（本地 vault）'}</span>
+                    </button>
                     <button
                       className="nibi-note-export-item"
                       onClick={() => {
@@ -2298,6 +2418,16 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                     <button className="nibi-note-export-back" onClick={() => setExportSource(null)}>
                       <ArrowLeft size={13} /> 返回内容选择
                     </button>
+                    {exportSource === 'transcript' && (
+                      <label className="nibi-note-export-toggle">
+                        <input
+                          type="checkbox"
+                          checked={transcriptWithSpeaker}
+                          onChange={(event) => setTranscriptWithSpeaker(event.target.checked)}
+                        />
+                        区分说话人
+                      </label>
+                    )}
                     <div className="nibi-note-export-group-label">选择格式</div>
                     {exportFormatGroups.map((group) => (
                       <div key={group.label}>

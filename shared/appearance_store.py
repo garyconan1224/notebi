@@ -26,6 +26,8 @@ DEFAULTS: dict[str, Any] = {
     "mode": "system",
     "fonts": {"ui": None, "cap": None, "sum": None},
     "uploaded_fonts": [],
+    # Q3 / D3：Obsidian 直写目的地（非秘密配置；token 一律不保存）
+    "obsidian": {"vault_path": "", "subdir": "", "direct_write": False},
 }
 
 
@@ -55,6 +57,11 @@ def load_settings() -> dict[str, Any]:
             entry for entry in (doc.get("uploaded_fonts") or [])
             if isinstance(entry, dict) and entry.get("id")
         ],
+        "obsidian": {
+            "vault_path": str((doc.get("obsidian") or {}).get("vault_path") or ""),
+            "subdir": str((doc.get("obsidian") or {}).get("subdir") or ""),
+            "direct_write": bool((doc.get("obsidian") or {}).get("direct_write") or False),
+        },
     }
     return merged
 
@@ -68,7 +75,7 @@ def save_settings(doc: dict[str, Any]) -> None:
 
 
 def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
-    """浅合并 patch（fonts 按槽位合并），落盘并返回回读结果。"""
+    """浅合并 patch（fonts / obsidian 按字段合并），落盘并返回回读结果。"""
     current = load_settings()
     if "theme" in patch:
         current["theme"] = patch["theme"]
@@ -79,5 +86,11 @@ def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
             if slot in patch["fonts"]:
                 value = patch["fonts"][slot]
                 current["fonts"][slot] = str(value) if value else None
+    if isinstance(patch.get("obsidian"), dict):
+        for key in ("vault_path", "subdir"):
+            if key in patch["obsidian"]:
+                current["obsidian"][key] = str(patch["obsidian"][key] or "")
+        if "direct_write" in patch["obsidian"]:
+            current["obsidian"]["direct_write"] = bool(patch["obsidian"]["direct_write"])
     save_settings(current)
     return load_settings()

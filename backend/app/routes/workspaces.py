@@ -6286,6 +6286,115 @@ class NotionExportRequest(BaseModel):
     markdown: str = Field(min_length=1, max_length=500_000)
 
 
+class ObsidianVaultExportRequest(BaseModel):
+    """Q3 / D3：直接写入本地 Obsidian vault。
+
+    vault_path/subdir 为非秘密目的地配置；不保存任何 token。
+    """
+
+    vault_path: str = Field(min_length=1, max_length=2000)
+    subdir: str = Field(default="", max_length=500)
+    on_conflict: Literal["rename", "overwrite"] = "rename"
+    source_kind: Literal["main", "summary"] = "main"
+    summary_id: Optional[str] = None
+
+
+def _safe_join_under_root(root: Path, *parts: str) -> Path:
+    """把子路径拼进 root；解析后越界直接拒绝（防 ../ 逃逸）。"""
+    target = root.joinpath(*[p for p in parts if p]).resolve()
+    root_resolved = root.resolve()
+    if target != root_resolved and root_resolved not in target.parents:
+        raise HTTPException(status_code=422, detail="目标路径越出 Vault 边界，已拒绝写入")
+    return target
+
+
+def _next_available_path(target: Path) -> Path:
+    """同名时生成 title-1.md / title-2.md … 直到可用。"""
+    if not target.exists():
+        return target
+    stem, suffix = target.stem, target.suffix
+    index = 1
+    while True:
+        candidate = target.with_name(f"{stem}-{index}{suffix}")
+        if not candidate.exists():
+            return candidate
+        index += 1
+
+
+@router.post("/{workspace_id}/items/{item_id}/note/export/obsidian-vault")
+def export_item_note_to_obsidian_vault(
+    workspace_id: str,
+    item_id: str,
+    body: ObsidianVaultExportRequest,
+) -> Dict[str, Any]:
+    """把笔记直接写入本地 Obsidian vault（D3）。
+
+    - 写入前校验目录存在、路径不越界；
+    - 同名按 rename（新版本）/ overwrite 策略处理；
+    - 只写 Markdown 文本，不改动 vault 其他内容。
+    """
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    item = _find_item(rec, item_id)
+
+    vault_root = Path(body.vault_path).expanduser()
+    if not vault_root.exists() or not vault_root.is_dir():
+        raise HTTPException(
+            status_code=422,
+            detail="Vault 目录不存在：请检查设置里的 Obsidian vault 路径。",
+        )
+    if body.subdir.strip().startswith(("/", "\\")) or body.subdir.strip().startswith(".."):
+        raise HTTPException(status_code=422, detail="子目录不允许使用绝对路径或 ..")
+
+    target_dir = _safe_join_under_root(vault_root, body.subdir.strip())
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    # 收集笔记正文（与导出下载同口径）
+    owner_workspace_id = _canonical_note_owner(workspace_id, item_id)
+    nd = note_dir(owner_workspace_id, item_id)
+    note_path = nd / "note.md"
+    if not note_path.exists():
+        if item.related_task_ids:
+            for tid in reversed(item.related_task_ids):
+                task = _pipeline_runner.store.get(tid)
+                if task and task.result:
+                    merged = dict(item.results or {})
+                    merged.update(task.result)
+                    item.results = merged
+                    break
+        assemble_item_note(owner_workspace_id, item_id, _item=item)
+    if not note_path.exists():
+        raise HTTPException(status_code=404, detail="note not generated")
+
+    note_md = note_path.read_text(encoding="utf-8")
+    if body.source_kind == "summary":
+        if not body.summary_id:
+            raise HTTPException(status_code=400, detail="summary_id is required for summary export")
+        summary = next((entry for entry in item.summaries if entry.summary_id == body.summary_id), None)
+        if summary is None:
+            raise HTTPException(status_code=404, detail="summary not found")
+        speaker_map = (item.results or {}).get("speaker_map") or {}
+        note_md = apply_speaker_map(
+            summary.content_md or "",
+            speaker_map if isinstance(speaker_map, dict) else {},
+        )
+
+    raw_title = (item.name or "note").strip() or "note"
+    safe_title = re.sub(r'[\\/:*?"<>|#\[\]]', "_", raw_title)[:120] or "note"
+    target = target_dir / f"{safe_title}.md"
+    existed = target.exists()
+    written_path = target if body.on_conflict == "overwrite" else _next_available_path(target)
+    written_path.write_text(note_md, encoding="utf-8")
+
+    return {
+        "path": str(written_path),
+        "relative": str(written_path.relative_to(vault_root.resolve())),
+        "created": not existed or body.on_conflict == "rename",
+        "overwritten": existed and body.on_conflict == "overwrite",
+    }
+
+
 _NOTION_PAGE_ID_PATTERN = re.compile(
     r"(?<![0-9a-f])(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{32})(?![0-9a-f])",
     re.IGNORECASE,

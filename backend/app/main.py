@@ -23,6 +23,7 @@ load_dotenv(_ROOT_DIR / ".env", override=False)
 from backend.app.routes.admin import router as admin_router
 from backend.app.routes.download_config import router as download_config_router
 from backend.app.routes.export import router as export_router
+from backend.app.routes.media_export import router as media_export_router
 from backend.app.routes.network_config import router as network_config_router
 from backend.app.routes.pipeline import router as pipeline_router
 from backend.app.routes.task_batches import router as task_batches_router
@@ -198,6 +199,7 @@ app.include_router(templates_legacy_router)
 app.include_router(workspaces_router)
 app.include_router(chat_router)
 app.include_router(export_router)
+app.include_router(media_export_router)
 app.include_router(admin_router)
 app.include_router(system_router)
 app.include_router(link_preview_router)

@@ -370,10 +370,11 @@ describe('NoteShell summary switching', () => {
     await screen.findByText('尚未生成总结')
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
 
-    // 新契约：菜单项不带笔记标题
-    expect(screen.getByRole('button', { name: '转写文本' })).not.toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '转写文本（区分说话人）' }))
-    fireEvent.click(screen.getByRole('button', { name: 'TXT（按说话人归组）' }))
+    // Q3 / D2：区分说话人是转写域下的选项，不再是独立内容源
+    expect(screen.getByRole('button', { name: /转写文本 \/ 字幕/ })).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /转写文本 \/ 字幕/ }))
+    fireEvent.click(screen.getByText('区分说话人'))
+    fireEvent.click(screen.getByRole('button', { name: 'TXT 文章' }))
 
     await waitFor(() => {
       // downloadTranscript 现在接收标题作为第 4 个参数，用于 fallback 文件名

@@ -3772,3 +3772,21 @@
   opacity: 0.35;
   cursor: not-allowed;
 }
+
+/* Q3：转写导出的「区分说话人」选项 */
+.nibi-note-export-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--fg2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.nibi-note-export-toggle input {
+  accent-color: var(--acc);
+  width: 14px;
+  height: 14px;
+}

@@ -19,6 +19,8 @@ export interface AppearanceSettings {
   mode: ThemeMode
   fonts: Record<FontSlotId, string | null>
   uploaded_fonts: UploadedFont[]
+  /** Q3 / D3：Obsidian 直写目的地（非秘密配置） */
+  obsidian?: { vault_path: string; subdir: string; direct_write: boolean }
 }
 
 export const DEFAULT_APPEARANCE: AppearanceSettings = {
@@ -26,6 +28,7 @@ export const DEFAULT_APPEARANCE: AppearanceSettings = {
   mode: 'system',
   fonts: { ui: null, cap: null, sum: null },
   uploaded_fonts: [],
+  obsidian: { vault_path: '', subdir: '', direct_write: false },
 }
 
 export async function fetchSettings(): Promise<AppearanceSettings> {
