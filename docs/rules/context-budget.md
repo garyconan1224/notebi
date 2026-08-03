@@ -2,7 +2,7 @@
 
 > 本文件由 `CLAUDE.md` §7 索引指向。AI 用 `rg -n "^##" docs/rules/context-budget.md` 查目录后再 `sed -n` 读片段，**不要整文件读**。
 >
-> 适用范围：本节约束 **Claude Code 终端版**（当前由 CC Switch 路由到千问）。**不要求 Codex、Claude Desktop 或其他工具照此限制**，其他工具可按各自能力选择更合适的验证方式。
+> 适用范围：本节是 **Claude Code 终端版**的可选参考；NoteBi 默认由 Codex 直接执行。只有用户明确要求 Claude Code 时才适用，且不约束 Codex、Claude Desktop 或其他工具。
 >
 > 目标：保留能力但减少无效上下文。不要用"禁用工具"替代验证；要按下面顺序选最低成本且足够强的证据。
 
@@ -64,7 +64,7 @@
 
 ## 6. `/clear` 接力
 
-**不同问题、互不依赖的批次和每个新 Claude Code 任务必须先 `/clear` 或启动全新会话；只有同一问题返修可以保留上下文。** Claude Code 终端在长任务、跨文件实现、或准备 `/clear` 前，维护本地 checkpoint：`.claude/current-task.md`。这个文件**只放接力信息，不进 git**。
+**用户明确要求使用 Claude Code 时**，不同问题、互不依赖的批次和每个新任务必须先 `/clear` 或启动全新会话；只有同一问题返修可以保留上下文。Claude Code 终端在长任务、跨文件实现、或准备 `/clear` 前，维护本地 checkpoint：`.claude/current-task.md`。这个文件**只放接力信息，不进 git**。
 
 checkpoint 保持短小，只写：
 

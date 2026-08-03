@@ -27,7 +27,7 @@ git branch --show-current
 
 1. 本文件顶部规则。
 2. `docs/AI_HANDOFF.md` 前 80 行。
-3. `docs/rules/agent-roles.md`，用于确认 Codex / Claude Code + 千问接力边界。
+3. `docs/rules/agent-roles.md`，用于确认 Codex 直接执行与可选外部工具边界。
 4. 用户明确点名的计划文件或代码文件。
 
 `git log` 是事实来源。若 `AI_HANDOFF.md` 顶部与最近 commit 冲突，先报告漂移并请求确认，不要按旧文档继续。
@@ -36,29 +36,24 @@ git branch --show-current
 
 ---
 
-## 3. Codex / 千问协作铁律
+## 3. Codex 直接执行铁律
 
 默认协作链：
 
-1. **Codex**：负责调查、实测、根因分析、产品/技术计划和可执行验收标准。
-2. **Claude Code 终端 + 千问**：只按 Codex 已确认的任务执行具体修改、测试和 commit；当前由 CC Switch 路由到千问模型，每次新会话先核对实际模型映射。
-3. **Codex**：Claude Code 完成后独立审查 diff、测试和运行证据，给出通过 / 不通过 / 需要补充验证。
+1. **Codex**：负责调查、实测、根因分析、产品/技术计划、具体实现、测试、提交和最终验证。
+2. **用户**：负责产品取舍、风险停点与是否采用外部工具的决定。
 
-具体执行默认交给 Claude Code 中的千问，不让千问重新做产品规划。执行类计划落地为 `docs/plans/*.md`（背景 / 根因 / 修复方案 / 涉及文件 / 验收 / 给千问的执行须知与红线）；完成并合入后删除计划文件，历史从 Git 提交读取。
+执行类计划落地为 `docs/plans/*.md`（背景 / 根因 / 修复方案 / 涉及文件 / 验收 / 执行红线）；完成并合入后删除计划文件，历史从 Git 提交读取。
 
-**计划 / 调查与执行隔离**：当用户要求“先做计划”“先调查”或尚未明确同意执行时，Codex 只能用本地代码、文档、运行证据和必要的定向测试完成工作；**不得启动 Claude Code + 千问，不得调用 Open Design，也不得为规划生成完整设计稿或重启外部工具**。此阶段的交付应是：问题归类、事实证据、待确认产品决策、分批执行顺序、验收标准和可直接交给千问的提示词。只有用户明确说“执行 / 按计划做”后，才按对应批次启动千问；该批确有 UI 设计需求时，再为该批、该页面调用 Open Design。除非用户在当前轮明确要求把某个外部工具用于计划本身，否则本条优先；不得因外部工具卡住而拖长计划阶段。
+**计划 / 调查与执行隔离**：当用户要求“先做计划”“先调查”或尚未明确同意执行时，Codex 只能用本地代码、文档、运行证据和必要的定向测试完成工作；不得调用外部执行器、Open Design 或为规划生成完整设计稿。交付应包含：问题归类、事实证据、待确认产品决策、分批执行顺序和验收标准。用户明确说“执行 / 按计划做”后，Codex 才在已确认范围内直接实现。
 
-审查不通过时，把 Codex 的具体问题、失败测试和验收差距退回千问修一次；**同一个问题连续两次仍未解决，Codex 直接接管并修复，不再第三次来回转交**。这里的“同一个问题”按同一根因或同一验收项计数；新发现的独立问题重新计数。Codex 接管后仍遵守风险求证、TDD、干净工作区和不主动 push 的规则。
+**Claude Code 是可选工具，不是必经步骤**：只有用户在当前任务明确要求使用 Claude Code / 千问时，Codex 才可启动并监控它；否则不得把实现、测试或 commit 默认转交出去。外部执行结果也必须由 Codex 复验。
 
-**UI/设计分支**：仅在用户已经授权执行、且当前执行批次涉及用户可见 UI 页面、布局、视觉稿、交互流程或视觉审查时，Codex 才可用 Open Design 产出或审查该批设计方案，再把已确认的设计产物、约束和验收点交给千问实现；计划和调查阶段不调用。没有 UI/设计需求时不强制调用。Open Design 是设计/评审工具，不替代千问写生产代码；千问在缺少设计产物或设计与代码事实矛盾时必须停止回报，不得自行猜 UI。Codex 仍独立审查最终 UI 和运行证据。详见 [`docs/rules/agent-roles.md`](docs/rules/agent-roles.md)。
+**UI/设计分支**：仅在用户已经授权执行、且当前批次涉及用户可见 UI 页面、布局、视觉稿、交互流程或视觉审查时，Codex 才可用 Open Design 产出或审查该批设计方案。Open Design 只做设计/评审，不写生产代码；Codex 根据确认的产物直接实现并验证。详见 [`docs/rules/agent-roles.md`](docs/rules/agent-roles.md)。
 
-**会话隔离**：同一问题的返修可以保留上下文；不同问题、互不依赖的子任务，以及每次新建 Claude Code 执行任务前，必须先 `/clear` 或退出后启动全新会话。新会话启动前确认旧 Claude Code 进程已停止、工作区状态已对账，禁止两个执行器并行修改同一工作区。
+产品决策（功能取舍 / 交互方案）仍由用户拍板；Codex 只给事实、选项与建议。
 
-**可见终端优先**：Codex 调用 Claude Code 时，优先使用用户可见的右侧/集成终端；当前界面无法直接写入时，打开前台可见 Terminal 窗口。除非用户明确同意或可见终端不可用，不要把长执行静默放在后台。每批至少在开始、红灯、绿灯、commit 四个节点汇报进度。
-
-产品决策（功能取舍 / 交互方案）仍由用户拍板；Codex 和千问只给事实、选项与建议。
-
-需要完整模板时再读 [`docs/rules/agent-roles.md`](docs/rules/agent-roles.md)。
+需要完整执行与工具边界时再读 [`docs/rules/agent-roles.md`](docs/rules/agent-roles.md)。
 
 ---
 
@@ -137,10 +132,10 @@ git branch --show-current
 | Git 行为 / commit / push | [`docs/rules/git-workflow.md`](docs/rules/git-workflow.md) |
 | Python / TypeScript / UI / 测试风格 | [`docs/rules/code-style.md`](docs/rules/code-style.md) |
 | pipeline / 状态机 / 阈值 / 清理策略 | [`docs/rules/business-contract.md`](docs/rules/business-contract.md) |
-| 模型选择：Codex 规划 / Claude Code + 千问执行 | [`docs/rules/model-strategy.md`](docs/rules/model-strategy.md) |
+| 执行工具选择：Codex 直接执行 / 可选 Claude Code | [`docs/rules/model-strategy.md`](docs/rules/model-strategy.md) |
 | 项目结构 / router / 端口 / 常用命令 | [`docs/rules/project-map.md`](docs/rules/project-map.md) |
-| 千问终端执行加速协议（沿用旧文件名） | [`docs/rules/mimo-onboarding.md`](docs/rules/mimo-onboarding.md) |
-| Codex / Claude Code + 千问接力 | [`docs/rules/agent-roles.md`](docs/rules/agent-roles.md) |
+| 外部执行器历史说明（沿用旧文件名） | [`docs/rules/mimo-onboarding.md`](docs/rules/mimo-onboarding.md) |
+| Codex 直接执行与 Open Design 协作 | [`docs/rules/agent-roles.md`](docs/rules/agent-roles.md) |
 
 产物目录约定：
 
@@ -153,6 +148,6 @@ git branch --show-current
 
 - 是否用中文，并解释了关键操作？
 - 是否只读了必要片段，而不是整文件扫全项目？
-- 是否遵守了 Codex 调查计划 / 千问执行 / Codex 审查与两次失败接管边界？
+- 是否遵守了 Codex 调查、直接实现、独立验证，以及外部工具必须由用户明确指定的边界？
 - 是否触发风险求证项？若触发，是否已经停下来问用户？
 - 是否避免了无关重构、危险命令、主动 push 和脏树 commit 审查？

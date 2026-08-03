@@ -7,11 +7,11 @@
 
 ## Required Reading Order
 
-Follow [`CLAUDE.md` §2 Startup Reading](CLAUDE.md#2-每次启动先做). Codex is the reviewer, so keep startup narrow:
+Follow [`CLAUDE.md` §2 Startup Reading](CLAUDE.md#2-每次启动先做). Codex is the default executor and verifier, so keep startup narrow:
 
 1. `CLAUDE.md` top rules — role boundaries and startup policy
 2. `docs/AI_HANDOFF.md` first 80 lines — current pointer
-3. `docs/rules/agent-roles.md` — Codex / Claude Code + Qwen handoff contract
+3. `docs/rules/agent-roles.md` — Codex direct-execution and optional-tool contract
 4. The specific commit, plan file, or paths named by the user
 
 **Deprecated, do not read for current decisions**: `docs/archive/*`, `docs/conversation-inputs/*`.
@@ -24,27 +24,26 @@ Read `docs/PRODUCT_DECISIONS.md` only when product boundaries matter. Historical
 
 ## Codex Role Boundary (Important, MUST read)
 
-**默认情况下，Codex 负责调查、实测、计划和完成后的独立审查；具体代码执行优先交给 Claude Code 中的千问。若同一问题交给千问连续两次仍未解决，视为用户已授权 Codex 在原任务范围内直接接管修复，并继续遵守停点求证规则。**
+**默认情况下，Codex 负责调查、实测、计划、代码实现、测试、提交和独立验证。Claude Code / 千问不是默认执行器，只有用户在当前任务明确要求时才能调用。**
 
-**计划 / 调查门槛**：当用户要求先计划、先调查或尚未明确授权执行时，Codex 只用本地代码、文档、运行证据和必要的定向测试；不得启动 Claude Code + 千问、调用 Open Design、重启外部工具或生成完整设计稿。先提交证据、待确认选择、批次、验收与执行提示词；只有用户明确说“执行 / 按计划做”后，才按需启动千问。该已授权批次确有 UI 需求时，才为该批、该页面调用 Open Design。用户当前轮明确要求将外部工具用于计划本身时除外。
+**计划 / 调查门槛**：当用户要求先计划、先调查或尚未明确授权执行时，Codex 只用本地代码、文档、运行证据和必要的定向测试；不得启动外部执行器、调用 Open Design、重启外部工具或生成完整设计稿。先提交证据、待确认选择、批次与验收；只有用户明确说“执行 / 按计划做”后，才直接实现。该已授权批次确有 UI 需求时，才为该批、该页面调用 Open Design。用户当前轮明确要求将外部工具用于计划本身时除外。
 
 ### Codex Can Do
 
 - Run tests: `pytest tests/backend -q`, `cd frontend && pnpm test`
 - Investigate live code/runtime evidence and write executable plans with acceptance criteria
-- Start Claude Code + Qwen in a user-visible terminal, monitor progress, and independently review its commit
+- Implement confirmed features directly, using TDD and narrow verification
 - Compare branch diffs: `git diff main..<branch>` with textual review
 - Lint and build checks: `pnpm lint`, `pnpm build`
 - Read `docs/AI_HANDOFF.md`, `docs/PRODUCT_DECISIONS.md`, and the current named plan to suggest next steps
 - Find and report potential issues (bugs, type errors, missing tests)
-- Directly fix the same unresolved issue after two failed Qwen attempts, with narrow tests and no scope expansion
 - Compare multiple agent branches, point out differences, let the user decide which to adopt
-- Invoke Open Design to produce or review UI designs (pages, layouts, visuals, interaction flows), then hand the confirmed artifacts, constraints, and acceptance points to Qwen for implementation. Open Design is a design/review tool only — it never writes production code; do not invoke it when the task has no UI/design need
+- Invoke Open Design to produce or review UI designs (pages, layouts, visuals, interaction flows), then implement confirmed artifacts directly. Open Design is a design/review tool only — it never writes production code; do not invoke it when the task has no UI/design need
 
 ### Codex Must NOT Do（除非用户对当前任务明确授权）
 
 - ❌ **在未获得当前任务明确授权时写新业务功能**（API endpoints、frontend pages、data models 等）
-- ❌ 在千问尚未对同一问题完成两次失败尝试前，跳过默认接力直接实现具体业务功能（用户当前轮明确要求 Codex 直接执行除外）
+- ❌ 在用户未授权执行时写新业务功能；Claude Code 不是默认实现渠道
 - ❌ Commit directly to the `main` branch
 - ❌ Apply / cherry-pick another agent's stash or commit
 - ❌ Treat another agent's worktree branch as `main` for rebasing
@@ -66,9 +65,7 @@ git branch --show-current
 
 **Single-Agent Serial Principle (since 2026-05-18)**: This project no longer runs agents in parallel. If `git status` shows uncommitted changes that don't belong to the current task, or the current branch doesn't match expectations — **stop immediately and ask the user**, do not continue.
 
-**Visible Terminal + Fresh Session**: Prefer the Codex right-side/integrated terminal for Claude Code so the user can watch progress. If unavailable, open a foreground Terminal window. Before every new unrelated Claude Code task, run `/clear` or start a fresh Claude session; confirm the previous process has stopped. Preserve context only for retries of the same issue.
-
-**Two-Attempt Takeover**: After each Qwen commit, Codex independently reviews it. Return the first failed review to Qwen with concrete evidence. If the same root cause or acceptance item is still unresolved after the second Qwen attempt, Codex fixes it directly; do not send a third retry.
+**Optional Claude Code**: Only start Claude Code when the user expressly asks for it in the current task. Reconcile Git state before and after use; do not treat it as a requirement or default handoff.
 
 **用户明确授权后的停点规则**：即使本轮允许 Codex 执行，只要实际代码、数据结构、接口、依赖、范围或产品行为与计划不一致，也必须立即停下，用中文列出事实和选项，等待用户确认；不得自行想当然。
 

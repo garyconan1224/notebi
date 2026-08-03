@@ -3,7 +3,7 @@
 状态：**用户于 2026-08-03 回复“按计划做”，D1–D7 推荐方案已确认，进入串行执行；Q8 仍须在模型下载与许可证接受前单独停点**
 调查基线：`7b47c6a`（分支 `codex/continue-product-redesign`）
 目标平台：macOS / Linux；本计划不启动 Windows、安装包或整合包工作
-执行方式：OpenDesign 冻结 UI → Claude Code 中的千问逐批 TDD 执行并提交 → Codex 独立审核
+执行方式：Codex 逐批 TDD 直接实现并验证；UI 批次按需使用 OpenDesign 设计/评审
 远端策略：只保留本地分支和提交，不 push
 
 ## 1. 目标与边界
@@ -203,7 +203,7 @@
 - `notebi-2026-08-02-ui-spec.md`
 - `notebi-2026-08-02-theme-systems.md`
 
-绝对目录（千问直接读取，不复制进业务源码）：
+绝对目录（Codex 在 UI 批次按需读取，不复制进业务源码）：
 
 `/Users/conan/Library/Application Support/Open Design/namespaces/release-stable/data/projects/2bd11d3f-ecc1-4d2c-89b5-d7e95b41c8d1/`
 
@@ -213,12 +213,12 @@
 交互 HTML > theme systems。主题文档末尾提到的 localStorage 仅可做即时预览，持久化必须以 D6 和 UI
 规格第 7 节的后端 GET/PATCH/readback 为准；HTML 内的 SettingsStore 只是原型模拟，不是实现接口。
 
-千问不得凭文字自行发明新版布局；Q2、Q3、Q4、Q5、Q6 必须以这三个产物和当前代码共同为准。
-若产物与真实组件/数据契约不一致，立即停下交 Codex 报告，不得修改产品语义来迁就设计稿。
+Codex 不得凭文字自行发明新版布局；Q2、Q3、Q4、Q5、Q6 必须以这三个产物和当前代码共同为准。
+若产物与真实组件/数据契约不一致，立即停下向用户报告，不得修改产品语义来迁就设计稿。
 
-## 6. 千问执行总规则
+## 6. Codex 执行总规则
 
-每个批次使用新的 Claude Code 会话或先 `/clear`，严格串行：
+每个批次由 Codex 严格串行执行：
 
 1. 读取 `CLAUDE.md`、`docs/AI_HANDOFF.md` 前 80 行、
    `docs/rules/agent-roles.md` 和本计划对应批次；
@@ -228,7 +228,7 @@
 5. 只改本批次列出的文件族；实际契约、数据结构、依赖或产品行为与计划不同立即停止；
 6. 跑窄测试、相关回归、`git diff --check`；UI 批次还要跑 Playwright 截图/重叠矩阵；
 7. 一个批次一个本地 commit，不 push；在提交说明里列出测试命令和未验证边界；
-8. 交回 Codex 独立审核。首次不通过按证据修一次；同根因第二次仍未解决后由 Codex 接管。
+8. Codex 独立复核自己的 diff、测试和运行证据；不以执行汇报替代验证。
 
 禁止：
 
@@ -517,7 +517,7 @@ CSS zoom：100%、125%、150%。
 
 ## 9. Codex 审核门槛
 
-每个 Qwen commit 都按以下顺序独立验证：
+每个 Codex commit 都按以下顺序验证：
 
 1. commit 基线与 diff 范围；
 2. 先看新增红灯测试是否真的会在旧代码失败；
@@ -527,4 +527,4 @@ CSS zoom：100%、125%、150%。
 6. 对日志/导出/字体/模型检查隐私、路径和临时文件；
 7. 给出明确“通过/不通过”和证据。
 
-同根因首次不通过回给 Qwen一次；第二次仍失败，Codex 在原批次范围接管修复。
+发现不通过时，Codex 在原批次范围直接补充修复与验证；超出已确认范围则按停点规则向用户求证。

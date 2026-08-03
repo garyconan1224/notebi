@@ -139,7 +139,9 @@ cd frontend && pnpm build       # tsc -b && vite build
 
 本项目已初始化本地代码知识图谱 CodeGraph（已配置 `.gitignore` 过滤 `.codegraph/` 缓存）。
 
-### 4.1 Claude Code 终端版接入步骤
+### 4.1 Claude Code 终端版接入步骤（仅用户明确要求时手动使用）
+
+> NoteBi 默认由 Codex 直接执行；本节只保留给用户自行使用 Claude Code 时参考，Codex 不会把它作为默认执行环节。
 
 1. **添加 MCP 服务**：在终端运行以下命令，将 CodeGraph 注册到 Claude Code：
 
