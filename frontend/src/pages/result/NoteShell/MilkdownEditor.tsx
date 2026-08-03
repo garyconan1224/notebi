@@ -6,10 +6,11 @@
  *
  * re-seed 策略：由外部 key={noteId+seedVersion} 控制重挂，
  * 内部不自动重设 defaultValue（防光标跳动 + 保存死循环）。
- * 首帧 markdownUpdated 不触发保存（skipFirstRef 守卫）。
+ * 首挂保存边界：mounted 时用编辑器自己的序列化器捕获初始 canonical 内容作为
+ * 基线（createNoteSeedGuard），规范化不触发保存，真实编辑才保存。
  */
 import { useEffect, useRef } from 'react'
-import { Editor, rootCtx, defaultValueCtx, prosePluginsCtx, editorViewCtx } from '@milkdown/core'
+import { Editor, rootCtx, defaultValueCtx, prosePluginsCtx, editorViewCtx, serializerCtx } from '@milkdown/core'
 import { Plugin, TextSelection } from '@milkdown/prose/state'
 import { Milkdown, MilkdownProvider, useEditor, useInstance } from '@milkdown/react'
 import { commonmark } from '@milkdown/preset-commonmark'
@@ -19,6 +20,7 @@ import { prism } from '@milkdown/plugin-prism'
 import { nord } from '@milkdown/theme-nord'
 import '@milkdown/theme-nord/style.css'
 import { timestampPlugin, unescapeNoteTimestamps } from './milkdownTimestamp'
+import { createNoteSeedGuard, type NoteSeedGuard } from './milkdownSeedGuard'
 import { useLnEditorStore } from '@/store/lnEditorStore'
 import {
   getEditorFormattingState,
@@ -38,9 +40,12 @@ function MilkdownEditorInner({
   onSeek,
   registerCommands = true,
 }: MilkdownEditorProps) {
-  // 记住挂载时的初始内容：seed 触发的 markdownUpdated（md 等于初值）跳过，
-  // 用户真实编辑（md 已变）才上抛保存。避免「首次编辑被吞」（旧 skipFirstRef 的坑）。
-  const initialMdRef = useRef(markdown)
+  // 「初始 canonical 内容」守卫：首挂规范化不保存，内容偏离基线才保存。
+  // 懒初始化，保证每次挂载（key 变化重挂）都拿到以当次 seed 建立的新守卫。
+  const guardRef = useRef<NoteSeedGuard | null>(null)
+  if (guardRef.current === null) {
+    guardRef.current = createNoteSeedGuard(markdown)
+  }
   // 避免 timestampPlugin 闭包捕获旧 onSeek
   const onSeekRef = useRef(onSeek)
   onSeekRef.current = onSeek
@@ -51,14 +56,27 @@ function MilkdownEditorInner({
         .config((ctx: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
           ctx.set(rootCtx, root)
           ctx.set(defaultValueCtx, markdown)
-          ctx.get(listenerCtx).markdownUpdated((_ctx: any, md: string) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-            // 先反转义时间码方括号（Milkdown commonmark 序列化器会把 [ 转义成 \[），
-            // 保证 seed 比较和落盘都用裸文本。
-            const normalized = unescapeNoteTimestamps(md)
-            // seed 初值不触发保存；内容变化才保存（trim 抵消 Milkdown 规范化的首尾空白差异）
-            if (normalized.trim() === initialMdRef.current.trim()) return
-            onMarkdownChange(normalized)
-          })
+          ctx.get(listenerCtx)
+            .markdownUpdated((_ctx: any, md: string) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+              // 先反转义时间码方括号（Milkdown commonmark 序列化器会把 [ 转义成 \[），
+              // 保证基线比较和落盘都用裸文本。
+              const normalized = unescapeNoteTimestamps(md)
+              if (!guardRef.current?.shouldSave(normalized)) return
+              onMarkdownChange(normalized)
+            })
+            .mounted((mctx: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+              // 挂载完成：用编辑器自己的序列化器捕获初始 doc 的 canonical 形式。
+              // 之后 markdownUpdated 的内容若等于该基线，即为首挂规范化/无变化，不保存。
+              try {
+                const view = mctx.get(editorViewCtx)
+                const serializer = mctx.get(serializerCtx)
+                guardRef.current?.captureBaseline(
+                  unescapeNoteTimestamps(serializer(view.state.doc)),
+                )
+              } catch {
+                // 捕获失败时退回「与原始 seed 比较」的兜底路径
+              }
+            })
           // 注册时间码 decoration 插件
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ctx.update(prosePluginsCtx, (ps: any) => {

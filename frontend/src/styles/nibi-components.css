@@ -1314,8 +1314,11 @@
 
 .capture-interval {
   gap: 5px;
-  height: 28px;
-  padding: 0 8px;
+  /* 不用固定 height：内含 PositiveIntInput（输入框 + 快捷按钮行，自然两行）。
+     用 min-height 保持单行视觉高度，flex-wrap 允许内容自然换行，避免溢出重叠。 */
+  min-height: 28px;
+  flex-wrap: wrap;
+  padding: 3px 8px;
   border: 1px solid var(--bdr);
   border-radius: var(--rs);
   background: var(--srf);

@@ -61,7 +61,7 @@ export function PositiveIntInput({
   }
 
   return (
-    <span className="inline-flex flex-col gap-1">
+    <span className="inline-flex max-w-full flex-col gap-1">
       <input
         type="number"
         min={1}

@@ -59,7 +59,12 @@ mixinKeyEncTab = [
 
 
 def extract_bvid_from_url(url: str) -> Optional[str]:
-    """从B站URL提取BVID"""
+    """从B站URL提取BVID
+
+    BV 号 payload 大小写敏感（B站API按原大小写匹配），只规范 b/v 前缀为 "BV"，
+    不得整体 upper——整体大写会把混合大小写的有效 BV 号变成无效号，
+    导致 get_meta 拿不到封面/元信息。
+    """
     patterns = [
         r'bilibili\.com/video/([Bb][Vv][A-Za-z0-9]+)',
         r'bilibili\.com/video/([Bb][Vv][A-Za-z0-9]+)/',
@@ -71,10 +76,57 @@ def extract_bvid_from_url(url: str) -> Optional[str]:
         match = re.search(pattern, url)
         if match:
             bvid = match.group(1)
-            if not bvid.upper().startswith('BV'):
-                bvid = f'BV{bvid}'
-            return bvid.upper()
+            if len(bvid) >= 2 and bvid[:2].upper() == 'BV':
+                # 前缀规范为 BV，payload 保留原大小写
+                return f'BV{bvid[2:]}'
+            return f'BV{bvid}'
     return None
+
+
+# JSON 解析失败时的响应体摘要长度上限（防止把整个风控页写进日志）
+_LOG_BODY_LIMIT = 200
+
+# 摘要脱敏：命中这些敏感键时，把键后的值整体替换为 ***。
+# 值可能跨多个 token（如 "Bearer abc123"），Bearer 前缀一并吞掉。
+_SENSITIVE_SUMMARY_RE = re.compile(
+    r'(?i)\b(cookie|set-cookie|sessdata|access[-_]?token|token|authorization'
+    r'|api[-_]?key|secret|password|passwd|credential)'
+    r'(\s*[=:]\s*)'
+    r'(?:Bearer\s+)?'
+    r'\S+'
+)
+
+
+def _redact_summary(text: str) -> str:
+    """对日志摘要做敏感值脱敏：敏感键的值整体替换为 ***。"""
+    return _SENSITIVE_SUMMARY_RE.sub(r'\1\2***', text)
+
+
+def _parse_api_json(resp, context: str):
+    """解析 B 站 API 的 JSON 响应。
+
+    解析失败时记录可诊断的上下文（HTTP 状态码、content-type、有长度上限且脱敏的
+    响应体摘要），然后原样抛出 JSONDecodeError。不记录 Set-Cookie 等敏感响应头。
+    """
+    try:
+        return resp.json()
+    except json.JSONDecodeError:
+        status = getattr(resp, 'status_code', '?')
+        headers = getattr(resp, 'headers', None)
+        content_type = 'unknown'
+        if headers is not None:
+            try:
+                content_type = headers.get('content-type', 'unknown')
+            except Exception:
+                content_type = 'unknown'
+        body = getattr(resp, 'text', '') or ''
+        # 先脱敏再截断，避免截断点恰好把敏感值切成半截残留
+        summary = _redact_summary(body)[:_LOG_BODY_LIMIT]
+        logger.warning(
+            "%s：响应不是有效 JSON（HTTP %s，content-type=%s，响应体前 %d 字符摘要）：%r",
+            context, status, content_type, _LOG_BODY_LIMIT, summary,
+        )
+        raise
 
 
 def get_mixin_key(orig: str) -> str:
@@ -139,7 +191,7 @@ class BilibiliNoCookieDownloader(Downloader):
         resp = self.session.get(NAV_API, timeout=10)
         resp.raise_for_status()
 
-        data = resp.json()
+        data = _parse_api_json(resp, "获取WBI密钥")
         if data.get('code') != 0:
             raise Exception(f"获取WBI密钥失败: {data.get('message')}")
 
@@ -172,7 +224,7 @@ class BilibiliNoCookieDownloader(Downloader):
         resp = self.session.get(VIEW_API, params=params, timeout=15)
         resp.raise_for_status()
 
-        data = resp.json()
+        data = _parse_api_json(resp, "获取视频信息")
         if data.get('code') != 0:
             raise Exception(f"获取视频信息失败: {data.get('message')}")
 
@@ -231,7 +283,7 @@ class BilibiliNoCookieDownloader(Downloader):
         resp = self.session.get(SUBTITLE_API, params=params, timeout=15)
         resp.raise_for_status()
 
-        data = resp.json()
+        data = _parse_api_json(resp, "获取字幕列表")
         if data.get('code') != 0:
             logger.warning(f"字幕API调用失败: {data.get('message')}")
             return None
@@ -272,7 +324,7 @@ class BilibiliNoCookieDownloader(Downloader):
         sub_resp = self.session.get(subtitle_url, timeout=10)
         sub_resp.raise_for_status()
 
-        sub_data = sub_resp.json()
+        sub_data = _parse_api_json(sub_resp, "获取字幕内容")
 
         # 解析字幕段落
         segments = []
@@ -329,7 +381,7 @@ class BilibiliNoCookieDownloader(Downloader):
                                params=params, timeout=15)
         resp.raise_for_status()
 
-        data = resp.json()
+        data = _parse_api_json(resp, "获取播放链接")
         if data.get('code') != 0:
             raise Exception(f"playurl API调用失败: {data.get('message')}")
 
