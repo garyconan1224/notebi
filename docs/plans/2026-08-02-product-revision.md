@@ -1,6 +1,6 @@
 # NoteBi 2026-08-02 产品修订执行计划
 
-状态：**用户于 2026-08-03 回复“按计划做”，D1–D7 推荐方案已确认，进入串行执行；Q8 仍须在模型下载与许可证接受前单独停点**
+状态：**Q1–Q7 已全部完成并提交（D1–D7 落地）；Q8 CrisperWhisper POC 未启动——仍须在模型下载与许可证接受前单独停点确认**
 调查基线：`7b47c6a`（分支 `codex/continue-product-redesign`）
 目标平台：macOS / Linux；本计划不启动 Windows、安装包或整合包工作
 执行方式：Codex 逐批 TDD 直接实现并验证；UI 批次按需使用 OpenDesign 设计/评审
