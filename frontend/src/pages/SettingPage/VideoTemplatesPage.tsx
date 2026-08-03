@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Pencil, RotateCcw, Trash2, Copy, Plus, X } from 'lucide-react'
+import { Eye, EyeOff, Pencil, RotateCcw, Trash2, Copy, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +15,7 @@ import {
   deleteTemplate,
   duplicateTemplate,
   resetTemplate,
+  setTemplateVisibility,
 } from '@/services/templates'
 
 type ModalMode = 'closed' | 'create' | 'edit'
@@ -173,6 +174,25 @@ export default function VideoTemplatesPage() {
     }
   }
 
+  // Q5：切换模板「新建可见」，以服务端回读值更新本地状态
+  const handleToggleVisibility = async (t: VideoTemplateItem) => {
+    const nextVisible = t.show_in_create === false
+    setBusyId(t.template_id)
+    try {
+      const saved = await setTemplateVisibility(t.template_id, nextVisible)
+      setTemplates((prev) => prev.map((item) => (
+        item.template_id === t.template_id
+          ? { ...item, show_in_create: saved.show_in_create }
+          : item
+      )))
+      useTemplateStore.getState().invalidate(category)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '保存可见性失败')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   const meta = CATEGORY_META[category]
 
   return (
@@ -242,6 +262,18 @@ export default function VideoTemplatesPage() {
                 </p>
               </div>
               <div className="flex items-center gap-1 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => handleToggleVisibility(t)}
+                  disabled={busyId === t.template_id}
+                  aria-pressed={t.show_in_create !== false}
+                  title={t.show_in_create !== false ? '新建弹窗可见，点击隐藏' : '新建弹窗已隐藏，点击恢复'}
+                >
+                  {t.show_in_create !== false ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+                  {t.show_in_create !== false ? '新建可见' : '已隐藏'}
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"

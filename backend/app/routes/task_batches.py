@@ -393,6 +393,14 @@ def create_batch(req: BatchCreateRequest) -> Dict[str, Any]:
             source_url = str(item.get("source_url") or "")
             workspace_item_id = str(uuid.uuid4())
             source_title = str(item.get("source_title") or "").strip() or source_url
+            # Q5：批量条目类型以来源识别为准；未识别落 unknown，由 pipeline
+            # probe 回写真实类型——绝不默认硬建 video（反馈 #16）。
+            resolved_item_type = str(item.get("item_type") or "").strip().lower()
+            item_type = (
+                resolved_item_type
+                if resolved_item_type in {"video", "audio", "image", "text"}
+                else "unknown"
+            )
             frame_analysis = bool(effective_settings.get("frame_analysis", True))
             summary_template = str(effective_settings.get("note_style") or "standard")
             note_type = str(effective_settings.get("note_type") or "auto")
@@ -419,7 +427,7 @@ def create_batch(req: BatchCreateRequest) -> Dict[str, Any]:
                 target_workspace_id,
                 WorkspaceItem(
                     item_id=workspace_item_id,
-                    type=ItemType.VIDEO.value,
+                    type=item_type,
                     source="local" if req.source_type == "local_files" else "url",
                     source_value=source_url,
                     name=source_title,
@@ -459,7 +467,7 @@ def create_batch(req: BatchCreateRequest) -> Dict[str, Any]:
                 "intent": "note",
                 "note_media_kind": note_type,
                 "source_type": "local" if req.source_type == "local_files" else "link",
-                "kind_hint": ItemType.VIDEO.value,
+                "kind_hint": item_type if item_type != "unknown" else "auto",
                 "summary_template": summary_template,
                 "diarize": diarize,
                 "summary_mode": summary_mode,

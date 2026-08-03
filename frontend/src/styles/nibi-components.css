@@ -521,6 +521,18 @@
   display: block;
 }
 
+/* Q5：待识别条目的虚线空心点，不伪装成视频 */
+.batch-source-unknown-dot {
+  width: 16px;
+  height: 16px;
+  border: 1.5px dashed oklch(100% 0 0 / .6);
+  border-radius: 999px;
+}
+
+.batch-source-duration[data-type='unknown'] {
+  border: 1px dashed var(--bdrs, rgba(25, 20, 16, 0.2));
+}
+
 .batch-source-main {
   min-width: 0;
 }
@@ -1498,6 +1510,8 @@ body.nibi-sidebar-compact .note-grid:not([class*="note-grid--cols-"]) { --nibi-c
 }
 .cover-image  { background: linear-gradient(135deg, oklch(88% 0.07 85),  oklch(76% 0.15 48),  oklch(82% 0.12 60));  }
 .cover-text   { background: linear-gradient(135deg, oklch(96% 0.008 80), oklch(93% 0.012 75)); }
+/* Q5：待识别素材封面——中性灰，不使用任何类型暗示 */
+.cover-unknown { background: oklch(90% 0.005 80); }
 
 .media-chip {
   position: absolute;
@@ -1538,6 +1552,15 @@ body.nibi-sidebar-compact .note-grid:not([class*="note-grid--cols-"]) { --nibi-c
   color: oklch(100% 0 0 / .76);
 }
 .cover-icon svg { width: 42px; height: 42px; }
+
+/* Q5：未知/待识别类型——虚线空心圆，绝不伪装成视频播放钮 */
+.cover-icon--unknown {
+  width: 34px;
+  height: 34px;
+  border: 2px dashed oklch(100% 0 0 / .65);
+  border-radius: 999px;
+  background: transparent;
+}
 
 .audio-wave {
   position: absolute;

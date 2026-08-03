@@ -347,6 +347,11 @@
   background: var(--accent-warm);
   color: #111;
 }
+/* Q5：待识别类型——中性灰 + 虚线描边，不冒充任何具体类型 */
+.mat-type[data-tone='neutral'] {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px dashed rgba(255, 255, 255, 0.65);
+}
 .mat-prog {
   position: absolute;
   bottom: 0;

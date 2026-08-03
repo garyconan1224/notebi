@@ -9,7 +9,7 @@ export interface LibraryItem {
   workspace_id: string
   workspace_name: string
   workspace_kind: 'note'
-  type: 'video' | 'audio' | 'image' | 'text'
+  type: 'video' | 'audio' | 'image' | 'text' | 'unknown'
   source: 'url' | 'local'
   source_value: string
   name: string

@@ -24,6 +24,8 @@ export interface VideoTemplateItem {
   use_case?: string
   speaker_aware_only?: boolean
   group?: 'general' | 'speaker_aware'
+  /** Q5：是否在「新建」弹窗可见；缺省 true（旧数据兼容） */
+  show_in_create?: boolean
 }
 
 const BASE = '/templates'
@@ -70,6 +72,18 @@ export async function duplicateTemplate(
   const res = await http.post<VideoTemplateItem>(
     `${BASE}/${templateId}/duplicate`,
     body,
+  )
+  return res.data
+}
+
+/** Q5：设置模板「新建可见」，返回服务端回读值。 */
+export async function setTemplateVisibility(
+  templateId: string,
+  showInCreate: boolean,
+): Promise<{ template_id: string; show_in_create: boolean }> {
+  const res = await http.patch<{ template_id: string; show_in_create: boolean }>(
+    `${BASE}/${templateId}/visibility`,
+    { show_in_create: showInCreate },
   )
   return res.data
 }

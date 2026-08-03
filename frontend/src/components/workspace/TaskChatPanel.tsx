@@ -4,6 +4,7 @@ import {
   CheckCheck,
   FileAudio,
   FileImage,
+  FileQuestion,
   FileText,
   FileVideo,
   Loader2,
@@ -35,6 +36,7 @@ const ITEM_TYPE_ICON: Record<ItemType, typeof FileVideo> = {
   audio: FileAudio,
   image: FileImage,
   text: FileText,
+  unknown: FileQuestion,
 }
 
 /**

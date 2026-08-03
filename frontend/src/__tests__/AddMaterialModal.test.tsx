@@ -803,3 +803,126 @@ describe('AddMaterialModal', () => {
     expect(footer!.textContent).toContain('笔记')
   })
 })
+
+describe('AddMaterialModal Q5：自动类型与模板可见性', () => {
+  beforeEach(() => {
+    navigateMock.mockClear()
+    sniffUrlMock.mockReset()
+    resolveBatchSourceMock.mockReset()
+    createTaskBatchMock.mockReset()
+    getWorkspaceMock.mockReset()
+    fetchTemplatesMock.mockReset()
+    fetchTemplatesMock.mockResolvedValue([])
+    getTaskDefaultsMock.mockResolvedValue({
+      summary_template: 'standard',
+      video_frame_analysis: true,
+      frame_interval_sec: 5,
+      diarize: false,
+      speaker_count: null,
+    })
+    probeDurationMock.mockResolvedValue({ duration_sec: 0 })
+    fetchLinkPreviewMock.mockImplementation(() => new Promise(() => {}))
+    createTaskBatchMock.mockResolvedValue({
+      batch_id: 'batch-1',
+      target_workspace_id: 'workspace-1',
+      items: [],
+    })
+    getWorkspaceMock.mockResolvedValue({
+      workspace_id: 'workspace-1',
+      name: '批量合集',
+      items: [],
+    })
+  })
+
+  it('批量提交保留 auto 类型，不再硬编码 video', async () => {
+    resolveBatchSourceMock.mockResolvedValue({
+      source_type: 'multi_url',
+      source_url: '',
+      title: '批量合集',
+      items: [{
+        source_url: 'https://example.com/1',
+        title: '第一条',
+        index: 1,
+        external_id: 'video-1',
+      }],
+    })
+    render(<AddMaterialModal open onOpenChange={vi.fn()} workspaceIds={['ws-1']} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /批量合集/ }))
+    const urlInput = screen.getByPlaceholderText(/B站|小红书|抖音|YouTube|本地文件路径/)
+    fireEvent.change(urlInput, {
+      target: { value: 'https://example.com/1\nhttps://example.com/2' },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/提交批量/)).toBeTruthy()
+    }, { timeout: 3000 })
+    fireEvent.click(screen.getByRole('button', { name: /提交批量/ }))
+
+    await waitFor(() => expect(createTaskBatchMock).toHaveBeenCalled())
+    const payload = createTaskBatchMock.mock.calls[0][0]
+    // auto 必须原样下发给后端，由 probe 决定真实类型
+    expect(payload.settings.note_type).toBe('auto')
+    // 配图分析保持用户开关（默认开），不因类型未识别而关掉
+    expect(payload.settings.frame_analysis).toBe(true)
+  })
+
+  it('批量识别结果里未知类型行显示待识别，不标视频', async () => {
+    resolveBatchSourceMock.mockResolvedValue({
+      source_type: 'multi_url',
+      source_url: '',
+      title: '批量合集',
+      items: [{
+        source_url: 'https://example.com/unknown-1',
+        title: '未知内容',
+        external_id: 'u-1',
+      }],
+    })
+    render(<AddMaterialModal open onOpenChange={vi.fn()} workspaceIds={['ws-1']} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /批量合集/ }))
+    const urlInput = screen.getByPlaceholderText(/B站|小红书|抖音|YouTube|本地文件路径/)
+    fireEvent.change(urlInput, {
+      target: { value: 'https://example.com/unknown-1\nhttps://example.com/unknown-2' },
+    })
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/待识别/).length).toBeGreaterThan(0)
+    }, { timeout: 3000 })
+    // 未知行不得默认标「视频」
+    const rows = document.querySelectorAll('.batch-source-row')
+    expect(rows.length).toBeGreaterThan(0)
+    rows.forEach((row) => {
+      expect(row.textContent).not.toMatch(/^视频$|>视频</)
+    })
+  })
+
+  it('所有模板隐藏时回退标准总结并给设置入口', async () => {
+    fetchTemplatesMock.mockResolvedValue([
+      { template_id: 'standard', name: '标准总结', prompt: '', is_builtin: true, category: 'style_video_with_frames', created_at: '', updated_at: '', show_in_create: false },
+      { template_id: 'detailed', name: '详细要点', prompt: '', is_builtin: true, category: 'style_video_with_frames', created_at: '', updated_at: '', show_in_create: false },
+    ])
+    render(<AddMaterialModal open onOpenChange={vi.fn()} workspaceIds={['ws-1']} />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/可见模板已全部隐藏/)).toBeTruthy()
+    })
+    // 提供进入模板设置的入口
+    expect(screen.getByRole('button', { name: /前往模板设置/ })).toBeTruthy()
+  })
+
+  it('show_in_create=false 的模板不出现在风格选项里', async () => {
+    fetchTemplatesMock.mockResolvedValue([
+      { template_id: 'standard', name: '标准总结', prompt: '', is_builtin: true, category: 'style_video_with_frames', created_at: '', updated_at: '', show_in_create: true },
+      { template_id: 'hidden-one', name: '隐藏模板甲', prompt: '', is_builtin: false, category: 'style_video_with_frames', created_at: '', updated_at: '', show_in_create: false },
+    ])
+    render(<AddMaterialModal open onOpenChange={vi.fn()} workspaceIds={['ws-1']} />)
+
+    await waitFor(() => expect(fetchTemplatesMock).toHaveBeenCalled())
+    // 打开风格下拉，隐藏模板不应出现
+    fireEvent.click(screen.getByRole('combobox', { name: '笔记风格' }))
+    await waitFor(() => {
+      expect(screen.queryByText('隐藏模板甲')).toBeNull()
+    })
+  })
+})

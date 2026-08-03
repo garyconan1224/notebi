@@ -22,6 +22,8 @@ export function itemTypeLabel(type?: string): string {
   if (type === 'audio') return '音频'
   if (type === 'image') return '图片'
   if (type === 'text') return '文本'
+  // Q5：probe 回写前的未知类型，不得默认标成视频
+  if (type === 'unknown') return '待识别'
   return '视频'
 }
 
@@ -298,6 +300,9 @@ export function MaterialSourcePanel({
                 {batchResult.items.map((item, idx) => {
                   const itemKey = batchSourceItemKey(item, idx)
                   const checked = batchSelectedKeys.has(itemKey)
+                  // Q5：合集/播放列表类来源可确定是视频；多链接来源逐条未知，
+                  // 显示「待识别」而不是默认视频（反馈 #16）。
+                  const rowResolved = batchResult.source_type === 'multi_url' ? 'unknown' : 'video'
                   return (
                     <button
                       key={itemKey}
@@ -324,8 +329,10 @@ export function MaterialSourcePanel({
                             referrerPolicy="no-referrer"
                             onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                           />
-                        ) : (
+                        ) : rowResolved === 'video' ? (
                           <Video size={15} />
+                        ) : (
+                          <span className="batch-source-unknown-dot" aria-hidden />
                         )}
                       </span>
                       <span className="batch-source-main">
@@ -336,9 +343,18 @@ export function MaterialSourcePanel({
                           {item.source_url}
                         </span>
                       </span>
-                      <span className="kw batch-source-duration">
-                        {item.duration_seconds ? formatDuration(Math.round(item.duration_seconds)) : item.platform || '视频'}
-                      </span>
+                      {item.duration_seconds ? (
+                        <span className="kw batch-source-duration">
+                          {formatDuration(Math.round(item.duration_seconds))}
+                        </span>
+                      ) : (
+                        <span
+                          className="kw batch-source-duration"
+                          data-type={rowResolved}
+                        >
+                          {rowResolved === 'video' ? (item.platform || '视频') : '待识别'}
+                        </span>
+                      )}
                     </button>
                   )
                 })}

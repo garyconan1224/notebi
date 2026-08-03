@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { FileVideo, FileAudio, FileImage, FileText, Check, Star, Trash2 } from 'lucide-react'
+import { FileVideo, FileAudio, FileImage, FileText, FileQuestion, Check, Star, Trash2 } from 'lucide-react'
 import type { WorkspaceItem, ItemType } from '@/types/workspace'
 import { resolveItemRoute } from '@/lib/resolveItemRoute'
 import { SYSTEM_TAG_DIMENSIONS } from '@/constants/tagDimensions'
@@ -10,6 +10,7 @@ const TYPE_ICON: Record<ItemType, React.ElementType> = {
   audio: FileAudio,
   image: FileImage,
   text: FileText,
+  unknown: FileQuestion,
 }
 
 /** 类型 → 中文 label */
@@ -18,6 +19,7 @@ const TYPE_LABEL: Record<ItemType, string> = {
   audio: '音频',
   image: '图片',
   text: '文字',
+  unknown: '待识别',
 }
 
 /** 类型 → 设计稿 tone（颜色语义） */
@@ -26,6 +28,7 @@ const TYPE_TONE: Record<ItemType, string> = {
   audio: 'purple',
   image: 'blue',
   text: 'amber',
+  unknown: 'neutral',
 }
 
 function getMaterialThumbnail(item: WorkspaceItem): string | null {

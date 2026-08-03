@@ -18,6 +18,8 @@ const TYPE_LABEL: Record<string, string> = {
   audio: 'AUDIO',
   image: 'IMAGE',
   text:  'TEXT',
+  // Q5：probe 回写前的未知类型，不得显示成任何具体类型
+  unknown: 'AUTO',
 }
 
 function visibleTags(tags?: ItemTags): string[] {
@@ -134,6 +136,9 @@ export function ItemCard({ item, selected, selectMode, onToggleSelect, onDelete,
           <div className="doc-lines">
             {Array.from({ length: 4 }, (_, i) => <i key={i} />)}
           </div>
+        )}
+        {!hasThumb && item.type === 'unknown' && (
+          <div className="cover-icon cover-icon--unknown" aria-label="待识别内容" />
         )}
 
         {/* selection / actions overlay */}

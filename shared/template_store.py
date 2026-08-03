@@ -19,6 +19,9 @@ from typing import Any
 ROOT_DIR: Path = Path(__file__).resolve().parent.parent
 STORE_DIR: Path = ROOT_DIR / ".local"
 STORE_PATH: Path = STORE_DIR / "video_templates.json"
+# Q5（反馈 #12）：模板「新建可见」持久化。独立小文件，不改动模板本体；
+# 旧数据缺省即可见（True），不做迁移。
+VISIBILITY_PATH: Path = STORE_DIR / "template_visibility.json"
 
 
 @dataclass
@@ -151,3 +154,31 @@ def duplicate_template(template_id: str, source_prompt: str) -> VideoTemplate | 
     templates.append(new_t)
     save_templates(templates)
     return new_t
+
+
+# ── Q5：模板「新建可见」（show_in_create）─────────────────────
+
+
+def load_visibility() -> dict[str, bool]:
+    """读取 template_id → 是否在「新建」弹窗可见；缺省视为 True。"""
+    _ensure_store_dir()
+    if not VISIBILITY_PATH.is_file():
+        return {}
+    try:
+        raw = json.loads(VISIBILITY_PATH.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            return {}
+        return {str(k): bool(v) for k, v in raw.items()}
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def set_template_visibility(template_id: str, visible: bool) -> None:
+    """写入单个模板的新建可见性并落盘。"""
+    _ensure_store_dir()
+    visibility = load_visibility()
+    visibility[str(template_id)] = bool(visible)
+    VISIBILITY_PATH.write_text(
+        json.dumps(visibility, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )

@@ -185,6 +185,8 @@ const DEFAULTS_BY_TYPE_AND_ID: Record<
     translate: { ...DEFAULT_TEXT_TRANSLATE },
     multi: { enabled: false },
   },
+  // Q5：probe 回写前没有可配置任务，保持空默认
+  unknown: {},
 }
 
 /**
@@ -284,6 +286,9 @@ export function getTopLevelTasks(type: ItemType): TopLevelTask[] {
         { id: 'translate', label: '翻译' },
         { id: 'multi', label: '多文对比', desc: '与同任务其他文本对比' },
       ]
+    case 'unknown':
+      // Q5：类型未识别时没有可配置任务
+      return []
   }
 }
 

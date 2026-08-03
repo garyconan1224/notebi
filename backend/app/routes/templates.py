@@ -22,7 +22,9 @@ from shared.template_store import (
     duplicate_template,
     load_templates,
     load_templates_by_category,
+    load_visibility,
     save_templates,
+    set_template_visibility,
     update_template,
 )
 
@@ -91,6 +93,12 @@ class TemplateUpdateRequest(BaseModel):
 
 class DuplicateRequest(BaseModel):
     source_prompt: str = Field(..., min_length=1, max_length=20000)
+
+
+class TemplateVisibilityRequest(BaseModel):
+    """Q5：模板「新建可见」设置。"""
+
+    show_in_create: bool
 
 
 STYLE_CATEGORIES: Dict[str, str] = {
@@ -211,6 +219,21 @@ def _summary_builtin_response(template_id: str, category: str) -> Dict[str, Any]
     }
 
 
+def _attach_visibility(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Q5：为模板列表附加 show_in_create（缺省 True，兼容旧数据）。"""
+    visibility = load_visibility()
+    for entry in entries:
+        entry["show_in_create"] = visibility.get(str(entry.get("template_id") or ""), True)
+    return entries
+
+
+def _known_template_ids() -> set[str]:
+    """全部可设置的模板 id：内置（video/text/style）+ 用户自定义。"""
+    ids = set(BUILTIN_IDS) | set(_TEXT_BUILTIN_IDS) | set(TEMPLATES.keys())
+    ids.update(t.template_id for t in load_templates())
+    return ids
+
+
 @router.get("")
 def get_all_templates(
     category: Optional[str] = Query(None, pattern="^(video|text|style_[a-z_]+)$"),
@@ -228,21 +251,21 @@ def get_all_templates(
             for t in load_templates_by_category(category)
             if t.template_id not in TEMPLATES
         ]
-        return builtins + customs
+        return _attach_visibility(builtins + customs)
     if category == "text":
         builtins = [
             _build_builtin_response(name, prompt, "text", f"text-builtin-{name}")
             for name, prompt in _TEXT_BUILTIN_PROMPTS.items()
         ]
         customs = [_template_to_response(t) for t in load_templates_by_category("text")]
-        return builtins + customs
+        return _attach_visibility(builtins + customs)
     if category == "video":
         builtins = [
             _build_builtin_response(name, prompt, "video")
             for name, prompt in _BUILTIN_TEMPLATE_PROMPTS.items()
         ]
         customs = [_template_to_response(t) for t in load_templates_by_category("video")]
-        return builtins + customs
+        return _attach_visibility(builtins + customs)
     # 无 filter：返回全部（向后兼容）
     video_builtins = [
         _build_builtin_response(name, prompt, "video")
@@ -258,7 +281,21 @@ def get_all_templates(
         for tid, template in TEMPLATES.items()
         if "style_video_with_frames" in template.style_categories
     ]
-    return video_builtins + text_builtins + style_builtins + customs
+    return _attach_visibility(video_builtins + text_builtins + style_builtins + customs)
+
+
+@router.patch("/{template_id}/visibility")
+def update_template_visibility(
+    template_id: str, body: TemplateVisibilityRequest
+) -> Dict[str, Any]:
+    """Q5：写入模板「新建可见」，GET 列表回读一致。"""
+    if template_id not in _known_template_ids():
+        raise HTTPException(status_code=404, detail="模板不存在")
+    set_template_visibility(template_id, body.show_in_create)
+    return {
+        "template_id": template_id,
+        "show_in_create": load_visibility().get(template_id, True),
+    }
 
 
 # ── 向后兼容：旧 /video-templates 端点 ──────────────────────

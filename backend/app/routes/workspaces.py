@@ -746,16 +746,52 @@ def _refresh_auto_note_if_stale(workspace_id: str, item: WorkspaceItem, note_pat
     return not bool(assembled.get("skipped"))
 
 
-def _on_note_success_write_title(completed_task: TaskRecord, runner) -> None:  # type: ignore[type-arg]
-    """note task 完成后，把真实标题回写 item.name。
+_NOTE_KIND_TO_ITEM_TYPE: Dict[str, str] = {
+    "video": ItemType.VIDEO.value,
+    "audio": ItemType.AUDIO.value,
+    "image_text": ItemType.IMAGE.value,
+    "mixed": ItemType.IMAGE.value,
+    "text": ItemType.TEXT.value,
+}
 
-    仅在 item.name 仍为 URL/ID 占位时覆盖，避免覆盖用户自定义名。
+
+def _note_kind_to_item_type(note_kind: str) -> Optional[str]:
+    """pipeline probe 的 note_kind → canonical WorkspaceItem.type。
+
+    未知/空 kind 返回 None：绝不猜测类型，保持现状（可能是 unknown）。
+    """
+    return _NOTE_KIND_TO_ITEM_TYPE.get(str(note_kind or "").strip())
+
+
+def _on_note_success_sync_item(completed_task: TaskRecord, runner) -> None:  # type: ignore[type-arg]
+    """note task 成功后同步 workspace item：
+
+    1. Q5（反馈 #16）：把 probe 出的 note_kind 原子回写 canonical
+       item.type（含 unknown → 真实类型），并打 type_probed 标记；
+       无 note_kind 时不回写、不猜测。
+    2. 把真实标题回写 item.name（仅在仍为 URL/ID 占位时覆盖）。
     """
     matches = _iter_workspace_items_for_task(completed_task, runner)
     for ws, item in matches:
         _ensure_task_linked_to_item(ws.workspace_id, item, completed_task, runner)
 
-    video_title = str((completed_task.result or {}).get("video_title") or "").strip()
+    result = completed_task.result or {}
+    probed_type = _note_kind_to_item_type(str(result.get("note_kind") or ""))
+    if probed_type:
+        for ws, item in matches:
+            if item.type == probed_type and (item.results or {}).get("type_probed"):
+                continue
+            try:
+                _store.update_item(
+                    ws.workspace_id,
+                    item.item_id,
+                    type=probed_type,
+                    results={**(item.results or {}), "type_probed": True},
+                )
+            except Exception:
+                pass
+
+    video_title = str(result.get("video_title") or "").strip()
     if not video_title:
         return
 
@@ -775,7 +811,7 @@ def _on_note_success_write_title(completed_task: TaskRecord, runner) -> None:  #
                 pass
 
 
-_pipeline_runner.register_success_callback("note", _on_note_success_write_title)
+_pipeline_runner.register_success_callback("note", _on_note_success_sync_item)
 
 
 WORKSPACE_UPLOAD_ROOT: Path = DATA_DIR / "workspaces"

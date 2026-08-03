@@ -5,6 +5,7 @@ import {
   Download,
   FileAudio,
   FileImage,
+  FileQuestion,
   FileText,
   FileVideo,
 } from 'lucide-react'
@@ -17,6 +18,7 @@ const TYPE_ICON: Record<ItemType, React.ElementType> = {
   audio: FileAudio,
   image: FileImage,
   text: FileText,
+  unknown: FileQuestion,
 }
 
 interface ExportTabProps {

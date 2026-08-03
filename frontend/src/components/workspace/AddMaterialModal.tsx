@@ -43,7 +43,7 @@ import {
   normalizePreviewImageUrl,
 } from './MaterialSourcePanel'
 import { WorkspacePicker } from './WorkspacePicker'
-import { NoteSettingsPanel, type NoteMediaKind, type SpeakerCountChoice } from './NoteSettingsPanel'
+import { NoteSettingsPanel, type NoteMediaKind, type SpeakerCountChoice, type StyleOption } from './NoteSettingsPanel'
 
 export interface StagedConfig {
   types: ItemType[]
@@ -348,8 +348,9 @@ export function AddMaterialModal({
         desc: STYLE_DESCRIPTIONS[style.id] ?? '',
       }))
     }
+    // Q5：只展示「新建可见」的模板（show_in_create 缺省为可见）
     return [...styleTemplates]
-      .filter((item) => !item.speaker_aware_only)
+      .filter((item) => !item.speaker_aware_only && item.show_in_create !== false)
       .sort((a, b) => {
         const ai = STYLE_ORDER.get(a.template_id) ?? 1000
         const bi = STYLE_ORDER.get(b.template_id) ?? 1000
@@ -360,6 +361,13 @@ export function AddMaterialModal({
         label: item.name,
         desc: item.description || item.use_case || STYLE_DESCRIPTIONS[item.template_id] || '',
       }))
+  }, [styleTemplates])
+
+  // Q5：所有模板都被隐藏时回退标准总结，并给模板设置入口
+  const allTemplatesHidden = useMemo(() => {
+    if (styleTemplates.length === 0) return false
+    const general = styleTemplates.filter((item) => !item.speaker_aware_only)
+    return general.length > 0 && general.every((item) => item.show_in_create === false)
   }, [styleTemplates])
 
   const primaryStyleOptions = styleOptions.slice(0, 7)
@@ -453,16 +461,29 @@ export function AddMaterialModal({
   const speakerAwareMedia = (showAudioNoteSettings || showVideoNoteSettings) && diarizeOn
   const selectedSpeakerCount = speakerCount === 'auto' ? undefined : Number(speakerCount)
   const selectedGeneralStyle = styleOptions.find((style) => style.id === noteStyle)
+  // Q5：可见模板全部被隐藏时回退到标准总结
+  const hiddenFallbackOptions: StyleOption[] = [
+    { id: 'standard', label: '标准总结', desc: STYLE_DESCRIPTIONS['standard'] ?? '' },
+  ]
+  const generalStyleOptions = allTemplatesHidden ? hiddenFallbackOptions : primaryStyleOptions
   const visiblePrimaryStyleOptions = speakerAwareMedia
     ? (
         selectedGeneralStyle && !SPEAKER_AWARE_STYLE_IDS.has(noteStyle)
           ? [selectedGeneralStyle, ...SPEAKER_AWARE_STYLES]
           : SPEAKER_AWARE_STYLES
       )
-    : primaryStyleOptions
+    : generalStyleOptions
   const visibleMoreStyleOptions = speakerAwareMedia
     ? []
-    : moreStyleOptions
+    : allTemplatesHidden
+      ? []
+      : moreStyleOptions
+
+  // 可见模板变化导致当前选择不可见时，回退到标准总结
+  useEffect(() => {
+    if (!allTemplatesHidden) return
+    setNoteStyle((current) => (current === 'standard' ? current : 'standard'))
+  }, [allTemplatesHidden])
 
   const handleDiarizeChange = (enabled: boolean) => {
     taskDefaultsEditedRef.current = true
@@ -802,7 +823,8 @@ export function AddMaterialModal({
     setBatchImporting(true)
     setError(null)
     try {
-      const resolvedNoteKind = selectedNoteType === 'auto' ? 'video' : selectedNoteType === 'mixed' ? 'mixed' : selectedNoteType
+      // Q5：auto 保持 auto——真实类型由 pipeline probe 回写，前端不猜视频
+      const resolvedNoteKind = selectedNoteType === 'mixed' ? 'mixed' : selectedNoteType
       const effInterval = captureMode === 'auto' ? computeAutoInterval(videoDuration) : frameInterval
       const effVisionModel = selectedVisionModel === '__default__' ? '' : selectedVisionModel
       const batch = await createTaskBatch({
@@ -828,7 +850,7 @@ export function AddMaterialModal({
           note_style: noteStyle,
           note_type: resolvedNoteKind,
           diarize: diarizeOn,
-          frame_analysis: resolvedNoteKind === 'video' ? embedFrames : false,
+          frame_analysis: embedFrames,
           frame_interval: effInterval,
           vision_model: effVisionModel,
           ...(selectedSpeakerCount ? { speaker_count: selectedSpeakerCount } : {}),
@@ -1124,6 +1146,22 @@ export function AddMaterialModal({
             userNotes={userNotes}
             onUserNotesChange={setUserNotes}
               />
+            {allTemplatesHidden && !speakerAwareMedia && (
+              <div className="kw" style={{ marginTop: 8, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span>可见模板已全部隐藏，已回退到标准总结。</span>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  style={{ padding: '2px 8px', fontSize: 12 }}
+                  onClick={() => {
+                    onOpenChange(false)
+                    navigate('/settings/video-templates')
+                  }}
+                >
+                  前往模板设置
+                </button>
+              </div>
+            )}
             </div>
           </div>
         </div>

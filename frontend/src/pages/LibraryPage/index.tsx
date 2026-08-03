@@ -232,7 +232,7 @@ export default function LibraryPage() {
   }, [load])
 
   const typeFilters = selectedFilters.filter(
-    (k): k is LibraryItem['type'] => k === 'video' || k === 'audio' || k === 'image' || k === 'text',
+    (k): k is 'video' | 'audio' | 'image' | 'text' => k === 'video' || k === 'audio' || k === 'image' || k === 'text',
   )
   const showCollections = selectedFilters.includes('collection')
   const showRunning = selectedFilters.includes('running')
@@ -293,7 +293,7 @@ export default function LibraryPage() {
     if (!(showAll || showCollections || showRunning)) return []
     return collectionWorkspaces.filter((ws) => {
       const wsItems = itemsByWorkspace.get(ws.workspace_id) ?? []
-      if (typeFilters.length > 0 && !wsItems.some((item) => typeFilters.includes(item.type))) return false
+      if (typeFilters.length > 0 && !wsItems.some((item) => typeFilters.includes(item.type as 'video' | 'audio' | 'image' | 'text'))) return false
       if (showRunning && !(ws.status === 'running' || wsItems.some(isItemGenerating))) return false
       if (!matchesQuery(normalizedQuery, [ws.name, ...wsItems.flatMap((item) => [item.name, item.source_value, item.workspace_name, item.description])])) return false
       return true
@@ -309,7 +309,7 @@ export default function LibraryPage() {
     let items = scopedItems
     if (!showAll) {
       if (typeFilters.length > 0) {
-        items = items.filter((item) => typeFilters.includes(item.type))
+        items = items.filter((item) => typeFilters.includes(item.type as 'video' | 'audio' | 'image' | 'text'))
       }
       if (showRunning) {
         items = items.filter(isItemGenerating)

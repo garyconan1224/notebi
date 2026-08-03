@@ -1,6 +1,6 @@
 // 与后端 backend/app/models/workspace.py 对齐的类型定义
 
-export type ItemType = 'video' | 'audio' | 'image' | 'text'
+export type ItemType = 'video' | 'audio' | 'image' | 'text' | 'unknown'
 
 /** 笔记媒体类型（添加素材时的手动选择） */
 export type NoteMediaKind = 'auto' | 'video' | 'image_text' | 'audio' | 'mixed'
@@ -239,6 +239,7 @@ export const ITEM_TYPE_TEXT: Record<ItemType, string> = {
   audio: '音频',
   image: '图片',
   text: '文字',
+  unknown: '待识别',
 }
 
 /** 各类型对应的语义色（对齐设计文档 1.3 颜色语义） */
@@ -247,11 +248,12 @@ export const ITEM_TYPE_COLOR: Record<ItemType, string> = {
   audio: 'bg-teal-100 text-teal-700',
   image: 'bg-blue-100 text-blue-700',
   text: 'bg-gray-100 text-gray-700',
+  unknown: 'bg-gray-50 text-gray-500',
 }
 
 /** 统计工作空间内不同类型素材的数量 */
 export function countItemsByType(ws: WorkspaceRecord): Record<ItemType, number> {
-  const acc: Record<ItemType, number> = { video: 0, audio: 0, image: 0, text: 0 }
+  const acc: Record<ItemType, number> = { video: 0, audio: 0, image: 0, text: 0, unknown: 0 }
   for (const it of ws.items) {
     acc[it.type] = (acc[it.type] ?? 0) + 1
   }

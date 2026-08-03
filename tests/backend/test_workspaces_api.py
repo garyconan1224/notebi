@@ -1049,7 +1049,7 @@ def test_note_retry_success_links_back_to_workspace_item(tmp_path: Path) -> None
         patch.object(ws_module, "_pipeline_runner", mock_runner),
     ):
         app.include_router(ws_module.router)
-        ws_module._on_note_success_write_title(new_task, mock_runner)
+        ws_module._on_note_success_sync_item(new_task, mock_runner)
         with TestClient(app) as c:
             body = c.get(f"/workspaces/{ws_id}").json()
 

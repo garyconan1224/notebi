@@ -15,6 +15,7 @@ const TYPE_LABEL: Record<LibraryItem['type'], string> = {
   audio: 'AUDIO',
   image: 'IMAGE',
   text: 'TEXT',
+  unknown: 'AUTO',
 }
 
 const COVER_CLASS: Record<LibraryItem['type'], string> = {
@@ -22,6 +23,7 @@ const COVER_CLASS: Record<LibraryItem['type'], string> = {
   audio: 'cover-audio',
   image: 'cover-image',
   text: 'cover-text',
+  unknown: 'cover-unknown',
 }
 
 interface RecentTasksProps {

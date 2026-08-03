@@ -3432,9 +3432,9 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
         result["workspace_id"] = str(payload.get("workspace_id") or "")
     if payload.get("item_id"):
         result["item_id"] = str(payload.get("item_id") or "")
-    # M7: 附加 PROBE 识别结果
-    if note_kind != "video":
-        result["note_kind"] = note_kind
+    # M7: 附加 PROBE 识别结果。Q5：video 也带 note_kind，成功后用于
+    # 原子回写 canonical item.type（含 unknown → 真实类型）。
+    result["note_kind"] = note_kind
     if images_from_download:
         result["images"] = images_from_download
         result["image_count"] = len(images_from_download)
