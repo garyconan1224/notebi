@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, CircleAlert, FileText, Pause, Play, RefreshCw, XCircle } from 'lucide-react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft, CircleAlert, FileText, Pause, Play, RefreshCw, Trash2, XCircle } from 'lucide-react'
+import { toast } from 'sonner'
 import { StatusBadge, type StatusKind } from '@/components/ui/status-badge'
 import {
   cancelTaskBatch,
+  deleteTaskBatch,
   getTaskBatch,
   pauseTaskBatch,
   resumeTaskBatch,
@@ -91,8 +93,10 @@ function itemTaskDetail(batch: TaskBatch, item: BatchItem): BatchTaskDetail | un
 
 export default function BatchDetailPage() {
   const { batchId = '' } = useParams()
+  const navigate = useNavigate()
   const [batch, setBatch] = useState<TaskBatch | null>(null)
   const [error, setError] = useState('')
+  const [deleting, setDeleting] = useState(false)
   const batchStatus = batch?.status
 
   const run = async (action: (id: string) => Promise<TaskBatch>) => {
@@ -101,6 +105,23 @@ export default function BatchDetailPage() {
       setBatch(await action(batchId))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '操作失败')
+    }
+  }
+
+  // Q7 / D5：删除终态批次记录——只删批次记录，不删子任务/笔记/素材/媒体/导出。
+  const handleDelete = async () => {
+    const confirmed = window.confirm(
+      '只删除这条终态批次记录本身；不会删除子任务、笔记、素材、媒体文件或导出产物。确认删除？',
+    )
+    if (!confirmed) return
+    setDeleting(true)
+    try {
+      await deleteTaskBatch(batchId)
+      toast.success('已删除批次记录')
+      navigate('/tasks')
+    } catch {
+      setError('删除失败：运行中的批次不能删除，请稍后重试')
+      setDeleting(false)
     }
   }
 
@@ -167,8 +188,43 @@ export default function BatchDetailPage() {
             }}><XCircle size={15} />取消</button>
           )}
           {batch.failed_count > 0 && <button className="btn" type="button" onClick={() => void run(retryFailedTaskBatch)}><RefreshCw size={15} />重试失败项</button>}
+          {terminal && (
+            <button className="btn task-batch-delete-detail" type="button" disabled={deleting} onClick={() => void handleDelete()}>
+              <Trash2 size={15} />{deleting ? '删除中…' : '删除记录'}
+            </button>
+          )}
           <Link className="btn btn-ghost" to={`/settings/monitor?batch_id=${encodeURIComponent(batch.batch_id)}`}>查看监控</Link>
         </div>
+
+        {batch.failed_count > 0 && (() => {
+          const failedItems = batch.items.filter((item) => {
+            const detail = itemTaskDetail(batch, item)
+            const status = detail?.status || item.status
+            return ['FAILED', 'PARTIAL', 'failed'].includes(status)
+          })
+          const reasons = new Map<string, number>()
+          for (const item of failedItems) {
+            const detail = itemTaskDetail(batch, item)
+            const reason = detail?.error || item.error || '未知原因'
+            reasons.set(reason, (reasons.get(reason) || 0) + 1)
+          }
+          const topReasons = [...reasons.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+          return (
+            <section className="task-failure-summary" aria-label="失败原因汇总">
+              <h2><CircleAlert size={16} /> {batch.failed_count} 项失败</h2>
+              <ul>
+                {topReasons.map(([reason, count]) => (
+                  <li key={reason}><strong>{count} 项</strong>：{reason}</li>
+                ))}
+              </ul>
+              <p>
+                可点击「重试失败项」重新处理，或
+                <Link to={`/settings/monitor?batch_id=${encodeURIComponent(batch.batch_id)}`}>查看诊断日志</Link>
+                了解技术细节。失败项的笔记与素材已保留。
+              </p>
+            </section>
+          )
+        })()}
 
         <section className="task-detail-list" aria-label="批次素材详情">
           {batch.items.map((item, index) => {

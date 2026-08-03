@@ -635,3 +635,103 @@
     margin-left: 0;
   }
 }
+
+/* ════ Q7 / D5：批次卡删除记录 + 失败汇总 ════ */
+.task-batch-card--article {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.task-batch-card-link {
+  display: block;
+  width: 100%;
+  padding: 16px;
+  border: none;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.task-batch-card-link:focus-visible {
+  outline: none;
+  box-shadow: var(--shf);
+}
+
+.task-batch-card--article:has(.task-batch-card-link:hover) {
+  border-color: var(--bdrs);
+  box-shadow: var(--sh1);
+  transform: translateY(-1px);
+}
+
+.task-batch-delete {
+  align-self: flex-end;
+  margin: 0 12px 12px;
+  padding: 5px 12px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--rs, 6px);
+  background: transparent;
+  color: var(--mut);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.task-batch-delete:hover:not(:disabled) {
+  color: var(--err);
+  border-color: var(--err);
+}
+
+.task-batch-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.task-batch-delete-detail {
+  color: var(--err);
+  border-color: var(--err);
+}
+
+.task-failure-summary {
+  padding: 14px 16px;
+  border: 1px solid var(--wrn);
+  border-radius: var(--r);
+  background: var(--wrnl);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-failure-summary h2 {
+  margin: 0;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg);
+}
+
+.task-failure-summary ul {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.task-failure-summary li {
+  font-size: 12.5px;
+  color: var(--fg2);
+}
+
+.task-failure-summary p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--fg2);
+}
+
+.task-failure-summary a {
+  color: var(--acc-text, var(--acc));
+}

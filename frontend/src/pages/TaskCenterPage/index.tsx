@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { PageHeader } from '@/components/ui/page-header'
 import { StatusBadge, type StatusKind } from '@/components/ui/status-badge'
 import { listPipelineTasks, deletePipelineTask } from '@/services/pipeline'
-import { listTaskBatches } from '@/services/taskBatches'
+import { listTaskBatches, deleteTaskBatch } from '@/services/taskBatches'
 import { getStatusText, isTaskTerminal, type TaskRecord } from '@/types/task'
 import type { BatchStatus, TaskBatch } from '@/types/taskBatch'
 
@@ -16,6 +16,15 @@ type BatchFilter = 'all' | 'running' | 'completed' | 'attention' | 'waiting'
 
 const PAGE_SIZE = 12
 const ACTIVE_BATCH_STATUSES = new Set<BatchStatus>(['queued', 'running'])
+
+// Q7 / D5：终态批次才允许删除记录
+const TERMINAL_BATCH_STATUSES = new Set<BatchStatus>([
+  'completed',
+  'partial',
+  'failed',
+  'cancelled',
+  'partial_cancelled',
+])
 
 const SOURCE_LABELS: Record<string, string> = {
   urls: '多链接',
@@ -164,6 +173,7 @@ export default function TaskCenterPage() {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [page, setPage] = useState(1)
   const [deletingIds, setDeletingIds] = useState<ReadonlySet<string>>(() => new Set())
+  const [deletingBatchIds, setDeletingBatchIds] = useState<ReadonlySet<string>>(() => new Set())
 
   const load = useCallback(async (background = false) => {
     if (background) setRefreshing(true)
@@ -201,6 +211,28 @@ export default function TaskCenterPage() {
       setDeletingIds((previous) => {
         const next = new Set(previous)
         next.delete(task.task_id)
+        return next
+      })
+    }
+  }, [load])
+
+  // Q7 / D5：删除终态批次记录。只删批次记录本身，不删子任务/笔记/素材/媒体/导出。
+  const handleDeleteBatch = useCallback(async (batch: TaskBatch) => {
+    const confirmed = window.confirm(
+      '只删除这条终态批次记录本身；不会删除子任务、笔记、素材、媒体文件或导出产物。确认删除？',
+    )
+    if (!confirmed) return
+    setDeletingBatchIds((previous) => new Set(previous).add(batch.batch_id))
+    try {
+      await deleteTaskBatch(batch.batch_id)
+      toast.success('已删除批次记录')
+      await load()
+    } catch {
+      toast.error('删除失败：运行中的批次不能删除，请稍后重试')
+    } finally {
+      setDeletingBatchIds((previous) => {
+        const next = new Set(previous)
+        next.delete(batch.batch_id)
         return next
       })
     }
@@ -389,44 +421,61 @@ export default function TaskCenterPage() {
               {(pageItems as TaskBatch[]).map((batch) => {
                 const waiting = waitingCount(batch)
                 const progress = batchProgress(batch)
+                const terminal = TERMINAL_BATCH_STATUSES.has(batch.status)
+                const deletingBatch = deletingBatchIds.has(batch.batch_id)
                 return (
-                  <button
-                    key={batch.batch_id}
-                    type="button"
-                    className="task-batch-card"
-                    onClick={() => navigate(`/tasks/batches/${batch.batch_id}`)}
-                  >
-                    <div className="task-batch-heading">
-                      <div>
-                        <span className="tag">{SOURCE_LABELS[batch.source_type] || '其他来源'}</span>
-                        <h2>{batch.name}</h2>
+                  <article key={batch.batch_id} className="task-batch-card task-batch-card--article">
+                    <button
+                      type="button"
+                      className="task-batch-card-link"
+                      onClick={() => navigate(`/tasks/batches/${batch.batch_id}`)}
+                      aria-label={`打开批次 ${batch.name}`}
+                    >
+                      <div className="task-batch-heading">
+                        <div>
+                          <span className="tag">{SOURCE_LABELS[batch.source_type] || '其他来源'}</span>
+                          <h2>{batch.name}</h2>
+                        </div>
+                        <StatusBadge status={batchStatusKind(batch.status)}>
+                          {BATCH_STATUS_LABELS[batch.status]}
+                        </StatusBadge>
                       </div>
-                      <StatusBadge status={batchStatusKind(batch.status)}>
-                        {BATCH_STATUS_LABELS[batch.status]}
-                      </StatusBadge>
-                    </div>
-                    <div className="task-progress-row">
-                      <strong>{progress}%</strong>
-                      <div
-                        className="task-progress"
-                        role="progressbar"
-                        aria-label={`${batch.name}进度`}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-valuenow={progress}
+                      <div className="task-progress-row">
+                        <strong>{progress}%</strong>
+                        <div
+                          className="task-progress"
+                          role="progressbar"
+                          aria-label={`${batch.name}进度`}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={progress}
+                        >
+                          <span style={{ width: `${progress}%` }} />
+                        </div>
+                        <span>{batch.total_count} 项</span>
+                      </div>
+                      <div className="task-batch-meta">
+                        <span className="task-count-success">{batch.completed_count} 成功</span>
+                        <span className="task-count-error">{batch.failed_count} 失败</span>
+                        <span>{waiting} 等待</span>
+                        {batch.skipped_count > 0 && <span>{batch.skipped_count} 跳过</span>}
+                        <time>{formatTime(batch.created_at)}</time>
+                      </div>
+                    </button>
+                    {terminal && (
+                      <button
+                        type="button"
+                        className="task-batch-delete"
+                        disabled={deletingBatch}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void handleDeleteBatch(batch)
+                        }}
                       >
-                        <span style={{ width: `${progress}%` }} />
-                      </div>
-                      <span>{batch.total_count} 项</span>
-                    </div>
-                    <div className="task-batch-meta">
-                      <span className="task-count-success">{batch.completed_count} 成功</span>
-                      <span className="task-count-error">{batch.failed_count} 失败</span>
-                      <span>{waiting} 等待</span>
-                      {batch.skipped_count > 0 && <span>{batch.skipped_count} 跳过</span>}
-                      <time>{formatTime(batch.created_at)}</time>
-                    </div>
-                  </button>
+                        {deletingBatch ? '删除中…' : '删除记录'}
+                      </button>
+                    )}
+                  </article>
                 )
               })}
             </div>

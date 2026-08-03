@@ -384,14 +384,26 @@ _default_store: Optional[RuntimeLogStore] = None
 _default_lock = threading.Lock()
 
 
+def resolve_log_dir() -> Path:
+    """解析日志目录：优先 NOTEBI_LOG_DIR 环境变量（测试隔离），否则 data/logs。
+
+    Q7（反馈 #15）：测试通过 NOTEBI_LOG_DIR 指向临时目录，避免污染 data/logs。
+    """
+    import os
+
+    override = os.environ.get("NOTEBI_LOG_DIR", "").strip()
+    if override:
+        return Path(override).expanduser()
+    from shared.config import ROOT_DIR
+
+    return ROOT_DIR / "data" / "logs"
+
+
 def get_default_store() -> RuntimeLogStore:
     """返回进程级默认存储单例。"""
     global _default_store
     if _default_store is None:
         with _default_lock:
             if _default_store is None:
-                from shared.config import ROOT_DIR
-
-                log_dir = ROOT_DIR / "data" / "logs"
-                _default_store = RuntimeLogStore(log_dir)
+                _default_store = RuntimeLogStore(resolve_log_dir())
     return _default_store

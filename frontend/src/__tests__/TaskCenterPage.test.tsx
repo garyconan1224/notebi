@@ -6,13 +6,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import TaskCenterPage from '@/pages/TaskCenterPage'
 
-const { listBatchesMock, listTasksMock, deleteTaskMock } = vi.hoisted(() => ({
+const { listBatchesMock, listTasksMock, deleteTaskMock, deleteBatchMock } = vi.hoisted(() => ({
   listBatchesMock: vi.fn(),
   listTasksMock: vi.fn(),
   deleteTaskMock: vi.fn(),
+  deleteBatchMock: vi.fn(),
 }))
 
-vi.mock('@/services/taskBatches', () => ({ listTaskBatches: listBatchesMock }))
+vi.mock('@/services/taskBatches', () => ({
+  listTaskBatches: listBatchesMock,
+  deleteTaskBatch: deleteBatchMock,
+}))
 vi.mock('@/services/pipeline', () => ({
   listPipelineTasks: listTasksMock,
   deletePipelineTask: deleteTaskMock,
@@ -70,6 +74,7 @@ describe('TaskCenterPage', () => {
       total: 2,
     })
     deleteTaskMock.mockResolvedValue(undefined)
+    deleteBatchMock.mockResolvedValue({ deleted: true })
     listTasksMock.mockResolvedValue([
       {
         task_id: 't1',
@@ -285,5 +290,41 @@ describe('TaskCenterPage', () => {
     expect(retryButton).toBeEnabled()
     fireEvent.click(retryButton)
     await waitFor(() => expect(deleteTaskMock).toHaveBeenCalledTimes(2))
+  })
+
+  it('Q7/D5：终态批次卡显示删除记录，运行中批次不显示', async () => {
+    render(<MemoryRouter><TaskCenterPage /></MemoryRouter>)
+    await screen.findByText('测试批次')
+
+    // 运行中批次（b1）没有删除入口；终态批次（b2）有
+    const deleteButtons = screen.getAllByRole('button', { name: '删除记录' })
+    expect(deleteButtons).toHaveLength(1)
+    expect(deleteButtons[0].closest('article')).not.toBeNull()
+  })
+
+  it('Q7/D5：确认删除终态批次会说明不删素材并刷新列表', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<MemoryRouter><TaskCenterPage /></MemoryRouter>)
+    await screen.findByText('测试批次')
+
+    fireEvent.click(screen.getByRole('button', { name: '删除记录' }))
+
+    // 确认框逐字说明不删子任务/笔记/素材/媒体/导出
+    expect(confirmSpy).toHaveBeenCalledWith(
+      expect.stringContaining('不会删除子任务、笔记、素材、媒体文件或导出产物'),
+    )
+    expect(deleteBatchMock).toHaveBeenCalledWith('b2')
+    await waitFor(() => expect(vi.mocked(toast.success)).toHaveBeenCalledWith('已删除批次记录'))
+    // 删除后刷新批次列表
+    await waitFor(() => expect(listBatchesMock).toHaveBeenCalledTimes(2))
+  })
+
+  it('Q7/D5：取消确认时不调用删除', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    render(<MemoryRouter><TaskCenterPage /></MemoryRouter>)
+    await screen.findByText('测试批次')
+
+    fireEvent.click(screen.getByRole('button', { name: '删除记录' }))
+    expect(deleteBatchMock).not.toHaveBeenCalled()
   })
 })
