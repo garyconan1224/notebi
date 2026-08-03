@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { FileCode, Globe, Loader2, Quote } from 'lucide-react'
+import { ChevronDown, FileCode, Globe, Languages, Loader2, Quote } from 'lucide-react'
 import { toast } from 'sonner'
 import type { VideoResultTranscriptLine } from '@/services/workspaces'
 import { updateTranscriptSegment, translateTranscriptSegments } from '@/services/workspaces'
@@ -131,6 +131,10 @@ export default function LNTranscriptPanel({
   const [translateLang, setTranslateLang] = useState('zh')
   const [translating, setTranslating] = useState(false)
   const [translateError, setTranslateError] = useState('')
+  // Q2：工具行可折叠——折叠只隐藏工具（显示模式/翻译），不隐藏字幕正文
+  const [toolsCollapsed, setToolsCollapsed] = useState(false)
+  // Q2：窄窗把翻译选项收进 popover（宽窗由 CSS 隐藏触发按钮）
+  const [translatePopOpen, setTranslatePopOpen] = useState(false)
   const [translationCache, setTranslationCache] = useState<Record<string, Record<number, string>>>(
     () => normalizeTranslations(translations),
   )
@@ -279,6 +283,40 @@ export default function LNTranscriptPanel({
 
   const optimizeOffscreenRows = optimizeLongTranscript && transcript.length >= 300
 
+  // 翻译操作（宽窗内联在工具行；窄窗收进 popover，同一份 JSX 由 CSS 决定呈现）
+  const translateActions = (
+    <>
+      <label className="ln-tr-lang">
+        <span>译为</span>
+        <select
+          className="ln-tr-lang-select"
+          value={translateLang}
+          disabled={translating}
+          onChange={(e) => handleLanguageChange(e.target.value)}
+        >
+          {TRANSLATE_LANGS.map((l) => (
+            <option key={l.value} value={l.value}>{l.label}</option>
+          ))}
+        </select>
+      </label>
+      <button
+        className="ln-tr-translate-btn"
+        data-variant={hasCachedTranslation ? 'secondary' : 'primary'}
+        disabled={translating}
+        onClick={handleTranslate}
+      >
+        {translating ? (
+          <Loader2 size={13} className="animate-spin" />
+        ) : (
+          <Globe size={13} />
+        )}
+        <span>
+          {translating ? '翻译中...' : translateError ? '重试' : hasCachedTranslation ? '重新翻译' : '翻译'}
+        </span>
+      </button>
+    </>
+  )
+
   return (
     <div className={`ln-transcript-panel${optimizeOffscreenRows ? ' ln-transcript-panel--long' : ''}`}>
       <div className="ln-tr-head">
@@ -299,63 +337,64 @@ export default function LNTranscriptPanel({
           {translateError && (
             <span className="ln-tr-status ln-tr-status--error">{translateError}</span>
           )}
+          <button
+            type="button"
+            className="ln-tr-tools-collapse"
+            aria-expanded={!toolsCollapsed}
+            aria-label={toolsCollapsed ? '展开工具行' : '折叠工具行'}
+            title={toolsCollapsed ? '展开工具行' : '折叠工具行'}
+            onClick={() => setToolsCollapsed((value) => !value)}
+          >
+            <ChevronDown size={12} className={toolsCollapsed ? 'is-collapsed' : undefined} />
+          </button>
         </div>
-        <div className="ln-tr-head-tools">
-          <div className="ln-tr-display-tabs" aria-label="字幕显示模式">
-            <button
-              className="ln-tr-tab"
-              data-active={mode === 'original' ? 'true' : undefined}
-              onClick={() => setMode('original')}
-            >
-              原文
-            </button>
-            <button
-              className="ln-tr-tab"
-              data-active={mode === 'bilingual' ? 'true' : undefined}
-              disabled={!hasTranslation || translating}
-              onClick={() => setMode('bilingual')}
-            >
-              双语
-            </button>
-            <button
-              className="ln-tr-tab"
-              data-active={mode === 'translated' ? 'true' : undefined}
-              disabled={!hasTranslation || translating}
-              onClick={() => setMode('translated')}
-            >
-              译文
-            </button>
-          </div>
-          <div className="ln-tr-translate-actions">
-            <label className="ln-tr-lang">
-              <span>译为</span>
-              <select
-                className="ln-tr-lang-select"
-                value={translateLang}
-                disabled={translating}
-                onChange={(e) => handleLanguageChange(e.target.value)}
+        {!toolsCollapsed && (
+          <div className="ln-tr-head-tools">
+            <div className="ln-tr-display-tabs" aria-label="字幕显示模式">
+              <button
+                className="ln-tr-tab"
+                data-active={mode === 'original' ? 'true' : undefined}
+                onClick={() => setMode('original')}
               >
-                {TRANSLATE_LANGS.map((l) => (
-                  <option key={l.value} value={l.value}>{l.label}</option>
-                ))}
-              </select>
-            </label>
-            <button
-              className="ln-tr-translate-btn"
-              data-variant={hasCachedTranslation ? 'secondary' : 'primary'}
-              disabled={translating}
-              onClick={handleTranslate}
-            >
-              {translating ? (
-                <Loader2 size={13} className="animate-spin" />
-              ) : (
-                <Globe size={13} />
-              )}
-              <span>
-                {translating ? '翻译中...' : translateError ? '重试' : hasCachedTranslation ? '重新翻译' : '翻译'}
-              </span>
-            </button>
+                原文
+              </button>
+              <button
+                className="ln-tr-tab"
+                data-active={mode === 'bilingual' ? 'true' : undefined}
+                disabled={!hasTranslation || translating}
+                onClick={() => setMode('bilingual')}
+              >
+                双语
+              </button>
+              <button
+                className="ln-tr-tab"
+                data-active={mode === 'translated' ? 'true' : undefined}
+                disabled={!hasTranslation || translating}
+                onClick={() => setMode('translated')}
+              >
+                译文
+              </button>
+            </div>
+            <div className="ln-tr-translate-actions">
+              {translateActions}
+            </div>
           </div>
+        )}
+        <div className="ln-tr-translate-pop-wrap">
+          <button
+            type="button"
+            className="ln-tr-translate-pop-trigger"
+            aria-expanded={translatePopOpen}
+            title="翻译选项"
+            onClick={() => setTranslatePopOpen((value) => !value)}
+          >
+            <Languages size={12} /> 译
+          </button>
+          {translatePopOpen && (
+            <div className="ln-tr-translate-pop">
+              {translateActions}
+            </div>
+          )}
         </div>
       </div>
       {/* 顶层切换：字幕 | 原始素材（仅当 sourceMd 有值时显示） */}

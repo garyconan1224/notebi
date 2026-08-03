@@ -258,14 +258,78 @@
 }
 
 /* ── Shared video transport fallback ───────────── */
-.vm-ln-scope .note-controls {
+/* Q2 控制带：transport + 时间/进度合并为一条 44–52px 带，低频按钮进「…」 */
+.vm-ln-scope .note-ctl-band {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
+  height: 48px;
+  padding: 0 12px;
   background: var(--bg-elev);
   border-bottom: 1px solid var(--line);
-  flex-wrap: wrap;
+}
+
+.vm-ln-scope .note-ctl-time {
+  font-family: var(--mono, var(--fm, monospace));
+  font-size: 11px;
+  color: var(--ink-4);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.vm-ln-scope .note-ctl-spacer {
+  flex: 1 1 auto;
+  min-width: 4px;
+}
+
+.vm-ln-scope .note-ctl-more-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.vm-ln-scope .note-ctl-more-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 150px;
+  padding: 6px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+}
+
+.vm-ln-scope .note-ctl-more-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.vm-ln-scope .note-ctl-more-menu button:hover {
+  background: var(--bg-sunken);
+  color: var(--ink);
+}
+
+.vm-ln-scope .note-ctl-more-menu button.is-on {
+  color: var(--accent);
+}
+
+.vm-ln-scope .note-ctl-more-menu button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .vm-ln-scope .note-transport,
@@ -365,11 +429,44 @@
   border-bottom: 1px solid var(--line);
 }
 
-.vm-ln-scope .note-timeline-head {
+/* 时间轴热区是 role=slider 的可聚焦控件：焦点环可见 */
+.vm-ln-scope .note-progress:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg-elev), 0 0 0 4px var(--acc-bright, var(--accent));
+}
+
+/* hover/focus 预览：最近故事板帧 + 时间码 */
+.vm-ln-scope .note-timeline-preview {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 3px;
+  padding: 4px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+  pointer-events: none;
+  z-index: 20;
+}
+
+.vm-ln-scope .note-timeline-preview img {
+  width: 110px;
+  height: 62px;
+  object-fit: cover;
+  border-radius: 4px;
+  display: block;
+  background: #0a0a0a;
+}
+
+.vm-ln-scope .note-timeline-preview span {
+  font-size: 10px;
+  font-family: var(--mono, var(--fm, monospace));
+  color: var(--ink);
+  white-space: nowrap;
 }
 
 .vm-ln-scope .note-time {
@@ -484,7 +581,7 @@
   width: 100%;
 }
 
-.vm-ln-scope .ln-video-panel:fullscreen .note-controls,
+.vm-ln-scope .ln-video-panel:fullscreen .note-ctl-band,
 .vm-ln-scope .ln-video-panel:fullscreen .note-timeline {
   flex-shrink: 0;
   background: rgba(0, 0, 0, 0.85);
@@ -1002,6 +1099,67 @@
   flex-wrap: wrap;
 }
 
+/* Q2：工具行折叠按钮——只折叠工具，不折叠字幕正文 */
+.vm-ln-scope .ln-tr-tools-collapse {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-4);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.vm-ln-scope .ln-tr-tools-collapse:hover {
+  background: var(--bg-sunken);
+  color: var(--ink);
+}
+
+.vm-ln-scope .ln-tr-tools-collapse svg.is-collapsed {
+  transform: rotate(-90deg);
+}
+
+/* Q2：窄窗翻译 popover（宽窗隐藏触发按钮，≤1100px 显示） */
+.vm-ln-scope .ln-tr-translate-pop-wrap {
+  position: relative;
+  display: none;
+}
+
+.vm-ln-scope .ln-tr-translate-pop-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.vm-ln-scope .ln-tr-translate-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+}
+
 .vm-ln-scope .ln-tr-display-tabs,
 .vm-ln-scope .ln-tr-translate-actions {
   display: inline-flex;
@@ -1087,11 +1245,12 @@
   font-size: 13px;
 }
 
+/* Q2 字幕行：时间码槽 56px（窄窗 44px）+ 说话人/文本；行高紧凑保证首屏 ≥6 行 */
 .vm-ln-scope .ln-tr-row {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 8px 10px;
+  gap: 10px;
+  padding: 7px 12px;
   cursor: pointer;
   border-radius: var(--radius-sm);
   transition: background 0.15s;
@@ -1149,11 +1308,11 @@
 }
 
 .vm-ln-scope .ln-tr-time {
-  flex-shrink: 0;
+  flex: 0 0 56px;
+  text-align: right;
   font-family: var(--mono);
   font-size: 12px;
   color: var(--ink-4);
-  min-width: 48px;
 }
 
 .vm-ln-scope .ln-tr-text {
@@ -1378,5 +1537,48 @@
   .ln-chat-drawer {
     background: var(--bg-elev, #111);
     border-color: var(--line, #333);
+  }
+}
+
+/* ── Q2 窄窗压缩（≤1100px，对应 1024 窄窗审查）────────────────────
+   时间轴隐藏刻度文字（保留进度热区 + hover 预览）；字幕行压缩留白与字号，
+   让出首屏 ≥6 行；翻译选项收进 popover，标题/条数/折叠入口保持单行。 */
+@media (max-width: 1100px) {
+  .vm-ln-scope .note-progress-ticks {
+    display: none;
+  }
+
+  .vm-ln-scope .ln-tr-row {
+    padding: 2.5px 8px;
+    gap: 8px;
+  }
+
+  .vm-ln-scope .ln-tr-time {
+    flex-basis: 44px;
+    font-size: 11px;
+  }
+
+  .vm-ln-scope .ln-tr-text {
+    font-size: 13px;
+    line-height: 1.38;
+  }
+
+  .vm-ln-scope .ln-tr-head {
+    padding: 6px 8px;
+    flex-wrap: nowrap;
+  }
+
+  .vm-ln-scope .ln-tr-head-tools {
+    min-width: 0;
+    flex: 0 1 auto;
+  }
+
+  /* 翻译选项收进 popover：内联隐藏，触发按钮出现 */
+  .vm-ln-scope .ln-tr-translate-actions {
+    display: none;
+  }
+
+  .vm-ln-scope .ln-tr-translate-pop-wrap {
+    display: inline-flex;
   }
 }

@@ -45,6 +45,8 @@ import { SourceMdModal } from './SourceMdModal'
 import { NotionExportDialog } from './NotionExportDialog'
 import { FeishuExportDialog } from './FeishuExportDialog'
 import { ChapterEvidenceStrip } from './ChapterEvidenceStrip'
+import StoryboardStrip from './StoryboardStrip'
+import SpeakerDiarizationRow, { type SpeakerDiarizationInfo, type SpeakerDiarizationStatus } from './SpeakerDiarizationRow'
 import { withStatusToast } from '@/lib/statusToast'
 import { categorizeError } from '@/lib/errorCategories'
 
@@ -124,7 +126,8 @@ const tl = (id: string) => TEMPLATE_LABELS[id] ?? id
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'failed'
 const VIDEO_SPLIT_MIN = 20
 const VIDEO_SPLIT_MAX = 72
-const VIDEO_SPLIT_DEFAULT = 60
+// Q2：1024 窄窗双列按 55/45 紧凑布局，默认分栏取同一比例
+const VIDEO_SPLIT_DEFAULT = 55
 const VIDEO_SPLIT_STORAGE_KEY = 'nibi.note.videoLeftPct'
 const EDITOR_PREFS_STORAGE_KEY = 'nibi.note.editorPrefs'
 
@@ -519,10 +522,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [note, setNote] = useState<ItemNote | null>(null)
   const [speakerMap, setSpeakerMap] = useState<Record<string, string>>({})
   const [speakerRoles, setSpeakerRoles] = useState<Record<string, string>>({})
-  const [speakerChipsExpanded, setSpeakerChipsExpanded] = useState(true)
-  const [editingSpeakerId, setEditingSpeakerId] = useState<string | null>(null)
-  const [editingSpeakerName, setEditingSpeakerName] = useState('')
-  const [editingSpeakerRole, setEditingSpeakerRole] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [askAiOpen, setAskAiOpen] = useState(false)
@@ -582,6 +581,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const notePageRef = useRef<HTMLDivElement>(null)
   const noteScrollRef = useRef<HTMLDivElement>(null)
   const immersiveScrollRef = useRef<HTMLDivElement>(null)
+  const immersiveTriggerRef = useRef<HTMLButtonElement>(null)
+  const immersiveWasOpenRef = useRef(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [videoDuration, setVideoDuration] = useState(0)
   const [isPip, setIsPip] = useState(false)
@@ -1071,13 +1072,12 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     Array.isArray(note?.transcript) ? note.transcript as VideoResultTranscriptLine[] : []
   ), [note?.transcript])
   const videoFrames = useMemo(() => note?.media?.frames ?? [], [note?.media?.frames])
-  const activeFrameIdx = useMemo(() => {
-    let activeIdx = -1
-    for (let idx = 0; idx < videoFrames.length; idx += 1) {
-      if (videoFrames[idx].sec <= currentTime + 0.5) activeIdx = idx
-    }
-    return activeIdx
-  }, [currentTime, videoFrames])
+  // Q2：旧版无时间戳（sec=null）的帧无法定位，统一过滤后再进故事板/时间轴/章节证据
+  const timedVideoFrames = useMemo(
+    () => videoFrames.filter((frame): frame is { sec: number; url: string } =>
+      typeof frame.sec === 'number' && frame.sec >= 0 && Boolean(frame.url)),
+    [videoFrames],
+  )
 
   const activeTranscriptLine = useMemo(() => {
     let active: VideoResultTranscriptLine | null = null
@@ -1114,6 +1114,34 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     const noteType = String(((note?.frontmatter ?? {}) as Record<string, unknown>).type ?? '')
     if (noteType === 'audio' && note?.media?.audio) setIsPip(true)
   }, [note])
+
+  // Q2 沉浸式：Esc 退出；退出后焦点回到触发按钮。
+  const closeImmersive = useCallback(() => {
+    setImmersiveOpen(false)
+  }, [])
+
+  useEffect(() => {
+    if (!immersiveOpen) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setImmersiveOpen(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [immersiveOpen])
+
+  useEffect(() => {
+    if (immersiveOpen) {
+      immersiveWasOpenRef.current = true
+      return
+    }
+    if (immersiveWasOpenRef.current) {
+      immersiveWasOpenRef.current = false
+      immersiveTriggerRef.current?.focus()
+    }
+  }, [immersiveOpen])
 
   const fetchNote = useCallback(async () => {
     setLoading(true)
@@ -1736,9 +1764,10 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     : (fallbackTags.length > 0 ? { custom_tags: fallbackTags } : {})
   const hasTags = hasRenderableTags(tags)
   const activeSummary = summaries.find((x) => x.summary_id === activeSummaryId)
+  // Q2：顶栏只显示「主笔记」，修订号只出现在版本历史/下拉里
   const versionButtonLabel = activeSummary
     ? `${summaryGroupLabel(summaryGroupKey(activeSummary))} · ${activeSummary.name || `V${activeSummary.version}`}`
-    : `主笔记 v${noteVersion}`
+    : '主笔记'
 
   // 7.3: 视频笔记三列布局标志
   const isVideoNote = itemType === 'video' && !!note.media?.video?.url
@@ -1759,7 +1788,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const handleSpeakerProfileSave = async (speakerId: string, nextName: string, nextRole: string) => {
     const trimmed = nextName.trim()
     const normalizedRole = nextRole.trim()
-    setEditingSpeakerId(null)
     if (!trimmed || trimmed === speakerId) return
     if (!SPEAKER_ROLE_OPTIONS.includes(normalizedRole as (typeof SPEAKER_ROLE_OPTIONS)[number]) && normalizedRole) return
     const currentName = speakerMap[speakerId] || ''
@@ -1806,6 +1834,24 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     speakerStatsMap.set(speakerId, current)
   })
   const totalSpeakerDuration = [...speakerStatsMap.values()].reduce((sum, stat) => sum + stat.duration, 0)
+  // D1（Q2）：说话人四状态以后端 speaker_status 为准——区分「未请求」与
+  // 「请求后无结果」，不再只看 speakerIds / speaker_retry_task_id。
+  const speakerStatus: SpeakerDiarizationStatus = note.speaker_status
+    ?? (speakerIds.length > 0 ? 'data' : 'none')
+  const speakerInfos: SpeakerDiarizationInfo[] = speakerIds.map((speakerId) => {
+    const stat = speakerStatsMap.get(speakerId)
+    return {
+      id: speakerId,
+      displayName: speakerMap[speakerId] || speakerId.replace(/^SPEAKER_/, 'S'),
+      role: speakerRoles[speakerId] || '',
+      color: audioSpeakerColor(speakerId),
+      count: stat?.count ?? 0,
+      durationSec: stat?.duration ?? 0,
+      percent: totalSpeakerDuration > 0 && stat
+        ? Math.round((stat.duration / totalSpeakerDuration) * 100)
+        : 0,
+    }
+  })
   const sourceMarker = sourceMarkerFromUrl(sourceUrl)
   const mediaDuration = isVideoNote ? effectiveVideoDuration : isAudioNote ? effectiveAudioDuration : 0
   const saveStatusNode = (
@@ -1828,7 +1874,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     sourceMarker ? { label: '素材 ID', value: sourceMarker } : null,
     transcriptCount > 0 ? { label: '转写', value: `${transcriptCount} 条` } : null,
     isAudioNote && speakerNames.length > 0 ? { label: '说话人', value: speakerNames.join(' / ') } : null,
-    isVideoNote && videoFrames.length > 0 ? { label: '关键帧', value: `${videoFrames.length} 张` } : null,
+    isVideoNote && timedVideoFrames.length > 0 ? { label: '关键帧', value: `${timedVideoFrames.length} 张` } : null,
     isImageNote && images.length > 0 ? { label: '图片', value: `${images.length} 张` } : null,
     summaries.length > 0 ? { label: '总结', value: `${summaries.length} 个版本` } : null,
     noteCreatedAt ? { label: '创建', value: noteCreatedAt } : null,
@@ -2298,9 +2344,11 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
             )}
           </div>
           <button
+            ref={immersiveTriggerRef}
             className="nibi-note-bar-btn nibi-note-bar-btn--label nibi-note-bar-btn--accent"
             onClick={handleOpenImmersive}
             title="打开沉浸式笔记"
+            aria-pressed={immersiveOpen}
           >
             <Sparkles size={14} /> 沉浸式
           </button>
@@ -2361,8 +2409,12 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
 
       {immersiveOpen && (
         <div className="nibi-note-immersive">
+          {/* Q2：固定退出入口，不可隐藏；Esc 同样可退出 */}
+          <button type="button" className="nibi-note-immersive-exit" onClick={closeImmersive}>
+            退出沉浸式 <kbd>Esc</kbd>
+          </button>
           <div className="nibi-note-immersive-bar">
-            <button className="nibi-note-bar-back" onClick={() => setImmersiveOpen(false)} title="返回工作台">
+            <button className="nibi-note-bar-back" onClick={closeImmersive} title="返回工作台">
               <ArrowLeft size={15} />
               <span>工作台</span>
             </button>
@@ -2387,7 +2439,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
               <button className="nibi-note-bar-btn nibi-note-bar-btn--label" onClick={() => handleDownloadNoteExport('pdf')} disabled={!!exportBusy}>
                 <FileDown size={14} /> {exportBusy === 'pdf' ? '导出中…' : 'PDF'}
               </button>
-              <button className="nibi-note-bar-btn" onClick={() => setImmersiveOpen(false)} title="关闭">
+              <button className="nibi-note-bar-btn" onClick={closeImmersive} title="关闭">
                 <X size={14} />
               </button>
             </div>
@@ -2460,7 +2512,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                   workspaceId={workspaceId}
                   onTimeUpdate={handleTimeUpdate}
                   onDurationChange={handleVideoDurationChange}
-                  markers={videoFrames}
+                  markers={timedVideoFrames}
+                  frames={timedVideoFrames}
                   renderTransportInline={false}
                   onTransportChange={handleTransportChange}
                   isPipActive={isPip}
@@ -2484,99 +2537,22 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
             </div>
             {/* 控制条 + 时间线（在 player-wrap 外，避免 overflow:hidden 截断） */}
             {!isPip && transportNode}
-            {!isPip && videoFrames.length > 0 && (
-              <div className="note-chapters" aria-label="关键帧轨">
-                {videoFrames.map((frame, idx) => (
-                  <button
-                    key={`${frame.sec}-${frame.url}`}
-                    className={`note-thumb${idx === activeFrameIdx ? ' is-active' : ''}`}
-                    onClick={() => handleSeek(frame.sec)}
-                    title={`跳转到 ${formatTimecode(frame.sec)}`}
-                  >
-                    <img src={frame.url} alt="" loading="lazy" />
-                    <span>{formatTimecode(frame.sec)}</span>
-                  </button>
-                ))}
-              </div>
+            {/* Q2 故事板：≤12 帧、独立于 VLM；无帧时整条不渲染，seek 走时间轴热区 */}
+            {!isPip && (
+              <StoryboardStrip frames={timedVideoFrames} currentTime={currentTime} onSeek={handleSeek} />
             )}
             {/* 转录 */}
             {!isPip && Array.isArray(note.transcript) && (note.transcript as VideoResultTranscriptLine[]).length > 0 ? (
               <div className="nibi-note-transcript-wrap">
-                {speakerIds.length === 0 && note.speaker_retry_task_id && (
-                  <div className="nibi-audio-speaker-empty">
-                    <strong>尚未区分说话人</strong>
-                    <span>现有转写已保留，可只补做说话人识别。</span>
-                    <button type="button" onClick={() => void handleRetrySpeakerAnalysis()} disabled={retryingSpeakerAnalysis}>
-                      {retryingSpeakerAnalysis ? '正在提交…' : '仅补做说话人识别'}
-                    </button>
-                  </div>
-                )}
-                {speakerIds.length > 0 && (
-                  <div className="nibi-audio-speaker-chips" aria-label="视频说话人" data-collapsed={!speakerChipsExpanded}>
-                    <button
-                      type="button"
-                      className="nibi-audio-speaker-toggle"
-                      aria-expanded={speakerChipsExpanded}
-                      onClick={() => setSpeakerChipsExpanded((expanded) => !expanded)}
-                    >
-                      {speakerChipsExpanded ? '隐藏说话人' : `显示说话人（${speakerIds.length}）`}
-                    </button>
-                    <span className="nibi-audio-speaker-title">说话人</span>
-                    {speakerIds.map((speakerId) => {
-                      const displayName = speakerMap[speakerId] || speakerId.replace(/^SPEAKER_/, 'S')
-                      const displayRole = speakerRoles[speakerId] || ''
-                      const speakerStat = speakerStatsMap.get(speakerId)
-                      const speakerPercent = totalSpeakerDuration > 0 && speakerStat
-                        ? Math.round((speakerStat.duration / totalSpeakerDuration) * 100)
-                        : 0
-                      const isEditing = editingSpeakerId === speakerId
-                      if (isEditing) {
-                        return (
-                          <div key={speakerId} className="nibi-audio-speaker-editor">
-                            <input
-                              className="nibi-audio-speaker-input"
-                              autoFocus
-                              value={editingSpeakerName}
-                              aria-label={`${speakerId} 姓名`}
-                              onChange={(event) => setEditingSpeakerName(event.target.value)}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') void handleSpeakerProfileSave(speakerId, editingSpeakerName, editingSpeakerRole)
-                                if (event.key === 'Escape') setEditingSpeakerId(null)
-                              }}
-                            />
-                            <select
-                              className="nibi-audio-speaker-role"
-                              aria-label={`${speakerId} 角色`}
-                              value={editingSpeakerRole}
-                              onChange={(event) => setEditingSpeakerRole(event.target.value)}
-                            >
-                              <option value="">未设置角色</option>
-                              {SPEAKER_ROLE_OPTIONS.map((role) => <option key={role} value={role}>{role}</option>)}
-                            </select>
-                            <button type="button" className="nibi-audio-speaker-save" onClick={() => void handleSpeakerProfileSave(speakerId, editingSpeakerName, editingSpeakerRole)}>保存</button>
-                          </div>
-                        )
-                      }
-                      return (
-                        <button
-                          key={speakerId}
-                          className="nibi-audio-speaker-chip"
-                          style={{ '--speaker-color': audioSpeakerColor(speakerId) } as CSSProperties}
-                          title="点击编辑姓名和角色"
-                          onClick={() => {
-                            setEditingSpeakerId(speakerId)
-                            setEditingSpeakerName(speakerMap[speakerId] || '')
-                            setEditingSpeakerRole(speakerRoles[speakerId] || '')
-                          }}
-                        >
-                          <span className="nibi-audio-speaker-dot" />
-                          <span>{displayName}{displayRole ? ` · ${displayRole}` : ''}</span>
-                          {speakerStat && <small>{speakerStat.count} 段 · {speakerPercent}%</small>}
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
+                {/* D1 说话人四状态：未请求整层不渲染；失败/处理中为紧凑行；有数据默认折叠 */}
+                <SpeakerDiarizationRow
+                  status={speakerStatus}
+                  speakers={speakerInfos}
+                  retrying={retryingSpeakerAnalysis}
+                  onRetry={() => void handleRetrySpeakerAnalysis()}
+                  onRename={(speakerId, name, role) => void handleSpeakerProfileSave(speakerId, name, role)}
+                  roleOptions={SPEAKER_ROLE_OPTIONS}
+                />
                 <LNTranscriptPanel
                   transcript={note.transcript as VideoResultTranscriptLine[]}
                   currentTime={currentTime}
@@ -2642,10 +2618,10 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                     </div>
                   )
                 })()}
-                {videoFrames.length > 0 && videoEvidenceChapters.length > 0 && (
+                {timedVideoFrames.length > 0 && videoEvidenceChapters.length > 0 && (
                   <ChapterEvidenceStrip
                     chapters={videoEvidenceChapters}
-                    frames={videoFrames}
+                    frames={timedVideoFrames}
                     onSeek={handleSeek}
                     sourceLabel={hasModelChapters ? '模型章节' : '自动分段'}
                     generateLabel={hasModelChapters ? '重新生成' : '模型生成'}
@@ -2765,85 +2741,15 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
             {/* 转录 */}
             {!isPip && transcriptLines.length > 0 ? (
                   <div id="audio-transcript" className="nibi-note-transcript-wrap">
-                    {speakerIds.length > 0 ? (
-                      <div className="nibi-audio-speaker-chips" aria-label="说话人" data-collapsed={!speakerChipsExpanded}>
-                        <button
-                          type="button"
-                          className="nibi-audio-speaker-toggle"
-                          aria-expanded={speakerChipsExpanded}
-                          onClick={() => setSpeakerChipsExpanded((expanded) => !expanded)}
-                        >
-                          {speakerChipsExpanded ? '隐藏说话人' : `显示说话人（${speakerIds.length}）`}
-                        </button>
-                        <span className="nibi-audio-speaker-title">说话人</span>
-                        {speakerIds.map((speakerId) => {
-                          const displayName = speakerMap[speakerId] || speakerId.replace(/^SPEAKER_/, 'S')
-                          const displayRole = speakerRoles[speakerId] || ''
-                          const speakerStat = speakerStatsMap.get(speakerId)
-                          const speakerPercent = totalSpeakerDuration > 0 && speakerStat
-                            ? Math.round((speakerStat.duration / totalSpeakerDuration) * 100)
-                            : 0
-                          const isEditing = editingSpeakerId === speakerId
-                          return isEditing ? (
-                            <div key={speakerId} className="nibi-audio-speaker-editor">
-                              <input
-                                className="nibi-audio-speaker-input"
-                                autoFocus
-                                value={editingSpeakerName}
-                                aria-label={`${speakerId} 姓名`}
-                                onChange={(event) => setEditingSpeakerName(event.target.value)}
-                                onKeyDown={(event) => {
-                                  if (event.key === 'Enter') void handleSpeakerProfileSave(speakerId, editingSpeakerName, editingSpeakerRole)
-                                  if (event.key === 'Escape') setEditingSpeakerId(null)
-                                }}
-                              />
-                              <select
-                                className="nibi-audio-speaker-role"
-                                aria-label={`${speakerId} 角色`}
-                                value={editingSpeakerRole}
-                                onChange={(event) => setEditingSpeakerRole(event.target.value)}
-                              >
-                                <option value="">未设置角色</option>
-                                {SPEAKER_ROLE_OPTIONS.map((role) => <option key={role} value={role}>{role}</option>)}
-                              </select>
-                              <button
-                                type="button"
-                                className="nibi-audio-speaker-save"
-                                onClick={() => void handleSpeakerProfileSave(speakerId, editingSpeakerName, editingSpeakerRole)}
-                              >保存</button>
-                            </div>
-                          ) : (
-                            <button
-                              key={speakerId}
-                              className="nibi-audio-speaker-chip"
-                              style={{ '--speaker-color': audioSpeakerColor(speakerId) } as CSSProperties}
-                              title="点击编辑姓名和角色"
-                              onClick={() => {
-                                setEditingSpeakerId(speakerId)
-                                setEditingSpeakerName(speakerMap[speakerId] || '')
-                                setEditingSpeakerRole(speakerRoles[speakerId] || '')
-                              }}
-                            >
-                              <span className="nibi-audio-speaker-dot" />
-                              <span>{displayName}{displayRole ? ` · ${displayRole}` : ''}</span>
-                              {speakerStat && (
-                                <small>{speakerStat.count} 段 · {formatTimecode(speakerStat.duration)} · {speakerPercent}%</small>
-                              )}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    ) : (
-                      <div className="nibi-audio-speaker-empty">
-                        <strong>暂无说话人信息</strong>
-                        <span>现有转写已保留，可只补做说话人识别后按人物显示颜色、名称与发言占比。</span>
-                        {note.speaker_retry_task_id && (
-                          <button type="button" onClick={() => void handleRetrySpeakerAnalysis()} disabled={retryingSpeakerAnalysis}>
-                            {retryingSpeakerAnalysis ? '正在提交…' : '仅补做说话人识别'}
-                          </button>
-                        )}
-                      </div>
-                    )}
+                    {/* D1 说话人四状态（音频与视频同构）：未请求不渲染；失败显示紧凑行 + 重试 */}
+                    <SpeakerDiarizationRow
+                      status={speakerStatus}
+                      speakers={speakerInfos}
+                      retrying={retryingSpeakerAnalysis}
+                      onRetry={() => void handleRetrySpeakerAnalysis()}
+                      onRename={(speakerId, name, role) => void handleSpeakerProfileSave(speakerId, name, role)}
+                      roleOptions={SPEAKER_ROLE_OPTIONS}
+                    />
                     <LNTranscriptPanel
                   transcript={transcriptLines}
                   currentTime={currentTime}

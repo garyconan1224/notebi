@@ -173,7 +173,7 @@ describe('NoteShell summary switching', () => {
       expectAnyEditorToContain('主笔记正文')
     })
 
-    fireEvent.click(screen.getByRole('button', { name: /主笔记 v1/ }))
+    fireEvent.click(screen.getByRole('button', { name: '主笔记' }))
     fireEvent.click(screen.getByRole('button', { name: /V0/ }))
 
     expectAnyEditorToContain('总结正文')
@@ -192,7 +192,7 @@ describe('NoteShell summary switching', () => {
     expect(screen.queryByRole('button', { name: '复制总结' })).toBeNull()
     expect(screen.queryByRole('button', { name: '重新生成总结' })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: /主笔记 v1/ }))
+    fireEvent.click(screen.getByRole('button', { name: '主笔记' }))
     fireEvent.click(screen.getByRole('button', { name: /V0/ }))
 
     expect(screen.getByRole('button', { name: '复制总结' })).not.toBeNull()
@@ -246,7 +246,7 @@ describe('NoteShell summary switching', () => {
     )
 
     await waitFor(() => expectAnyEditorToContain('主笔记正文'))
-    fireEvent.click(screen.getByRole('button', { name: /主笔记 v1/ }))
+    fireEvent.click(screen.getByRole('button', { name: '主笔记' }))
 
     const versions = Array.from(document.querySelectorAll('.nibi-note-version-choice strong'))
       .map((node) => node.textContent)
@@ -402,7 +402,7 @@ describe('NoteShell summary switching', () => {
       </MemoryRouter>,
     )
 
-    await screen.findByRole('button', { name: /主笔记 v1/ })
+    await screen.findByRole('button', { name: '主笔记' })
     fireEvent.click(screen.getByRole('button', { name: '新建总结' }))
     fireEvent.click(screen.getByRole('button', { name: '生成' }))
     await waitFor(() => expect(mocks.createSummary).toHaveBeenCalled())
@@ -437,12 +437,12 @@ describe('NoteShell summary switching', () => {
       </MemoryRouter>,
     )
 
-    await screen.findByRole('button', { name: /主笔记 v1/ })
+    await screen.findByRole('button', { name: '主笔记' })
     fireEvent.click(screen.getByRole('button', { name: '新建总结' }))
     fireEvent.click(screen.getByRole('button', { name: '生成' }))
     await waitFor(() => expect(mocks.createSummary).toHaveBeenCalled())
 
-    fireEvent.click(screen.getByRole('button', { name: /主笔记 v1/ }))
+    fireEvent.click(screen.getByRole('button', { name: '主笔记' }))
     fireEvent.click(screen.getByRole('button', { name: /V0/ }))
 
     useTaskStore.getState().updateTask('summary-task-2', {
@@ -484,14 +484,15 @@ describe('NoteShell summary switching', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /主笔记 v1/ })).not.toBeNull()
+      expect(screen.getByRole('button', { name: '主笔记' })).not.toBeNull()
     })
-    fireEvent.click(screen.getByRole('button', { name: /主笔记 v1/ }))
+    fireEvent.click(screen.getByRole('button', { name: '主笔记' }))
     fireEvent.click(screen.getByRole('button', { name: /V0/ }))
     expectAnyEditorToContain('SPEAKER_00 提出关键结论')
 
-    fireEvent.click(screen.getByRole('button', { name: /S00/ }))
-    const input = document.querySelector<HTMLInputElement>('.nibi-audio-speaker-input')
+    // D1 新契约：说话人默认折叠为「N 位说话人」，展开后直接编辑
+    fireEvent.click(screen.getByRole('button', { name: /1 位说话人/ }))
+    const input = document.querySelector<HTMLInputElement>('.nibi-speaker-row-input')
     expect(input).not.toBeNull()
     fireEvent.change(input!, { target: { value: '主持人' } })
     fireEvent.keyDown(input!, { key: 'Enter' })
@@ -502,9 +503,10 @@ describe('NoteShell summary switching', () => {
     })
   })
 
-  it('allows speaker profiles to collapse without removing them', async () => {
+  it('说话人折叠/展开不丢失已有名称（D1 折叠行）', async () => {
     mocks.getItemNote.mockResolvedValue({
       ...AUDIO_NOTE,
+      speaker_map: { SPEAKER_00: '主持人' },
       transcript: [{ t_sec: 0, t_str: '00:00', text: '开场。', speaker: 'SPEAKER_00' }],
     })
 
@@ -514,9 +516,18 @@ describe('NoteShell summary switching', () => {
       </MemoryRouter>,
     )
 
-    fireEvent.click(await screen.findByRole('button', { name: '隐藏说话人' }))
+    // 默认折叠：只显示「1 位说话人」，无编辑输入
+    const head = await screen.findByRole('button', { name: /1 位说话人/ })
+    expect(screen.queryByLabelText('SPEAKER_00 姓名')).toBeNull()
 
-    expect(screen.getByRole('button', { name: '显示说话人（1）' })).not.toBeNull()
-    expect(screen.getByRole('button', { name: /S00/ }).closest('.nibi-audio-speaker-chips')?.getAttribute('data-collapsed')).toBe('true')
+    // 展开 → 输入框出现且回显已有名称
+    fireEvent.click(head)
+    const input = screen.getByLabelText('SPEAKER_00 姓名') as HTMLInputElement
+    expect(input.value).toBe('主持人')
+
+    // 再折叠 → 输入框消失，但折叠行仍在（profile 未删除）
+    fireEvent.click(screen.getByRole('button', { name: /1 位说话人/ }))
+    expect(screen.queryByLabelText('SPEAKER_00 姓名')).toBeNull()
+    expect(screen.getByRole('button', { name: /1 位说话人/ })).not.toBeNull()
   })
 })

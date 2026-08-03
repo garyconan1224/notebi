@@ -22,6 +22,12 @@ import { toast } from 'sonner'
 import { uploadLnScreenshot } from '@/services/lnScreenshots'
 import { useLnEditorStore } from '@/store/lnEditorStore'
 
+/** 故事板帧（sec 可能为 null = 旧版无时间戳帧，不参与预览/定位） */
+export interface LNVideoPanelFrame {
+  sec: number | null
+  url: string
+}
+
 interface LNVideoPanelProps {
   src: string
   /** 在线平台网页链接（src 为空时降级展示，供用户去原平台观看） */
@@ -32,6 +38,8 @@ interface LNVideoPanelProps {
   onDurationChange?: (duration: number) => void
   markers?: { sec: number }[]
   subtitle?: string
+  /** 故事板帧：时间轴 hover/focus 预览最近帧 + 缩略图 seek 参考 */
+  frames?: LNVideoPanelFrame[]
   /** NoteShell can render transport outside an overflow-hidden player wrapper. */
   renderTransportInline?: boolean
   /** 状态变化时通知父组件重渲染（驱动 transportNode getter 刷新） */
@@ -96,6 +104,7 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
     onDurationChange,
     markers = [],
     subtitle,
+    frames = [],
     renderTransportInline = true,
     onTransportChange,
     isPipActive,
@@ -120,6 +129,7 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
     const [isFullscreen, setIsFullscreen] = useState(false)
     const [nativePip, setNativePip] = useState(false)
     const [subtitlesOn, setSubtitlesOn] = useState(true)
+    const [moreOpen, setMoreOpen] = useState(false)
     const pipActive = typeof onTogglePip === 'function' ? !!isPipActive : nativePip
 
     const insertAtCursor = useLnEditorStore((s) => s.insertAtCursor)
@@ -283,6 +293,74 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
       setHoverTime(null)
     }, [])
 
+    /* ── 画面点击播放/暂停（Q2：子控件不得冒泡触发） ── */
+
+    const handleSurfaceClick = useCallback(() => {
+      togglePlay()
+    }, [togglePlay])
+
+    const handleSurfaceKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.code === 'Enter' || e.code === 'Space') {
+        e.preventDefault()
+        e.stopPropagation()
+        togglePlay()
+      }
+    }, [togglePlay])
+
+    /* ── 时间轴 slider：键盘 seek（←/→ 步进 5s）与 hover 预览 ── */
+
+    const seekBy = useCallback((delta: number) => {
+      const v = videoRef.current
+      if (!v) return
+      const upper = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : Number.MAX_SAFE_INTEGER
+      v.currentTime = Math.max(0, Math.min(upper, v.currentTime + delta))
+    }, [])
+
+    const handleSliderKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.code === 'ArrowLeft') {
+        e.preventDefault()
+        e.stopPropagation()
+        seekBy(-5)
+      } else if (e.code === 'ArrowRight') {
+        e.preventDefault()
+        e.stopPropagation()
+        seekBy(5)
+      } else if (e.code === 'Home') {
+        e.preventDefault()
+        seekBy(Number.NEGATIVE_INFINITY)
+      } else if (e.code === 'End' && duration > 0) {
+        e.preventDefault()
+        seekBy(Number.POSITIVE_INFINITY)
+      }
+    }, [seekBy, duration])
+
+    const handleSliderFocus = useCallback(() => {
+      const v = videoRef.current
+      if (!v || !duration) return
+      setHoverTime(v.currentTime)
+      setHoverX(duration > 0 ? (v.currentTime / duration) * 100 : 0)
+    }, [duration])
+
+    const handleSliderBlur = useCallback(() => {
+      setHoverTime(null)
+    }, [])
+
+    /** hover/focus 预览：最近故事板帧 + 时间码 */
+    const previewFrame = (() => {
+      if (hoverTime == null) return null
+      let best: LNVideoPanelFrame | null = null
+      let bestDist = Number.POSITIVE_INFINITY
+      for (const frame of frames) {
+        if (typeof frame.sec !== 'number' || !frame.url) continue
+        const dist = Math.abs(frame.sec - hoverTime)
+        if (dist < bestDist) {
+          bestDist = dist
+          best = frame
+        }
+      }
+      return best
+    })()
+
     /* ── 音量滑杆交互（拖拽 + 点击） ── */
 
     const applyVolumeFromEvent = useCallback((e: MouseEvent) => {
@@ -372,6 +450,8 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
       function handleKey(e: KeyboardEvent) {
         const v = videoRef.current
         if (!v) return
+        // 画面/时间轴 slider 自己处理过的按键不再全局重复触发
+        if (e.defaultPrevented) return
         if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') return
 
         if (e.code === 'Space') {
@@ -396,29 +476,26 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
     /* ── 通知父组件状态变化（驱动 transportNode getter 刷新） ── */
     useEffect(() => {
       onTransportChange?.()
-    }, [playing, speed, muted, volume, loop, progress, duration, hoverTime, hoverX, isFullscreen, pipActive, subtitlesOn, shooting, onTransportChange])
+    }, [playing, speed, muted, volume, loop, progress, duration, hoverTime, hoverX, isFullscreen, pipActive, subtitlesOn, shooting, moreOpen, onTransportChange])
 
+    /**
+     * Q2 控制带：transport + 当前时间/进度合并为一条 44–52px 的 `.note-ctl-band`，
+     * 低频按钮（±10s / 循环 / 截图 / 画中画 / 全屏）收进「…」popover。
+     * 时间轴热区为 role="slider"，←/→ 步进 5s，hover/focus 预览最近故事板帧。
+     */
     function renderTransportNode() {
+      const currentSec = progress * duration
       return (
         <>
-          <div className="note-controls">
-            <div className="note-transport">
-              <button className="note-icon-btn" onClick={togglePlay} title="播放/暂停 (Space)">
-                {playing ? <Pause size={15} /> : <Play size={15} fill="currentColor" />}
-              </button>
-              <button className="note-icon-btn" onClick={() => skip(-10)} title="后退 10 秒">
-                <svg viewBox="0 0 24 24"><path d="M12.5 8V4l-4.5 4 4.5 4V8a6 6 0 1 1-6 6" /><text x="12" y="16" fontSize="7" fill="currentColor" textAnchor="middle" stroke="none" fontFamily="var(--fm)" fontWeight="700">10</text></svg>
-              </button>
-              <button className="note-icon-btn" onClick={() => skip(10)} title="前进 10 秒">
-                <svg viewBox="0 0 24 24"><path d="M11.5 8V4l4.5 4-4.5 4V8a6 6 0 1 0 6 6" /><text x="12" y="16" fontSize="7" fill="currentColor" textAnchor="middle" stroke="none" fontFamily="var(--fm)" fontWeight="700">10</text></svg>
-              </button>
-              <button className={`note-icon-btn${subtitlesOn ? ' is-on' : ''}`} onClick={toggleSubtitles} disabled={!subtitle} title={!subtitle ? '暂无字幕轨' : subtitlesOn ? '隐藏字幕' : '显示字幕'}>
-                <Subtitles size={15} />
-              </button>
-              <button className={`note-icon-btn${loop ? ' is-on' : ''}`} onClick={toggleLoop} title="循环播放">
-                <Repeat size={15} />
-              </button>
-            </div>
+          <div className="note-ctl-band">
+            <button className="note-icon-btn" onClick={togglePlay} title="播放/暂停 (Space)" aria-label={playing ? '暂停' : '播放'}>
+              {playing ? <Pause size={15} /> : <Play size={15} fill="currentColor" />}
+            </button>
+            <button className={`note-icon-btn${subtitlesOn ? ' is-on' : ''}`} onClick={toggleSubtitles} disabled={!subtitle} title={!subtitle ? '暂无字幕轨' : subtitlesOn ? '隐藏字幕' : '显示字幕'} aria-pressed={subtitlesOn && !!subtitle}>
+              <Subtitles size={15} />
+            </button>
+            <span className="note-ctl-time">{formatTs(currentSec)} / {formatTs(duration)}</span>
+            <span className="note-ctl-spacer" />
             <button className="note-speed" onClick={cycleSpeed} title="切换倍速">
               {formatSpeed(speed)}x
             </button>
@@ -434,29 +511,64 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
                 <div className="note-volume-fill" style={{ width: `${(muted ? 0 : volume) * 100}%` }} />
               </div>
             </div>
+            <div className="note-ctl-more-wrap">
+              <button
+                className="note-icon-btn note-ctl-more"
+                onClick={() => setMoreOpen((open) => !open)}
+                title="更多播放控制"
+                aria-expanded={moreOpen}
+                aria-haspopup="menu"
+              >
+                <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+                  <circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none" />
+                  <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+                  <circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none" />
+                </svg>
+              </button>
+              {moreOpen && (
+                <div className="note-ctl-more-menu" role="menu">
+                  <button role="menuitem" onClick={() => { skip(-10); setMoreOpen(false) }} title="后退 10 秒">
+                    <svg viewBox="0 0 24 24" width="14" height="14"><path d="M12.5 8V4l-4.5 4 4.5 4V8a6 6 0 1 1-6 6" /><text x="12" y="16" fontSize="7" fill="currentColor" textAnchor="middle" stroke="none" fontFamily="var(--fm)" fontWeight="700">10</text></svg>
+                    后退 10 秒
+                  </button>
+                  <button role="menuitem" onClick={() => { skip(10); setMoreOpen(false) }} title="前进 10 秒">
+                    <svg viewBox="0 0 24 24" width="14" height="14"><path d="M11.5 8V4l4.5 4-4.5 4V8a6 6 0 1 0 6 6" /><text x="12" y="16" fontSize="7" fill="currentColor" textAnchor="middle" stroke="none" fontFamily="var(--fm)" fontWeight="700">10</text></svg>
+                    前进 10 秒
+                  </button>
+                  <button role="menuitem" className={loop ? ' is-on' : ''} onClick={() => { toggleLoop(); setMoreOpen(false) }} title="循环播放">
+                    <Repeat size={14} /> 循环播放
+                  </button>
+                  <button role="menuitem" onClick={() => { setMoreOpen(false); void handleScreenshot() }} disabled={shooting} title="截取当前帧">
+                    <Camera size={14} /> 截取当前帧
+                  </button>
+                  <button role="menuitem" className={pipActive ? ' is-on' : ''} onClick={() => { setMoreOpen(false); void togglePip() }} disabled={!src} title={pipActive ? '退出画中画' : '画中画'}>
+                    <PictureInPicture2 size={14} /> {pipActive ? '退出画中画' : '画中画'}
+                  </button>
+                  <button role="menuitem" onClick={() => { setMoreOpen(false); toggleFullscreen() }} title={isFullscreen ? '退出全屏' : '全屏'}>
+                    {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />} {isFullscreen ? '退出全屏' : '全屏'}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
           <div className="note-timeline">
-            <div className="note-timeline-head">
-              <span className="note-time">{formatTs(progress * duration)} / {formatTs(duration)}</span>
-              <div className="note-timeline-actions">
-                <button className="note-icon-btn" onClick={handleScreenshot} disabled={shooting} title="截取当前帧">
-                  <Camera size={15} />
-                </button>
-                <button className={`note-icon-btn${pipActive ? ' is-on' : ''}`} onClick={togglePip} disabled={!src} title={pipActive ? '退出画中画' : '画中画'}>
-                  <PictureInPicture2 size={15} />
-                </button>
-                <button className="note-icon-btn" onClick={toggleFullscreen} title={isFullscreen ? '退出全屏' : '全屏'}>
-                  {isFullscreen ? <Minimize size={15} /> : <Maximize size={15} />}
-                </button>
-              </div>
-            </div>
             <div className="note-progress-wrap">
               <div
                 className="note-progress"
+                role="slider"
+                tabIndex={0}
+                aria-label="播放进度"
+                aria-valuemin={0}
+                aria-valuemax={Math.round(duration)}
+                aria-valuenow={Math.round(currentSec)}
+                aria-valuetext={`${formatTs(currentSec)} / ${formatTs(duration)}`}
                 ref={progressRef}
                 onClick={onProgressClick}
                 onMouseMove={onProgressHover}
                 onMouseLeave={onProgressLeave}
+                onKeyDown={handleSliderKeyDown}
+                onFocus={handleSliderFocus}
+                onBlur={handleSliderBlur}
               >
                 <span className="note-progress-fill" style={{ width: `${progress * 100}%` }} />
                 {duration > 0 && markers.map((marker, idx) => (
@@ -472,6 +584,12 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
                 >
                   {hoverTime != null && formatTs(hoverTime)}
                 </div>
+                {hoverTime != null && (
+                  <div className="note-timeline-preview" style={{ left: `${hoverX}%` }}>
+                    {previewFrame && <img src={previewFrame.url} alt="" />}
+                    <span>{formatTs(hoverTime)}</span>
+                  </div>
+                )}
               </div>
               {duration > 0 && (
                 <div className="note-progress-ticks" aria-hidden="true">
@@ -560,7 +678,17 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
 
     return (
       <div className="ln-video-panel" ref={panelRef}>
-        <div className="ln-video-wrapper">
+        {/* Q2：画面单击切换播放/暂停；role=button 可键盘操作。
+            子控件（overlay、字幕层之外的控制带/时间轴等）在 wrapper 外部或
+            自带 stopPropagation，不会冒泡二次触发。 */}
+        <div
+          className="ln-video-wrapper"
+          role="button"
+          tabIndex={0}
+          aria-label={playing ? '暂停视频' : '播放视频'}
+          onClick={handleSurfaceClick}
+          onKeyDown={handleSurfaceKeyDown}
+        >
           <video
             ref={videoRef}
             src={src}
@@ -574,7 +702,14 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
             onEnded={handleEnded}
           />
           {!playing && (
-            <button className="note-play-overlay" onClick={togglePlay} title="播放">
+            <button
+              className="note-play-overlay"
+              onClick={(e) => {
+                e.stopPropagation()
+                togglePlay()
+              }}
+              title="播放"
+            >
               <Play size={24} fill="currentColor" />
             </button>
           )}

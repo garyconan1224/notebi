@@ -163,7 +163,7 @@ export interface NoteMedia {
   images?: string[]        // image 类型：图片 URL 列表
   image_infos?: ImageInfo[]  // image 类型：每张图的结构化分析信息
   video?: { url: string; duration: number }  // video 类型
-  frames?: { sec: number; url: string }[]    // video 类型：关键帧
+  frames?: { sec: number | null; url: string }[]    // video 类型：关键帧/故事板（旧版帧可能无时间戳 → null）
   audio?: string           // audio 类型：音频 URL
   waveform?: number[]      // audio 类型：真实音频内容归一化峰值
 }
@@ -218,6 +218,11 @@ export interface ItemNote {
   summary_retry_task_id?: string
   /** 无说话人标签的音视频可只补做说话人识别，不重跑转写。 */
   speaker_retry_task_id?: string
+  /**
+   * D1 说话人四状态（后端按 task payload 的 diarization 参数兼容推断）：
+   * none=未请求 / running=处理中 / failed=请求后无结果 / data=有说话人数据。
+   */
+  speaker_status?: 'none' | 'running' | 'failed' | 'data'
 }
 
 /** 中文展示文案——状态 */

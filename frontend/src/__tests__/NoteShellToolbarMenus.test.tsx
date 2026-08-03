@@ -128,7 +128,8 @@ describe('NoteShell 导出菜单信息架构（阶段 A1）', () => {
 
     expect(screen.getByText('选择内容')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /当前显示内容/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^主笔记$/ })).toBeInTheDocument()
+    // 顶栏版本按钮也叫「主笔记」，这里只断言导出菜单内的内容来源项
+    expect(within(document.querySelector('.nibi-note-export-menu') as HTMLElement).getByRole('button', { name: /^主笔记$/ })).toBeInTheDocument()
     expect(screen.queryByText('Markdown')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /当前显示内容/ }))
@@ -153,7 +154,7 @@ describe('NoteShell 导出菜单信息架构（阶段 A1）', () => {
   it('按用途分组笔记与字幕导出格式', async () => {
     await renderNoteShell()
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
-    fireEvent.click(screen.getByRole('button', { name: /^主笔记$/ }))
+    fireEvent.click(within(document.querySelector('.nibi-note-export-menu') as HTMLElement).getByRole('button', { name: /^主笔记$/ }))
 
     const exportMenu = document.querySelector('.nibi-note-export-menu')
     expect(exportMenu).not.toBeNull()

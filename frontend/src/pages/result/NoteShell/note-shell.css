@@ -3213,7 +3213,8 @@
 
 /* ── 响应式 ── */
 
-@media (max-width: 920px) {
+/* Q2：<900px 才允许单列堆叠（1024 窄窗必须保持双列） */
+@media (max-width: 899px) {
   .nibi-note-hero {
     align-items: flex-start;
     flex-direction: column;
@@ -3430,4 +3431,283 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+/* ════ Q2：故事板（StoryboardStrip，独立于 VLM，≤12 帧）════════
+   横向滚动为声明豁免容器（同 .frames）。无帧时组件整体不渲染。 */
+.nibi-storyboard {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--bdrs, rgba(25, 20, 16, 0.12)) transparent;
+  background: var(--srf, #fff);
+  border-bottom: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
+  flex-shrink: 0;
+}
+
+.nibi-storyboard-frame {
+  position: relative;
+  flex: 0 0 auto;
+  width: 88px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.nibi-storyboard-frame img {
+  display: block;
+  width: 100%;
+  height: 49px;
+  object-fit: cover;
+  background: #0a0a0a;
+}
+
+.nibi-storyboard-frame span {
+  display: block;
+  padding: 1px 0 2px;
+  font-family: var(--fm, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  color: var(--mut, #7c7464);
+  text-align: center;
+}
+
+.nibi-storyboard-frame.is-active {
+  border-color: var(--acc-bright, var(--acc, #2563eb));
+}
+
+/* ════ Q2 / D1：说话人四状态行 ════ */
+.nibi-speaker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.nibi-speaker-row--running {
+  background: var(--accl, rgba(37, 99, 235, 0.08));
+  color: var(--fg2, #3d3929);
+}
+
+.nibi-speaker-row--failed {
+  background: var(--wrnl, rgba(217, 119, 6, 0.1));
+  color: var(--fg2, #3d3929);
+}
+
+.nibi-speaker-row--failed button {
+  margin-left: auto;
+  border: 1px solid var(--bdrs, rgba(25, 20, 16, 0.16));
+  border-radius: var(--rs, 6px);
+  background: var(--srf, #fff);
+  color: var(--fg2, #3d3929);
+  font-size: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.nibi-speaker-row--failed button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.nibi-speaker-row-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--speaker-color, var(--mut, #7c7464));
+  flex-shrink: 0;
+}
+
+.nibi-speaker-row small {
+  color: var(--mut, #7c7464);
+  font-size: 11px;
+}
+
+.nibi-speaker-row--data {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 4px 12px;
+}
+
+.nibi-speaker-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 4px 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fg2, #3d3929);
+  cursor: pointer;
+}
+
+.nibi-speaker-row-swatches {
+  display: inline-flex;
+}
+
+.nibi-speaker-row-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--speaker-color, var(--mut, #7c7464));
+  border: 1px solid var(--srf, #fff);
+}
+
+.nibi-speaker-row-swatch + .nibi-speaker-row-swatch {
+  margin-left: -3px;
+}
+
+.nibi-speaker-row-caret {
+  margin-left: auto;
+  color: var(--mut, #7c7464);
+}
+
+.nibi-speaker-row--data:not(.is-expanded) .nibi-speaker-row-caret {
+  transform: rotate(-90deg);
+}
+
+.nibi-speaker-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 0 6px;
+}
+
+.nibi-speaker-row-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nibi-speaker-row-item > small {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.nibi-speaker-row-input {
+  flex: 0 1 160px;
+  min-width: 0;
+  border: 1px solid var(--bdrs, rgba(25, 20, 16, 0.16));
+  border-radius: var(--rs, 6px);
+  background: var(--srf, #fff);
+  color: var(--fg, #191410);
+  font-size: 12px;
+  padding: 3px 8px;
+}
+
+.nibi-speaker-row-role {
+  flex: 0 0 auto;
+  border: 1px solid var(--bdrs, rgba(25, 20, 16, 0.16));
+  border-radius: var(--rs, 6px);
+  background: var(--srf, #fff);
+  color: var(--fg2, #3d3929);
+  font-size: 12px;
+  padding: 3px 6px;
+}
+
+.nibi-speaker-row-item > button:not(.nibi-speaker-row-name) {
+  border: 1px solid var(--bdrs, rgba(25, 20, 16, 0.16));
+  border-radius: var(--rs, 6px);
+  background: var(--srf, #fff);
+  color: var(--fg2, #3d3929);
+  font-size: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.nibi-speaker-row-name {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--fg2, #3d3929);
+  cursor: pointer;
+}
+
+.nibi-speaker-row-name:hover {
+  text-decoration: underline;
+}
+
+.nibi-speaker-row-hint {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--mut, #7c7464);
+}
+
+/* ════ Q2：沉浸式固定退出入口 ════ */
+.nibi-note-immersive-exit {
+  position: fixed;
+  top: 14px;
+  right: 16px;
+  z-index: 130;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(12, 10, 8, 0.82);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.24);
+}
+
+.nibi-note-immersive-exit kbd {
+  font-family: var(--fm, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.nibi-note-immersive-exit:hover {
+  background: rgba(12, 10, 8, 0.92);
+}
+
+/* ════ Q2：≤1100px 窄窗压缩（1024 双列审查）════════ */
+@media (max-width: 1100px) {
+  /* 顶栏长标题下保持单行：工具区可横向滚动（声明豁免） */
+  .nibi-note-bar-tools {
+    overflow-x: auto;
+    scrollbar-width: thin;
+    max-width: 70%;
+  }
+
+  /* 故事板缩略图压缩但不隐藏 */
+  .nibi-storyboard-frame {
+    width: 72px;
+  }
+
+  .nibi-storyboard-frame img {
+    height: 30px;
+  }
+
+  /* 说话人数据行在窄窗隐藏（说话人信息保留在字幕行标签）；
+     失败/处理中状态行保留 */
+  .nibi-speaker-row--data {
+    display: none;
+  }
+}
+
+/* 1024 窄窗强制紧凑 55/45 双列（覆盖用户自定义分栏），<900 才转单列 */
+@media (max-width: 1100px) {
+  .nibi-note-page {
+    --note-left-width: 55% !important;
+  }
+
+  .nibi-note-splitter {
+    display: none;
+  }
 }

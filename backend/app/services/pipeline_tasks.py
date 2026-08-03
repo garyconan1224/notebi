@@ -37,6 +37,7 @@ from shared.audio_analyzer import (
 from shared.video_analyzer import (
     CaptureParams,
     extract_first_frame,
+    extract_storyboard_frames,
     find_videos,
     get_output_dir,
     get_safe_name,
@@ -2914,6 +2915,7 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
     # ── 4+5. transcribe + analyze 并行步骤 ──────────────────────
     # R22: 音频转录(ASR)与视频截帧(VLM)本质独立，可并行执行。
     # 进度区间：transcribe 0.12~0.30, analyze 0.30~0.60，各自独立更新。
+    _storyboard_frames: List[Dict[str, Any]] = []
     if "transcribe" in steps or "analyze" in steps:
         from concurrent.futures import Future, as_completed
 
@@ -2963,6 +2965,25 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
             raise ValueError(
                 f"无可用的本地视频文件进行转录 (project_video_dir={project_video_dir})"
             )
+
+        # Q2 故事板：独立于 VLM 的轻量截帧。视频文件就绪后立即按时长均分
+        # 抽 ≤12 帧并持久化进 task.result：之后即使转录/画面理解失败，
+        # 结果页仍有可 seek 的故事板（不随 VLM 产物存亡）。
+        if note_kind == "video":
+            try:
+                _storyboard_frames = extract_storyboard_frames(
+                    video_file,
+                    get_output_dir(Path(video_file)) / "storyboard",
+                    max_frames=12,
+                )
+                if _storyboard_frames:
+                    _persist_intermediate(runner, task_id, {"frames": _storyboard_frames})
+            except Exception as _sb_err:  # noqa: BLE001 故事板失败不得阻塞主流程
+                runner.append_log(
+                    task_id,
+                    f"⚠️ 故事板截帧失败（不影响转写/分析主流程）: {_sb_err}",
+                    level="warning",
+                )
 
         # 预检查：analyze 需要 api_key
         if "analyze" in steps and not api_key:
@@ -3432,6 +3453,10 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
     # 图文内容分类：识别 tool_recommendation 等，写入 content_category + default_summary_template
     if note_kind == "image_text":
         _classify_image_text_content(result, raw_source_text, image_infos, note_body)
+    # Q2: 故事板帧（独立于 VLM 抽取）进入最终 result——最终 return 会整体
+    # 覆盖 task.result，中间持久化的 frames 必须随最终结果带出。
+    if _storyboard_frames and not result.get("frames"):
+        result["frames"] = _storyboard_frames
     return result
 
 

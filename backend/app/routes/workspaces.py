@@ -5606,6 +5606,78 @@ def _canonical_note_owner(workspace_id: str, item_id: str) -> str:
     return owner_workspace_id
 
 
+def _task_requests_diarization(task: Any) -> bool:
+    """任务 payload 是否请求过区分说话人。
+
+    兼容推断：旧任务可能没有 ``diarize`` 键——没有即视为未请求，
+    不做数据迁移。``_retry_stage='diarization'`` 是「仅补做说话人识别」
+    重试任务，同样算作已请求。
+    """
+    payload = getattr(task, "payload", None) or {}
+    if str(payload.get("_retry_stage") or "") == "diarization":
+        return True
+    if payload.get("diarize"):
+        return True
+    return str(payload.get("summary_mode") or "") == "speaker_aware"
+
+
+def _is_transcript_producer(task: Any, item_type: str) -> bool:
+    """判断任务是否为当前转录的产出任务（与 speaker_retry_task_id 同口径）。"""
+    if item_type == "audio":
+        return getattr(task, "task_type", "") == "audio"
+    if item_type == "video":
+        return getattr(task, "task_type", "") == "note" and bool(
+            (getattr(task, "result", None) or {}).get("video_file")
+        )
+    return False
+
+
+def _note_speaker_status(
+    item_type: str,
+    transcript: Optional[List[Dict[str, Any]]],
+    related_task_ids: List[str],
+    task_lookup: Any,
+) -> str:
+    """D1：说话人四状态判定。
+
+    - ``data``：转录已带说话人标签；
+    - ``running``：有请求过区分说话人的任务仍在运行（含补做重试）；
+    - ``failed``：产出当前转录的任务请求过区分说话人，但终态仍无标签；
+    - ``none``：从未请求过区分说话人（整层不渲染）。
+
+    不得只看 speakerIds / speaker_retry_task_id：必须区分「未请求」与
+    「请求后无结果」。旧任务按原 task payload 的 diarization 参数兼容推断。
+    """
+    lines = transcript or []
+    if item_type not in {"audio", "video"} or not lines:
+        return "none"
+    has_labels = any(
+        str(line.get("speaker") or "").strip()
+        for line in lines
+        if isinstance(line, dict)
+    )
+    if has_labels:
+        return "data"
+
+    producer: Any = None
+    for task_id in reversed(related_task_ids):
+        task = task_lookup(task_id)
+        if task is None:
+            continue
+        status = getattr(task, "status", "")
+        status_value = getattr(status, "value", status)
+        if status_value not in TERMINAL_STATUS_VALUES:
+            if _task_requests_diarization(task):
+                return "running"
+            continue
+        if producer is None and _is_transcript_producer(task, item_type):
+            producer = task
+
+    if producer is not None and _task_requests_diarization(producer):
+        return "failed"
+    return "none"
+
+
 def _rebuild_source_md_transcript(nd: Path, lines: List[Dict[str, Any]]) -> None:
     """用规范化字幕行重建 source.md 的「转写正文」，保留已有「视频信息」头。
 
@@ -5776,12 +5848,14 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
             _video_url = item.source_value if item.source == "url" else ""
         duration = float(results.get("duration_sec") or results.get("duration") or 0)
         media["video"] = {"url": _video_url, "duration": duration}
-        # frames（可能已 materialize 为 /static URL，也可能是绝对路径）
+        # frames（可能已 materialize 为 /static URL，也可能是绝对路径）。
+        # 旧版 analyze 帧没有时间戳：sec 传 null，前端不把它们当可 seek 故事板。
         frames_data = results.get("frames") or []
         media["frames"] = []
         for f in frames_data:
             fp = f.get("frame_image_path") or f.get("image_path") or ""
-            sec = f.get("sec", 0)
+            raw_sec = f.get("sec")
+            sec = float(raw_sec) if isinstance(raw_sec, (int, float)) else None
             media["frames"].append({"sec": sec, "url": fp if fp.startswith("/static/") else to_static_url(fp)})
         # transcript（优先 segments 带时间码，降级为纯文本规范化）
         transcript = _note_transcript(results, nd)
@@ -5813,6 +5887,12 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
         str(segment.get("speaker") or "").strip()
         for segment in (transcript or [])
         if isinstance(segment, dict)
+    )
+    speaker_status = _note_speaker_status(
+        item_type,
+        transcript,
+        list(item.related_task_ids or []),
+        _pipeline_runner.store.get,
     )
     speaker_retry_task_id = ""
     if item_type in {"audio", "video"} and transcript and not has_speaker_labels:
@@ -5846,6 +5926,8 @@ def get_item_note(workspace_id: str, item_id: str) -> Dict[str, Any]:
         "summary_failure": summary_failure,
         "summary_retry_task_id": latest_result_task.task_id if summary_failure and latest_result_task else "",
         "speaker_retry_task_id": speaker_retry_task_id,
+        # D1：前端按四状态渲染说话人区域，不再只看 speakerIds/retry_task_id
+        "speaker_status": speaker_status,
     }
 
 

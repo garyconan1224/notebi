@@ -30,3 +30,9 @@ Object.defineProperty(window, 'localStorage', {
   configurable: true,
   value: localStorageMock,
 })
+
+// jsdom 未实现 scrollIntoView：字幕高亮行自动滚动等行为依赖它，
+// 测试里只需确认调用存在，不需要真实滚动。
+if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = vi.fn()
+}

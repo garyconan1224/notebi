@@ -299,6 +299,57 @@ def extract_frames(video_path: Path, interval_sec: int = 2, max_frames: int | No
     cap.release()
 
 
+def extract_storyboard_frames(
+    video_path: str | Path,
+    output_dir: str | Path,
+    max_frames: int = 12,
+) -> list[dict[str, Any]]:
+    """轻量故事板截帧：按时长均分位置抽帧，独立于 VLM（Q2）。
+
+    返回 ``[{"sec": int, "frame_image_path": str}]``，最多 ``max_frames`` 张。
+    用位置 seek（CAP_PROP_POS_MSEC）而不是全量解码，长视频也轻量；
+    seek 取不到帧时该位置跳过，不伪造内容。视频打不开返回空列表。
+    """
+    video_path = Path(video_path)
+    if not video_path.exists():
+        return []
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        return []
+    try:
+        fps = cap.get(cv2.CAP_PROP_FPS) or 0.0
+        total = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0.0
+        duration = int(total / fps) if fps > 0 and total > 0 else 0
+        out_dir = Path(output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        safe_name = get_safe_name(video_path)
+
+        if duration <= 0:
+            # 拿不到时长：只取首帧，保证故事板不空转
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                return []
+            target = out_dir / f"{safe_name}_sb_00_00_00.jpg"
+            save_frame_to_disk(frame, target)
+            return [{"sec": 0, "frame_image_path": str(target.resolve())}]
+
+        count = max(1, min(max_frames, duration))
+        frames_out: list[dict[str, Any]] = []
+        for i in range(count):
+            sec = int(duration * i / count)
+            cap.set(cv2.CAP_PROP_POS_MSEC, sec * 1000)
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                continue
+            ts = format_timestamp(sec)
+            target = out_dir / f"{safe_name}_sb_{ts.replace(':', '_')}.jpg"
+            save_frame_to_disk(frame, target)
+            frames_out.append({"sec": sec, "frame_image_path": str(target.resolve())})
+        return frames_out
+    finally:
+        cap.release()
+
+
 def extract_frames_by_scenes(video_path: Path, frames_per_shot: int = 3):
     """N7: 用 PySceneDetect 检测镜头切换，每镜头取 2 或 3 帧。
 
