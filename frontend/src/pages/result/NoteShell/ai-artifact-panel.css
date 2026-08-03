@@ -229,3 +229,99 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ════ Q4 / D7：语义渲染器样式 ════ */
+
+/* 旧版产物徽标 */
+.note-artifact-legacy { position: relative; }
+.note-artifact-legacy-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  margin-bottom: 8px;
+  border: 1px solid var(--bdrs);
+  border-radius: var(--rs, 6px);
+  color: var(--mut);
+  font-size: 11px;
+}
+
+/* 思维导图 */
+.mindmap-wrap { display: flex; flex-direction: column; gap: 10px; }
+.mindmap-actions { display: flex; gap: 8px; }
+.mindmap-actions button {
+  padding: 4px 10px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--rs, 6px);
+  background: var(--srf);
+  color: var(--fg2);
+  font-size: 12px;
+  cursor: pointer;
+}
+.mindmap-actions button:hover { border-color: var(--bdrs); color: var(--fg); }
+.mindmap-tree, .mindmap-children { list-style: none; margin: 0; padding-left: 0; }
+.mindmap-children { padding-left: 20px; border-left: 1px solid var(--bdr); margin-left: 8px; }
+.mindmap-node-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: var(--rs, 6px);
+}
+.mindmap-node-row:hover { background: var(--bgalt); }
+.mindmap-node-row[data-depth='0'] .mindmap-node-text { font-weight: 700; color: var(--acc-text, var(--acc)); }
+.mindmap-toggle {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: var(--mut);
+  cursor: pointer;
+}
+.mindmap-leaf-dot { width: 5px; height: 5px; border-radius: 99px; background: var(--bdrs); margin: 0 6px; }
+.mindmap-node-text { font-size: 13px; color: var(--fg2); }
+
+/* 行动项 */
+.artifact-action-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.artifact-action-items li { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--fg2); }
+.artifact-action-items li input { margin-top: 2px; accent-color: var(--acc); }
+.artifact-action-items li.is-done span { text-decoration: line-through; color: var(--mut); }
+
+/* 要点卡 */
+.artifact-key-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.artifact-key-card {
+  padding: 12px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--r, 8px);
+  background: var(--srf);
+}
+.artifact-key-card h4 { margin: 0 0 6px; font-size: 13.5px; color: var(--fg); }
+.artifact-key-card p { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--fg2); white-space: pre-wrap; }
+
+/* 闪卡 */
+.artifact-flashcards { display: flex; flex-direction: column; gap: 8px; }
+.artifact-flashcard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--r, 8px);
+  background: var(--srf);
+  cursor: pointer;
+}
+.artifact-flashcard-q { font-size: 13px; font-weight: 600; color: var(--fg); }
+.artifact-flashcard-a { font-size: 12.5px; line-height: 1.55; color: var(--fg2); white-space: pre-wrap; }
+.artifact-flashcard-hint { font-size: 11px; color: var(--mut); }
+
+/* 术语表 / 时间线 */
+.artifact-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.artifact-table th, .artifact-table td {
+  border: 1px solid var(--bdr);
+  padding: 6px 9px;
+  text-align: left;
+  vertical-align: top;
+}
+.artifact-table th { background: var(--bgalt); color: var(--fg); font-weight: 600; }
+.artifact-table td { color: var(--fg2); }

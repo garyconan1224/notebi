@@ -11,6 +11,16 @@ import {
 import { useLnEditorStore } from '@/store/lnEditorStore'
 import { useTaskStore } from '@/store/taskStore'
 import type { TaskRecord } from '@/types/task'
+import {
+  ActionItemsView,
+  FlashcardsView,
+  GlossaryView,
+  KeyCardsView,
+  MindMapTree,
+  TimelineView,
+  type ArtifactContentJson,
+  type MindMapData,
+} from './ArtifactRenderers'
 
 import './ai-artifact-panel.css'
 
@@ -42,6 +52,40 @@ function downloadArtifact(artifact: NoteArtifact) {
   anchor.click()
   anchor.remove()
   URL.revokeObjectURL(url)
+}
+
+/** Q4 / D7：按 kind 用语义组件渲染 content_json；无结构化内容回退 Markdown 并标注旧版。 */
+export function ArtifactContentView({ artifact }: { artifact: NoteArtifact }) {
+  const contentJson = (artifact.content_json ?? null) as ArtifactContentJson
+
+  if (artifact.kind === 'mind_map' && contentJson && (contentJson as MindMapData).root) {
+    return <MindMapTree data={contentJson as MindMapData} title={artifact.title} />
+  }
+  if (artifact.kind === 'action_items' && contentJson && Array.isArray((contentJson as { items?: unknown }).items)) {
+    return <ActionItemsView items={(contentJson as { items: Array<{ id: string; text: string; done: boolean }> }).items} />
+  }
+  if (artifact.kind === 'key_cards' && contentJson && Array.isArray((contentJson as { cards?: unknown }).cards)) {
+    const cards = (contentJson as { cards: Array<{ id?: string; title?: string; body?: string }> }).cards
+    return <KeyCardsView cards={cards.map((c, i) => ({ id: c.id ?? `c${i}`, title: c.title ?? '', body: c.body ?? '' }))} />
+  }
+  if (artifact.kind === 'flashcards' && contentJson && Array.isArray((contentJson as { cards?: unknown }).cards)) {
+    const cards = (contentJson as { cards: Array<{ id?: string; question?: string; answer?: string }> }).cards
+    return <FlashcardsView cards={cards.map((c, i) => ({ id: c.id ?? `f${i}`, question: c.question ?? '', answer: c.answer ?? '' }))} />
+  }
+  if (artifact.kind === 'glossary' && contentJson && Array.isArray((contentJson as { rows?: unknown }).rows)) {
+    return <GlossaryView rows={(contentJson as { rows: Array<{ term: string; definition: string; context: string }> }).rows} />
+  }
+  if (artifact.kind === 'timeline' && contentJson && Array.isArray((contentJson as { rows?: unknown }).rows)) {
+    return <TimelineView rows={(contentJson as { rows: Array<{ time: string; event: string; who: string; impact: string }> }).rows} />
+  }
+
+  // 旧版产物 / 解析失败：回退 Markdown 并标注
+  return (
+    <div className="note-artifact-legacy">
+      <span className="note-artifact-legacy-badge">旧版产物</span>
+      <pre className="note-artifact-content">{artifact.content_md}</pre>
+    </div>
+  )
 }
 
 export function AiArtifactPanel({
@@ -223,7 +267,7 @@ export function AiArtifactPanel({
                     </div>
                   </div>
                 ) : (
-                  <pre className="note-artifact-content">{selected.content_md}</pre>
+                  <ArtifactContentView artifact={selected} />
                 )}
                 <footer>
                   {selected.kind !== 'selection_rewrite' && (

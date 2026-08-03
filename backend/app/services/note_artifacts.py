@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict
 
 from backend.app.models.workspace import WorkspaceItem
+from backend.app.services.artifact_parser import parse_artifact_json
 from backend.app.services.summary_generator import _call_llm
 
 ARTIFACT_KINDS = {
@@ -107,11 +108,16 @@ def generate_note_artifact(
     )
     if progress:
         progress(0.88, f"正在整理{label}")
+    content_md = content_md.strip()
+    # Q4 / D7：同时产出按 kind 校验的结构化 JSON；解析失败为 None，
+    # 前端回退 Markdown 并标注旧版。content_md 始终是可移植降级文本。
+    content_json = parse_artifact_json(kind, content_md)
     return {
         "artifact_id": str(uuid.uuid4()),
         "kind": kind,
         "title": label,
-        "content_md": content_md.strip(),
+        "content_md": content_md,
+        "content_json": content_json,
         "source_scope": "selection" if kind == "selection_rewrite" else "full_note",
         "original_text": source if kind == "selection_rewrite" else "",
         "model_used": model_used,

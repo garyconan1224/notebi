@@ -14,6 +14,8 @@ export interface NoteArtifact {
   kind: NoteArtifactKind
   title: string
   content_md: string
+  /** Q4 / D7：按 kind 校验的结构化内容；旧产物可能缺失（回退 Markdown） */
+  content_json?: unknown
   source_scope: 'full_note' | 'selection'
   original_text: string
   model_used: string
