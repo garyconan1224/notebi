@@ -11,7 +11,8 @@
 
 | 哈希 | 主题 | 批次 |
 |---|---|---|
-| 最新修正提交（以 `git log` 为准） | fix: close q1-q8 audit gaps | Q2–Q8 审查 |
+| `b9346a7` | revert: drop crisperwhisper poc after chinese longform evaluation | Q8 放弃 |
+| `f258ba7` | fix: close q1-q8 audit gaps | Q2–Q8 审查 |
 | `9b9c3e2` | poc: evaluate crisperwhisper 2 transcription | Q8 阶段 A |
 | 本文件所在提交（以 `git log` 为准） | docs: handoff 2026-08-02 plan Q1–Q7 | — |
 | `a64f87e` | fix: make task diagnostics actionable and isolated | Q7 |
@@ -35,11 +36,12 @@
 ### 最终测试 / 构建结果（真实退出码）
 
 - 前端测试：`pnpm test` → 96 文件 / 506 passed，退出码 0。
-- 后端测试：`.venv/bin/python -m pytest tests/backend backend/tests tests/test_*.py -m "not integration" -q` → 1476 passed / 2 skipped / 6 deselected，退出码 0。
+- 后端测试：`.venv/bin/python -m pytest tests/backend backend/tests tests/test_*.py -m "not integration" -q` → 1462 passed / 2 skipped / 6 deselected，退出码 0。
   skipped 明细：`test_audio_analyzer.py:315`（silero-vad torch 模型，需 `RUN_AUDIO_MODEL_TESTS=1` 单跑）、`test_ocr_service.py:44`（PaddleOCR 模型不可用）。
 - 构建：`pnpm build`（`tsc -b && vite build`）退出码 0。
 - 离线 E2E：`.venv/bin/python tests/e2e_qa.py` → 12/12，退出码 0；真实网络 E2E 已正确标记 `integration`。
 - 各批均按 TDD 先红后绿；UI 批用 Playwright 实测关键交互。
+- 注意：Crisper 删除提交后后端测试为 1462 passed（原 1476 含 crisper 相关 14 项测试，随删除一并移除）。
 
 ### 未验证项 / 已知边界
 
