@@ -109,44 +109,13 @@ def run_local_asr_with_fallback(
                 pass
 
     configured = preferred_engine.strip().lower()
-    # Q8（D8）：crisper-whisper 为可选 POC 引擎——仅当显式 preferred_engine
-    # 指定时才纳入候选；默认顺序仍是 mlx-whisper > fast-whisper，未改变。
     engine_order = ["mlx-whisper", "fast-whisper"]
-    if configured in {"mlx-whisper", "fast-whisper", "crisper-whisper"}:
+    if configured in {"mlx-whisper", "fast-whisper"}:
         engine_order = [configured, *[name for name in engine_order if name != configured]]
 
     # ── 本地引擎：顺序受设置页“当前使用”控制，失败后才回退 ─────
     for engine_name in engine_order:
-        if engine_name == "crisper-whisper":
-            try:
-                from backend.app.services.asr_crisper_whisper import (
-                    get_crisper_whisper_capability,
-                    transcribe_file_with_crisper_whisper,
-                )
-                capability = get_crisper_whisper_capability()
-                if capability["status"] == "available":
-                    tried.append("crisper-whisper")
-                    _emit("🔍 选用 ASR 引擎：crisper-whisper（POC）")
-                    text, segs, dur = transcribe_file_with_crisper_whisper(
-                        file_path,
-                        model_name=model_name,
-                        language=language,
-                        log_callback=log_callback,
-                        progress_callback=progress_callback,
-                        return_segments=True,
-                    )
-                    if text.strip():
-                        text = _to_simplified(text)
-                        for seg in segs:
-                            seg["text"] = _to_simplified(seg.get("text", ""))
-                        return text, segs, dur, "crisper-whisper"
-                    errors.append("crisper-whisper: 转写结果为空")
-                else:
-                    errors.append("crisper-whisper: 未安装（需先安装依赖并下载许可模型）")
-            except Exception as err:
-                errors.append(f"crisper-whisper: {err}")
-                logger.warning("crisper-whisper 失败，尝试下一引擎: %s", err)
-        elif engine_name == "mlx-whisper":
+        if engine_name == "mlx-whisper":
             try:
                 from backend.app.services.asr_mlx_whisper import (
                     is_mlx_whisper_available,

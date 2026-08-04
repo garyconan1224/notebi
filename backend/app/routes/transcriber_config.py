@@ -171,20 +171,6 @@ def get_transcriber_hardware_status() -> Dict[str, Any]:
     return get_asr_hardware_status()
 
 
-@router.get("/transcriber_config/crisper_whisper")
-def get_crisper_whisper_status() -> Dict[str, Any]:
-    """Q8（D8）：返回 CrisperWhisper 2.0 能力状态。
-
-    只读探测，不下载、不加载模型；未安装依赖时 status=not_installed。
-    模型权重为非商业研究许可，需用户单独确认后才下载，绝不随应用分发。
-    """
-    from backend.app.services.asr_crisper_whisper import (
-        get_crisper_whisper_capability,
-    )
-
-    return get_crisper_whisper_capability()
-
-
 @router.get("/local_models")
 def get_local_models() -> Dict[str, Any]:
     """List every NoteBi runtime model that may download weights locally.
