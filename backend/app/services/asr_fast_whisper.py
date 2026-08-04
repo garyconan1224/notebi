@@ -55,10 +55,26 @@ def _has_audio_stream(file_path: str | Path) -> bool:
         return True
 
 
+def _fast_whisper_repo_id(model_name: str) -> str:
+    """返回 faster-whisper 模型在 HuggingFace 上的实际仓库 id。
+
+    - 用户直接传仓库全名（含 "/"）时原样返回；
+    - 否则按 size 补默认前缀 `Systran/faster-whisper-<size>`；
+    - 例外：`large-v3-turbo` / `turbo` 使用 faster-whisper 官方别名
+      指向的 `mobiuslabsgmbh/faster-whisper-large-v3-turbo`。缓存目录、
+      预下载和实际模型加载必须与此一致，
+      否则下载后状态与缓存判定会对不上。
+    """
+    if "/" in model_name:
+        return model_name
+    if model_name in {"large-v3-turbo", "turbo"}:
+        return "mobiuslabsgmbh/faster-whisper-large-v3-turbo"
+    return f"Systran/faster-whisper-{model_name}"
+
+
 def _hf_repo_dir(model_name: str) -> Path:
-    """按 faster-whisper 约定拼 HF repo 缓存目录（Systran/faster-whisper-<size>）。"""
-    # 允许用户直接传仓库全名（如 "Systran/faster-whisper-large-v3"），否则按 size 自动补前缀
-    repo = model_name if "/" in model_name else f"Systran/faster-whisper-{model_name}"
+    """按 faster-whisper 约定拼 HF repo 缓存目录（Systran/faster-whisper-<size> 或 deepdml 替代源）。"""
+    repo = _fast_whisper_repo_id(model_name)
     return _hf_hub_cache_dir() / f"models--{repo.replace('/', '--')}"
 
 
@@ -240,7 +256,8 @@ def _load_model(
             f"本地语音识别引擎加载失败：{err}\n\n{_install_hint_for_current_interpreter()}"
         ) from err
 
-    key = (model_name, device, compute_type, str(cpu_threads))
+    model_source = _fast_whisper_repo_id(model_name)
+    key = (model_source, device, compute_type, str(cpu_threads))
 
     # 命中缓存直接返回；避免在持锁路径中启动无意义的看门狗
     cached = _MODEL_CACHE.get(key)
@@ -349,7 +366,7 @@ def _load_model(
         watcher.start()
         try:
             effective_threads = cpu_threads if cpu_threads > 0 else min(os.cpu_count() or 4, 8)
-            model = WhisperModel(model_name, device=device, compute_type=compute_type, cpu_threads=effective_threads)
+            model = WhisperModel(model_source, device=device, compute_type=compute_type, cpu_threads=effective_threads)
         finally:
             stop_evt.set()
             watcher.join(timeout=1.0)

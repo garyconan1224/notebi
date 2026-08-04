@@ -1492,6 +1492,8 @@ export interface ObsidianVaultExportResult {
   relative: string
   created: boolean
   overwritten: boolean
+  dry_run?: boolean
+  exists?: boolean
 }
 
 /** POST note/export/obsidian-vault — 直接写入本地 Obsidian vault */
@@ -1504,6 +1506,7 @@ export async function exportNoteToObsidianVault(
     on_conflict?: 'rename' | 'overwrite'
     source_kind?: 'main' | 'summary'
     summary_id?: string
+    dry_run?: boolean
   },
 ): Promise<ObsidianVaultExportResult> {
   const res = await http.post<ObsidianVaultExportResult>(

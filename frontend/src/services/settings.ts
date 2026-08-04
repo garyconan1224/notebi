@@ -39,6 +39,7 @@ export async function fetchSettings(): Promise<AppearanceSettings> {
 export async function patchSettings(
   patch: Partial<Pick<AppearanceSettings, 'theme' | 'mode'>> & {
     fonts?: Partial<Record<FontSlotId, string | null>>
+    obsidian?: Partial<NonNullable<AppearanceSettings['obsidian']>>
   },
 ): Promise<AppearanceSettings> {
   const res = await http.patch<AppearanceSettings>('/settings', patch)

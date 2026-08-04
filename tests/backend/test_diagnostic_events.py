@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from backend.app.services import diagnostic_events
 from backend.app.services.diagnostic_events import (
     DiagnosticAggregator,
+    classify_task_failure,
     describe_event,
     redact_event,
     redact_text,
 )
+from types import SimpleNamespace
 
 
 def test_describe_known_event_has_summary_cause_action() -> None:
@@ -65,6 +68,45 @@ def test_aggregator_separates_by_task_id() -> None:
     b = agg.record("asr_failed", task_id="t2", now=100.0)
     assert a is not b
     assert len(agg.recent()) == 2
+
+
+def test_emitter_aggregates_repeated_events_and_writes_actionable_fields() -> None:
+    assert hasattr(diagnostic_events, "emit_diagnostic_event")
+    emit_diagnostic_event = diagnostic_events.emit_diagnostic_event
+
+    class Sink:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def append(self, *args, **kwargs):
+            self.calls.append((args, kwargs))
+
+    sink = Sink()
+    agg = DiagnosticAggregator(window_seconds=30)
+    emit_diagnostic_event(sink, "asr_failed", task_id="t1", aggregator=agg, now=100.0)
+    emit_diagnostic_event(sink, "asr_failed", task_id="t1", aggregator=agg, now=101.0)
+    emit_diagnostic_event(sink, "asr_failed", task_id="t1", aggregator=agg, now=102.0)
+
+    # 1、2 次时写入聚合快照；第 3 次被抑制，避免相同错误刷屏。
+    assert len(sink.calls) == 2
+    _, latest = sink.calls[-1]
+    assert latest["event_code"] == "asr_failed"
+    assert latest["probable_cause"]
+    assert latest["suggested_action"]
+    assert latest["details"]["item_count"] == 2
+
+
+def test_bilibili_source_does_not_hide_later_asr_failure() -> None:
+    record = SimpleNamespace(
+        task_type="note",
+        payload={"url": "https://www.bilibili.com/video/BV1example"},
+    )
+
+    assert classify_task_failure(record, stage="ASR", error="decode failed") == "asr_failed"
+    assert (
+        classify_task_failure(record, stage="DOWNLOAD", error="metadata unavailable")
+        == "bilibili_meta_failed"
+    )
 
 
 def test_log_dir_respects_env_override(monkeypatch, tmp_path) -> None:

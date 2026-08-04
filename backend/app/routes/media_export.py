@@ -19,7 +19,13 @@ import io
 from backend.app.routes.workspaces import _store, _sync_item_with_tasks
 from backend.app.routes.pipeline import _runner as _pipeline_runner
 from backend.app.models.tasks import TaskRecord, TaskStatus
+from backend.app.services.diagnostic_events import (
+    DiagnosticAggregator,
+    classify_task_failure,
+    emit_diagnostic_event,
+)
 from backend.app.services.media_export import (
+    BurnTask,
     MediaExportError,
     build_softsub_zip,
     build_subtitle_content,
@@ -30,8 +36,58 @@ from backend.app.services.media_export import (
     run_burn_subtitles,
 )
 from shared.config import DATA_DIR
+from backend.app.services.runtime_log_store import get_default_store
 
 router = APIRouter(prefix="/workspaces", tags=["media-export"])
+_diagnostic_sink = get_default_store()
+_burn_diagnostic_aggregator = DiagnosticAggregator()
+
+
+def _sync_burn_task_to_pipeline(final: BurnTask, output_path: Path) -> None:
+    """同步烧录终态；任务中心的取消请求优先于后台线程完成结果。"""
+    current = _pipeline_runner.store.get(final.task_id)
+    was_cancelled = bool(
+        current
+        and (
+            current.cancel_requested
+            or current.status == TaskStatus.CANCELLED.value
+        )
+    )
+    if was_cancelled:
+        burn_registry.cancel(final.task_id)
+        final.status = "cancelled"
+        final.output_url = ""
+        if output_path.exists():
+            try:
+                output_path.unlink()
+            except OSError:
+                pass
+
+    status_map = {
+        "done": TaskStatus.SUCCESS.value,
+        "failed": TaskStatus.FAILED.value,
+        "cancelled": TaskStatus.CANCELLED.value,
+        "running": TaskStatus.VLM.value,
+        "pending": TaskStatus.PENDING.value,
+    }
+    _pipeline_runner.store.update(
+        final.task_id,
+        status=status_map.get(final.status, TaskStatus.FAILED.value),
+        progress=final.progress,
+        error=final.error,
+        result={"output_path": str(output_path) if final.status == "done" else ""},
+    )
+    if final.status == "failed":
+        emit_diagnostic_event(
+            _diagnostic_sink,
+            classify_task_failure(current or final, stage="BURN", error=final.error),
+            task_id=final.task_id,
+            workspace_id=final.workspace_id,
+            stage="BURN",
+            component="burn_subtitle",
+            technical_detail=final.error,
+            aggregator=_burn_diagnostic_aggregator,
+        )
 
 
 def _get_item_or_404(workspace_id: str, item_id: str):
@@ -195,21 +251,8 @@ def start_burn(workspace_id: str, item_id: str, body: BurnRequest):
         final = burn_registry.get(task.task_id)
         if final is None:
             return
-        status_map = {
-            "done": TaskStatus.SUCCESS.value,
-            "failed": TaskStatus.FAILED.value,
-            "cancelled": TaskStatus.CANCELLED.value,
-            "running": TaskStatus.VLM.value,
-            "pending": TaskStatus.PENDING.value,
-        }
         try:
-            _pipeline_runner.store.update(
-                task.task_id,
-                status=status_map.get(final.status, TaskStatus.FAILED.value),
-                progress=final.progress,
-                error=final.error,
-                result={"output_path": str(output_path) if final.status == "done" else ""},
-            )
+            _sync_burn_task_to_pipeline(final, output_path)
         except Exception:  # noqa: BLE001
             pass
 

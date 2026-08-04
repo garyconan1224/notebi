@@ -1,4 +1,4 @@
-name: VidMirror QA E2E
+name: NoteBi QA E2E
 
 on:
   workflow_dispatch:

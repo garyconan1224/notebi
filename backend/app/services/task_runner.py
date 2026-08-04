@@ -8,11 +8,17 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional, Protocol
 
 from backend.app.models.tasks import TERMINAL_STATUS_VALUES, TaskRecord, TaskStatus
+from backend.app.services.diagnostic_events import (
+    DiagnosticAggregator,
+    classify_task_failure,
+    emit_diagnostic_event,
+)
 from backend.app.services.log_context import log_context
 from backend.app.services.task_store import TaskStore
 
 TaskHandler = Callable[[TaskRecord, "TaskRunner"], Dict[str, Any]]
 SuccessCallback = Callable[[TaskRecord, "TaskRunner"], None]
+IntermediateCallback = Callable[[TaskRecord, "TaskRunner"], None]
 PartialCallback = Callable[[TaskRecord, "TaskRunner"], None]
 CompletionCallback = Callable[[TaskRecord, "TaskRunner"], None]
 TaskCreatedCallback = Callable[[TaskRecord], None]
@@ -40,9 +46,11 @@ class TaskRunner:
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="vps-task")
         self._handlers: Dict[str, TaskHandler] = {}
         self._success_callbacks: Dict[str, List[SuccessCallback]] = {}
+        self._intermediate_callbacks: Dict[str, List[IntermediateCallback]] = {}
         self._partial_callbacks: Dict[str, List[PartialCallback]] = {}
         self._completion_callbacks: List[CompletionCallback] = []
         self._emitted_events: set[tuple[str, str]] = set()
+        self._diagnostic_aggregator = DiagnosticAggregator()
         self._lock = threading.Lock()
 
     def _emit_task_event(
@@ -127,6 +135,31 @@ class TaskRunner:
         """注册 task_type 成功后的回调（可注册多个，按顺序调用）。"""
         with self._lock:
             self._success_callbacks.setdefault(task_type, []).append(callback)
+
+    def register_intermediate_callback(
+        self,
+        task_type: str,
+        callback: IntermediateCallback,
+    ) -> None:
+        """注册中间结果落盘后的回调，用于 probe 等需即时反映到 UI 的状态。"""
+        with self._lock:
+            self._intermediate_callbacks.setdefault(task_type, []).append(callback)
+
+    def notify_intermediate(self, task_id: str) -> None:
+        record = self.store.get(task_id)
+        if record is None:
+            return
+        with self._lock:
+            callbacks = list(self._intermediate_callbacks.get(record.task_type, []))
+        for callback in callbacks:
+            try:
+                callback(record, self)
+            except Exception as callback_error:  # noqa: BLE001
+                self.store.append_log(
+                    task_id,
+                    f"Intermediate callback error: {callback_error}",
+                    level="error",
+                )
 
     def register_partial_callback(self, task_type: str, callback: PartialCallback) -> None:
         """注册核心产物可用、但后续阶段未完成时的回调。"""
@@ -338,9 +371,24 @@ class TaskRunner:
                 except Exception as cb_err:  # noqa: BLE001
                     self.store.append_log(task_id, f"Success callback error: {cb_err}", level="error")
         except Exception as err:  # noqa: BLE001
+            failed_at = self.store.get(task_id) or record
+            failed_stage = failed_at.status
             self.store.update(task_id, status=TaskStatus.FAILED.value, error=str(err))
             self.store.append_log(task_id, f"Task failed: {err}", level="error")
             failed = self.store.get(task_id) or record
+            if self._event_sink is not None:
+                event_code = classify_task_failure(failed_at, stage=failed_stage, error=str(err))
+                emit_diagnostic_event(
+                    self._event_sink,
+                    event_code,
+                    task_id=failed.task_id,
+                    batch_id=failed.batch_id,
+                    workspace_id=failed.project_id,
+                    stage=failed_stage,
+                    component=failed.task_type,
+                    technical_detail=str(err),
+                    aggregator=self._diagnostic_aggregator,
+                )
             self._emit_task_event(
                 failed,
                 "failed",

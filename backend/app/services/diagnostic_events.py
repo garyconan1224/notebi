@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import re
+import time
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional
 
@@ -67,6 +68,11 @@ EVENT_CATALOG: Dict[str, Dict[str, str]] = {
         "summary": "任务已取消",
         "cause": "用户主动取消了该任务。",
         "action": "如需继续，可在任务中心重试。",
+    },
+    "task_failed": {
+        "summary": "任务执行失败",
+        "cause": "处理过程中发生未分类错误。",
+        "action": "在任务中心查看失败阶段和技术详情，然后重试。",
     },
 }
 
@@ -154,3 +160,77 @@ class DiagnosticAggregator:
     def recent(self, limit: int = 50) -> List[Dict[str, Any]]:
         items = list(self._entries.values())
         return items[-limit:]
+
+
+_DEFAULT_AGGREGATOR = DiagnosticAggregator()
+
+
+def emit_diagnostic_event(
+    sink: Any,
+    event_code: str,
+    *,
+    task_id: str = "",
+    batch_id: str = "",
+    workspace_id: str = "",
+    stage: str = "",
+    component: str = "",
+    technical_detail: str = "",
+    aggregator: Optional[DiagnosticAggregator] = None,
+    now: Optional[float] = None,
+) -> Any:
+    """把有限事件代码写入标准日志，并对时间窗内重复事件降噪。
+
+    第 1、2、4、8…次重复写入带累计次数的快照，其余重复被抑制；
+    既保留趋势，又避免同一底层错误刷满诊断页。
+    """
+    agg = aggregator or _DEFAULT_AGGREGATOR
+    entry = agg.record(event_code, task_id=task_id, now=time.monotonic() if now is None else now)
+    count = int(entry["count"])
+    if count > 1 and count & (count - 1):
+        return None
+    info = describe_event(event_code)
+    message = info["summary"] if count == 1 else f"{info['summary']}（重复 {count} 次）"
+    return sink.append(
+        "ERROR",
+        "diagnostic",
+        message,
+        task_id=task_id or None,
+        batch_id=batch_id or None,
+        workspace_id=workspace_id or None,
+        stage=stage or None,
+        event_code=event_code,
+        component=component or None,
+        outcome="failed",
+        summary=info["summary"],
+        probable_cause=info["cause"],
+        suggested_action=info["action"],
+        technical_detail=technical_detail or None,
+        details={"item_count": count},
+    )
+
+
+def classify_task_failure(record: Any, *, stage: str, error: str) -> str:
+    """按真实任务上下文把失败归入有限用户诊断代码。"""
+    text = str(error or "").lower()
+    task_type = str(getattr(record, "task_type", "") or "").lower()
+    payload = getattr(record, "payload", {}) or {}
+    source = str(payload.get("url") or payload.get("source") or payload.get("source_value") or "").lower()
+    normalized_stage = str(stage or "").upper()
+    if any(token in text for token in ("permission denied", "no space left", "disk full", "read-only file system")):
+        return "disk_or_permission"
+    if task_type == "burn_subtitle":
+        missing_ffmpeg = "ffmpeg" in text and any(
+            token in text for token in ("not", "missing", "未找到", "不存在")
+        )
+        return "ffmpeg_missing" if missing_ffmpeg else "export_failed"
+    if normalized_stage == "DIARIZATION":
+        return "diarization_failed"
+    if normalized_stage == "ASR" or task_type == "audio":
+        return "asr_failed"
+    if normalized_stage in {"VLM", "FRAMES"} and any(token in text for token in ("model", "vision", "vlm")):
+        return "vlm_model_mismatch"
+    if "bilibili.com" in source or "b23.tv" in source:
+        return "bilibili_meta_failed"
+    if "export" in task_type or "ffmpeg" in text:
+        return "export_failed"
+    return "task_failed"

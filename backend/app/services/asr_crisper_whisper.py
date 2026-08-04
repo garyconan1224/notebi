@@ -27,7 +27,13 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 CRISPER_WHISPER_LICENSE = (
     "non-commercial research (nyralabs/CrisperWhisper2.0)"
 )
-CRISPER_WHISPER_MODELS = ("turbo", "large")
+# CrisperWhisper 2.0 支持的大小；large-v3 别名映射为 large（上游没有独立 large-v3 权重）。
+CRISPER_WHISPER_MODELS = ("turbo", "large", "medium", "small")
+# 上游命名别名 → canonical 大小。无对应关系的（如 base）明确报错，不静默映射。
+CRISPER_WHISPER_MODEL_ALIASES = {
+    "large-v3": "large",
+    "large-v3-turbo": "turbo",
+}
 CRISPER_WHISPER_MODES = ("verbatim", "intended")
 
 _MAX_SEGMENT_CHARS = 42
@@ -40,6 +46,25 @@ def _module_available(module_name: str) -> bool:
         return importlib.util.find_spec(module_name) is not None
     except (ImportError, ValueError):
         return False
+
+
+def normalize_crisper_model_name(model_name: str) -> str:
+    """把用户给的模型名归一化为 CrisperWhisper 支持的 canonical 大小。
+
+    - 支持：turbo / large / medium / small；
+    - large-v3 映射为 large，large-v3-turbo 映射为 turbo；
+    - base 等无对应关系的大小明确报错，不静默透传。
+    """
+    key = (model_name or "").strip().lower()
+    if key in CRISPER_WHISPER_MODEL_ALIASES:
+        return CRISPER_WHISPER_MODEL_ALIASES[key]
+    if key in CRISPER_WHISPER_MODELS:
+        return key
+    supported = "/".join(CRISPER_WHISPER_MODELS)
+    raise ValueError(
+        f"不支持的 CrisperWhisper 模型: {model_name}（可选 {supported}；"
+        "large-v3 等别名映射为 large）"
+    )
 
 
 def is_crisper_whisper_available() -> bool:
@@ -186,6 +211,9 @@ def transcribe_file_with_crisper_whisper(
     path = Path(file_path)
     if not path.is_file():
         raise FileNotFoundError(f"CrisperWhisper 文件不存在: {path}")
+
+    # 先校验/归一化模型名，再校验模式——base 等无对应关系时明确报错。
+    model_name = normalize_crisper_model_name(model_name)
 
     def _emit(msg: str) -> None:
         if log_callback:

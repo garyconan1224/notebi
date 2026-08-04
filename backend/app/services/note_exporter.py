@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 
 from backend.app.models.workspace import WorkspaceItem
 from shared.config import DATA_DIR
+from shared import appearance_store
 
 
 _ITEM_TYPE_LABELS = {
@@ -177,15 +178,17 @@ def _render_note_html(*, title: str, item: WorkspaceItem, body: str) -> str:
     )
     source_label = _source_label(item.source_value)
     item_type = item.type.upper()
+    font_face_css, summary_font_css = _summary_export_font_css()
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
   <title>{escape(title)}</title>
   <style>
+    {font_face_css}
     :root {{
       color-scheme: light;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: {summary_font_css}, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color: #191410;
       background: #f7f3ec;
     }}
@@ -303,6 +306,35 @@ def _render_note_html(*, title: str, item: WorkspaceItem, body: str) -> str:
   </main>
 </body>
 </html>"""
+
+
+def _css_font_name(value: str) -> str:
+    clean = value.replace("\\", "\\\\").replace('"', '\\"')
+    clean = clean.replace("\r", " ").replace("\n", " ").strip()
+    return f'"{clean}"'
+
+
+def _summary_export_font_css() -> tuple[str, str]:
+    """读取总结字体槽；上传字体以内嵌 data URI 保证离线导出可复现。"""
+    try:
+        settings = appearance_store.load_settings()
+    except Exception:
+        settings = {}
+    family = str((settings.get("fonts") or {}).get("sum") or "").strip()
+    if not family:
+        return "", '"PingFang SC"'
+
+    css_name = _css_font_name(family)
+    for entry in settings.get("uploaded_fonts") or []:
+        if not isinstance(entry, dict) or str(entry.get("family") or "") != family:
+            continue
+        data_uri = _asset_to_data_uri(str(entry.get("url") or ""))
+        if data_uri:
+            return (
+                f"@font-face {{ font-family: {css_name}; src: url(\"{data_uri}\"); font-display: swap; }}",
+                css_name,
+            )
+    return "", css_name
 
 
 def _source_label(source_value: str) -> str:

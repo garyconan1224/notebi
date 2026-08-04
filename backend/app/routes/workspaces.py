@@ -763,6 +763,58 @@ def _note_kind_to_item_type(note_kind: str) -> Optional[str]:
     return _NOTE_KIND_TO_ITEM_TYPE.get(str(note_kind or "").strip())
 
 
+def _sync_probed_note_type(task: TaskRecord, runner) -> None:  # type: ignore[type-arg]
+    """把 probe 类型立即同步到素材与批次；不依赖后续总结是否成功。"""
+    result = task.result or {}
+    probed_type = _note_kind_to_item_type(str(result.get("note_kind") or ""))
+    if not probed_type:
+        return
+
+    for ws, item in _iter_workspace_items_for_task(task, runner):
+        if item.type == probed_type and (item.results or {}).get("type_probed"):
+            continue
+        try:
+            _store.update_item(
+                ws.workspace_id,
+                item.item_id,
+                type=probed_type,
+                results={**(item.results or {}), "type_probed": True},
+            )
+        except Exception:
+            pass
+
+    batch_id = str(getattr(task, "batch_id", "") or "")
+    batch_item_id = str(getattr(task, "batch_item_id", "") or "")
+    if not batch_id or not batch_item_id:
+        return
+    try:
+        # 延迟导入避免 workspaces <-> task_batches 的路由循环依赖。
+        from backend.app.routes.task_batches import get_default_batch_store
+
+        batch_store = get_default_batch_store()
+        batch = batch_store.get(batch_id)
+        if batch is None:
+            return
+        batch_item = next(
+            (
+                candidate
+                for candidate in batch.items
+                if candidate.batch_item_id == batch_item_id
+            ),
+            None,
+        )
+        if batch_item is None or batch_item.item_type == probed_type:
+            return
+        batch_item.item_type = probed_type
+        batch_store.save(batch)
+    except Exception:
+        pass
+
+
+def _on_note_intermediate_sync_item(task: TaskRecord, runner) -> None:  # type: ignore[type-arg]
+    _sync_probed_note_type(task, runner)
+
+
 def _on_note_success_sync_item(completed_task: TaskRecord, runner) -> None:  # type: ignore[type-arg]
     """note task 成功后同步 workspace item：
 
@@ -775,22 +827,9 @@ def _on_note_success_sync_item(completed_task: TaskRecord, runner) -> None:  # t
     for ws, item in matches:
         _ensure_task_linked_to_item(ws.workspace_id, item, completed_task, runner)
 
-    result = completed_task.result or {}
-    probed_type = _note_kind_to_item_type(str(result.get("note_kind") or ""))
-    if probed_type:
-        for ws, item in matches:
-            if item.type == probed_type and (item.results or {}).get("type_probed"):
-                continue
-            try:
-                _store.update_item(
-                    ws.workspace_id,
-                    item.item_id,
-                    type=probed_type,
-                    results={**(item.results or {}), "type_probed": True},
-                )
-            except Exception:
-                pass
+    _sync_probed_note_type(completed_task, runner)
 
+    result = completed_task.result or {}
     video_title = str(result.get("video_title") or "").strip()
     if not video_title:
         return
@@ -811,6 +850,7 @@ def _on_note_success_sync_item(completed_task: TaskRecord, runner) -> None:  # t
                 pass
 
 
+_pipeline_runner.register_intermediate_callback("note", _on_note_intermediate_sync_item)
 _pipeline_runner.register_success_callback("note", _on_note_success_sync_item)
 
 
@@ -6290,6 +6330,8 @@ class ObsidianVaultExportRequest(BaseModel):
     """Q3 / D3：直接写入本地 Obsidian vault。
 
     vault_path/subdir 为非秘密目的地配置；不保存任何 token。
+    dry_run=True 时只预检同名目标是否存在，不创建目录、不写入文件，
+    供前端决定是否需要「覆盖」二次确认。
     """
 
     vault_path: str = Field(min_length=1, max_length=2000)
@@ -6297,6 +6339,7 @@ class ObsidianVaultExportRequest(BaseModel):
     on_conflict: Literal["rename", "overwrite"] = "rename"
     source_kind: Literal["main", "summary"] = "main"
     summary_id: Optional[str] = None
+    dry_run: bool = False
 
 
 def _safe_join_under_root(root: Path, *parts: str) -> Path:
@@ -6347,7 +6390,23 @@ def export_item_note_to_obsidian_vault(
     if body.subdir.strip().startswith(("/", "\\")) or body.subdir.strip().startswith(".."):
         raise HTTPException(status_code=422, detail="子目录不允许使用绝对路径或 ..")
 
+    # dry_run：只预检同名目标是否存在，不创建目录、不组装/写入笔记。
+    # 标题来自 item.name（与正式写入的 safe_title 同口径），无需 note.md。
+    raw_title = (item.name or "note").strip() or "note"
+    safe_title = re.sub(r'[\\/:*?"<>|#\[\]]', "_", raw_title)[:120] or "note"
     target_dir = _safe_join_under_root(vault_root, body.subdir.strip())
+    target = target_dir / f"{safe_title}.md"
+    if body.dry_run:
+        existed = target.exists()
+        return {
+            "dry_run": True,
+            "path": str(target),
+            "relative": str(target.relative_to(vault_root.resolve())),
+            "exists": existed,
+            "created": False,
+            "overwritten": False,
+        }
+
     target_dir.mkdir(parents=True, exist_ok=True)
 
     # 收集笔记正文（与导出下载同口径）
@@ -6380,9 +6439,6 @@ def export_item_note_to_obsidian_vault(
             speaker_map if isinstance(speaker_map, dict) else {},
         )
 
-    raw_title = (item.name or "note").strip() or "note"
-    safe_title = re.sub(r'[\\/:*?"<>|#\[\]]', "_", raw_title)[:120] or "note"
-    target = target_dir / f"{safe_title}.md"
     existed = target.exists()
     written_path = target if body.on_conflict == "overwrite" else _next_available_path(target)
     written_path.write_text(note_md, encoding="utf-8")

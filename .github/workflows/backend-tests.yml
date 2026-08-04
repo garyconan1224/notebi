@@ -29,4 +29,4 @@ jobs:
           pip install pytest
 
       - name: Run backend tests
-        run: pytest tests/backend -q
+        run: pytest tests/backend backend/tests tests/test_*.py -m "not integration" -q

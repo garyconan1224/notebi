@@ -40,6 +40,12 @@ describe('Q4 AI 产物语义渲染', () => {
     // 有导出 PNG / SVG 按钮
     expect(screen.getByRole('button', { name: '导出 PNG' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '导出 SVG' })).toBeInTheDocument()
+    const canvas = screen.getByTestId('mindmap-canvas')
+    expect(canvas).toHaveStyle({ transform: 'scale(1)' })
+    fireEvent.click(screen.getByRole('button', { name: '放大思维导图' }))
+    expect(canvas).toHaveStyle({ transform: 'scale(1.1)' })
+    fireEvent.click(screen.getByRole('button', { name: '重置思维导图缩放' }))
+    expect(canvas).toHaveStyle({ transform: 'scale(1)' })
   })
 
   it('mindMapToSvg 生成真实 SVG（含节点与连线）', () => {

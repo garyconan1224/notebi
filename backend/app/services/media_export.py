@@ -207,6 +207,9 @@ def run_burn_subtitles(
     font_size: int = 0,
 ) -> None:
     """在后台线程执行 ffmpeg 烧录；进度写 task.progress，结束更新状态。"""
+    if task.status == "cancelled":
+        burn_registry._cleanup(task)
+        return
     task.status = "running"
     task._tmp_path = output_path
 
@@ -229,6 +232,10 @@ def run_burn_subtitles(
         str(output_path),
     ]
     try:
+        # 取消可能发生在任务入队和后台线程真正启动之间。
+        if task.status == "cancelled":
+            burn_registry._cleanup(task)
+            return
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -236,6 +243,14 @@ def run_burn_subtitles(
             text=True,
         )
         task._proc = proc
+        if task.status == "cancelled":
+            try:
+                proc.terminate()
+            except Exception:  # noqa: BLE001
+                pass
+            proc.wait()
+            burn_registry._cleanup(task)
+            return
         if task.duration_sec > 0 and proc.stdout:
             for line in proc.stdout:
                 m = _TIME_RE.search(line)

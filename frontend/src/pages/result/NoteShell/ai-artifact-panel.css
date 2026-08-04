@@ -257,6 +257,9 @@
   cursor: pointer;
 }
 .mindmap-actions button:hover { border-color: var(--bdrs); color: var(--fg); }
+.mindmap-zoom-value { min-width: 38px; align-self: center; text-align: center; color: var(--fg3); font-size: 12px; }
+.mindmap-viewport { overflow: auto; min-height: 180px; padding: 4px; }
+.mindmap-canvas { width: max-content; min-width: 100%; transform-origin: top left; transition: transform 120ms ease; }
 .mindmap-tree, .mindmap-children { list-style: none; margin: 0; padding-left: 0; }
 .mindmap-children { padding-left: 20px; border-left: 1px solid var(--bdr); margin-left: 8px; }
 .mindmap-node-row {

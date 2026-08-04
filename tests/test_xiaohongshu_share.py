@@ -230,6 +230,7 @@ class TestParseXhsPage:
     os.environ.get("SKIP_NETWORK_TESTS", "0") == "1",
     reason="跳过网络测试",
 )
+@pytest.mark.integration
 class TestE2E:
     """用两个实测链接跑通完整流程。"""
 

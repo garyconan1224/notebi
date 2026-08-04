@@ -148,3 +148,62 @@ def test_transcribe_rejects_unknown_mode(tmp_path) -> None:
         assert False, "未知模式应报错"
     except ValueError:
         pass
+
+
+def test_model_normalization_maps_generic_large_aliases() -> None:
+    assert cw.normalize_crisper_model_name("large-v3") == "large"
+    assert cw.normalize_crisper_model_name("large-v3-turbo") == "turbo"
+
+
+def test_model_normalization_passes_supported_sizes() -> None:
+    for name in ("turbo", "large", "medium", "small"):
+        assert cw.normalize_crisper_model_name(name) == name
+
+
+def test_model_normalization_rejects_unsupported_size() -> None:
+    try:
+        cw.normalize_crisper_model_name("base")
+        assert False, "base 无对应关系应报错"
+    except ValueError as err:
+        assert "base" in str(err)
+        assert "turbo" in str(err)
+
+
+def test_capability_lists_supported_models() -> None:
+    cap = cw.get_crisper_whisper_capability()
+    assert set(cap["models"]) == {"turbo", "large", "medium", "small"}
+
+
+def test_transcribe_rejects_unsupported_model(tmp_path) -> None:
+    audio = tmp_path / "a.wav"
+    audio.write_bytes(b"RIFF-fake")
+    try:
+        cw.transcribe_file_with_crisper_whisper(audio, model_name="base")
+        assert False, "无对应关系的模型名应报错"
+    except ValueError as err:
+        assert "base" in str(err)
+
+
+def test_transcribe_accepts_large_v3_via_mapping(tmp_path) -> None:
+    audio = tmp_path / "a.wav"
+    audio.write_bytes(b"RIFF-fake")
+
+    class FakeResult:
+        text = "Hello world."
+        language = "en"
+        mode = "intended"
+        duration = 0.7
+        words = [
+            {"word": "Hello", "start": 0.0, "end": 0.3},
+            {"word": "world.", "start": 0.3, "end": 0.7},
+        ]
+
+    class FakeModel:
+        def transcribe(self, path, language=None, mode="verbatim", word_timestamps=True):
+            return FakeResult()
+
+    text, segments, duration = cw.transcribe_file_with_crisper_whisper(
+        audio, model_name="large-v3", mode="intended", _model=FakeModel()
+    )
+    assert text == "Hello world."
+    assert segments[0]["engine"] == "crisper-whisper"

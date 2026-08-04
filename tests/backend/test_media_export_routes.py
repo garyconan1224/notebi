@@ -17,7 +17,11 @@ from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
 
 import backend.app.routes.media_export as media_export_module
+import backend.app.routes.pipeline as pipeline_module
 import backend.app.routes.workspaces as workspaces_module
+import backend.app.services.media_export as media_export_service
+from backend.app.models.tasks import TaskRecord
+from backend.app.services.diagnostic_events import DiagnosticAggregator
 from backend.app.models.workspace import WorkspaceItem, WorkspaceRecord
 from backend.app.services.workspace_store import WorkspaceStore
 
@@ -154,6 +158,143 @@ def test_burn_rejects_when_no_transcript(setup, monkeypatch):
     assert "没有可用字幕" in resp.json()["detail"]
 
 
+def test_task_center_cancel_stops_burn_registry(monkeypatch):
+    record = TaskRecord(
+        task_id="burn-cancel-1",
+        project_id="ws-1",
+        task_type="burn_subtitle",
+        payload={"item_id": "item-video"},
+    )
+
+    class Runner:
+        def cancel_task(self, task_id):
+            assert task_id == record.task_id
+            record.cancel_requested = True
+            record.status = "CANCELLED"
+            return record
+
+    cancelled: list[str] = []
+    monkeypatch.setattr(pipeline_module, "_runner", Runner())
+    monkeypatch.setattr(media_export_service.burn_registry, "cancel", cancelled.append)
+
+    result = pipeline_module.cancel_task(record.task_id)
+
+    assert result["status"] == "CANCELLED"
+    assert cancelled == [record.task_id]
+
+
+def test_pre_cancelled_burn_never_starts_ffmpeg(tmp_path, monkeypatch):
+    task = media_export_service.BurnTask(
+        task_id="burn-cancel-early",
+        item_id="item-video",
+        workspace_id="ws-1",
+        status="cancelled",
+    )
+    monkeypatch.setattr(
+        media_export_service.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("取消后不应启动 ffmpeg")),
+    )
+
+    media_export_service.run_burn_subtitles(
+        task,
+        tmp_path / "video.mp4",
+        tmp_path / "sub.srt",
+        tmp_path / "out.mp4",
+    )
+
+    assert task.status == "cancelled"
+
+
+def test_finish_check_preserves_task_center_cancelled_status(monkeypatch):
+    burn_task = media_export_service.BurnTask(
+        task_id="burn-cancel-race",
+        item_id="item-video",
+        workspace_id="ws-1",
+        status="done",
+        progress=1.0,
+    )
+    pipeline_record = TaskRecord(
+        task_id=burn_task.task_id,
+        project_id="ws-1",
+        task_type="burn_subtitle",
+        payload={"item_id": "item-video"},
+        status="CANCELLED",
+        cancel_requested=True,
+    )
+
+    class Store:
+        def __init__(self):
+            self.updated = None
+
+        def get(self, task_id):
+            assert task_id == burn_task.task_id
+            return pipeline_record
+
+        def update(self, task_id, **kwargs):
+            assert task_id == burn_task.task_id
+            self.updated = kwargs
+            return pipeline_record
+
+    store = Store()
+    monkeypatch.setattr(media_export_module._pipeline_runner, "store", store)
+    cancelled: list[str] = []
+    monkeypatch.setattr(media_export_module.burn_registry, "cancel", cancelled.append)
+
+    media_export_module._sync_burn_task_to_pipeline(burn_task, Path("/tmp/out.mp4"))
+
+    assert cancelled == [burn_task.task_id]
+    assert store.updated is not None
+    assert store.updated["status"] == "CANCELLED"
+    assert store.updated["result"] == {"output_path": ""}
+
+
+def test_failed_burn_emits_actionable_diagnostic(monkeypatch):
+    burn_task = media_export_service.BurnTask(
+        task_id="burn-failed",
+        item_id="item-video",
+        workspace_id="ws-1",
+        status="failed",
+        error="未找到 ffmpeg",
+    )
+    pipeline_record = TaskRecord(
+        task_id=burn_task.task_id,
+        project_id="ws-1",
+        task_type="burn_subtitle",
+        payload={"item_id": "item-video"},
+        status="VLM",
+    )
+
+    class Store:
+        def get(self, _task_id):
+            return pipeline_record
+
+        def update(self, _task_id, **_kwargs):
+            return pipeline_record
+
+    class Sink:
+        def __init__(self):
+            self.events = []
+
+        def append(self, *args, **kwargs):
+            self.events.append((args, kwargs))
+
+    sink = Sink()
+    monkeypatch.setattr(media_export_module._pipeline_runner, "store", Store())
+    monkeypatch.setattr(media_export_module, "_diagnostic_sink", sink)
+    monkeypatch.setattr(
+        media_export_module,
+        "_burn_diagnostic_aggregator",
+        DiagnosticAggregator(),
+    )
+
+    media_export_module._sync_burn_task_to_pipeline(burn_task, Path("/tmp/out.mp4"))
+
+    assert sink.events
+    assert sink.events[0][1]["event_code"] == "ffmpeg_missing"
+    assert sink.events[0][1]["suggested_action"]
+
+
 # ── Obsidian 直写（D3）─────────────────────────────────────────
 
 
@@ -227,6 +368,45 @@ def test_obsidian_rejects_path_traversal(obsidian_setup):
         json={"vault_path": str(vault), "subdir": "../../etc"},
     )
     assert resp.status_code == 422
+
+
+def test_obsidian_dry_run_reports_existing_target(obsidian_setup):
+    client, vault = obsidian_setup
+    # 先实际写一次，产生同名文件
+    first = client.post(
+        "/workspaces/ws-1/items/item-1/note/export/obsidian-vault",
+        json={"vault_path": str(vault)},
+    )
+    assert first.status_code == 200
+    path1 = Path(first.json()["path"])
+
+    # dry_run 应报告 exists=True，且不产生新文件、不写入
+    resp = client.post(
+        "/workspaces/ws-1/items/item-1/note/export/obsidian-vault",
+        json={"vault_path": str(vault), "dry_run": True},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["dry_run"] is True
+    assert body["exists"] is True
+    assert Path(body["path"]) == path1
+
+    md_files = list(vault.glob("*.md"))
+    assert len(md_files) == 1, "dry_run 不得产生新文件"
+
+
+def test_obsidian_dry_run_reports_no_conflict(obsidian_setup):
+    client, vault = obsidian_setup
+    # 空 vault：dry_run 应报告 exists=False，且不创建目录/文件
+    resp = client.post(
+        "/workspaces/ws-1/items/item-1/note/export/obsidian-vault",
+        json={"vault_path": str(vault), "subdir": "Notes", "dry_run": True},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["dry_run"] is True
+    assert body["exists"] is False
+    assert not (vault / "Notes").exists(), "dry_run 不得创建子目录"
 
 
 def test_obsidian_rejects_missing_vault(obsidian_setup):

@@ -382,6 +382,12 @@ def create_batch(req: BatchCreateRequest) -> Dict[str, Any]:
     item_payloads: dict[str, dict[str, Any]] = {}
     for item in req.items:
         action = str(item.get("action") or "process")
+        resolved_item_type = str(item.get("item_type") or "").strip().lower()
+        batch_item_type = (
+            resolved_item_type
+            if resolved_item_type in {"video", "audio", "image", "text"}
+            else "unknown"
+        )
         batch_item_id = str(
             item.get("batch_item_id")
             or stable_batch_item_id(
@@ -395,12 +401,7 @@ def create_batch(req: BatchCreateRequest) -> Dict[str, Any]:
             source_title = str(item.get("source_title") or "").strip() or source_url
             # Q5：批量条目类型以来源识别为准；未识别落 unknown，由 pipeline
             # probe 回写真实类型——绝不默认硬建 video（反馈 #16）。
-            resolved_item_type = str(item.get("item_type") or "").strip().lower()
-            item_type = (
-                resolved_item_type
-                if resolved_item_type in {"video", "audio", "image", "text"}
-                else "unknown"
-            )
+            item_type = batch_item_type
             frame_analysis = bool(effective_settings.get("frame_analysis", True))
             summary_template = str(effective_settings.get("note_style") or "standard")
             note_type = str(effective_settings.get("note_type") or "auto")
@@ -487,6 +488,7 @@ def create_batch(req: BatchCreateRequest) -> Dict[str, Any]:
                 existing_workspace_id=str(item.get("existing_workspace_id") or ""),
                 existing_item_id=str(item.get("existing_item_id") or ""),
                 action=action,
+                item_type=batch_item_type,
             )
         )
 

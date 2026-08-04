@@ -51,6 +51,12 @@ def _parse_vtt(text: str) -> List[Dict[str, Any]]:
     # 去掉 WEBVTT 头部
     text = re.sub(r'^WEBVTT[^\n]*\n', '', text, flags=re.MULTILINE)
     text = re.sub(r'^NOTE[^\n]*\n(?:[^\n]+\n)*', '', text, flags=re.MULTILINE)
+    # WebVTT 允许省略小时（MM:SS.mmm），SRT 解析器需要 HH:MM:SS.mmm。
+    text = re.sub(
+        r'(?<!\d:)(\d{2}):(\d{2})([,.]\d{3})',
+        r'00:\1:\2\3',
+        text,
+    )
     # VTT 和 SRT 结构相似，复用解析
     return _parse_srt(text)
 

@@ -53,6 +53,7 @@ class BatchItem:
     existing_workspace_id: str = ""
     existing_item_id: str = ""
     action: str = "process"  # process / skip / copy
+    item_type: str = "unknown"  # probe 后回写 video/audio/image/text
     task_id: str = ""  # 关联的任务 ID
     task_ids: List[str] = field(default_factory=list)  # 同一逻辑项的全部 attempt
     status: str = "pending"  # pending / running / completed / failed / cancelled / skipped
@@ -77,6 +78,7 @@ class BatchItem:
             existing_workspace_id=str(data.get("existing_workspace_id") or ""),
             existing_item_id=str(data.get("existing_item_id") or ""),
             action=str(data.get("action") or "process"),
+            item_type=str(data.get("item_type") or "unknown"),
             task_id=current_task_id,
             task_ids=task_ids,
             status=str(data.get("status") or "pending"),

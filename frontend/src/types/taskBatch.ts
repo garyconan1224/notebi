@@ -13,6 +13,7 @@ export interface BatchItem {
   source_url: string
   source_title: string
   action: 'process' | 'skip' | 'copy'
+  item_type: 'unknown' | 'video' | 'audio' | 'image' | 'text'
   task_id: string
   task_ids: string[]
   status: string

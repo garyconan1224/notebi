@@ -248,8 +248,10 @@ def _run_download(model_id: str, report: Callable[[float, str], None]) -> None:
     family, _, variant = model_id.partition(":")
     if family == "fast-whisper" and variant in _FAST_SIZES:
         from huggingface_hub import snapshot_download
+        from backend.app.services.asr_fast_whisper import _fast_whisper_repo_id
+        repo_id = _fast_whisper_repo_id(variant)
         report(0.03, "正在连接 Hugging Face 模型仓库")
-        snapshot_download(f"Systran/faster-whisper-{variant}")
+        snapshot_download(repo_id)
         report(1.0, "模型下载完成")
         return
     if family == "mlx-whisper" and variant in MLX_MODEL_MAP:

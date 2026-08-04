@@ -165,6 +165,11 @@ def delete_task(task_id: str) -> Dict[str, Any]:
 def cancel_task(task_id: str) -> Dict[str, Any]:
     try:
         rec = _runner.cancel_task(task_id)
+        if rec.task_type == "burn_subtitle":
+            # 延迟导入避免 media_export -> pipeline 的路由循环依赖。
+            from backend.app.services.media_export import burn_registry
+
+            burn_registry.cancel(task_id)
         return rec.to_dict()
     except KeyError as err:
         raise HTTPException(status_code=404, detail=str(err)) from err

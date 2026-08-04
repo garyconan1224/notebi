@@ -152,6 +152,67 @@ def test_success_writeback_updates_item_type_persistently(client) -> None:
     assert fresh_item.type == "audio"
 
 
+def test_probe_writeback_updates_workspace_and_batch_before_completion(client) -> None:
+    test_client, workspace_store = client
+    resp = _create_batch(
+        test_client,
+        [{"action": "process", "source_url": "https://example.com/x", "source_title": "未知"}],
+        settings={"note_type": "auto"},
+    )
+    assert resp.status_code in (200, 201), resp.text
+    batch_data = resp.json()
+    item = workspace_store.get("ws-1").items[0]
+    task_id = "note-q5-probe"
+    workspace_store.update_item("ws-1", item.item_id, related_task_ids=[task_id])
+
+    from backend.app.models.tasks import TaskRecord
+    from backend.app.routes import task_batches
+    from backend.app.routes.workspaces import _on_note_intermediate_sync_item
+
+    task = TaskRecord(
+        task_id=task_id,
+        project_id="ws-1",
+        task_type="note",
+        payload={"workspace_id": "ws-1", "item_id": item.item_id},
+        result={"note_kind": "audio"},
+        batch_id=batch_data["batch_id"],
+        batch_item_id=batch_data["items"][0]["batch_item_id"],
+    )
+    _on_note_intermediate_sync_item(task, runner=SimpleNamespace(store=None))
+
+    updated = workspace_store.get("ws-1").items[0]
+    assert updated.type == "audio"
+    assert (updated.results or {}).get("type_probed") is True
+    batch = task_batches.get_default_batch_store().get(batch_data["batch_id"])
+    assert batch is not None
+    assert batch.items[0].item_type == "audio"
+
+
+def test_persist_intermediate_notifies_registered_callback(tmp_path: Path) -> None:
+    from backend.app.models.tasks import TaskRecord
+    from backend.app.services.pipeline_tasks import _persist_intermediate
+    from backend.app.services.task_runner import TaskRunner
+    from backend.app.services.task_store import TaskStore
+
+    runner = TaskRunner(TaskStore(tmp_path / "tasks.json"), max_workers=1)
+    record = TaskRecord(
+        task_id="note-intermediate",
+        project_id="ws-1",
+        task_type="note",
+        payload={},
+    )
+    runner.store.create(record)
+    observed: list[str] = []
+    runner.register_intermediate_callback(
+        "note",
+        lambda task, _runner: observed.append(str(task.result.get("note_kind") or "")),
+    )
+
+    _persist_intermediate(runner, record.task_id, {"note_kind": "video"})
+
+    assert observed == ["video"]
+
+
 def test_writeback_skips_when_note_kind_missing(client) -> None:
     test_client, workspace_store = client
     resp = _create_batch(

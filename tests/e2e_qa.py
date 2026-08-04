@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Nibi 端到端 QA 验收脚本（离线可运行）。
+NoteBi 端到端 QA 验收脚本（离线可运行）。
 
 检查项（12）：
 1. app.py 语法
@@ -220,12 +220,17 @@ def check_08_video_analyzer_mock_and_09_json_sync() -> str:
     state = AnalysisState(videos=[VideoProgress(video_name=video_path.name)])
 
     orig_analyze = va.analyze_video_frame
+    orig_analyze_batch = va.analyze_video_frames_batch
     orig_summary = va.generate_video_summary
     try:
         va.analyze_video_frame = lambda *args, **kwargs: {  # type: ignore[assignment]
             "description_zh": "测试帧",
             "image_prompt_en": "test prompt",
         }
+        va.analyze_video_frames_batch = lambda _key, _model, frames, _name: [  # type: ignore[assignment]
+            {"description_zh": "测试帧", "image_prompt_en": "test prompt"}
+            for _frame in frames
+        ]
         va.generate_video_summary = lambda *args, **kwargs: "测试全局总结"  # type: ignore[assignment]
         out_dir = process_video(
             api_key="fake",
@@ -240,6 +245,7 @@ def check_08_video_analyzer_mock_and_09_json_sync() -> str:
         )
     finally:
         va.analyze_video_frame = orig_analyze  # type: ignore[assignment]
+        va.analyze_video_frames_batch = orig_analyze_batch  # type: ignore[assignment]
         va.generate_video_summary = orig_summary  # type: ignore[assignment]
 
     _assert(out_dir is not None, "process_video 返回 None")
@@ -318,7 +324,7 @@ def main() -> int:
         ("api_key_resolver 优先级", check_12_api_resolver_priority),
     ]
 
-    print("=== Nibi QA 验收报告 ===")
+    print("=== NoteBi QA 验收报告 ===")
     with setup_tmp_env():
         for i, (name, fn) in enumerate(checks, start=1):
             res = run_check(i, name, fn)

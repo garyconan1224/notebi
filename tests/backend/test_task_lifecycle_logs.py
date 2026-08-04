@@ -73,3 +73,27 @@ def test_cancel_writes_cancelled_not_succeeded(tmp_path) -> None:
     ]
     assert "cancelled" in stages
     assert "succeeded" not in stages
+
+
+def test_real_task_failures_write_actionable_diagnostic_codes(tmp_path) -> None:
+    event_store = RuntimeLogStore(tmp_path / "logs")
+    task_store = TaskStore(tmp_path / "backend_tasks.json")
+    runner = TaskRunner(task_store, max_workers=1, event_sink=event_store)
+    runner.register("audio", lambda _record, _runner: (_ for _ in ()).throw(RuntimeError("decode failed")))
+    runner.register("note", lambda _record, _runner: (_ for _ in ()).throw(RuntimeError("metadata unavailable")))
+
+    audio = runner.create_task("ws-audio", "audio", {"source_type": "local"})
+    bilibili = runner.create_task(
+        "ws-bili",
+        "note",
+        {"url": "https://www.bilibili.com/video/BV1example"},
+    )
+    _wait_terminal(runner, audio.task_id)
+    _wait_terminal(runner, bilibili.task_id)
+
+    events = event_store.query(limit=100).entries
+    audio_event = next(event for event in events if event.task_id == audio.task_id and event.event_code)
+    bili_event = next(event for event in events if event.task_id == bilibili.task_id and event.event_code)
+    assert audio_event.event_code == "asr_failed"
+    assert bili_event.event_code == "bilibili_meta_failed"
+    assert audio_event.probable_cause and audio_event.suggested_action

@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react'
+
 import { LangSwitcher } from '@/components/LangSwitcher'
 import ThemeSwitcher from '@/components/ThemeSwitcher'
 import FontSlotEditor from '@/components/FontSlotEditor'
 import { THEME_PACKAGES } from '@/lib/appearanceThemes'
 import { useAppearanceStore } from '@/store/appearanceStore'
-import type { FontSlotId } from '@/services/settings'
+import { fetchSettings, patchSettings, type FontSlotId } from '@/services/settings'
 
 const FONT_SLOTS: FontSlotId[] = ['ui', 'cap', 'sum']
 
@@ -15,6 +17,33 @@ export function GeneralSettingsPage() {
   const pendingMigration = useAppearanceStore((state) => state.pendingMigration)
   const acceptMigration = useAppearanceStore((state) => state.acceptMigration)
   const dismissMigration = useAppearanceStore((state) => state.dismissMigration)
+  const [obsidian, setObsidian] = useState({ vault_path: '', subdir: '', direct_write: false })
+  const [obsidianSaving, setObsidianSaving] = useState(false)
+  const [obsidianStatus, setObsidianStatus] = useState('')
+
+  useEffect(() => {
+    let active = true
+    void fetchSettings().then((settings) => {
+      if (active && settings.obsidian) setObsidian(settings.obsidian)
+    }).catch(() => {
+      if (active) setObsidianStatus('读取失败，请稍后重试')
+    })
+    return () => { active = false }
+  }, [])
+
+  const saveObsidian = async () => {
+    setObsidianSaving(true)
+    setObsidianStatus('')
+    try {
+      const saved = await patchSettings({ obsidian })
+      if (saved.obsidian) setObsidian(saved.obsidian)
+      setObsidianStatus('已保存')
+    } catch {
+      setObsidianStatus('保存失败，请检查路径后重试')
+    } finally {
+      setObsidianSaving(false)
+    }
+  }
 
   return (
     <section className="settings-panel" aria-labelledby="general-settings-title">
@@ -121,6 +150,67 @@ export function GeneralSettingsPage() {
           {FONT_SLOTS.map((slot) => (
             <FontSlotEditor key={slot} slot={slot} />
           ))}
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-title">Obsidian</div>
+        <div className="settings-card">
+          <label className="settings-row">
+            <span className="settings-row-label">
+              <strong>Vault 路径</strong>
+              <span className="settings-row-hint">Obsidian 仓库在本机的完整路径</span>
+            </span>
+            <span className="settings-row-control">
+              <input
+                className="settings-input"
+                aria-label="Obsidian Vault 路径"
+                value={obsidian.vault_path}
+                placeholder="例如 /Users/你/Documents/My Vault"
+                onChange={(event) => setObsidian((current) => ({ ...current, vault_path: event.target.value }))}
+              />
+            </span>
+          </label>
+          <label className="settings-row">
+            <span className="settings-row-label">
+              <strong>笔记子目录</strong>
+              <span className="settings-row-hint">留空时写入 Vault 根目录</span>
+            </span>
+            <span className="settings-row-control">
+              <input
+                className="settings-input"
+                aria-label="Obsidian 子目录"
+                value={obsidian.subdir}
+                placeholder="例如 NoteBi"
+                onChange={(event) => setObsidian((current) => ({ ...current, subdir: event.target.value }))}
+              />
+            </span>
+          </label>
+          <div className="settings-row">
+            <span className="settings-row-label">
+              <strong>允许本地直写</strong>
+              <span className="settings-row-hint">关闭后仍可下载 Obsidian ZIP 包</span>
+            </span>
+            <span className="settings-row-control">
+              <label>
+                <input
+                  type="checkbox"
+                  aria-label="启用 Obsidian 直写"
+                  checked={obsidian.direct_write}
+                  onChange={(event) => setObsidian((current) => ({ ...current, direct_write: event.target.checked }))}
+                />
+              </label>
+              <button
+                type="button"
+                className="settings-save-btn"
+                disabled={obsidianSaving}
+                onClick={() => void saveObsidian()}
+              >
+                {obsidianSaving ? '保存中…' : '保存 Obsidian 设置'}
+              </button>
+              {obsidianStatus && <span role="status" className="settings-row-hint">{obsidianStatus}</span>}
+            </span>
+          </div>
         </div>
       </div>
     </section>

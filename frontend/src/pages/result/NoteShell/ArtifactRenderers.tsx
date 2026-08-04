@@ -7,7 +7,7 @@
  * - 旧产物（无 content_json）：由调用方回退 Markdown 并标注「旧版产物」。
  */
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 
 export interface MindMapNode {
   id: string
@@ -211,15 +211,31 @@ function MindMapBranch({ node, depth }: { node: MindMapNode; depth: number }) {
 }
 
 export function MindMapTree({ data, title }: { data: MindMapData; title: string }) {
+  const [scale, setScale] = useState(1)
+  const zoom = (delta: number) => {
+    setScale((value) => Math.max(0.6, Math.min(1.6, Number((value + delta).toFixed(1)))))
+  }
   return (
     <div className="mindmap-wrap">
       <div className="mindmap-actions">
+        <button type="button" aria-label="缩小思维导图" onClick={() => zoom(-0.1)}><ZoomOut size={14} /></button>
+        <span className="mindmap-zoom-value" aria-live="polite">{Math.round(scale * 100)}%</span>
+        <button type="button" aria-label="放大思维导图" onClick={() => zoom(0.1)}><ZoomIn size={14} /></button>
+        <button type="button" aria-label="重置思维导图缩放" onClick={() => setScale(1)}><RotateCcw size={14} /></button>
         <button type="button" onClick={() => exportMindMapPng(data.root, title)}>导出 PNG</button>
         <button type="button" onClick={() => exportMindMapSvg(data.root, title)}>导出 SVG</button>
       </div>
-      <ul className="mindmap-tree">
-        <MindMapBranch node={data.root} depth={0} />
-      </ul>
+      <div className="mindmap-viewport">
+        <div
+          className="mindmap-canvas"
+          data-testid="mindmap-canvas"
+          style={{ transform: `scale(${scale})` }}
+        >
+          <ul className="mindmap-tree">
+            <MindMapBranch node={data.root} depth={0} />
+          </ul>
+        </div>
+      </div>
     </div>
   )
 }

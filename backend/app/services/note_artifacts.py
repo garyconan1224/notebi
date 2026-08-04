@@ -109,9 +109,34 @@ def generate_note_artifact(
     if progress:
         progress(0.88, f"正在整理{label}")
     content_md = content_md.strip()
-    # Q4 / D7：同时产出按 kind 校验的结构化 JSON；解析失败为 None，
-    # 前端回退 Markdown 并标注旧版。content_md 始终是可移植降级文本。
+    # selection_rewrite 本来就是自由正文；其余产物必须能被对应语义组件解析。
     content_json = parse_artifact_json(kind, content_md)
+    if kind != "selection_rewrite" and content_json is None:
+        if progress:
+            progress(0.92, f"{label}格式异常，正在自动修复")
+        repair_prompt = (
+            f"下面是一次不符合格式要求的“{label}”输出。"
+            "请依据原材料和原任务要求重新生成一次，只输出合格的 Markdown，"
+            "不要解释修复过程。\n\n"
+            f"原格式要求：{_ARTIFACT_INSTRUCTIONS[kind]}\n\n"
+            f"不合格输出：\n{content_md[:12000]}\n\n"
+            f"原材料：\n{source[:16000]}"
+        )
+        repaired_md, repaired_model = _call_llm(
+            system_prompt,
+            repair_prompt,
+            provider_id=provider_id,
+            model=model,
+        )
+        repaired_md = repaired_md.strip()
+        repaired_json = parse_artifact_json(kind, repaired_md)
+        if repaired_json is None:
+            raise RuntimeError(
+                f"{label}生成结果格式无效，自动修复后仍无法解析，请重试"
+            )
+        content_md = repaired_md
+        content_json = repaired_json
+        model_used = repaired_model
     return {
         "artifact_id": str(uuid.uuid4()),
         "kind": kind,

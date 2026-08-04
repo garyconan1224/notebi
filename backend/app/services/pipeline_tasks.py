@@ -1435,6 +1435,7 @@ def _persist_intermediate(runner: TaskRunner, task_id: str, result_patch: Dict[s
     merged = dict(rec.result) if rec and rec.result else {}
     merged.update(result_patch)
     runner.store.update(task_id, result=merged)
+    runner.notify_intermediate(task_id)
 
 
 # ── note task 下载/识别/步骤调度 helpers ────────────────────

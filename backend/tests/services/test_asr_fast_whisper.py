@@ -5,9 +5,14 @@
 
 from __future__ import annotations
 
+import sys
+import types
+
 import pytest
+import backend.app.services.asr_fast_whisper as fast_whisper_service
 
 from backend.app.services.asr_fast_whisper import (
+    _fast_whisper_repo_id,
     _has_audio_stream,
     _scan_model_cache_bytes,
     transcribe_file_with_fast_whisper,
@@ -134,3 +139,45 @@ class TestFlatSnapshotCache:
         (snapshot / "config.json").write_bytes(b"{}")
 
         assert _scan_model_cache_bytes("flat-model") == (7, 0)
+
+
+class TestFastWhisperRepoId:
+    """模型仓库源映射与 faster-whisper 官方别名保持一致。"""
+
+    def test_regular_sizes_use_systran(self):
+        for size in ("tiny", "base", "small", "medium", "large-v3"):
+            assert _fast_whisper_repo_id(size) == f"Systran/faster-whisper-{size}"
+
+    def test_large_v3_turbo_uses_upstream_turbo_repo(self):
+        assert (
+            _fast_whisper_repo_id("large-v3-turbo")
+            == "mobiuslabsgmbh/faster-whisper-large-v3-turbo"
+        )
+
+    def test_full_repo_name_passthrough(self):
+        assert (
+            _fast_whisper_repo_id("deepdml/faster-whisper-large-v3-turbo-ct2")
+            == "deepdml/faster-whisper-large-v3-turbo-ct2"
+        )
+
+    def test_model_loader_uses_the_resolved_repo_id(self, monkeypatch):
+        captured: dict[str, str] = {}
+
+        class FakeWhisperModel:
+            def __init__(self, source, **_kwargs):
+                captured["source"] = source
+
+        fake_module = types.ModuleType("faster_whisper")
+        fake_module.WhisperModel = FakeWhisperModel  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "faster_whisper", fake_module)
+        fast_whisper_service._MODEL_CACHE.clear()
+        monkeypatch.setattr(fast_whisper_service, "is_model_cached", lambda _name: True)
+        fast_whisper_service._load_model(
+            "large-v3-turbo",
+            "cpu",
+            "int8",
+            cpu_threads=1,
+        )
+        fast_whisper_service._MODEL_CACHE.clear()
+
+        assert captured["source"] == "mobiuslabsgmbh/faster-whisper-large-v3-turbo"

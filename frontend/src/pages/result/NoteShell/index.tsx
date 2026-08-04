@@ -15,6 +15,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Bold, BookOpenCheck, Brain, Camera, Check, ChevronDown, Code2, Copy, Download, ExternalLink, FileDown, FileText, FileType, Film, History, Image, Italic, List, MessageCircle, Minus, Pause, Pencil, Play, Plus, Presentation, RefreshCw, Sparkles, Strikethrough, Subtitles, Trash2, Type, Underline, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 
 import { createChapterSummaries, downloadItemNoteExport, downloadOriginalMedia, downloadSoftSubMedia, downloadSubtitles, downloadTranscript, exportItemNoteObsidian, exportNoteToObsidianVault, getItemNote, putItemNote, startBurnSubtitles, updateSpeakerMap, type ItemNoteExportFormat, type TranscriptExportMode } from '@/services/workspaces'
 import { fetchSettings } from '@/services/settings'
@@ -537,6 +538,14 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [mediaExporting, setMediaExporting] = useState<string | null>(null)
   const [notionExportOpen, setNotionExportOpen] = useState(false)
   const [feishuExportOpen, setFeishuExportOpen] = useState(false)
+  // Q3 / D3：Obsidian 直写同名冲突确认（目标已存在时弹框，需用户主动选择覆盖）
+  const [obsidianConflict, setObsidianConflict] = useState<{
+    vault_path: string
+    subdir: string
+    relative: string
+    source_kind: 'main' | 'summary'
+    summary_id?: string
+  } | null>(null)
   const [immersiveOpen, setImmersiveOpen] = useState(false)
   const [sourceMdOpen, setSourceMdOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -1590,22 +1599,32 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   }, [workspaceId, itemId, showOperationNotice])
 
   // ── Q3 / D3：Obsidian 直写（vault 目的地来自设置）──────────
+  // 先 dry_run 预检同名目标；已存在则弹冲突确认，由用户主动选择「另存为新版本」或「覆盖」。
   const handleObsidianDirectWrite = useCallback(async () => {
     setMediaExporting('obsidian-vault')
     try {
       const settings = await fetchSettings()
-      const vaultPath = settings.obsidian?.vault_path
+      if (!settings.obsidian?.direct_write) {
+        showOperationNotice('Obsidian 本地直写已关闭，请到 设置 → 常规与外观 启用', 'error')
+        return
+      }
+      const vaultPath = settings.obsidian.vault_path.trim()
       if (!vaultPath) {
         showOperationNotice('尚未配置 Obsidian vault 路径，请到 设置 → 常规与外观 配置', 'error')
         return
       }
-      const result = await exportNoteToObsidianVault(workspaceId, itemId, {
+      const common = {
         vault_path: vaultPath,
         subdir: settings.obsidian?.subdir || '',
-        on_conflict: 'rename',
-        source_kind: activeSummaryId ? 'summary' : 'main',
+        source_kind: activeSummaryId ? 'summary' as const : 'main' as const,
         summary_id: activeSummaryId ?? undefined,
-      })
+      }
+      const precheck = await exportNoteToObsidianVault(workspaceId, itemId, { ...common, dry_run: true })
+      if (precheck.exists) {
+        setObsidianConflict({ ...common, relative: precheck.relative })
+        return
+      }
+      const result = await exportNoteToObsidianVault(workspaceId, itemId, { ...common, on_conflict: 'rename' })
       showOperationNotice(`已写入 Obsidian：${result.relative}`, 'success')
       setExportOpen(false)
     } catch {
@@ -1614,6 +1633,29 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
       setMediaExporting(null)
     }
   }, [workspaceId, itemId, activeSummaryId, showOperationNotice])
+
+  // 冲突确认：另存为新版本（默认）或覆盖（主动选择，AlertDialog 本身即二次确认）
+  const handleObsidianConflictSave = useCallback(async (overwrite: boolean) => {
+    const conflict = obsidianConflict
+    if (!conflict) return
+    setObsidianConflict(null)
+    setMediaExporting('obsidian-vault')
+    try {
+      const result = await exportNoteToObsidianVault(workspaceId, itemId, {
+        vault_path: conflict.vault_path,
+        subdir: conflict.subdir,
+        on_conflict: overwrite ? 'overwrite' : 'rename',
+        source_kind: conflict.source_kind,
+        summary_id: conflict.summary_id,
+      })
+      showOperationNotice(overwrite ? `已覆盖 Obsidian：${result.relative}` : `已另存为新版本：${result.relative}`, 'success')
+      setExportOpen(false)
+    } catch {
+      showOperationNotice('写入 Obsidian 失败：请检查 vault 路径与目录权限', 'error')
+    } finally {
+      setMediaExporting(null)
+    }
+  }, [workspaceId, itemId, obsidianConflict, showOperationNotice])
 
   // VN4.3 新建总结（从 AI 工具菜单触发，复用 NewSummaryModal）
   const handleCreateSummary = useCallback(async (opts: {
@@ -3329,6 +3371,32 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
           })
         }}
       />
+      <AlertDialog
+        open={!!obsidianConflict}
+        onOpenChange={(open) => { if (!open) setObsidianConflict(null) }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Obsidian 已有同名文件</AlertDialogTitle>
+            <AlertDialogDescription>
+              <code className="rounded bg-muted px-1.5 py-0.5 text-sm">{obsidianConflict?.relative}</code>{' '}
+              已存在。默认会<b>另存为新版本</b>（生成 -1 后缀文件）；只有当你确认需要覆盖时，才选择<b>覆盖</b>。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void handleObsidianConflictSave(false)}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              另存为新版本
+            </AlertDialogAction>
+            <AlertDialogAction onClick={() => void handleObsidianConflictSave(true)}>
+              覆盖
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <NoteHistoryPanel
         open={historyOpen}
         workspaceId={workspaceId}

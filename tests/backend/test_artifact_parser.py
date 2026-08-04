@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from backend.app.services.artifact_parser import (
     MAX_MIND_MAP_DEPTH,
     mind_map_stats,
@@ -157,3 +159,47 @@ def test_generate_artifact_includes_content_json(monkeypatch) -> None:
     )
     assert rewrite["content_json"] is None
     assert rewrite["content_md"] == "改写后的文本"
+
+
+def test_generate_artifact_repairs_invalid_structure_once(monkeypatch) -> None:
+    from backend.app.services import note_artifacts
+    from types import SimpleNamespace
+
+    outputs = iter([
+        ("这不是列表", "test-model"),
+        ("- 根\n  - 修复后的子节点", "test-model"),
+    ])
+    calls: list[str] = []
+
+    def fake_call(_system, user, **_kwargs):
+        calls.append(user)
+        return next(outputs)
+
+    monkeypatch.setattr(note_artifacts, "_call_llm", fake_call)
+    item = SimpleNamespace(results={"note_body": "一些内容"})
+
+    artifact = note_artifacts.generate_note_artifact(item, "mind_map")
+
+    assert len(calls) == 2
+    assert "修复后的子节点" in artifact["content_md"]
+    assert artifact["content_json"]["root"]["text"] == "根"
+
+
+def test_generate_artifact_fails_clearly_after_one_repair(monkeypatch) -> None:
+    from backend.app.services import note_artifacts
+    from types import SimpleNamespace
+
+    calls = 0
+
+    def fake_call(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        return "仍然不是结构化内容", "test-model"
+
+    monkeypatch.setattr(note_artifacts, "_call_llm", fake_call)
+    item = SimpleNamespace(results={"note_body": "一些内容"})
+
+    with pytest.raises(RuntimeError, match="自动修复后仍无法解析"):
+        note_artifacts.generate_note_artifact(item, "mind_map")
+
+    assert calls == 2

@@ -1,15 +1,18 @@
 # AI Handoff
 
-## 当前执行指针（2026-08-03，2026-08-02 产品修订计划 Q1–Q7 完成）
+## 当前执行指针（2026-08-04，Q1–Q8 审查修正完成）
 
 - **当前分支**：`codex/continue-product-redesign`
 - **当前 HEAD**：本文件所在提交，以 `git log` 为准。
-- **本轮计划**：`docs/plans/2026-08-02-product-revision.md`（D1–D7 已确认并落地；**Q8 CrisperWhisper POC 未做**，需单独停点确认模型下载与许可证）。
+- **本轮计划**：`docs/plans/2026-08-02-product-revision.md`。Q1–Q7 已落地；Q8 阶段 A（适配器/假模型/路由 POC）已完成，阶段 B 的真实模型下载与长音频基准仍需许可证与下载确认。
+- **2026-08-04 审查修正**：诊断生产接入、烧录取消竞态、Obsidian 设置/冲突确认、probe 类型即时回写、Crisper 模型归一化、结构化产物修复、导出字体、1024 顶栏均已补齐。
 
 ### 提交历史（2026-08-02 计划，最新在前）
 
 | 哈希 | 主题 | 批次 |
 |---|---|---|
+| 最新修正提交（以 `git log` 为准） | fix: close q1-q8 audit gaps | Q2–Q8 审查 |
+| `9b9c3e2` | poc: evaluate crisperwhisper 2 transcription | Q8 阶段 A |
 | 本文件所在提交（以 `git log` 为准） | docs: handoff 2026-08-02 plan Q1–Q7 | — |
 | `a64f87e` | fix: make task diagnostics actionable and isolated | Q7 |
 | `61c7463` | feat: render typed ai note artifacts | Q4 |
@@ -31,26 +34,27 @@
 
 ### 最终测试 / 构建结果（真实退出码）
 
-- 前端测试：`CI=true pnpm test` → 94 文件 / 497 passed，退出码 0。
-- 后端测试：`.venv/bin/python -m pytest tests/backend backend/tests -q` → 1381 passed / 2 skipped，退出码 0。
+- 前端测试：`pnpm test` → 96 文件 / 506 passed，退出码 0。
+- 后端测试：`.venv/bin/python -m pytest tests/backend backend/tests tests/test_*.py -m "not integration" -q` → 1476 passed / 2 skipped / 6 deselected，退出码 0。
   skipped 明细：`test_audio_analyzer.py:315`（silero-vad torch 模型，需 `RUN_AUDIO_MODEL_TESTS=1` 单跑）、`test_ocr_service.py:44`（PaddleOCR 模型不可用）。
 - 构建：`pnpm build`（`tsc -b && vite build`）退出码 0。
+- 离线 E2E：`.venv/bin/python tests/e2e_qa.py` → 12/12，退出码 0；真实网络 E2E 已正确标记 `integration`。
 - 各批均按 TDD 先红后绿；UI 批用 Playwright 实测关键交互。
 
 ### 未验证项 / 已知边界
 
 - 各 commit message 的「未验证边界」段落为准；主要为真实素材端到端（真实视频导出/烧录、真实 LLM 产物、真实 vault 写入）与部分浏览器像素级走查。
-- Q8 CrisperWhisper 2.0 POC 未启动：需先停点确认模型下载（大小/磁盘位置）与非商业研究许可证接受。
+- Q8 阶段 B 未启动：未下载 CrisperWhisper 权重、未接受/代替用户接受非商业研究许可证，也未做 continuation 中文长音频真实基准。
 - 后端 2 个 skipped 为本地模型依赖缺失，本环境未验证。
 - 未 push 到远端。
 
 ### 脏文件
 
-无（工作区干净，本文件更新随本提交）
+- `test-audit-report-2026-08-03.md` 为用户已有未跟踪审计报告，本轮保留且不纳入提交。
 
 ## 当前执行顺序
 
-2026-08-02 计划 Q1–Q7 已全部完成。**Q8（CrisperWhisper）需用户单独确认模型下载与许可证后再执行**；其余后续操作需用户明确授权。
+Q1–Q8 代码审查修正已完成。若继续 Q8 阶段 B，需用户单独确认模型下载位置/大小与非商业研究许可证；真实素材、真实 Vault、烧录视频和浏览器多视口像素级验收仍是后续验证边界。
 
 ## 启动检查
 

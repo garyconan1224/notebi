@@ -3678,11 +3678,27 @@
 
 /* ════ Q2：≤1100px 窄窗压缩（1024 双列审查）════════ */
 @media (max-width: 1100px) {
-  /* 顶栏长标题下保持单行：工具区可横向滚动（声明豁免） */
+  /* 1024 窄窗把操作收为图标按钮；title 提供完整可访问名称。
+     顶栏本身不滚动、不换行，避免右侧操作被裁切。 */
   .nibi-note-bar-tools {
-    overflow-x: auto;
-    scrollbar-width: thin;
-    max-width: 70%;
+    overflow: visible;
+    max-width: none;
+    flex-shrink: 0;
+  }
+
+  .nibi-note-bar-btn--label {
+    width: 32px;
+    padding: 0;
+    gap: 0;
+    font-size: 0;
+  }
+
+  .nibi-note-bar-title {
+    min-width: 72px;
+  }
+
+  .nibi-note-bar-meta {
+    display: none;
   }
 
   /* 故事板缩略图压缩但不隐藏 */
