@@ -507,10 +507,11 @@ export async function generateNote(
   intent: string = 'note',
   noteMediaKind: string = 'auto',
   extra?: { diarize?: boolean; summary_mode?: 'general' | 'speaker_aware'; speaker_count?: number; summary_template?: string; user_notes?: string },
+  thumbnail?: string,
 ): Promise<GenerateNoteResponse> {
   const res = await http.post<GenerateNoteResponse>(
     `${BASE}/${workspaceId}/items/generate-note`,
-    { url, name, embed_frames: embedFrames, image_mode: imageMode, frame_interval: frameInterval, vision_model: visionModel, intent, note_media_kind: noteMediaKind, ...extra },
+    { url, name, embed_frames: embedFrames, image_mode: imageMode, frame_interval: frameInterval, vision_model: visionModel, intent, note_media_kind: noteMediaKind, ...(thumbnail ? { thumbnail } : {}), ...extra },
   )
   return res.data
 }

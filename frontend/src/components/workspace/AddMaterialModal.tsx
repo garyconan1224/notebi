@@ -973,11 +973,13 @@ export function AddMaterialModal({
       const effInterval =
         captureMode === 'auto' ? computeAutoInterval(videoDuration) : frameInterval
       const effVisionModel = selectedVisionModel === '__default__' ? '' : selectedVisionModel
+      const coverForSubmit = sniffThumbnail || coverUrl || ''
       const result = await generateNote(
         wsId, effectiveUrl, effectiveSniff?.title ?? undefined,
         embedFrames, 'vision', effInterval, effVisionModel,
         'note', selectedNoteType,
         { diarize: selectedNoteType === 'mixed' ? true : diarizeOn, ...(speakerAwareMedia && selectedSpeakerCount ? { speaker_count: selectedSpeakerCount } : {}), summary_template: noteStyle, ...(speakerAwareMedia ? { summary_mode: 'speaker_aware' as const } : {}), user_notes: userNotes, ...(selectedNoteType === 'mixed' ? { note_media_kind: 'mixed' } : {}) },
+        coverForSubmit,
       )
       toast.success('笔记生成中', { description: `${result.item_type} · ${effectiveUrl}` })
 

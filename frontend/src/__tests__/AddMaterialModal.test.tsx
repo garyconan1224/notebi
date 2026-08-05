@@ -298,6 +298,7 @@ describe('AddMaterialModal', () => {
         summary_template: 'detailed',
         summary_mode: 'speaker_aware',
       }),
+      '',
     ])
   })
 
@@ -485,6 +486,7 @@ describe('AddMaterialModal', () => {
         'note',
         'image_text',
         { diarize: false, summary_template: 'standard', user_notes: '' },
+        '',
       )
     })
     expect(addWorkspaceItemMock).not.toHaveBeenCalled()
@@ -537,6 +539,7 @@ describe('AddMaterialModal', () => {
         'note',
         'auto',
         { diarize: false, summary_template: 'standard', user_notes: '' },
+        '',
       )
     })
     expect(navigateMock).toHaveBeenCalledWith('/processing/task-note-1', {
@@ -621,6 +624,7 @@ describe('AddMaterialModal', () => {
         'note',
         'auto',
         { diarize: false, summary_template: 'standard', user_notes: '' },
+        '',
       )
     })
   })
@@ -684,6 +688,7 @@ describe('AddMaterialModal', () => {
         'note',
         'auto',
         { diarize: false, summary_template: 'standard', user_notes: '' },
+        '',
       )
     })
   })
@@ -787,6 +792,7 @@ describe('AddMaterialModal', () => {
           summary_mode: 'speaker_aware',
           summary_template: 'speaker_consultant_meeting_customer_voice',
         }),
+        '',
       )
     })
   })
