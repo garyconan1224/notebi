@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { Music } from 'lucide-react'
 import { useTaskStore } from '@/store/taskStore'
 import { isTaskTerminal } from '@/types/task'
+import { previewSrcForProxy } from '@/components/workspace/linkCover'
 
 interface TasksCardProps {
   currentTaskId: string
@@ -102,7 +103,7 @@ export default function TasksCard({ currentTaskId }: TasksCardProps) {
               {coverUrl ? (
                 <>
                   <img
-                    src={coverUrl}
+                    src={previewSrcForProxy(coverUrl)}
                     alt=""
                     referrerPolicy="no-referrer"
                     onError={(e) => {

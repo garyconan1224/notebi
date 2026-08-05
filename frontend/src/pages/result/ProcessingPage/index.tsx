@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button'
 import { StepProgress } from './StepProgress'
 import { useGlobalEta } from '@/hooks/useGlobalEta'
 import { LiveLog } from './LiveLog'
+import { previewSrcForProxy } from '@/components/workspace/linkCover'
 import NoteShell from '../NoteShell'
 
 import './processing.css'
@@ -352,7 +353,7 @@ export default function ProcessingPage() {
             <div className="thumb">
               {coverUrl ? (
                 <img
-                  src={coverUrl}
+                  src={previewSrcForProxy(coverUrl)}
                   alt={title}
                   referrerPolicy="no-referrer"
                   onError={(e) => {
