@@ -5,6 +5,7 @@
  * 点击空白、Esc 或滚动后隐藏。通过 lnEditorStore 作用于当前挂载的 Milkdown 编辑器。
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { CSSProperties } from 'react'
 import {
   AlignCenter,
@@ -40,12 +41,6 @@ import {
   type NoteEditorPrefs,
 } from './editorPrefs'
 
-const PARAGRAPH_OPTIONS = [
-  { value: '0', label: '正文' },
-  { value: '1', label: '标题 1' },
-  { value: '2', label: '标题 2' },
-  { value: '3', label: '标题 3' },
-] as const
 
 export type TextAlign = 'left' | 'center' | 'right'
 
@@ -100,6 +95,13 @@ interface EditorToolbarProps {
 }
 
 export function EditorToolbar({ textAlign, onTextAlignChange, editorPrefs, onEditorPrefsChange }: EditorToolbarProps) {
+  const { t } = useTranslation('note')
+  const paragraphOptions = [
+    { value: '0', label: t('editor.paragraph') },
+    { value: '1', label: t('editor.heading1') },
+    { value: '2', label: t('editor.heading2') },
+    { value: '3', label: t('editor.heading3') },
+  ]
   const formatting = useLnEditorStore((state) => state.formattingState)
   const applyFormat = useLnEditorStore((state) => state.applyFormat)
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
@@ -213,56 +215,56 @@ export function EditorToolbar({ textAlign, onTextAlignChange, editorPrefs, onEdi
           value={String(formatting.headingLevel)}
           onChange={(event) => applyFormat('heading', event.target.value)}
         >
-          {PARAGRAPH_OPTIONS.map((option) => (
+          {paragraphOptions.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
         </select>
         <span className="ed-toolbar-divider" aria-hidden="true" />
-        <ToolbarButton format="bold" label="加粗" shortcut={`${mod}B`} active={formatting.bold} disabled={!formatting.canBold}>
+        <ToolbarButton format="bold" label={t('editor.bold')} shortcut={`${mod}B`} active={formatting.bold} disabled={!formatting.canBold}>
           <Bold size={14} />
         </ToolbarButton>
-        <ToolbarButton format="italic" label="斜体" shortcut={`${mod}I`} active={formatting.italic} disabled={!formatting.canItalic}>
+        <ToolbarButton format="italic" label={t('editor.italic')} shortcut={`${mod}I`} active={formatting.italic} disabled={!formatting.canItalic}>
           <Italic size={14} />
         </ToolbarButton>
-        <ToolbarButton format="underline" label="下划线" active={formatting.underline} disabled={!formatting.canUnderline}>
+        <ToolbarButton format="underline" label={t('editor.underline')} active={formatting.underline} disabled={!formatting.canUnderline}>
           <Underline size={14} />
         </ToolbarButton>
-        <ToolbarButton format="strike" label="删除线" active={formatting.strike} disabled={!formatting.canStrike}>
+        <ToolbarButton format="strike" label={t('editor.strike')} active={formatting.strike} disabled={!formatting.canStrike}>
           <Strikethrough size={14} />
         </ToolbarButton>
-        <ToolbarButton format="link" label="链接" shortcut={`${mod}K`} active={formatting.link} disabled={!formatting.canLink} onClick={handleLink}>
+        <ToolbarButton format="link" label={t('editor.link')} shortcut={`${mod}K`} active={formatting.link} disabled={!formatting.canLink} onClick={handleLink}>
           <LinkIcon size={14} />
         </ToolbarButton>
         <span className="ed-toolbar-divider" aria-hidden="true" />
-        <ToolbarButton format="blockquote" label="引用" active={formatting.blockquote} disabled={!formatting.canBlockquote}>
+        <ToolbarButton format="blockquote" label={t('editor.blockquote')} active={formatting.blockquote} disabled={!formatting.canBlockquote}>
           <Quote size={14} />
         </ToolbarButton>
-        <ToolbarButton format="bulletList" label="无序列表" active={formatting.bulletList} disabled={!formatting.canBulletList}>
+        <ToolbarButton format="bulletList" label={t('editor.bulletList')} active={formatting.bulletList} disabled={!formatting.canBulletList}>
           <List size={14} />
         </ToolbarButton>
-        <ToolbarButton format="orderedList" label="有序列表" active={formatting.orderedList} disabled={!formatting.canOrderedList}>
+        <ToolbarButton format="orderedList" label={t('editor.orderedList')} active={formatting.orderedList} disabled={!formatting.canOrderedList}>
           <ListOrdered size={14} />
         </ToolbarButton>
-        <ToolbarButton format="taskList" label="待办列表" active={formatting.taskList} disabled={!formatting.canTaskList}>
+        <ToolbarButton format="taskList" label={t('editor.taskList')} active={formatting.taskList} disabled={!formatting.canTaskList}>
           <ListTodo size={14} />
         </ToolbarButton>
         <span className="ed-toolbar-divider" aria-hidden="true" />
-        <ToolbarButton format="inlineCode" label="行内代码" active={formatting.inlineCode} disabled={!formatting.canInlineCode}>
+        <ToolbarButton format="inlineCode" label={t('editor.inlineCode')} active={formatting.inlineCode} disabled={!formatting.canInlineCode}>
           <Braces size={14} />
         </ToolbarButton>
-        <ToolbarButton format="codeBlock" label="代码块" active={formatting.codeBlock} disabled={!formatting.canCodeBlock}>
+        <ToolbarButton format="codeBlock" label={t('editor.codeBlock')} active={formatting.codeBlock} disabled={!formatting.canCodeBlock}>
           <Code2 size={14} />
         </ToolbarButton>
-        <ToolbarButton format="clearFormat" label="清除格式" active={false} disabled={!formatting.canClearFormat}>
+        <ToolbarButton format="clearFormat" label={t('editor.clearFormat')} active={false} disabled={!formatting.canClearFormat}>
           <Eraser size={14} />
         </ToolbarButton>
         {showPrefsControls && (
           <>
             <span className="ed-toolbar-divider" aria-hidden="true" />
             <ToolbarButton
-              label="正文设置"
+              label={t('editor.textPrefs')}
               active={prefsOpen}
               onClick={() => setPrefsOpen((value) => !value)}
             >
@@ -273,13 +275,13 @@ export function EditorToolbar({ textAlign, onTextAlignChange, editorPrefs, onEdi
         {onTextAlignChange && (
           <>
             <span className="ed-toolbar-divider" aria-hidden="true" />
-            <ToolbarButton label="左对齐" active={textAlign === 'left'} onClick={() => onTextAlignChange('left')}>
+            <ToolbarButton label={t('editor.alignLeft')} active={textAlign === 'left'} onClick={() => onTextAlignChange('left')}>
               <AlignLeft size={14} />
             </ToolbarButton>
-            <ToolbarButton label="居中" active={textAlign === 'center'} onClick={() => onTextAlignChange('center')}>
+            <ToolbarButton label={t('editor.alignCenter')} active={textAlign === 'center'} onClick={() => onTextAlignChange('center')}>
               <AlignCenter size={14} />
             </ToolbarButton>
-            <ToolbarButton label="右对齐" active={textAlign === 'right'} onClick={() => onTextAlignChange('right')}>
+            <ToolbarButton label={t('editor.alignRight')} active={textAlign === 'right'} onClick={() => onTextAlignChange('right')}>
               <AlignRight size={14} />
             </ToolbarButton>
           </>
@@ -288,7 +290,7 @@ export function EditorToolbar({ textAlign, onTextAlignChange, editorPrefs, onEdi
       {prefsOpen && editorPrefs && onEditorPrefsChange && (
         <div className="nibi-note-pref-panel" role="group" aria-label="正文偏好设置">
           <div className="nibi-note-pref-group">
-            <span className="nibi-note-pref-label">字体</span>
+            <span className="nibi-note-pref-label">{t('editor.fontFamily')}</span>
             <div className="nibi-note-pref-segment">
               {FONT_FAMILY_OPTIONS.map((option) => (
                 <button
@@ -304,7 +306,7 @@ export function EditorToolbar({ textAlign, onTextAlignChange, editorPrefs, onEdi
             </div>
           </div>
           <div className="nibi-note-pref-group">
-            <span className="nibi-note-pref-label">字号</span>
+            <span className="nibi-note-pref-label">{t('editor.fontSize')}</span>
             <div className="nibi-note-pref-stepper">
               <button
                 type="button"
@@ -334,7 +336,7 @@ export function EditorToolbar({ textAlign, onTextAlignChange, editorPrefs, onEdi
             </div>
           </div>
           <div className="nibi-note-pref-group">
-            <span className="nibi-note-pref-label">行高</span>
+            <span className="nibi-note-pref-label">{t('editor.lineHeight')}</span>
             <div className="nibi-note-pref-segment">
               {LINE_HEIGHT_OPTIONS.map((value) => (
                 <button
@@ -350,7 +352,7 @@ export function EditorToolbar({ textAlign, onTextAlignChange, editorPrefs, onEdi
             </div>
           </div>
           <div className="nibi-note-pref-group">
-            <span className="nibi-note-pref-label">颜色</span>
+            <span className="nibi-note-pref-label">{t('editor.color')}</span>
             <div className="nibi-note-pref-swatches">
               {TONE_OPTIONS.map((option) => (
                 <button
@@ -358,7 +360,7 @@ export function EditorToolbar({ textAlign, onTextAlignChange, editorPrefs, onEdi
                   type="button"
                   className={`nibi-note-pref-swatch${editorPrefs.textTone === option.key ? ' is-active' : ''}`}
                   style={{ '--swatch-color': option.color } as CSSProperties}
-                  aria-label={`文字颜色：${option.label}`}
+                  aria-label={t('editor.color')}
                   aria-pressed={editorPrefs.textTone === option.key}
                   onClick={() => onEditorPrefsChange({ textTone: option.key })}
                 >
@@ -368,7 +370,7 @@ export function EditorToolbar({ textAlign, onTextAlignChange, editorPrefs, onEdi
             </div>
           </div>
           <div className="nibi-note-pref-group">
-            <span className="nibi-note-pref-label">字重</span>
+            <span className="nibi-note-pref-label">{t('editor.fontWeight')}</span>
             <div className="nibi-note-pref-segment">
               {FONT_WEIGHT_OPTIONS.map((option) => (
                 <button
@@ -389,7 +391,7 @@ export function EditorToolbar({ textAlign, onTextAlignChange, editorPrefs, onEdi
               className="nibi-note-pref-ghost"
               onClick={() => onEditorPrefsChange(DEFAULT_EDITOR_PREFS)}
             >
-              重置
+              {t('editor.reset')}
             </button>
           </div>
         </div>

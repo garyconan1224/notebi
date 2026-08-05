@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { FileDown, FileText, X } from 'lucide-react'
 
 export type ExportContentKind = 'transcript' | 'summary' | 'media'
@@ -40,10 +41,10 @@ interface StoredState {
   destination: ExportDestination
 }
 
-const LANGUAGE_LABEL: Record<ExportLanguage, string> = {
-  bilingual: '双语',
-  translation: '仅翻译',
-  source: '仅原文',
+const LANGUAGE_KEY: Record<ExportLanguage, 'bilingual' | 'translation' | 'source'> = {
+  bilingual: 'bilingual',
+  translation: 'translation',
+  source: 'source',
 }
 
 const TRANSCRIPT_TIMELINE_FORMATS = [
@@ -64,7 +65,7 @@ const SUMMARY_FORMATS = [
   { value: 'pdf', label: 'PDF' },
   { value: 'docx', label: 'Word' },
   { value: 'pptx', label: 'PPT' },
-  { value: 'long_image', label: '长图' },
+  { value: 'long_image', label: 'Long Image' },
 ]
 
 function readStoredState(itemId: string): StoredState | null {
@@ -89,6 +90,7 @@ export function NoteExportPanel({
   onExport,
   onCloud,
 }: NoteExportPanelProps) {
+  const { t } = useTranslation('note')
   const stored = useMemo(() => readStoredState(itemId), [itemId])
   const [content, setContent] = useState<ExportContentKind>('transcript')
   const [format, setFormat] = useState('srt')
@@ -131,29 +133,29 @@ export function NoteExportPanel({
 
   const mediaFormats = content === 'media'
     ? isAudioNote
-      ? [{ value: 'audio', label: '仅音频文件' }]
-      : [{ value: 'original', label: '原视频' }]
+      ? [{ value: 'audio', label: t('export.audioOnly') }]
+      : [{ value: 'original', label: t('export.originalVideo') }]
     : []
 
   const filename = useMemo(() => {
-    const safeTitle = (title || '未命名').replace(/[/\\:*?"<>|]/g, '_').trim().slice(0, 60) || 'media'
+    const safeTitle = (title || 'untitled').replace(/[/\\:*?"<>|]/g, '_').trim().slice(0, 60) || 'media'
     if (content === 'transcript') {
-      const lang = LANGUAGE_LABEL[effectiveLanguage]
-      const speaker = withSpeaker ? '_带说话人' : ''
-      return `${safeTitle}_转写_${lang}${speaker}.${format}`
+      const lang = t(`export.${LANGUAGE_KEY[effectiveLanguage]}`)
+      const speaker = withSpeaker ? '_with_speaker' : ''
+      return `${safeTitle}_${t('export.transcript')}_${lang}${speaker}.${format}`
     }
     if (content === 'summary') {
-      return `${safeTitle}_总结.${format}`
+      return `${safeTitle}_${t('export.summary')}.${format}`
     }
     if (content === 'media') {
-      if (withSubtitle && format === 'original') return `${safeTitle}_视频_${LANGUAGE_LABEL[effectiveLanguage]}字幕.zip`
-      if (format === 'original') return `${safeTitle}_视频_原始.mp4`
-      if (format === 'audio') return `${safeTitle}_音频.m4a`
-      if (format === 'burn') return `${safeTitle}_视频_${LANGUAGE_LABEL[effectiveLanguage]}字幕.mp4`
-      return `${safeTitle}_视频_${LANGUAGE_LABEL[effectiveLanguage]}字幕.zip`
+      if (withSubtitle && format === 'original') return `${safeTitle}_视频_${t(`export.${LANGUAGE_KEY[effectiveLanguage]}`)}字幕.zip`
+      if (format === 'original') return `${safeTitle}_video_original.mp4`
+      if (format === 'audio') return `${safeTitle}_audio.m4a`
+      if (format === 'burn') return `${safeTitle}_视频_${t(`export.${LANGUAGE_KEY[effectiveLanguage]}`)}字幕.mp4`
+      return `${safeTitle}_video_${t(`export.${LANGUAGE_KEY[effectiveLanguage]}`)}_subs.zip`
     }
     return safeTitle
-  }, [title, content, format, effectiveLanguage, withSpeaker, withSubtitle])
+  }, [title, content, format, effectiveLanguage, withSpeaker, withSubtitle, t])
 
   const selectFormat = (value: string) => {
     setFormat(value)
@@ -210,21 +212,21 @@ export function NoteExportPanel({
       >
         <header className="nibi-export-panel-head">
           <div>
-            <strong>导出</strong>
-            <span>内容 × 格式 × 选项 × 目的地</span>
+            <strong>{t('export.title')}</strong>
+            <span>{t('export.stepContent').slice(4)} × {t('export.stepFormat').slice(4)} × {t('export.stepOptions').slice(4)} × {t('export.stepDestination').slice(4)}</span>
           </div>
-          <button type="button" aria-label="关闭导出" onClick={() => onOpenChange(false)}>
+          <button type="button" aria-label={t('export.title')} onClick={() => onOpenChange(false)}>
             <X size={15} />
           </button>
         </header>
 
         <div className="nibi-export-step">
-          <div className="nibi-export-step-label">1 · 内容</div>
+          <div className="nibi-export-step-label">{t('export.stepContent')}</div>
           <div className="nibi-export-segment" role="radiogroup" aria-label="导出内容">
             {([
-              { value: 'transcript', label: '转写' },
-              { value: 'summary', label: '总结' },
-              ...(isVideoNote || isAudioNote ? [{ value: 'media', label: '媒体文件' }] : []),
+              { value: 'transcript', label: t('export.transcript') },
+              { value: 'summary', label: t('export.summary') },
+              ...(isVideoNote || isAudioNote ? [{ value: 'media', label: t('export.media') }] : []),
             ] as Array<{ value: ExportContentKind; label: string }>).map((item) => (
               <button
                 key={item.value}
@@ -248,7 +250,7 @@ export function NoteExportPanel({
         </div>
 
         <div className="nibi-export-step">
-          <div className="nibi-export-step-label">2 · 格式</div>
+          <div className="nibi-export-step-label">{t('export.stepFormat')}</div>
           {content === 'media' ? (
             <div className="nibi-export-segment" role="radiogroup" aria-label="媒体格式">
               {mediaFormats.map((item) => (
@@ -268,7 +270,7 @@ export function NoteExportPanel({
             <>
               {content === 'transcript' && (
                 <div className="nibi-export-format-group">
-                  <span>时间轴格式</span>
+                  <span>{t('export.timelineFormats')}</span>
                   <div className="nibi-export-segment" role="radiogroup" aria-label="时间轴格式">
                     {TRANSCRIPT_TIMELINE_FORMATS.map((item) => (
                       <button
@@ -286,7 +288,7 @@ export function NoteExportPanel({
                 </div>
               )}
               <div className="nibi-export-format-group">
-                <span>{content === 'transcript' ? '文档格式' : '总结格式'}</span>
+                <span>{content === 'transcript' ? t('export.docFormats') : t('export.summaryFormats')}</span>
                 <div className="nibi-export-segment" role="radiogroup" aria-label="文档格式">
                   {formats.map((item) => (
                     <button
@@ -308,7 +310,7 @@ export function NoteExportPanel({
 
         {content !== 'summary' && (
         <div className="nibi-export-step">
-          <div className="nibi-export-step-label">3 · 选项</div>
+          <div className="nibi-export-step-label">{t('export.stepOptions')}</div>
           <div className="nibi-export-options">
             {content === 'transcript' && (
               <>
@@ -319,8 +321,8 @@ export function NoteExportPanel({
                     disabled={!hasSpeakerData}
                     onChange={(event) => setWithSpeaker(event.target.checked)}
                   />
-                  带说话人
-                  {!hasSpeakerData && <span>该录音未识别到说话人</span>}
+                  {t('export.withSpeaker')}
+                  {!hasSpeakerData && <span>{t('export.withSpeakerHint')}</span>}
                 </label>
                 {!isTimelineFormat && (
                   <label>
@@ -329,7 +331,7 @@ export function NoteExportPanel({
                       checked={withTimestamp}
                       onChange={(event) => setWithTimestamp(event.target.checked)}
                     />
-                    带时间轴
+                    {t('export.withTimestamp')}
                   </label>
                 )}
               </>
@@ -341,7 +343,7 @@ export function NoteExportPanel({
                   checked={withSubtitle}
                   onChange={(event) => setWithSubtitle(event.target.checked)}
                 />
-                带字幕
+                {t('export.withSubtitle')}
               </label>
             )}
             <div className="nibi-export-language" role="radiogroup" aria-label="语言">
@@ -355,7 +357,7 @@ export function NoteExportPanel({
                     className={effectiveLanguage === value ? 'is-active' : ''}
                     onClick={() => setLanguage(value)}
                   >
-                    {LANGUAGE_LABEL[value]}
+                    {t(`export.${LANGUAGE_KEY[value]}`)}
                   </button>
                 ))}
               </div>
@@ -364,10 +366,10 @@ export function NoteExportPanel({
         )}
 
         <div className="nibi-export-step">
-          <div className="nibi-export-step-label">4 · 目的地</div>
+          <div className="nibi-export-step-label">{t('export.stepDestination')}</div>
           <div className="nibi-export-segment" role="radiogroup" aria-label="导出目的地">
             {([
-              { value: 'local', label: '本地下载' },
+              { value: 'local', label: t('export.local') },
               ...(!cloudDisabled
                 ? [
                     { value: 'notion', label: 'Notion' },
@@ -396,7 +398,7 @@ export function NoteExportPanel({
           </div>
           <button type="button" className="nibi-export-panel-submit" onClick={handlePrimary}>
             <FileText size={13} />
-            {destination === 'local' ? '开始导出' : `导出到 ${destination === 'notion' ? 'Notion' : destination === 'feishu' ? '飞书' : 'Obsidian'}`}
+            {destination === 'local' ? t('export.startExport') : `${t('export.exportTo')} ${destination === 'notion' ? 'Notion' : destination === 'feishu' ? 'Feishu' : 'Obsidian'}`}
           </button>
         </footer>
       </section>

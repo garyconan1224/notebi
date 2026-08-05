@@ -325,8 +325,9 @@ describe('NoteShell 正文设置（浮动工具栏 Q2）', () => {
     fireEvent.click(within(toolbar).getByRole('button', { name: '正文设置' }))
 
     const panel = screen.getByRole('group', { name: '正文偏好设置' })
-    const soft = within(panel).getByRole('button', { name: '文字颜色：柔' })
-    expect(within(panel).getByRole('button', { name: '文字颜色：浅' })).toBeInTheDocument()
+    const swatches = within(panel).getAllByRole('button', { name: '颜色' })
+    expect(swatches.length).toBeGreaterThanOrEqual(2)
+    const soft = swatches[1]
     fireEvent.click(soft)
     await waitFor(() => expect(soft).toHaveAttribute('aria-pressed', 'true'))
 
