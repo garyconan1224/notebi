@@ -1,3 +1,4 @@
+import '@testing-library/jest-dom'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AddMaterialModal } from '@/components/workspace/AddMaterialModal'
@@ -206,6 +207,33 @@ describe('AddMaterialModal', () => {
     expect(decodeURIComponent(img.getAttribute('src') ?? '')).toContain(
       'https://example.com/photo.png',
     )
+  })
+
+  it('B站链接已失效时给出明确提示而不是只显示占位', async () => {
+    fetchLinkPreviewMock.mockResolvedValue({
+      title: '视频去哪了呢？_哔哩哔哩_bilibili',
+      description: '',
+      image_url: null,
+      source: 'og',
+    })
+    render(
+      <AddMaterialModal
+        open
+        onOpenChange={vi.fn()}
+        workspaceIds={[]}
+        urlValue="https://www.bilibili.com/video/BV1fjGQ6AEAP/"
+        sniffResult={{
+          primary_type: 'video',
+          possible_types: ['video'],
+          platform: 'bilibili',
+          title: null,
+          thumbnail: null,
+          content_type_header: null,
+        }}
+      />,
+    )
+
+    expect(await screen.findByText(/该视频可能已失效或删除/)).toBeInTheDocument()
   })
 
   it('切换到音频笔记后从 style_audio 加载风格模板', async () => {

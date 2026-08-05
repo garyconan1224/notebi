@@ -105,6 +105,7 @@ export interface MaterialSourcePanelProps {
   previewThumbUrl: string
   linkTitle: string
   linkDesc: string
+  linkWarning?: string
 }
 
 export function MaterialSourcePanel({
@@ -148,6 +149,7 @@ export function MaterialSourcePanel({
   previewThumbUrl,
   linkTitle,
   linkDesc,
+  linkWarning,
 }: MaterialSourcePanelProps) {
   return (
     <div className="m-section">
@@ -493,6 +495,14 @@ export function MaterialSourcePanel({
               </span>
             </div>
           </div>
+        </div>
+      )}
+      {!isBatchMode && linkWarning && (
+        <div
+          role="status"
+          style={{ fontSize: 12, color: 'var(--err, #b33737)', marginTop: 6 }}
+        >
+          {linkWarning}
         </div>
       )}
       {!isBatchMode && sniffFailed && !effectiveSniff && effectiveUrl && (

@@ -249,6 +249,7 @@ export function AddMaterialModal({
   const [coverUrl, setCoverUrl] = useState('') // sniff 没给封面时，用 link-preview 补的封面
   const [linkTitle, setLinkTitle] = useState('') // sniff 没给标题时，用 link-preview 补的标题
   const [linkDesc, setLinkDesc] = useState('') // link-preview 的简介（B站含 UP主/播放量等）
+  const [linkWarning, setLinkWarning] = useState('') // 链接失效/删除等提示
   const [localCover, setLocalCover] = useState('') // 本地文件：后端 cv2 探测的首帧封面 static URL
   const [error, setError] = useState<string | null>(null)
   const [sniffFailed, setSniffFailed] = useState(false)
@@ -629,6 +630,7 @@ export function AddMaterialModal({
     setCoverUrl('')
     setLinkTitle('')
     setLinkDesc('')
+    setLinkWarning('')
   }, [effectiveUrl])
 
   // sniff 对已知平台（B站等）只做 O(1) 类型判断、不返回封面/标题 → 用 link-preview 补
@@ -648,6 +650,9 @@ export function AddMaterialModal({
         }
         if (p.title && !sniffTitle) setLinkTitle(p.title)
         if (p.description) setLinkDesc(p.description)
+        if (typeof p.title === 'string' && /视频去哪了呢|已失效|已删除|不存在/.test(p.title)) {
+          setLinkWarning('该视频可能已失效或删除，无法获取封面')
+        }
       })
       .catch(() => { /* link-preview 已内部兜底，忽略 */ })
     return () => { cancelled = true }
@@ -1073,8 +1078,9 @@ export function AddMaterialModal({
             effectiveUrl={effectiveUrl}
             previewThumbUrl={previewThumbUrl}
             linkTitle={linkTitle}
-            linkDesc={linkDesc}
-          />
+                linkDesc={linkDesc}
+                linkWarning={linkWarning}
+              />
 
           <WorkspacePicker
             workspaceIds={workspaceIds}
