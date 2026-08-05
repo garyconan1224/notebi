@@ -14,6 +14,7 @@ import {
   Globe,
 } from 'lucide-react'
 import type { WorkspaceBackground, WorkspaceItem } from '@/types/workspace'
+import { previewSrcForProxy } from '@/components/workspace/linkCover'
 
 /** 「更多」下拉菜单项 */
 export interface MoreMenuItem {
@@ -157,7 +158,7 @@ export function TaskboardHead({
             return (
               <div key={item?.item_id ?? `cover-empty-${index}`} className={`tb-head-cover-tile tb-head-cover-tile--${item?.type ?? 'empty'}`}>
                 {thumb ? (
-                  <img src={thumb} alt="" loading="lazy" />
+                  <img src={previewSrcForProxy(thumb)} alt="" loading="lazy" />
                 ) : (
                   <span>{item?.type?.toUpperCase() ?? (index === 0 ? 'COLLECTION' : 'EMPTY')}</span>
                 )}

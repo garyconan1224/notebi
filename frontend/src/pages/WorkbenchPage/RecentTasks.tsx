@@ -7,6 +7,7 @@ import { usePipelineTasks } from '@/hooks/usePipelineTasks'
 import { fetchLibrary, type LibraryItem } from '@/services/library'
 import { useTaskStore } from '@/store/taskStore'
 import { getStatusText, isTaskTerminal, type TaskRecord } from '@/types/task'
+import { previewSrcForProxy } from '@/components/workspace/linkCover'
 
 const HIDDEN_TASK_TYPES = new Set(['summary'])
 
@@ -281,7 +282,7 @@ export function RecentTasks({ tasks: tasksProp }: RecentTasksProps) {
                         setFailedThumbs((previous) => new Set(previous).add(item.item_id))
                       }
                       referrerPolicy="no-referrer"
-                      src={item.thumbnail ?? ''}
+                      src={previewSrcForProxy(item.thumbnail)}
                     />
                   )}
                   <span className="media-chip">{TYPE_LABEL[item.type]}</span>

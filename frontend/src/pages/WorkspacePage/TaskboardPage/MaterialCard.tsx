@@ -3,6 +3,7 @@ import { FileVideo, FileAudio, FileImage, FileText, FileQuestion, Check, Star, T
 import type { WorkspaceItem, ItemType } from '@/types/workspace'
 import { resolveItemRoute } from '@/lib/resolveItemRoute'
 import { SYSTEM_TAG_DIMENSIONS } from '@/constants/tagDimensions'
+import { previewSrcForProxy } from '@/components/workspace/linkCover'
 
 /** 类型 → 图标 */
 const TYPE_ICON: Record<ItemType, React.ElementType> = {
@@ -152,7 +153,7 @@ export function MaterialCard({ item, workspaceId, progress, selected, onSelect, 
           </div>
         )}
         {thumbnail ? (
-          <img src={thumbnail} alt={item.name || '素材封面'} />
+          <img src={previewSrcForProxy(thumbnail)} alt={item.name || '素材封面'} />
         ) : (
           <div className={`mat-thumb-fallback mat-thumb-fallback--${item.type}`}>
             <Icon size={32} />
