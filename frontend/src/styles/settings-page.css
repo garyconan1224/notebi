@@ -224,6 +224,23 @@
   box-shadow: var(--sh);
   backdrop-filter: blur(10px);
 }
+
+/* ── 语言切换（选择 + 确定/取消） ── */
+.lang-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lang-switcher-select {
+  min-width: 132px;
+}
+
+.lang-switcher-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
 .settings-reset-btn {
   background: transparent;
   color: var(--fg2);
@@ -270,10 +287,10 @@
 /* ── 表单行 ── */
 .settings-row {
   display: grid;
-  grid-template-columns: 180px 1fr;
+  grid-template-columns: minmax(180px, 220px) 1fr;
   align-items: center;
-  gap: 16px;
-  padding: 16px 20px;
+  gap: 20px;
+  padding: 18px 24px;
   border-bottom: 1px solid var(--bdr);
 }
 .settings-row:last-child {
@@ -294,6 +311,7 @@
   align-items: center;
   gap: 8px;
   justify-content: flex-end;
+  min-width: 0;
 }
 
 .accent-palette {
@@ -422,8 +440,8 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
   align-items: center;
-  gap: 16px;
-  padding: 16px 20px;
+  gap: 20px;
+  padding: 18px 24px;
   border-bottom: 1px solid var(--bdr);
 }
 
@@ -436,6 +454,18 @@
   margin-bottom: 3px;
   color: var(--fg);
   font-size: var(--sm);
+  line-height: 1.5;
+}
+
+.settings-inline-field p {
+  line-height: 1.5;
+}
+
+.settings-inline-field input,
+.settings-input {
+  min-height: 38px;
+  padding: 8px 12px;
+  line-height: 1.5;
 }
 
 .settings-inline-field p {
