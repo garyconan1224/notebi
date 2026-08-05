@@ -558,7 +558,12 @@ def build_prompt(
             duration_sec, len(frames)
         )
         if cap > 0 and len(frames) > cap:
-            frames = _evenly_sample_frames(frames, cap)
+            chapters = (item.results or {}).get("chapters") or []
+            frames = (
+                _chapter_aligned_sample_frames(frames, list(chapters), cap)
+                if isinstance(chapters, list) and chapters
+                else _evenly_sample_frames(frames, cap)
+            )
         if frames:
             lines = []
             for f in frames:
@@ -694,6 +699,52 @@ def _evenly_sample_frames(
     return [frames[min(len(frames) - 1, int(i * step))] for i in range(cap)]
 
 
+def _chapter_aligned_sample_frames(
+    frames: List[Dict[str, object]],
+    chapters: List[Dict[str, Any]],
+    cap: int,
+) -> List[Dict[str, object]]:
+    """章节对齐采样：每章取最接近章节起点的帧（与前端时间轴同一规则）。
+
+    无有效章节时回退到均匀采样。
+    """
+    if cap <= 0 or not frames:
+        return []
+    valid_chapters = [
+        ch for ch in chapters
+        if isinstance(ch, dict)
+        and str(ch.get("start") or "").strip() not in ("", "None")
+    ]
+    if not valid_chapters:
+        return _evenly_sample_frames(frames, cap)
+
+    picked: List[Dict[str, object]] = []
+    seen_idx: set[int] = set()
+    for ch in valid_chapters:
+        if len(picked) >= cap:
+            break
+        try:
+            start = max(0.0, float(ch.get("start") or 0))
+            end = max(start, float(ch.get("end") or start))
+        except (TypeError, ValueError):
+            continue
+        inside = [fr for fr in frames if start <= float(fr.get("sec") or 0) <= end]
+        candidates = inside or frames
+        nearest = min(
+            candidates,
+            key=lambda fr: abs(float(fr.get("sec") or 0) - start),
+        )
+        idx = int(nearest.get("idx") or 0)
+        if idx in seen_idx:
+            continue
+        seen_idx.add(idx)
+        picked.append(nearest)
+
+    if not picked:
+        return _evenly_sample_frames(frames, cap)
+    return sorted(picked, key=lambda fr: float(fr.get("sec") or 0))[:cap]
+
+
 def _collect_frames(item: WorkspaceItem) -> List[Dict[str, object]]:
     """收集关键帧信息：优先从 results["frames"]，兜底从 json_outputs 文件。
 
@@ -740,35 +791,48 @@ def _collect_frames(item: WorkspaceItem) -> List[Dict[str, object]]:
     if not out:
         out = _collect_frames_from_default_project(item)
 
-    # 收集 ln-screenshots/ 手动截图（用户在视频播放器中截取的）
-    # 注意：WorkspaceItem 没有 workspace_id 属性，需要从其他地方获取
-    # 这里暂时跳过，因为需要修改 WorkspaceItem 模型
-    # ws_id = item.workspace_id or ""
-    # item_id = item.item_id or ""
-    # if ws_id:
-    #     from shared.config import get_workspace_root
-    #     ws_root = get_workspace_root(ws_id)
-    #     ln_shots_dir = ws_root / "ln-screenshots"
-    #     if ln_shots_dir.is_dir():
-    #         for shot_file in sorted(ln_shots_dir.glob("shot-*.png")):
-    #             # 文件名格式：shot-XXXXXX-HHMMSS.png，XXXXXX 是秒数
-    #             parts = shot_file.stem.split("-")
-    #             if len(parts) >= 2:
-    #                 try:
-    #                     sec = float(parts[1])
-    #                 except ValueError:
-    #                     sec = 0.0
-    #             else:
-    #                 sec = 0.0
-    #             img_url = f"/static/workspaces/{ws_id}/ln-screenshots/{shot_file.name}"
-    #             out.append({
-    #                 "idx": len(out),
-    #                 "sec": sec,
-    #                 "desc": f"用户截图 @{int(sec)//60:02d}:{int(sec)%60:02d}",
-    #                 "image_path": img_url,
-    #             })
+    _collect_user_screenshots(item, out)
 
     return _filter_and_dedup_frames(out)
+
+
+def _collect_user_screenshots(
+    item: WorkspaceItem,
+    out: List[Dict[str, object]],
+) -> None:
+    """收集 ln-screenshots/ 手动截图（用户在视频播放器中截取的），并入配图候选。
+
+    WorkspaceItem 没有 workspace_id 字段，从 results 里找（任务创建时透传），
+    找不到则跳过（不阻塞总结）。
+    """
+    results = item.results or {}
+    ws_id = str(results.get("workspace_id") or results.get("project_id") or "").strip()
+    if not ws_id:
+        return
+    try:
+        from shared.config import get_workspace_root
+
+        ln_shots_dir = get_workspace_root(ws_id) / "ln-screenshots"
+        if not ln_shots_dir.is_dir():
+            return
+        for shot_file in sorted(ln_shots_dir.glob("shot-*.png")):
+            sec = 0.0
+            parts = shot_file.stem.split("-")
+            if len(parts) >= 2:
+                try:
+                    sec = float(parts[1])
+                except ValueError:
+                    sec = 0.0
+            img_url = f"/static/workspaces/{ws_id}/ln-screenshots/{shot_file.name}"
+            out.append({
+                "idx": len(out),
+                "sec": sec,
+                "desc": f"用户截图 @{int(sec) // 60:02d}:{int(sec) % 60:02d}",
+                "image_path": img_url,
+            })
+    except Exception:
+        # 截图目录不可读时静默跳过，不阻塞总结
+        return
 
 
 def _collect_frames_from_default_project(item: WorkspaceItem) -> List[Dict[str, object]]:
@@ -955,6 +1019,34 @@ def _split_images_from_headings(md: str) -> str:
         else:
             out.append(line)
     return "\n".join(out)
+
+
+_STANDALONE_EVIDENCE_HEADING_RE = re.compile(
+    r"^#{1,6}\s*(?:章节画面|画面证据|关键画面|章节截帧).*$"
+)
+
+
+def _remove_standalone_evidence_sections(md: str) -> str:
+    """删除总结中独立的『章节画面/画面证据』区段。
+
+    用户要求图片内联在正文段落里，不要单独的证据区；删除该区段（含其内重复图片）。
+    """
+    if not md:
+        return md
+    lines = md.split("\n")
+    out: list[str] = []
+    skipping = False
+    for line in lines:
+        if _STANDALONE_EVIDENCE_HEADING_RE.match(line):
+            skipping = True
+            continue
+        if skipping:
+            if line.startswith("#"):
+                skipping = False
+            else:
+                continue
+        out.append(line)
+    return "\n".join(out).strip("\n")
 
 
 def _to_static_url(path: str) -> str:
@@ -1146,6 +1238,7 @@ def generate_summary(
         if item.type == "video" and embed_frames:
             from backend.app.services.frame_placeholder import resolve_frame_placeholders
 
+            content_md = _remove_standalone_evidence_sections(content_md)
             content_md = resolve_frame_placeholders(content_md, _collect_frames(item))
         return ItemSummary(
             summary_id=str(uuid.uuid4()),
@@ -1196,6 +1289,7 @@ def generate_summary(
     if item.type == "video" and template_id in {"standard", "detailed", "lecture", "steps"}:
         frames = _collect_frames(item)
         content_md = _postprocess_frames(content_md, frames)
+    content_md = _remove_standalone_evidence_sections(content_md)
 
     # Stage 4: 通用占位符后处理 — *FRAME-[mm:ss] → 真图 URL
     # video 类素材且有 frames 时才替换；无 frames 时占位符直接清除

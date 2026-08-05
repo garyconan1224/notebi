@@ -21,6 +21,7 @@ import { nord } from '@milkdown/theme-nord'
 import '@milkdown/theme-nord/style.css'
 import { timestampPlugin, unescapeNoteTimestamps } from './milkdownTimestamp'
 import { createNoteSeedGuard, type NoteSeedGuard } from './milkdownSeedGuard'
+import { stripUnresolvedFramePlaceholders } from './frameMarkdown'
 import { useLnEditorStore } from '@/store/lnEditorStore'
 import {
   getEditorFormattingState,
@@ -40,11 +41,12 @@ function MilkdownEditorInner({
   onSeek,
   registerCommands = true,
 }: MilkdownEditorProps) {
+  const safeMarkdown = stripUnresolvedFramePlaceholders(markdown)
   // 「初始 canonical 内容」守卫：首挂规范化不保存，内容偏离基线才保存。
   // 懒初始化，保证每次挂载（key 变化重挂）都拿到以当次 seed 建立的新守卫。
   const guardRef = useRef<NoteSeedGuard | null>(null)
   if (guardRef.current === null) {
-    guardRef.current = createNoteSeedGuard(markdown)
+    guardRef.current = createNoteSeedGuard(safeMarkdown)
   }
   // 避免 timestampPlugin 闭包捕获旧 onSeek
   const onSeekRef = useRef(onSeek)
@@ -55,7 +57,7 @@ function MilkdownEditorInner({
       const editor = Editor.make()
         .config((ctx: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
           ctx.set(rootCtx, root)
-          ctx.set(defaultValueCtx, markdown)
+          ctx.set(defaultValueCtx, safeMarkdown)
           ctx.get(listenerCtx)
             .markdownUpdated((_ctx: any, md: string) => { // eslint-disable-line @typescript-eslint/no-explicit-any
               // 先反转义时间码方括号（Milkdown commonmark 序列化器会把 [ 转义成 \[），
