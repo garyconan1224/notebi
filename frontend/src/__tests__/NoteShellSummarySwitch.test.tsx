@@ -1,3 +1,4 @@
+import '@testing-library/jest-dom'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   renameSummary: vi.fn(),
   updateSpeakerMap: vi.fn(),
   downloadTranscript: vi.fn(),
+  downloadTranscriptDoc: vi.fn(),
   retryPipelineTask: vi.fn(),
 }))
 
@@ -27,6 +29,7 @@ vi.mock('@/services/workspaces', async (importOriginal) => {
     putItemNote: mocks.putItemNote,
     updateSpeakerMap: mocks.updateSpeakerMap,
     downloadTranscript: mocks.downloadTranscript,
+    downloadTranscriptDoc: mocks.downloadTranscriptDoc,
   }
 })
 
@@ -357,7 +360,7 @@ describe('NoteShell summary switching', () => {
     expect(screen.getByRole('button', { name: '重新生成' })).not.toBeNull()
   })
 
-  it('音频导出菜单提供无时间轴文章和按说话人分组版本', async () => {
+  it('音频导出面板支持带说话人的转写文档（TXT）', async () => {
     mocks.getItemNote.mockResolvedValue({
       ...AUDIO_NOTE,
       speaker_map: { SPEAKER_00: '主持人' },
@@ -374,19 +377,25 @@ describe('NoteShell summary switching', () => {
     await screen.findByText('尚未生成总结')
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
 
-    // Q3 / D2：区分说话人是转写域下的选项，不再是独立内容源
-    expect(screen.getByRole('button', { name: /转写文本 \/ 字幕/ })).not.toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /转写文本 \/ 字幕/ }))
-    fireEvent.click(screen.getByText('区分说话人'))
-    fireEvent.click(screen.getByRole('button', { name: 'TXT 文章' }))
+    // 统一导出面板：转写默认；勾选带说话人，选 TXT 文档格式
+    mocks.downloadTranscriptDoc.mockResolvedValue(undefined)
+    const speaker = screen.getByRole('checkbox', { name: /带说话人/ }) as HTMLInputElement
+    expect(speaker).not.toBeDisabled()
+    fireEvent.click(speaker)
+    fireEvent.click(screen.getByRole('radio', { name: 'TXT' }))
+    fireEvent.click(screen.getByRole('button', { name: '开始导出' }))
 
     await waitFor(() => {
-      // downloadTranscript 现在接收标题作为第 4 个参数，用于 fallback 文件名
-      expect(mocks.downloadTranscript).toHaveBeenCalledWith(
+      expect(mocks.downloadTranscriptDoc).toHaveBeenCalledWith(
         'ws-1',
         'item-1',
-        'speaker_grouped',
-        '测试音频',
+        {
+          format: 'txt',
+          with_speaker: true,
+          with_timestamp: true,
+          language: 'source',
+        },
+        expect.stringContaining('测试音频'),
       )
     })
   })
