@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import type { LibraryWorkspace, LibraryItem } from '@/services/library'
 import { SYSTEM_TAG_DIMENSIONS } from '@/constants/tagDimensions'
 import { CoverControls } from './CoverControls'
+import { previewSrcForProxy } from '@/components/workspace/linkCover'
 
 const TYPE_TONE: Record<string, { badge: string; label: string }> = {
   video: { badge: 'collection-mini--video', label: 'VIDEO' },
@@ -175,7 +176,7 @@ export function WorkspaceCard({
 
         {coverThumbnail ? (
           <div className="collection-hero-cover">
-            <img src={coverThumbnail} alt={`${workspace.name} 封面`} loading="lazy" />
+            <img src={previewSrcForProxy(coverThumbnail)} alt={`${workspace.name} 封面`} loading="lazy" />
             <div className="collection-hero-overlay">
               <span>NOTE COLLECTION</span>
               <strong>{workspace.items_count} 项内容</strong>
@@ -193,7 +194,7 @@ export function WorkspaceCard({
                     className={`collection-preview-tile ${tone ?? 'collection-preview-tile--video'}`}
                   >
                     {item?.thumbnail ? (
-                      <img src={item.thumbnail} alt="" loading="lazy" />
+                      <img src={previewSrcForProxy(item.thumbnail)} alt="" loading="lazy" />
                     ) : (
                       <div className="collection-preview-fallback">
                         <span>{item ? (TYPE_TONE[item.type]?.label ?? item.type.toUpperCase()) : 'NOTE'}</span>

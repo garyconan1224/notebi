@@ -12,6 +12,7 @@ import {
   extractDomain,
 } from './libraryHelpers'
 import { CoverControls } from './CoverControls'
+import { previewSrcForProxy } from '@/components/workspace/linkCover'
 
 const TYPE_LABEL: Record<string, string> = {
   video: 'VIDEO',
@@ -115,7 +116,7 @@ export function ItemCard({ item, selected, selectMode, onToggleSelect, onDelete,
       {/* Cover */}
       <div className={`note-cover ${coverClass}`}>
         {hasThumb ? (
-          <img src={item.thumbnail ?? undefined} alt={item.name} referrerPolicy="no-referrer"
+          <img src={previewSrcForProxy(item.thumbnail) || undefined} alt={item.name} referrerPolicy="no-referrer"
             style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : null}
         <span className="media-chip">{typeLabel}</span>
