@@ -21,6 +21,8 @@ export interface AppearanceSettings {
   uploaded_fonts: UploadedFont[]
   /** Q3 / D3：Obsidian 直写目的地（非秘密配置） */
   obsidian?: { vault_path: string; subdir: string; direct_write: boolean }
+  /** 导出与同步：云笔记目的地的非敏感默认值（API token 不保存） */
+  export_sync?: { notion_parent_page_id: string; feishu_folder_token: string }
 }
 
 export const DEFAULT_APPEARANCE: AppearanceSettings = {
@@ -29,6 +31,7 @@ export const DEFAULT_APPEARANCE: AppearanceSettings = {
   fonts: { ui: null, cap: null, sum: null },
   uploaded_fonts: [],
   obsidian: { vault_path: '', subdir: '', direct_write: false },
+  export_sync: { notion_parent_page_id: '', feishu_folder_token: '' },
 }
 
 export async function fetchSettings(): Promise<AppearanceSettings> {
@@ -40,6 +43,7 @@ export async function patchSettings(
   patch: Partial<Pick<AppearanceSettings, 'theme' | 'mode'>> & {
     fonts?: Partial<Record<FontSlotId, string | null>>
     obsidian?: Partial<NonNullable<AppearanceSettings['obsidian']>>
+    export_sync?: Partial<NonNullable<AppearanceSettings['export_sync']>>
   },
 ): Promise<AppearanceSettings> {
   const res = await http.patch<AppearanceSettings>('/settings', patch)

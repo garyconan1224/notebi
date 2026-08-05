@@ -10,6 +10,7 @@ import {
   Palette,
   Info,
   Languages,
+  Share2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useHealthPulse } from '@/hooks/useHealthPulse'
@@ -87,6 +88,7 @@ export function SettingsShell() {
       label: '笔记与数据',
       items: [
         { path: '/settings/style-templates', icon: <Palette size={16} />, label: '笔记模板' },
+        { path: '/settings/export-sync', icon: <Share2 size={16} />, label: '导出与同步' },
         { path: '/settings/trash', icon: <Trash2 size={16} />, label: '垃圾桶' },
       ],
     },

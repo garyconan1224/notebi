@@ -28,6 +28,9 @@ const TrashPage = lazy(() => import('@/pages/SettingPage/TrashPage'))
 const VideoTemplatesPage = lazy(
   () => import('@/pages/SettingPage/VideoTemplatesPage'),
 )
+const ExportSyncSettingsPage = lazy(
+  () => import('@/pages/SettingPage/ExportSyncSettingsPage'),
+)
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
 const WorkspaceList = lazy(() => import('@/pages/WorkspacePage/WorkspaceList'))
 const TaskboardPage = lazy(() => import('@/pages/WorkspacePage/TaskboardPage'))
@@ -172,6 +175,7 @@ export const router = createBrowserRouter([
           { path: 'trash', element: withSuspense(<TrashPage />) },
           { path: 'video-templates', element: withSuspense(<VideoTemplatesPage />) },
           { path: 'style-templates', element: withSuspense(<VideoTemplatesPage />) },
+          { path: 'export-sync', element: withSuspense(<ExportSyncSettingsPage />) },
           { path: 'about', element: withSuspense(<AboutPage />) },
           // 旧路由重定向（向后兼容）
           { path: 'providers', element: <Navigate to="/settings/providers-models" replace /> },
