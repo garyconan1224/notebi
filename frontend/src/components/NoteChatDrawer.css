@@ -139,3 +139,56 @@
   resize: none;
   font-size: 13px;
 }
+.note-chat-rich {
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.note-chat-rich p {
+  margin: 0 0 8px;
+}
+
+.note-chat-rich p:last-child {
+  margin-bottom: 0;
+}
+
+.note-chat-rich ul,
+.note-chat-rich ol {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+
+.note-chat-rich code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--bgalt, #f6f2ea);
+  font-size: 12px;
+}
+
+.note-chat-rich pre {
+  margin: 0 0 8px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--bgalt, #f6f2ea);
+  overflow-x: auto;
+}
+
+.note-chat-source-chip {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 2px;
+  padding: 2px 8px;
+  border: 1px solid var(--acc, #ff8a36);
+  border-radius: 999px;
+  background: var(--accl, rgba(255, 138, 54, 0.12));
+  color: var(--acc, #ff8a36);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  vertical-align: baseline;
+}
+
+.note-chat-source-chip:hover {
+  background: var(--acc, #ff8a36);
+  color: var(--bg, #fff);
+}

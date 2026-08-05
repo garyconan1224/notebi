@@ -15,6 +15,7 @@ import {
 } from '@/services/chat'
 import { toast } from 'sonner'
 import './NoteChatDrawer.css'
+import { ChatRichText } from './chatRichText'
 
 export interface NoteChatDrawerProps {
   workspaceId: string
@@ -32,6 +33,8 @@ export interface NoteChatDrawerProps {
   showHeader?: boolean
   /** 结果页将回答追加到当前正在编辑的主笔记或总结版本。 */
   onSaveAnswer?: (answer: string) => void
+  /** 点击【素材 N】引用时回调素材索引（从 1 开始）；未提供时 chip 仅展示。 */
+  onOpenSource?: (sourceIndex: number) => void
 }
 
 /**
@@ -48,6 +51,7 @@ export default function NoteChatDrawer({
   onClose,
   showHeader = true,
   onSaveAnswer,
+  onOpenSource,
 }: NoteChatDrawerProps) {
   const [open, setOpen] = useState(mode === 'inline') // inline 模式默认打开
   const [chatId, setChatId] = useState<string | null>(null)
@@ -272,6 +276,7 @@ export default function NoteChatDrawer({
               content={m.content}
               onCopy={handleCopyAnswer}
               onSave={onSaveAnswer}
+              onOpenSource={onOpenSource}
             />
           ))}
           {streaming && (
@@ -339,9 +344,10 @@ interface BubbleProps {
   pending?: boolean
   onCopy?: (answer: string) => void
   onSave?: (answer: string) => void
+  onOpenSource?: (sourceIndex: number) => void
 }
 
-function Bubble({ role, content, pending, onCopy, onSave }: BubbleProps) {
+function Bubble({ role, content, pending, onCopy, onSave, onOpenSource }: BubbleProps) {
   const isUser = role === 'user'
   return (
     <div className={cn('note-chat-bubble-row', isUser && 'note-chat-bubble-user')}>
@@ -352,7 +358,11 @@ function Bubble({ role, content, pending, onCopy, onSave }: BubbleProps) {
           pending && 'note-chat-bubble-pending',
         )}
       >
-        {content || (pending ? '…' : '')}
+        {isUser ? (
+          content || (pending ? '…' : '')
+        ) : (
+          <ChatRichText content={content || (pending ? '…' : '')} onOpenSource={onOpenSource} />
+        )}
       </div>
       {!isUser && !pending && content && (onCopy || onSave) && (
         <div className="note-chat-answer-actions">
