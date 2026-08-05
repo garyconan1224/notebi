@@ -84,7 +84,7 @@ describe('LNVideoPanel 画面与控制带（Q2）', () => {
     expect(play).toHaveBeenCalledTimes(1)
   })
 
-  it('高频操作外置于控制带，低频全屏收进更多菜单', () => {
+  it('高频操作外置于控制带，全屏直接可见', () => {
     const { container } = render(
       <LNVideoPanel src="/static/v.mp4" title="" renderTransportInline />,
     )
@@ -92,19 +92,15 @@ describe('LNVideoPanel 画面与控制带（Q2）', () => {
     expect(band).not.toBeNull()
     // 播放/倍速/音量在控制带内
     expect(band?.querySelector('[title*="播放"]')).not.toBeNull()
-    // 常用操作直接可见：±10s / 循环 / 截图 / 画中画
+    // 常用操作直接可见：±10s / 循环 / 截图 / 画中画 / 全屏
     expect(band?.querySelector('[title="后退 10 秒"]')).not.toBeNull()
     expect(band?.querySelector('[title="前进 10 秒"]')).not.toBeNull()
     expect(band?.querySelector('[title="循环播放"]')).not.toBeNull()
     expect(band?.querySelector('[title="截取当前帧"]')).not.toBeNull()
     expect(band?.querySelector('[title="画中画"]')).not.toBeNull()
-    const more = band?.querySelector('.note-ctl-more') as HTMLElement
-    expect(more).not.toBeNull()
-    fireEvent.click(more)
-    const menu = container.querySelector('.note-ctl-more-menu')
-    expect(menu?.querySelector('[title="全屏"]')).not.toBeNull()
-    expect(menu?.querySelector('[title="循环播放"]')).toBeNull()
-    expect(menu?.querySelector('[title*="画中画"]')).toBeNull()
+    expect(band?.querySelector('[title="全屏"]')).not.toBeNull()
+    // 更多菜单已移除
+    expect(container.querySelector('.note-ctl-more-menu')).toBeNull()
   })
 
   it('时间轴是 role=slider，键盘 ←/→ 步进 5 秒并带 aria 值', () => {

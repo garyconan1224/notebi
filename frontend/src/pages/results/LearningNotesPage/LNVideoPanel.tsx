@@ -129,7 +129,6 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
     const [isFullscreen, setIsFullscreen] = useState(false)
     const [nativePip, setNativePip] = useState(false)
     const [subtitlesOn, setSubtitlesOn] = useState(true)
-    const [moreOpen, setMoreOpen] = useState(false)
     const pipActive = typeof onTogglePip === 'function' ? !!isPipActive : nativePip
 
     const insertAtCursor = useLnEditorStore((s) => s.insertAtCursor)
@@ -476,7 +475,7 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
     /* ── 通知父组件状态变化（驱动 transportNode getter 刷新） ── */
     useEffect(() => {
       onTransportChange?.()
-    }, [playing, speed, muted, volume, loop, progress, duration, hoverTime, hoverX, isFullscreen, pipActive, subtitlesOn, shooting, moreOpen, onTransportChange])
+    }, [playing, speed, muted, volume, loop, progress, duration, hoverTime, hoverX, isFullscreen, pipActive, subtitlesOn, shooting, onTransportChange])
 
     /**
      * Q2 控制带：transport + 当前时间/进度合并为一条 44–52px 的 `.note-ctl-band`，
@@ -509,6 +508,9 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
             <button className={`note-icon-btn${pipActive ? ' is-on' : ''}`} onClick={() => void togglePip()} disabled={!src} title={pipActive ? '退出画中画' : '画中画'} aria-pressed={pipActive}>
               <PictureInPicture2 size={15} />
             </button>
+            <button className={`note-icon-btn${isFullscreen ? ' is-on' : ''}`} onClick={toggleFullscreen} title={isFullscreen ? '退出全屏' : '全屏'} aria-pressed={isFullscreen}>
+              {isFullscreen ? <Minimize size={15} /> : <Maximize size={15} />}
+            </button>
             <span className="note-ctl-time">{formatTs(currentSec)} / {formatTs(duration)}</span>
             <span className="note-ctl-spacer" />
             <button className="note-speed" onClick={cycleSpeed} title="切换倍速">
@@ -525,28 +527,6 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
               >
                 <div className="note-volume-fill" style={{ width: `${(muted ? 0 : volume) * 100}%` }} />
               </div>
-            </div>
-            <div className="note-ctl-more-wrap">
-              <button
-                className="note-icon-btn note-ctl-more"
-                onClick={() => setMoreOpen((open) => !open)}
-                title="更多播放控制"
-                aria-expanded={moreOpen}
-                aria-haspopup="menu"
-              >
-                <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
-                  <circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none" />
-                  <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
-                  <circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none" />
-                </svg>
-              </button>
-              {moreOpen && (
-                <div className="note-ctl-more-menu" role="menu">
-                  <button role="menuitem" onClick={() => { setMoreOpen(false); toggleFullscreen() }} title={isFullscreen ? '退出全屏' : '全屏'}>
-                    {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />} {isFullscreen ? '退出全屏' : '全屏'}
-                  </button>
-                </div>
-              )}
             </div>
           </div>
           <div className="note-timeline">
