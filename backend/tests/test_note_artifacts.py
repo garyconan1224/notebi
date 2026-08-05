@@ -189,3 +189,35 @@ def test_update_missing_artifact_returns_404(_patch_store: WorkspaceStore) -> No
     payload = {"content_json": {"root": {"id": "n0", "text": "根", "children": []}}}
     response = client.put("/workspaces/ws-1/items/item-1/artifacts/nope", json=payload)
     assert response.status_code == 404
+
+
+class _FakeNoteTask:
+    task_id = "note-task-1"
+
+
+def test_generate_note_persists_thumbnail(monkeypatch: pytest.MonkeyPatch, _patch_store: WorkspaceStore) -> None:
+    import backend.app.routes.workspaces as ws_module
+    from unittest.mock import MagicMock
+
+    class _Sniff:
+        platform = "bilibili"
+        primary_type = "video"
+
+    monkeypatch.setattr(ws_module, "sniff_url", lambda url: _Sniff())
+    fake_runner = MagicMock()
+    fake_runner.create_task.return_value = _FakeNoteTask()
+    monkeypatch.setattr(ws_module, "_pipeline_runner", fake_runner)
+
+    response = client.post("/workspaces/ws-1/items/generate-note", json={
+        "url": "https://www.bilibili.com/video/BV1test",
+        "thumbnail": "http://i1.hdslb.com/cover.jpg",
+        "embed_frames": False,
+    })
+    assert response.status_code == 200
+
+    item = next(
+        (it for it in _patch_store.get("ws-1").items if it.results and it.results.get("cover_thumbnail")),
+        None,
+    )
+    assert item is not None
+    assert item.results["cover_thumbnail"] == "http://i1.hdslb.com/cover.jpg"

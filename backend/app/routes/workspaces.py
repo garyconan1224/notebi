@@ -934,6 +934,7 @@ class GenerateNoteRequest(BaseModel):
         default="auto",
         description="笔记子类型：auto / video / image_text / audio / text",
     )
+    thumbnail: str = Field(default="", description="链接封面 URL（单个添加时透传，供结果页提前展示）")
     summary_template: str = Field(
         default="standard",
         description="笔记风格模板 ID（对应 summary_templates.py 中的模板）",
@@ -3699,6 +3700,12 @@ def generate_note(workspace_id: str, req: GenerateNoteRequest) -> Dict[str, Any]
     _intent = req.intent or "note"
     item.preflight = PreflightConfig(intent=_intent)
     _store.update_item(workspace_id, item.item_id, preflight=item.preflight)
+
+    # 2.2 单个添加透传封面：写入 results.cover_thumbnail，结果页/素材卡片立即可用
+    if req.thumbnail.strip():
+        _item_results = dict(item.results or {})
+        _item_results["cover_thumbnail"] = req.thumbnail.strip()
+        _store.update_item(workspace_id, item.item_id, results=_item_results)
 
     # 3. 创建 note task（复用 handle_note_task 统一流程）
     #    注入 LLM 配置（从 provider store 获取活跃 chat provider 的 key + model）
