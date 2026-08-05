@@ -212,7 +212,7 @@ export default function NoteChatDrawer({
         </div>
       )}
 
-      <div className="note-chat-scope-hint">{scopeHint}</div>
+      {mode !== 'inline' && scopeHint && <div className="note-chat-scope-hint">{scopeHint}</div>}
 
       <div className="note-chat-session-tools">
         <div className="note-chat-session-actions">
@@ -274,6 +274,7 @@ export default function NoteChatDrawer({
               key={m.message_id}
               role={m.role}
               content={m.content}
+              hideSourceIndex={itemIds.length <= 1}
               onCopy={handleCopyAnswer}
               onSave={onSaveAnswer}
               onOpenSource={onOpenSource}
@@ -342,12 +343,13 @@ interface BubbleProps {
   role: ChatMessage['role']
   content: string
   pending?: boolean
+  hideSourceIndex?: boolean
   onCopy?: (answer: string) => void
   onSave?: (answer: string) => void
   onOpenSource?: (sourceIndex: number) => void
 }
 
-function Bubble({ role, content, pending, onCopy, onSave, onOpenSource }: BubbleProps) {
+function Bubble({ role, content, pending, hideSourceIndex = false, onCopy, onSave, onOpenSource }: BubbleProps) {
   const isUser = role === 'user'
   return (
     <div className={cn('note-chat-bubble-row', isUser && 'note-chat-bubble-user')}>
@@ -361,7 +363,7 @@ function Bubble({ role, content, pending, onCopy, onSave, onOpenSource }: Bubble
         {isUser ? (
           content || (pending ? '…' : '')
         ) : (
-          <ChatRichText content={content || (pending ? '…' : '')} onOpenSource={onOpenSource} />
+          <ChatRichText content={content || (pending ? '…' : '')} onOpenSource={onOpenSource} hideSourceIndex={hideSourceIndex} />
         )}
       </div>
       {!isUser && !pending && content && (onCopy || onSave) && (

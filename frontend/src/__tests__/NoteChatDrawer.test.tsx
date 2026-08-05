@@ -25,6 +25,15 @@ describe('NoteChatDrawer 回答富文本与素材引用', () => {
     expect(onOpenSource).toHaveBeenCalledWith(2)
   })
 
+  it('单素材时隐藏【素材 N】标记', () => {
+    const onOpenSource = vi.fn()
+    render(<ChatRichText content="证据见【素材 1】" onOpenSource={onOpenSource} hideSourceIndex />)
+
+    expect(screen.queryByRole('button', { name: /素材/ })).toBeNull()
+    expect(screen.getByText('证据见')).toBeInTheDocument()
+    expect(onOpenSource).not.toHaveBeenCalled()
+  })
+
   it('普通链接新窗口打开，不触发素材回调', () => {
     const onOpenSource = vi.fn()
     render(<ChatRichText content="参考 [文档](https://example.com)" onOpenSource={onOpenSource} />)

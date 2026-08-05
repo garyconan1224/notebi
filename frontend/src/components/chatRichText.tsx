@@ -3,10 +3,9 @@ import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 const SOURCE_MARKER_RE = /【素材\s*(\d+)】/g
 
 /** 把 【素材 N】 转成内部链接，再交给 react-markdown 渲染成可点击 chip。 */
-function toMarkdownWithSourceLinks(content: string): string {
-  return content.replace(
-    SOURCE_MARKER_RE,
-    (_match, index: string) => `[素材 ${index}](notebi-source://${index})`,
+function toMarkdownWithSourceLinks(content: string, hideSourceIndex: boolean): string {
+  return content.replace(SOURCE_MARKER_RE, (_match, index: string) =>
+    hideSourceIndex ? '' : `[素材 ${index}](notebi-source://${index})`,
   )
 }
 
@@ -17,9 +16,11 @@ function toMarkdownWithSourceLinks(content: string): string {
 export function ChatRichText({
   content,
   onOpenSource,
+  hideSourceIndex = false,
 }: {
   content: string
   onOpenSource?: (sourceIndex: number) => void
+  hideSourceIndex?: boolean
 }) {
   return (
     <div className="note-chat-rich">
@@ -50,7 +51,7 @@ export function ChatRichText({
           },
         }}
       >
-        {toMarkdownWithSourceLinks(content)}
+        {toMarkdownWithSourceLinks(content, hideSourceIndex)}
       </ReactMarkdown>
     </div>
   )
