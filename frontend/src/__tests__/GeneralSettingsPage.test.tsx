@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/components/LangSwitcher', () => ({
@@ -66,23 +66,10 @@ describe('general settings', () => {
     expect(screen.getByRole('button', { name: '主题选择器' })).toBeInTheDocument()
   })
 
-  it('loads and saves the Obsidian vault destination', async () => {
+  it('moved Obsidian destination to the export-sync page', () => {
     render(<GeneralSettingsPage />)
 
-    const vault = await screen.findByLabelText('Obsidian Vault 路径')
-    expect(vault).toHaveValue('/Users/test/Vault')
-    expect(screen.getByLabelText('Obsidian 子目录')).toHaveValue('NoteBi')
-    expect(screen.getByRole('checkbox', { name: '启用 Obsidian 直写' })).toBeChecked()
-
-    fireEvent.change(vault, { target: { value: '/Users/test/NewVault' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存 Obsidian 设置' }))
-
-    await waitFor(() => expect(patchSettingsMock).toHaveBeenCalledWith({
-      obsidian: {
-        vault_path: '/Users/test/NewVault',
-        subdir: 'NoteBi',
-        direct_write: true,
-      },
-    }))
+    expect(screen.queryByLabelText('Obsidian Vault 路径')).not.toBeInTheDocument()
+    expect(screen.queryByText('保存 Obsidian 设置')).not.toBeInTheDocument()
   })
 })
