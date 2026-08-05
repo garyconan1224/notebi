@@ -494,6 +494,21 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
             <button className={`note-icon-btn${subtitlesOn ? ' is-on' : ''}`} onClick={toggleSubtitles} disabled={!subtitle} title={!subtitle ? '暂无字幕轨' : subtitlesOn ? '隐藏字幕' : '显示字幕'} aria-pressed={subtitlesOn && !!subtitle}>
               <Subtitles size={15} />
             </button>
+            <button className="note-icon-btn" onClick={() => skip(-10)} title="后退 10 秒">
+              <svg viewBox="0 0 24 24" width="15" height="15"><path d="M12.5 8V4l-4.5 4 4.5 4V8a6 6 0 1 1-6 6" /><text x="12" y="16" fontSize="7" fill="currentColor" textAnchor="middle" stroke="none" fontFamily="var(--fm)" fontWeight="700">10</text></svg>
+            </button>
+            <button className="note-icon-btn" onClick={() => skip(10)} title="前进 10 秒">
+              <svg viewBox="0 0 24 24" width="15" height="15"><path d="M11.5 8V4l4.5 4-4.5 4V8a6 6 0 1 0 6 6" /><text x="12" y="16" fontSize="7" fill="currentColor" textAnchor="middle" stroke="none" fontFamily="var(--fm)" fontWeight="700">10</text></svg>
+            </button>
+            <button className={`note-icon-btn${loop ? ' is-on' : ''}`} onClick={toggleLoop} title="循环播放" aria-pressed={loop}>
+              <Repeat size={15} />
+            </button>
+            <button className="note-icon-btn" onClick={() => void handleScreenshot()} disabled={shooting} title="截取当前帧">
+              <Camera size={15} />
+            </button>
+            <button className={`note-icon-btn${pipActive ? ' is-on' : ''}`} onClick={() => void togglePip()} disabled={!src} title={pipActive ? '退出画中画' : '画中画'} aria-pressed={pipActive}>
+              <PictureInPicture2 size={15} />
+            </button>
             <span className="note-ctl-time">{formatTs(currentSec)} / {formatTs(duration)}</span>
             <span className="note-ctl-spacer" />
             <button className="note-speed" onClick={cycleSpeed} title="切换倍速">
@@ -527,23 +542,6 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
               </button>
               {moreOpen && (
                 <div className="note-ctl-more-menu" role="menu">
-                  <button role="menuitem" onClick={() => { skip(-10); setMoreOpen(false) }} title="后退 10 秒">
-                    <svg viewBox="0 0 24 24" width="14" height="14"><path d="M12.5 8V4l-4.5 4 4.5 4V8a6 6 0 1 1-6 6" /><text x="12" y="16" fontSize="7" fill="currentColor" textAnchor="middle" stroke="none" fontFamily="var(--fm)" fontWeight="700">10</text></svg>
-                    后退 10 秒
-                  </button>
-                  <button role="menuitem" onClick={() => { skip(10); setMoreOpen(false) }} title="前进 10 秒">
-                    <svg viewBox="0 0 24 24" width="14" height="14"><path d="M11.5 8V4l4.5 4-4.5 4V8a6 6 0 1 0 6 6" /><text x="12" y="16" fontSize="7" fill="currentColor" textAnchor="middle" stroke="none" fontFamily="var(--fm)" fontWeight="700">10</text></svg>
-                    前进 10 秒
-                  </button>
-                  <button role="menuitem" className={loop ? ' is-on' : ''} onClick={() => { toggleLoop(); setMoreOpen(false) }} title="循环播放">
-                    <Repeat size={14} /> 循环播放
-                  </button>
-                  <button role="menuitem" onClick={() => { setMoreOpen(false); void handleScreenshot() }} disabled={shooting} title="截取当前帧">
-                    <Camera size={14} /> 截取当前帧
-                  </button>
-                  <button role="menuitem" className={pipActive ? ' is-on' : ''} onClick={() => { setMoreOpen(false); void togglePip() }} disabled={!src} title={pipActive ? '退出画中画' : '画中画'}>
-                    <PictureInPicture2 size={14} /> {pipActive ? '退出画中画' : '画中画'}
-                  </button>
                   <button role="menuitem" onClick={() => { setMoreOpen(false); toggleFullscreen() }} title={isFullscreen ? '退出全屏' : '全屏'}>
                     {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />} {isFullscreen ? '退出全屏' : '全屏'}
                   </button>
