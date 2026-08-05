@@ -56,6 +56,66 @@ def test_bili(mock_bvid, mock_dl_cls):
     assert "hdslb.com" in body["image_url"]
 
 
+@patch("backend.app.routes.link_preview._HAS_BILI", True)
+@patch(
+    "backend.app.routes.link_preview.BilibiliNoCookieDownloader",
+    create=True,
+)
+@patch(
+    "backend.app.routes.link_preview.extract_bvid_from_url",
+    return_value="BV1fjGG6AEAP",
+)
+@patch("shared.video_download_ytdlp.fetch_ytdlp_metadata")
+def test_bili_get_meta_banned_falls_back_to_ytdlp(mock_ytdlp, mock_bvid, mock_dl_cls):
+    """get_meta 被风控（-412）时降级 yt-dlp 拿标题/封面，不返回空预览。"""
+    mock_dl = MagicMock()
+    mock_dl.get_meta.side_effect = Exception("获取视频信息失败: request was banned")
+    mock_dl_cls.return_value = mock_dl
+    mock_ytdlp.return_value = {
+        "title": "yt-dlp 标题",
+        "duration": 330,
+        "uploader": "UP主",
+        "thumbnail_url": "http://i0.hdslb.com/bfs/archive/cover.jpg",
+    }
+
+    resp = client.get(
+        "/link-preview",
+        params={"url": "https://www.bilibili.com/video/BV1fjGG6AEAP"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["source"] == "bili"
+    assert body["title"] == "yt-dlp 标题"
+    assert body["image_url"] == "http://i0.hdslb.com/bfs/archive/cover.jpg"
+
+
+@patch("backend.app.routes.link_preview._HAS_BILI", True)
+@patch(
+    "backend.app.routes.link_preview.BilibiliNoCookieDownloader",
+    create=True,
+)
+@patch(
+    "backend.app.routes.link_preview.extract_bvid_from_url",
+    return_value="BV1fjGG6AEAP",
+)
+@patch("shared.video_download_ytdlp.fetch_ytdlp_metadata", return_value={})
+@patch("httpx.AsyncClient.get", side_effect=Exception("timeout"))
+def test_bili_all_channels_fail_falls_to_og(mock_get, mock_ytdlp, mock_bvid, mock_dl_cls):
+    """get_meta 与 yt-dlp 都失败时继续走 og 兜底，不报 500。"""
+    mock_dl = MagicMock()
+    mock_dl.get_meta.side_effect = Exception("获取视频信息失败: request was banned")
+    mock_dl_cls.return_value = mock_dl
+
+    resp = client.get(
+        "/link-preview",
+        params={"url": "https://www.bilibili.com/video/BV1fjGG6AEAP"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    # B 站 shell 页无 og 标签 → 最终 fallback
+    assert body["source"] == "fallback"
+
+
 # ── 通用网页 og → source=og ─────────────────────────────────────────────
 
 

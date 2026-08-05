@@ -84,6 +84,31 @@ def _extract_og(page_html: str) -> dict[str, Optional[str]]:
     }
 
 
+async def _fetch_bili_ytdlp_preview(url: str, include_content: bool) -> Optional[dict]:
+    """B 站风控期间用 yt-dlp 元数据（标题 + 封面）作预览；全失败返回 None。"""
+    try:
+        from shared.video_download_ytdlp import fetch_ytdlp_metadata
+
+        meta = await asyncio.to_thread(fetch_ytdlp_metadata, url)
+    except Exception as exc:
+        logger.warning("yt-dlp 预览降级失败: %s", exc)
+        return None
+    title = meta.get("title") or None
+    image_url = meta.get("thumbnail_url") or None
+    if not title and not image_url:
+        return None
+    result = {
+        "title": title,
+        "description": None,
+        "image_url": image_url,
+        "source": "bili",
+    }
+    if include_content:
+        result["content"] = ""
+        result["word_count"] = 0
+    return result
+
+
 @router.get("")
 async def link_preview(
     url: str = Query(..., description="待预览的链接"),
@@ -118,7 +143,13 @@ async def link_preview(
                 result["word_count"] = 0
             return result
         except Exception as exc:
-            logger.warning("B 站预览失败，降级到 og: %s", exc)
+            logger.warning("B 站预览失败，降级到 yt-dlp/og: %s", exc)
+            # B 站匿名 view API 间歇风控（-412），且 B 站 shell 页无 og 标签，
+            # og 兜底拿不到封面 → 前端空白封面。yt-dlp 有 B 站专用反爬配方
+            # （与 probe-duration 同一通道），作为第一降级。
+            ytdlp_result = await _fetch_bili_ytdlp_preview(url, include_content)
+            if ytdlp_result is not None:
+                return ytdlp_result
             # 降级到通用 og（B 站页面也有 og 标签）
 
     # ── 小红书：__INITIAL_STATE__ 专用解析（如果可用）──
