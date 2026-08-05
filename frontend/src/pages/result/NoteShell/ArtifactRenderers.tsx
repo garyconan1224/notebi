@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 /**
  * Q4 / D7：AI 产物的语义渲染器。
  *
@@ -21,7 +22,10 @@ export interface MindMapData {
 
 /* ── 思维导图：树布局 + SVG 生成 ─────────────────────────────── */
 
+const NODE_W = 168
 const NODE_H = 30
+const NODE_LINE_H = 18
+const NODE_TEXT_MAX_CHARS = 10
 const NODE_GAP_Y = 8
 const LEVEL_W = 190
 const PADDING = 16
@@ -37,6 +41,27 @@ interface LaidNode {
 function countLeaves(node: MindMapNode): number {
   if (!node.children || node.children.length === 0) return 1
   return node.children.reduce((sum, child) => sum + countLeaves(child), 0)
+}
+
+export function estimateNodeLines(text: string): number {
+  if (!text) return 1
+  const chars = Array.from(text)
+  return Math.max(1, Math.ceil(chars.length / NODE_TEXT_MAX_CHARS))
+}
+
+export function nodeHeightFor(text: string): number {
+  const lines = estimateNodeLines(text)
+  return NODE_H + (lines - 1) * NODE_LINE_H
+}
+
+function wrapText(text: string): string[] {
+  if (!text) return ['']
+  const chars = Array.from(text)
+  const lines: string[] = []
+  for (let i = 0; i < chars.length; i += NODE_TEXT_MAX_CHARS) {
+    lines.push(chars.slice(i, i + NODE_TEXT_MAX_CHARS).join(''))
+  }
+  return lines.length > 0 ? lines : ['']
 }
 
 function layoutMindMap(root: MindMapNode): { nodes: LaidNode[]; width: number; height: number } {
@@ -73,8 +98,6 @@ function layoutMindMap(root: MindMapNode): { nodes: LaidNode[]; width: number; h
   }
 }
 
-const NODE_W = 168
-
 function escapeXml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -83,9 +106,7 @@ function escapeXml(text: string): string {
     .replace(/"/g, '&quot;')
 }
 
-function truncate(text: string, max = 22): string {
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text
-}
+
 
 export function mindMapToSvg(root: MindMapNode): string {
   const { nodes, width, height } = layoutMindMap(root)
@@ -93,10 +114,12 @@ export function mindMapToSvg(root: MindMapNode): string {
   for (const laid of nodes) {
     if (!laid.parent) continue
     const from = laid.parent
+    const fromH = nodeHeightFor(from.node.text)
+    const toH = nodeHeightFor(laid.node.text)
     const x1 = from.x + NODE_W
-    const y1 = from.y + NODE_H / 2
+    const y1 = from.y + fromH / 2
     const x2 = laid.x
-    const y2 = laid.y + NODE_H / 2
+    const y2 = laid.y + toH / 2
     const midX = (x1 + x2) / 2
     edges.push(
       `<path d="M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}" fill="none" stroke="oklch(70% 0.03 70)" stroke-width="1.5" />`,
@@ -106,10 +129,15 @@ export function mindMapToSvg(root: MindMapNode): string {
     const fill = laid.depth === 0 ? 'oklch(52% 0.205 42)' : 'oklch(97% 0.005 80)'
     const stroke = laid.depth === 0 ? 'oklch(46% 0.21 42)' : 'oklch(85% 0.01 80)'
     const textColor = laid.depth === 0 ? 'oklch(100% 0 0)' : 'oklch(25% 0.012 60)'
+    const h = nodeHeightFor(laid.node.text)
+    const lines = wrapText(laid.node.text)
+    const tspans = lines
+      .map((line, i) => `<tspan x="${laid.x + 10}" dy="${i === 0 ? 4 : NODE_LINE_H}">${escapeXml(line)}</tspan>`)
+      .join('')
     return [
       `<g>`,
-      `<rect x="${laid.x}" y="${laid.y}" width="${NODE_W}" height="${NODE_H}" rx="7" fill="${fill}" stroke="${stroke}" stroke-width="1.2" />`,
-      `<text x="${laid.x + 10}" y="${laid.y + NODE_H / 2 + 4}" font-size="12.5" font-family="'PingFang SC', 'Microsoft YaHei', sans-serif" fill="${textColor}">${escapeXml(truncate(laid.node.text))}</text>`,
+      `<rect x="${laid.x}" y="${laid.y}" width="${NODE_W}" height="${h}" rx="7" fill="${fill}" stroke="${stroke}" stroke-width="1.2" />`,
+      `<text x="${laid.x + 10}" y="${laid.y + NODE_H / 2 - 4}" font-size="12.5" font-family="'PingFang SC', 'Microsoft YaHei', sans-serif" fill="${textColor}">${tspans}</text>`,
       `</g>`,
     ].join('')
   })
@@ -187,11 +215,30 @@ function pruneCollapsed(node: MindMapNode, collapsed: Set<string>): MindMapNode 
   }
 }
 
-export function MindMapTree({ data, title }: { data: MindMapData; title: string }) {
+export interface MindMapTreeProps {
+  data: MindMapData
+  title: string
+  workspaceId?: string
+  itemId?: string
+  artifactId?: string
+  onUpdated?: (contentJson: MindMapData) => void
+}
+
+function newMindMapId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `node-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+export function MindMapTree({ data, title, workspaceId, itemId, artifactId, onUpdated }: MindMapTreeProps) {
+  const [treeData, setTreeData] = useState<MindMapData>(data)
   const [scale, setScale] = useState(1)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [focusedId, setFocusedId] = useState<string | null>(null)
   const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [editing, setEditing] = useState<{ id: string; text: string; x: number; y: number; h: number } | null>(null)
+  const editInputRef = useRef<HTMLInputElement | null>(null)
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null)
 
@@ -210,10 +257,14 @@ export function MindMapTree({ data, title }: { data: MindMapData; title: string 
     return () => viewport.removeEventListener('wheel', onWheel)
   }, [])
 
+  useEffect(() => {
+    if (editing) editInputRef.current?.focus()
+  }, [editing])
+
   const { nodes, width, height } = useMemo(() => {
-    const pruned = pruneCollapsed(data.root, collapsed)
+    const pruned = pruneCollapsed(treeData.root, collapsed)
     return layoutMindMap(pruned)
-  }, [data, collapsed])
+  }, [treeData, collapsed])
 
   const hasChildrenMap = useMemo(() => {
     const map = new Map<string, boolean>()
@@ -221,9 +272,9 @@ export function MindMapTree({ data, title }: { data: MindMapData; title: string 
       map.set(node.id, (node.children?.length ?? 0) > 0)
       ;(node.children || []).forEach(walk)
     }
-    walk(data.root)
+    walk(treeData.root)
     return map
-  }, [data])
+  }, [treeData])
 
   const nodeById = useMemo(() => {
     const map = new Map<string, MindMapNode>()
@@ -231,9 +282,9 @@ export function MindMapTree({ data, title }: { data: MindMapData; title: string 
       map.set(node.id, node)
       ;(node.children || []).forEach(walk)
     }
-    walk(data.root)
+    walk(treeData.root)
     return map
-  }, [data])
+  }, [treeData])
 
   const toggleNode = (node: MindMapNode) => {
     setFocusedId(node.id)
@@ -246,6 +297,70 @@ export function MindMapTree({ data, title }: { data: MindMapData; title: string 
     })
   }
 
+  const persist = (next: MindMapData) => {
+    setTreeData(next)
+    if (workspaceId && itemId && artifactId && onUpdated) onUpdated(next)
+  }
+
+  const updateTree = (mutate: (node: MindMapNode) => void): MindMapData => {
+    const copy: MindMapNode = { ...treeData.root, children: (treeData.root.children || []).map(cloneNode) }
+    mutate(copy)
+    return { root: copy }
+  }
+
+  function cloneNode(node: MindMapNode): MindMapNode {
+    return { ...node, children: (node.children || []).map(cloneNode) }
+  }
+
+  const commitRename = () => {
+    if (!editing) return
+    const text = editing.text.trim()
+    if (!text) {
+      setEditing(null)
+      return
+    }
+    persist(updateTree((root) => {
+      const walk = (node: MindMapNode) => {
+        if (node.id === editing.id) node.text = text
+        ;(node.children || []).forEach(walk)
+      }
+      walk(root)
+    }))
+    setEditing(null)
+  }
+
+  const handleAddChild = (nodeId: string) => {
+    const text = window.prompt('子节点名称', '')
+    if (text == null) return
+    const childText = text.trim()
+    if (!childText) return
+    persist(updateTree((root) => {
+      const walk = (node: MindMapNode) => {
+        if (node.id === nodeId) {
+          node.children = [...(node.children || []), { id: newMindMapId(), text: childText, children: [] }]
+          return
+        }
+        ;(node.children || []).forEach(walk)
+      }
+      walk(root)
+    }))
+  }
+
+  const handleDelete = (node: MindMapNode) => {
+    if (node.id === treeData.root.id) return
+    if (!window.confirm(`删除节点「${node.text}」及其子节点？`)) return
+    persist(updateTree((root) => {
+      const prune = (parent: MindMapNode) => {
+        parent.children = (parent.children || []).filter((child) => {
+          if (child.id === node.id) return false
+          prune(child)
+          return true
+        })
+      }
+      prune(root)
+    }))
+  }
+
   return (
     <div className="mindmap-wrap">
       <div className="mindmap-actions">
@@ -253,8 +368,8 @@ export function MindMapTree({ data, title }: { data: MindMapData; title: string 
         <span className="mindmap-zoom-value" aria-live="polite">{Math.round(scale * 100)}%</span>
         <button type="button" aria-label="放大思维导图" onClick={() => zoom(0.1)}><ZoomIn size={14} /></button>
         <button type="button" aria-label="重置思维导图缩放" onClick={() => setScale(1)}><RotateCcw size={14} /></button>
-        <button type="button" onClick={() => exportMindMapPng(data.root, title)}>导出 PNG</button>
-        <button type="button" onClick={() => exportMindMapSvg(data.root, title)}>导出 SVG</button>
+        <button type="button" onClick={() => exportMindMapPng(treeData.root, title)}>导出 PNG</button>
+        <button type="button" onClick={() => exportMindMapSvg(treeData.root, title)}>导出 SVG</button>
       </div>
       <div
         ref={viewportRef}
@@ -296,9 +411,9 @@ export function MindMapTree({ data, title }: { data: MindMapData; title: string 
             {nodes.map((laid) => {
               if (!laid.parent) return null
               const x1 = laid.parent.x + NODE_W
-              const y1 = laid.parent.y + NODE_H / 2
+              const y1 = laid.parent.y + nodeHeightFor(laid.parent.node.text) / 2
               const x2 = laid.x
-              const y2 = laid.y + NODE_H / 2
+              const y2 = laid.y + nodeHeightFor(laid.node.text) / 2
               const midX = (x1 + x2) / 2
               return (
                 <path
@@ -312,6 +427,9 @@ export function MindMapTree({ data, title }: { data: MindMapData; title: string 
               const hasChildren = hasChildrenMap.get(laid.node.id) ?? false
               const isCollapsed = collapsed.has(laid.node.id)
               const isFocused = focusedId === laid.node.id
+              const isRoot = laid.depth === 0
+              const h = nodeHeightFor(laid.node.text)
+              const lines = wrapText(laid.node.text)
               return (
                 <g
                   key={laid.node.id}
@@ -320,7 +438,11 @@ export function MindMapTree({ data, title }: { data: MindMapData; title: string 
                   tabIndex={0}
                   aria-label={hasChildren ? `${isCollapsed ? '展开' : '折叠'} ${laid.node.text}` : laid.node.text}
                   aria-expanded={hasChildren ? !isCollapsed : undefined}
-                  className={`mindmap-node${laid.depth === 0 ? ' is-root' : ''}${isFocused ? ' is-focused' : ''}${isCollapsed ? ' is-collapsed' : ''}`}
+                  className={`mindmap-node${isRoot ? ' is-root' : ''}${isFocused ? ' is-focused' : ''}${isCollapsed ? ' is-collapsed' : ''}`}
+                  onDoubleClick={(event) => {
+                    event.stopPropagation()
+                    setEditing({ id: laid.node.id, text: laid.node.text, x: laid.x, y: laid.y, h })
+                  }}
                   onClick={() => {
                     const original = nodeById.get(laid.node.id)
                     if (original) toggleNode(original)
@@ -333,19 +455,64 @@ export function MindMapTree({ data, title }: { data: MindMapData; title: string 
                     }
                   }}
                 >
-                  <rect width={NODE_W} height={NODE_H} rx="7" />
-                  <text x={10} y={NODE_H / 2 + 4}>
-                    {truncate(laid.node.text)}
+                  <rect width={NODE_W} height={h} rx="7" />
+                  <text x={10} y={NODE_H / 2 - 4}>
+                    {lines.map((line, i) => (
+                      <tspan key={`${laid.node.id}-${i}`} x={10} dy={i === 0 ? 4 : NODE_LINE_H}>{line}</tspan>
+                    ))}
                   </text>
                   {hasChildren && (
                     <text className="mindmap-node-caret" x={NODE_W - 16} y={NODE_H / 2 + 4}>
                       {isCollapsed ? '▸' : '▾'}
                     </text>
                   )}
+                  <g
+                    className="mindmap-node-add"
+                    transform={`translate(${NODE_W - 40}, ${h - 16})`}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      handleAddChild(laid.node.id)
+                    }}
+                  >
+                    <rect width={16} height={16} rx="4" />
+                    <text x={8} y={12} textAnchor="middle">＋</text>
+                  </g>
+                  {!isRoot && (
+                    <g
+                      className="mindmap-node-del"
+                      transform={`translate(${NODE_W - 20}, ${h - 16})`}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        const original = nodeById.get(laid.node.id)
+                        if (original) handleDelete(original)
+                      }}
+                    >
+                      <rect width={16} height={16} rx="4" />
+                      <text x={8} y={12} textAnchor="middle">×</text>
+                    </g>
+                  )}
                 </g>
               )
             })}
           </svg>
+          {editing && (
+            <div
+              className="mindmap-edit"
+              style={{ left: editing.x, top: editing.y, width: NODE_W, height: editing.h }}
+            >
+              <input
+                ref={editInputRef}
+                value={editing.text}
+                aria-label="编辑节点名称"
+                onChange={(event) => setEditing({ ...editing, text: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') commitRename()
+                  if (event.key === 'Escape') setEditing(null)
+                }}
+                onBlur={commitRename}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

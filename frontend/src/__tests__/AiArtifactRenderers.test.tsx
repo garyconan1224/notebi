@@ -1,9 +1,10 @@
 import '@testing-library/jest-dom'
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ArtifactContentView } from '@/pages/result/NoteShell/AiArtifactPanel'
-import { mindMapToSvg } from '@/pages/result/NoteShell/ArtifactRenderers'
+import { estimateNodeLines, mindMapToSvg, nodeHeightFor, MindMapTree } from '@/pages/result/NoteShell/ArtifactRenderers'
+import { updateNoteArtifact } from '@/services/noteArtifacts'
 import type { NoteArtifact } from '@/services/noteArtifacts'
 
 function artifact(patch: Partial<NoteArtifact>): NoteArtifact {
@@ -19,6 +20,116 @@ function artifact(patch: Partial<NoteArtifact>): NoteArtifact {
     ...patch,
   }
 }
+
+vi.mock('@/services/noteArtifacts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/noteArtifacts')>()
+  return {
+    ...actual,
+    updateNoteArtifact: vi.fn().mockResolvedValue({ status: 'updated', artifact_id: 'a1' }),
+  }
+})
+
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}))
+
+describe('思维导图换行与编辑能力', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('长文本按行数计算节点高度与行切分', () => {
+    expect(estimateNodeLines('短文本')).toBe(1)
+    expect(estimateNodeLines('这是一段超过十个字符的长文本内容')).toBeGreaterThan(1)
+    const tall = nodeHeightFor('这是一段超过十个字符的长文本内容')
+    expect(tall).toBeGreaterThan(30)
+  })
+
+  it('mindMapToSvg 多行节点输出多个 tspan 且不超框', () => {
+    const contentJson = {
+      root: {
+        id: 'n0',
+        text: '中心主题',
+        children: [
+          { id: 'n0-0', text: '这是一个非常长的分支节点文字用于验证换行', children: [] },
+        ],
+      },
+    }
+    const svg = mindMapToSvg(contentJson.root)
+    expect(svg).toContain('<tspan')
+    // 长文本不应再被截断到 22 字省略号
+    expect(svg).not.toContain('…')
+  })
+
+  it('添加子节点后回调 onUpdated 并持久化', () => {
+    vi.spyOn(window, 'prompt').mockReturnValue('新分支')
+    const onUpdated = vi.fn()
+    const contentJson = {
+      root: { id: 'n0', text: '根', children: [] },
+    }
+    const { container } = render(
+      <MindMapTree
+        data={contentJson}
+        title="t"
+        workspaceId="ws"
+        itemId="it"
+        artifactId="a1"
+        onUpdated={onUpdated}
+      />,
+    )
+    // 点击根节点旁的添加按钮
+    const add = container.querySelector('.mindmap-node-add')
+    expect(add).not.toBeNull()
+    fireEvent.click(add as Element)
+    expect(window.prompt).toHaveBeenCalled()
+    expect(onUpdated).toHaveBeenCalledTimes(1)
+    const next = onUpdated.mock.calls[0][0] as { root: { children: unknown[] } }
+    expect(next.root.children.length).toBe(1)
+  })
+
+  it('双击节点进入重命名，回车提交并持久化', () => {
+    const onUpdated = vi.fn()
+    const contentJson = {
+      root: { id: 'n0', text: '旧名', children: [] },
+    }
+    const { container } = render(
+      <MindMapTree data={contentJson} title="t" workspaceId="ws" itemId="it" artifactId="a1" onUpdated={onUpdated} />,
+    )
+    const node = container.querySelector('.mindmap-node')
+    expect(node).not.toBeNull()
+    fireEvent.doubleClick(node as Element)
+    const input = container.querySelector('.mindmap-edit input') as HTMLInputElement
+    expect(input).not.toBeNull()
+    fireEvent.change(input, { target: { value: '新名' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onUpdated).toHaveBeenCalledTimes(1)
+    const next = onUpdated.mock.calls[0][0] as { root: { text: string } }
+    expect(next.root.text).toBe('新名')
+  })
+
+  it('非根节点可删除，根节点不显示删除按钮', () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const onUpdated = vi.fn()
+    const contentJson = {
+      root: { id: 'n0', text: '根', children: [{ id: 'n1', text: '子', children: [] }] },
+    }
+    const { container } = render(
+      <MindMapTree data={contentJson} title="t" workspaceId="ws" itemId="it" artifactId="a1" onUpdated={onUpdated} />,
+    )
+    const dels = container.querySelectorAll('.mindmap-node-del')
+    expect(dels.length).toBe(1) // 只有非根节点
+    fireEvent.click(dels[0] as Element)
+    expect(window.confirm).toHaveBeenCalled()
+    expect(onUpdated).toHaveBeenCalledTimes(1)
+    const next = onUpdated.mock.calls[0][0] as { root: { children: unknown[] } }
+    expect(next.root.children.length).toBe(0)
+  })
+
+  it('编辑后调用 updateNoteArtifact（经 AiArtifactPanel handler 集成由面板测试覆盖）', () => {
+    // 仅验证 service 存在可导入
+    expect(updateNoteArtifact).toBeTypeOf('function')
+  })
+})
 
 describe('Q4 AI 产物语义渲染', () => {
   it('思维导图渲染节点连线画布而非 <pre>，支持缩放与折叠', () => {

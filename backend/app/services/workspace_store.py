@@ -18,7 +18,7 @@ import tempfile
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from backend.app.models.workspace import (
     InlineFrame,
@@ -357,6 +357,39 @@ class WorkspaceStore:
             if len(kept) == len(entries):
                 return False
             results[key] = kept
+            target.results = results
+            target.updated_at = _now_iso()
+            self._save(rec)
+            return True
+
+    def update_item_result_entry(
+        self,
+        workspace_id: str,
+        item_id: str,
+        key: str,
+        id_key: str,
+        entry_id: str,
+        updater: Callable[[dict], dict],
+    ) -> bool:
+        """Atomically replace one dict entry inside item.results by id."""
+        with self._lock:
+            rec, target = self._locate_item(workspace_id, item_id)
+            results = dict(target.results or {})
+            entries = list(results.get(key) or [])
+            found = False
+            next_entries: list[Any] = []
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    next_entries.append(entry)
+                    continue
+                if str(entry.get(id_key) or "") == entry_id:
+                    next_entries.append(updater(dict(entry)))
+                    found = True
+                else:
+                    next_entries.append(entry)
+            if not found:
+                return False
+            results[key] = next_entries
             target.results = results
             target.updated_at = _now_iso()
             self._save(rec)

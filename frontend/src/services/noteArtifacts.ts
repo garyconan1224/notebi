@@ -57,6 +57,19 @@ export async function createNoteArtifact(
   return data
 }
 
+export async function updateNoteArtifact(
+  workspaceId: string,
+  itemId: string,
+  artifactId: string,
+  contentJson: unknown,
+): Promise<{ status: string; artifact_id: string }> {
+  const { data } = await http.put(
+    `/workspaces/${workspaceId}/items/${itemId}/artifacts/${artifactId}`,
+    { content_json: contentJson },
+  )
+  return data
+}
+
 export async function deleteNoteArtifact(
   workspaceId: string,
   itemId: string,

@@ -141,3 +141,51 @@ def test_delete_artifact() -> None:
     assert response.status_code == 200
     assert response.json()["artifact_id"] == "artifact-1"
     assert ws_module._store.get_item("ws-1", "item-1").results["ai_artifacts"] == []
+
+
+def _seed_mind_map(store: WorkspaceStore) -> None:
+    store.update_item("ws-1", "item-1", results={
+        "content": "正文",
+        "ai_artifacts": [{
+            "artifact_id": "art-1",
+            "kind": "mind_map",
+            "title": "思维导图",
+            "content_md": "- 根",
+            "content_json": {
+                "root": {"id": "n0", "text": "根", "children": []},
+            },
+        }],
+    })
+
+
+def test_update_mind_map_artifact_persists_content_json(_patch_store: WorkspaceStore) -> None:
+    _seed_mind_map(_patch_store)
+    payload = {
+        "content_json": {
+            "root": {
+                "id": "n0",
+                "text": "根",
+                "children": [{"id": "n1", "text": "新分支", "children": []}],
+            },
+        },
+    }
+    response = client.put("/workspaces/ws-1/items/item-1/artifacts/art-1", json=payload)
+    assert response.status_code == 200
+    assert response.json()["status"] == "updated"
+
+    listed = client.get("/workspaces/ws-1/items/item-1/artifacts").json()
+    assert listed[0]["content_json"]["root"]["children"][0]["text"] == "新分支"
+
+
+def test_update_mind_map_rejects_invalid_structure(_patch_store: WorkspaceStore) -> None:
+    _seed_mind_map(_patch_store)
+    payload = {"content_json": {"root": {"id": "", "text": "缺 id"}}}
+    response = client.put("/workspaces/ws-1/items/item-1/artifacts/art-1", json=payload)
+    assert response.status_code == 400
+
+
+def test_update_missing_artifact_returns_404(_patch_store: WorkspaceStore) -> None:
+    _seed_mind_map(_patch_store)
+    payload = {"content_json": {"root": {"id": "n0", "text": "根", "children": []}}}
+    response = client.put("/workspaces/ws-1/items/item-1/artifacts/nope", json=payload)
+    assert response.status_code == 404

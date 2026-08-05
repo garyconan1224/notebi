@@ -5436,6 +5436,74 @@ def create_note_artifact(
     }
 
 
+class NoteArtifactUpdateRequest(BaseModel):
+    content_json: Dict[str, Any]
+
+
+def _validate_mind_map_json(content: Dict[str, Any]) -> Optional[str]:
+    """轻量校验 mind_map 结构；返回错误信息或 None。"""
+    root = content.get("root")
+    if not isinstance(root, dict):
+        return "思维导图缺少 root 节点"
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        if not isinstance(node.get("id"), str) or not node.get("id"):
+            return "思维导图节点缺少 id"
+        if not isinstance(node.get("text"), str):
+            return "思维导图节点缺少 text"
+        children = node.get("children")
+        if children is None:
+            continue
+        if not isinstance(children, list) or not all(isinstance(c, dict) for c in children):
+            return "思维导图 children 必须是节点数组"
+        stack.extend(children)
+    return None
+
+
+@router.put("/{workspace_id}/items/{item_id}/artifacts/{artifact_id}")
+def update_note_artifact(
+    workspace_id: str,
+    item_id: str,
+    artifact_id: str,
+    req: NoteArtifactUpdateRequest,
+) -> Dict[str, Any]:
+    """更新已有 AI 产物（目前支持思维导图结构编辑持久化）。"""
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    item = _find_item(rec, item_id)
+
+    def updater(entry: Dict[str, Any]) -> Dict[str, Any]:
+        kind = str(entry.get("kind") or "")
+        if kind == "mind_map":
+            error = _validate_mind_map_json(req.content_json)
+            if error:
+                raise ValueError(error)
+            return {**entry, "content_json": req.content_json}
+        return entry
+
+    try:
+        updated = _store.update_item_result_entry(
+            workspace_id,
+            item_id,
+            "ai_artifacts",
+            "artifact_id",
+            artifact_id,
+            updater,
+        )
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+    if not updated:
+        raise HTTPException(status_code=404, detail="artifact not found")
+    # 校验 kind 是否支持更新（非思维导图暂不支持原地编辑）
+    for entry in (item.results or {}).get("ai_artifacts") or []:
+        if isinstance(entry, dict) and str(entry.get("artifact_id") or "") == artifact_id:
+            if str(entry.get("kind") or "") != "mind_map":
+                raise HTTPException(status_code=400, detail="仅支持更新思维导图产物")
+    return {"status": "updated", "artifact_id": artifact_id}
+
+
 @router.delete("/{workspace_id}/items/{item_id}/artifacts/{artifact_id}")
 def delete_note_artifact(
     workspace_id: str,

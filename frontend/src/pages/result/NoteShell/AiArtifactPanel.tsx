@@ -5,9 +5,11 @@ import {
   createNoteArtifact,
   deleteNoteArtifact,
   listNoteArtifacts,
+  updateNoteArtifact,
   type NoteArtifact,
   type NoteArtifactKind,
 } from '@/services/noteArtifacts'
+import { toast } from 'sonner'
 import { useLnEditorStore } from '@/store/lnEditorStore'
 import { useTaskStore } from '@/store/taskStore'
 import type { TaskRecord } from '@/types/task'
@@ -55,11 +57,27 @@ function downloadArtifact(artifact: NoteArtifact) {
 }
 
 /** Q4 / D7：按 kind 用语义组件渲染 content_json；无结构化内容回退 Markdown 并标注旧版。 */
-export function ArtifactContentView({ artifact }: { artifact: NoteArtifact }) {
+interface ArtifactContentViewProps {
+  artifact: NoteArtifact
+  workspaceId?: string
+  itemId?: string
+  onMindMapUpdated?: (artifact: NoteArtifact, contentJson: MindMapData) => void
+}
+
+export function ArtifactContentView({ artifact, workspaceId, itemId, onMindMapUpdated }: ArtifactContentViewProps) {
   const contentJson = (artifact.content_json ?? null) as ArtifactContentJson
 
   if (artifact.kind === 'mind_map' && contentJson && (contentJson as MindMapData).root) {
-    return <MindMapTree data={contentJson as MindMapData} title={artifact.title} />
+    return (
+      <MindMapTree
+        data={contentJson as MindMapData}
+        title={artifact.title}
+        workspaceId={workspaceId}
+        itemId={itemId}
+        artifactId={artifact.artifact_id}
+        onUpdated={(next) => onMindMapUpdated?.(artifact, next)}
+      />
+    )
   }
   if (artifact.kind === 'action_items' && contentJson && Array.isArray((contentJson as { items?: unknown }).items)) {
     return <ActionItemsView items={(contentJson as { items: Array<{ id: string; text: string; done: boolean }> }).items} />
@@ -187,6 +205,21 @@ export function AiArtifactPanel({
     }
   }
 
+  const handleMindMapUpdated = (artifact: NoteArtifact, contentJson: MindMapData) => {
+    void updateNoteArtifact(workspaceId, itemId, artifact.artifact_id, contentJson)
+      .then(() => {
+        setArtifacts((current) =>
+          current.map((item) =>
+            item.artifact_id === artifact.artifact_id
+              ? { ...item, content_json: contentJson as NoteArtifact['content_json'] }
+              : item,
+          ),
+        )
+        toast.success('思维导图已保存')
+      })
+      .catch(() => toast.error('思维导图保存失败，请重试'))
+  }
+
   const handleDelete = async (artifact: NoteArtifact) => {
     await deleteNoteArtifact(workspaceId, itemId, artifact.artifact_id)
     setArtifacts((current) => current.filter((item) => item.artifact_id !== artifact.artifact_id))
@@ -267,7 +300,7 @@ export function AiArtifactPanel({
                     </div>
                   </div>
                 ) : (
-                  <ArtifactContentView artifact={selected} />
+                  <ArtifactContentView artifact={selected} workspaceId={workspaceId} itemId={itemId} onMindMapUpdated={handleMindMapUpdated} />
                 )}
                 <footer>
                   {selected.kind !== 'selection_rewrite' && (
