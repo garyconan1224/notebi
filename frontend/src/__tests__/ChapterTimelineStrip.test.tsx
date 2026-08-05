@@ -19,8 +19,8 @@ const FRAMES: TimedFrame[] = [
 describe('pickChapterAlignedFrames', () => {
   it('有章节时每章取最接近章节起点的帧', () => {
     const picked = pickChapterAlignedFrames(FRAMES, [
-      { start: 5, end: 25, title: 'A' },
-      { start: 35, end: 60, title: 'B' },
+      { start: 5, end: 25 },
+      { start: 35, end: 60 },
     ])
     expect(picked.map((frame) => frame.sec)).toEqual([10, 40])
   })
@@ -57,8 +57,8 @@ describe('ChapterTimelineStrip', () => {
       <ChapterTimelineStrip
         frames={FRAMES}
         chapters={[
-          { start: 0, end: 30, title: '开场', source: 'fallback' },
-          { start: 30, end: 80, title: '正文', source: 'fallback' },
+          { start: 0, end: 30, title: '开场', source: 'fallback', summary: '', keywords: [] },
+          { start: 30, end: 80, title: '正文', source: 'fallback', summary: '', keywords: [] },
         ]}
         duration={80}
         currentTime={10}

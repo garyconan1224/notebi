@@ -127,10 +127,11 @@ async function openObsidianWrite(directWrite = true) {
   } as never)
   renderNote()
   await waitFor(() => expect(vi.mocked(getItemNote)).toHaveBeenCalledWith('ws-1', 'item-1'), { timeout: 5000 })
-  // 打开导出下拉
+  // 打开统一导出面板，选择 Obsidian 目的地并提交
   fireEvent.click(screen.getByTitle('导出'))
-  await waitFor(() => expect(screen.getByText('写入 Obsidian（本地 vault）')).toBeTruthy(), { timeout: 5000 })
-  fireEvent.click(screen.getByText('写入 Obsidian（本地 vault）'))
+  await waitFor(() => expect(screen.getByRole('dialog', { name: '导出' })).toBeTruthy(), { timeout: 5000 })
+  fireEvent.click(screen.getByRole('radio', { name: 'Obsidian' }))
+  fireEvent.click(screen.getByRole('button', { name: /导出到 Obsidian/ }))
 }
 
 // 冲突确认框内的按钮（避免与历史面板里的同名文案冲突）
