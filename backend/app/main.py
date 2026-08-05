@@ -45,6 +45,7 @@ from backend.app.routes.workspaces import (
 from shared.config import DATA_DIR
 from backend.app.routes.chat import router as chat_router
 from backend.app.routes.link_preview import router as link_preview_router
+from backend.app.routes.image_proxy import router as image_proxy_router
 from backend.app.routes.knowledge import router as knowledge_router
 from backend.app.services.replica_purge import purge_legacy_replica_workspaces
 from backend.app.services.runtime_log_buffer import (
@@ -203,6 +204,7 @@ app.include_router(media_export_router)
 app.include_router(admin_router)
 app.include_router(system_router)
 app.include_router(link_preview_router)
+app.include_router(image_proxy_router)
 app.include_router(knowledge_router)
 
 
