@@ -47,7 +47,6 @@ import type { TaskRecord } from '@/types/task'
 import { SourceMdModal } from './SourceMdModal'
 import { NotionExportDialog } from './NotionExportDialog'
 import { FeishuExportDialog } from './FeishuExportDialog'
-import { ChapterEvidenceStrip } from './ChapterEvidenceStrip'
 import { ChapterTimelineStrip } from './ChapterTimelineStrip'
 import { NoteExportPanel, type ExportDestination, type ExportPlan } from './NoteExportPanel'
 import SpeakerDiarizationRow, { type SpeakerDiarizationInfo, type SpeakerDiarizationStatus } from './SpeakerDiarizationRow'
@@ -2639,17 +2638,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                     </div>
                   )
                 })()}
-                {timedVideoFrames.length > 0 && videoEvidenceChapters.length > 0 && (
-                  <ChapterEvidenceStrip
-                    chapters={videoEvidenceChapters}
-                    frames={timedVideoFrames}
-                    onSeek={handleSeek}
-                    sourceLabel={hasModelChapters ? '模型章节' : '自动分段'}
-                    generateLabel={hasModelChapters ? '重新生成' : '模型生成'}
-                    generating={creatingChapters}
-                    onGenerate={() => void handleCreateChapterSummaries()}
-                  />
-                )}
                 {/* 正文（MilkdownEditor 渲染 h2/h3/p/ul/blockquote → 设计稿 .note-section 自动匹配） */}
                 <div className="note-section" style={{ marginTop: summaries.length > 0 ? 0 : 16 }}>
                   <div className="nibi-note-editor-panel">
