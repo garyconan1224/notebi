@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, BookOpenCheck, Brain, Camera, Check, ChevronDown, Copy, Download, ExternalLink, FileDown, FileText, FileType, Film, History, Image, List, MessageCircle, Minus, Pause, Pencil, Play, Plus, Presentation, RefreshCw, Sparkles, Subtitles, Trash2, Type, X } from 'lucide-react'
+import { ArrowLeft, BookOpenCheck, Brain, Camera, Check, ChevronDown, Copy, Download, ExternalLink, FileDown, FileText, FileType, Film, History, Image, List, MessageCircle, Pause, Pencil, Play, Plus, Presentation, RefreshCw, Sparkles, Subtitles, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
@@ -31,6 +31,7 @@ import { inferContentTags } from '@/lib/contentTags'
 import NoteMediaCompanion, { type NoteMediaCompanionHandle } from './NoteMediaCompanion'
 import MilkdownEditor from './MilkdownEditor'
 import EditorToolbar from './EditorToolbar'
+import { EDITOR_PREFS_STORAGE_KEY, FONT_FAMILY_VALUE, FONT_WEIGHT_VALUE, TEXT_TONE_VALUE, readEditorPrefs, type NoteEditorPrefs } from './editorPrefs'
 import LNVideoPanel, { type LNVideoPanelHandle } from '@/pages/results/LearningNotesPage/LNVideoPanel'
 import LNTranscriptPanel from '@/pages/results/LearningNotesPage/LNTranscriptPanel'
 import NoteAudioPanel, { type NoteAudioPanelHandle } from './NoteAudioPanel'
@@ -132,49 +133,6 @@ const VIDEO_SPLIT_MAX = 72
 // Q2：1024 窄窗双列按 55/45 紧凑布局，默认分栏取同一比例
 const VIDEO_SPLIT_DEFAULT = 55
 const VIDEO_SPLIT_STORAGE_KEY = 'nibi.note.videoLeftPct'
-const EDITOR_PREFS_STORAGE_KEY = 'nibi.note.editorPrefs'
-
-type NoteEditorPrefs = {
-  fontFamily: 'sans' | 'serif' | 'mono'
-  fontSize: number
-  lineHeight: 1.6 | 1.8 | 2
-  textTone: 'ink' | 'muted' | 'soft'
-  fontWeight: 'regular' | 'medium' | 'bold'
-  textAlign: 'left' | 'center' | 'right'
-}
-
-const DEFAULT_EDITOR_PREFS: NoteEditorPrefs = {
-  fontFamily: 'sans',
-  fontSize: 15,
-  lineHeight: 1.8,
-  textTone: 'ink',
-  fontWeight: 'medium',
-  textAlign: 'left',
-}
-
-const FONT_FAMILY_VALUE: Record<NoteEditorPrefs['fontFamily'], string> = {
-  sans: 'var(--fb)',
-  serif: 'var(--fd)',
-  mono: 'var(--fm)',
-}
-
-const TEXT_TONE_VALUE: Record<NoteEditorPrefs['textTone'], string> = {
-  ink: 'var(--fg2)',
-  muted: 'var(--mut)',
-  soft: 'var(--ink-2)',
-}
-
-const TONE_OPTIONS: Array<{ key: NoteEditorPrefs['textTone']; color: string; label: string }> = [
-  { key: 'ink', color: 'var(--fg2)', label: '深' },
-  { key: 'muted', color: 'var(--mut)', label: '柔' },
-  { key: 'soft', color: 'var(--ink-2)', label: '浅' },
-]
-
-const FONT_WEIGHT_VALUE: Record<NoteEditorPrefs['fontWeight'], number> = {
-  regular: 400,
-  medium: 500,
-  bold: 700,
-}
 
 const PIP_WIDTHS = [240, 320, 440]
 
@@ -192,25 +150,6 @@ const AUDIO_KEYWORD_STOPWORDS = new Set([
   '如果', '因为', '所以', '但是', '或者', '以及', '其实', '比较', '时候', '现在', '需要', '没有',
   'the', 'and', 'for', 'with', 'that', 'this', 'you', 'your', 'are', 'was', 'can',
 ])
-
-function readEditorPrefs(): NoteEditorPrefs {
-  if (typeof window === 'undefined') return DEFAULT_EDITOR_PREFS
-  try {
-    const raw = window.localStorage.getItem(EDITOR_PREFS_STORAGE_KEY)
-    if (!raw) return DEFAULT_EDITOR_PREFS
-    const parsed = JSON.parse(raw) as Partial<NoteEditorPrefs>
-    return {
-      fontFamily: parsed.fontFamily === 'serif' || parsed.fontFamily === 'mono' ? parsed.fontFamily : 'sans',
-      fontSize: typeof parsed.fontSize === 'number' ? clampNumber(parsed.fontSize, 13, 20) : DEFAULT_EDITOR_PREFS.fontSize,
-      lineHeight: parsed.lineHeight === 1.6 || parsed.lineHeight === 2 ? parsed.lineHeight : 1.8,
-      textTone: parsed.textTone === 'muted' || parsed.textTone === 'soft' ? parsed.textTone : 'ink',
-      fontWeight: parsed.fontWeight === 'regular' || parsed.fontWeight === 'bold' ? parsed.fontWeight : 'medium',
-      textAlign: parsed.textAlign === 'center' || parsed.textAlign === 'right' ? parsed.textAlign : 'left',
-    }
-  } catch {
-    return DEFAULT_EDITOR_PREFS
-  }
-}
 
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
@@ -576,9 +515,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [creatingChapterTaskId, setCreatingChapterTaskId] = useState<string | null>(null)
   const [retryingAutoSummary, setRetryingAutoSummary] = useState(false)
   const [retryingSpeakerAnalysis, setRetryingSpeakerAnalysis] = useState(false)
-  const [editorPrefsOpen, setEditorPrefsOpen] = useState(false)
-  const [tonePickerOpen, setTonePickerOpen] = useState(false)
-  const editorPrefsRef = useRef<HTMLDivElement>(null)
   const [editorPrefs, setEditorPrefs] = useState<NoteEditorPrefs>(readEditorPrefs)
   const pipelineTasks = useTaskStore((state) => state.tasks)
   const addPipelineTask = useTaskStore((state) => state.addTask)
@@ -1030,17 +966,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     document.addEventListener('keydown', handle)
     return () => document.removeEventListener('keydown', handle)
   }, [exportOpen, aiToolsOpen])
-
-  useEffect(() => {
-    if (!editorPrefsOpen) return
-    const handle = (e: MouseEvent) => {
-      if (editorPrefsRef.current && !editorPrefsRef.current.contains(e.target as Node)) {
-        setEditorPrefsOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handle)
-    return () => document.removeEventListener('mousedown', handle)
-  }, [editorPrefsOpen])
 
   // 图文笔记：图片索引 + 加载错误
   const [selectedImageIdx, setSelectedImageIdx] = useState(0)
@@ -1833,17 +1758,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     setEditorPrefs((current) => ({ ...current, ...patch }))
   }, [])
 
-  const adjustEditorFontSize = useCallback((delta: number) => {
-    setEditorPrefs((current) => ({
-      ...current,
-      fontSize: clampNumber(current.fontSize + delta, 13, 20),
-    }))
-  }, [])
-
-  const handleResetEditorPrefs = useCallback(() => {
-    setEditorPrefs(DEFAULT_EDITOR_PREFS)
-  }, [])
-
   // Q3 / D3：统一导出面板 → 本地执行
   const exportPanelTitle = String(((note?.frontmatter ?? {}) as Record<string, unknown>).title ?? '')
   const handleExportPlan = useCallback((plan: ExportPlan) => {
@@ -2312,148 +2226,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
               </button>
             </>
           )}
-          <div style={{ position: 'relative' }} ref={editorPrefsRef}>
-            <button className="nibi-note-bar-btn nibi-note-bar-btn--label" onClick={() => setEditorPrefsOpen((value) => !value)} title="正文设置">
-              <Type size={14} /> Aa 设置<ChevronDown size={11} />
-            </button>
-            {editorPrefsOpen && (
-              <div className="nibi-note-pref-panel">
-                <div className="nibi-note-pref-group">
-                  <span className="nibi-note-pref-label">字体</span>
-                  <div className="nibi-note-pref-segment">
-                    {[
-                      { key: 'sans', label: 'Sans' },
-                      { key: 'serif', label: 'Serif' },
-                      { key: 'mono', label: 'Mono' },
-                    ].map((option) => (
-                      <button
-                        key={option.key}
-                        className={`nibi-note-pref-chip${editorPrefs.fontFamily === option.key ? ' is-active' : ''}`}
-                        onClick={() => updateEditorPrefs({ fontFamily: option.key as NoteEditorPrefs['fontFamily'] })}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="nibi-note-pref-group">
-                  <span className="nibi-note-pref-label">字号</span>
-                  <div className="nibi-note-pref-stepper">
-                    <button className="nibi-note-pref-icon-btn" onClick={() => adjustEditorFontSize(-1)} title="减小字号">
-                      <Minus size={13} />
-                    </button>
-                    <strong>{editorPrefs.fontSize}px</strong>
-                    <button className="nibi-note-pref-icon-btn" onClick={() => adjustEditorFontSize(1)} title="增大字号">
-                      <Plus size={13} />
-                    </button>
-                  </div>
-                </div>
-                <div className="nibi-note-pref-group">
-                  <span className="nibi-note-pref-label">行高</span>
-                  <div className="nibi-note-pref-segment">
-                    {[1.6, 1.8, 2].map((value) => (
-                      <button
-                        key={value}
-                        className={`nibi-note-pref-chip${editorPrefs.lineHeight === value ? ' is-active' : ''}`}
-                        onClick={() => updateEditorPrefs({ lineHeight: value as NoteEditorPrefs['lineHeight'] })}
-                      >
-                        {value}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="nibi-note-pref-group">
-                  <span className="nibi-note-pref-label">颜色</span>
-                  <div style={{ position: 'relative' }}>
-                    <button
-                      type="button"
-                      className="nibi-note-pref-tone-trigger"
-                      aria-label="切换文字颜色"
-                      aria-expanded={tonePickerOpen}
-                      onClick={() => setTonePickerOpen((value) => !value)}
-                    >
-                      <span
-                        className="nibi-note-pref-swatch"
-                        style={{ '--swatch-color': TEXT_TONE_VALUE[editorPrefs.textTone] } as CSSProperties}
-                        aria-hidden="true"
-                      />
-                      {TONE_OPTIONS.find((option) => option.key === editorPrefs.textTone)?.label}
-                      <ChevronDown size={12} />
-                    </button>
-                    {tonePickerOpen && (
-                      <div className="nibi-note-pref-tone-popover" role="menu" aria-label="文字颜色选项">
-                        {TONE_OPTIONS.map((option) => (
-                      <button
-                        key={option.key}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={editorPrefs.textTone === option.key}
-                        className={`nibi-note-pref-tone-option${editorPrefs.textTone === option.key ? ' is-active' : ''}`}
-                        onClick={() => {
-                          updateEditorPrefs({ textTone: option.key })
-                          setTonePickerOpen(false)
-                        }}
-                      >
-                        <span
-                          className="nibi-note-pref-swatch"
-                          style={{ '--swatch-color': option.color } as CSSProperties}
-                          aria-hidden="true"
-                        />
-                        {option.label}
-                      </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="nibi-note-pref-group">
-                  <span className="nibi-note-pref-label">字重</span>
-                  <div className="nibi-note-pref-segment">
-                    {[
-                      { key: 'regular', label: '常规' },
-                      { key: 'medium', label: '中' },
-                      { key: 'bold', label: '粗' },
-                    ].map((option) => (
-                      <button
-                        key={option.key}
-                        className={`nibi-note-pref-chip${editorPrefs.fontWeight === option.key ? ' is-active' : ''}`}
-                        onClick={() => updateEditorPrefs({ fontWeight: option.key as NoteEditorPrefs['fontWeight'] })}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="nibi-note-pref-group">
-                  <span className="nibi-note-pref-label">选中文字</span>
-                  <span className="nibi-note-pref-hint">
-                    在正文中选中文字后，格式工具栏会出现在选区旁。
-                  </span>
-                </div>
-                <div className="nibi-note-pref-group">
-                  <span className="nibi-note-pref-label">段落对齐</span>
-                  <div className="nibi-note-pref-segment">
-                    {([
-                      { key: 'left', label: '左对齐' },
-                      { key: 'center', label: '居中' },
-                      { key: 'right', label: '右对齐' },
-                    ] as const).map((option) => (
-                      <button
-                        key={option.key}
-                        className={`nibi-note-pref-chip${editorPrefs.textAlign === option.key ? ' is-active' : ''}`}
-                        onClick={() => updateEditorPrefs({ textAlign: option.key })}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="nibi-note-pref-actions">
-                  <button className="nibi-note-pref-ghost" onClick={handleResetEditorPrefs}>重置</button>
-                </div>
-              </div>
-            )}
-          </div>
           {sourceUrl && (
             <a className="nibi-note-bar-btn nibi-note-bar-btn--label" href={sourceUrl} target="_blank" rel="noreferrer" title="打开原视频">
               <ExternalLink size={14} /> 原视频
@@ -3416,6 +3188,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         onTextAlignChange={
           isTextNote ? (align) => updateEditorPrefs({ textAlign: align }) : undefined
         }
+        editorPrefs={editorPrefs}
+        onEditorPrefsChange={updateEditorPrefs}
       />
 
       <NoteExportPanel

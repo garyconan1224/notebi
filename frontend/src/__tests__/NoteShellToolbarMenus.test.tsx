@@ -287,26 +287,51 @@ describe('NoteShell 浮动正文格式工具栏（Q6）', () => {
   })
 })
 
-describe('NoteShell 正文颜色切换（Q2）', () => {
-  it('颜色选项默认收起，点击触发按钮展开并可选中收起', async () => {
-    await renderNoteShell()
-    fireEvent.click(screen.getByRole('button', { name: /Aa 设置/ }))
 
-    // 三个颜色不再平直展开
-    expect(screen.queryByText('柔')).toBeNull()
-    expect(screen.queryByText('浅')).toBeNull()
 
-    const trigger = screen.getByRole('button', { name: '切换文字颜色' })
-    fireEvent.click(trigger)
-    expect(screen.getByRole('menuitemradio', { name: /柔/ })).toBeInTheDocument()
-    expect(screen.getByRole('menuitemradio', { name: /浅/ })).toBeInTheDocument()
+describe('NoteShell 正文设置（浮动工具栏 Q2）', () => {
+  function selectEditorText() {
+    const editor = screen.getAllByTestId('note-editor')[0]
+    const textNode = editor.firstChild as Node
+    const range = document.createRange()
+    range.selectNodeContents(textNode)
+    ;(range as Range & { getBoundingClientRect: () => DOMRect }).getBoundingClientRect = vi.fn(
+      () =>
+        ({
+          top: 120,
+          left: 160,
+          width: 90,
+          height: 20,
+          right: 250,
+          bottom: 140,
+          x: 160,
+          y: 120,
+          toJSON: () => ({}),
+        }) as DOMRect,
+    )
+    const selection = window.getSelection()
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+    document.dispatchEvent(new Event('selectionchange'))
+  }
 
-    fireEvent.click(screen.getByRole('menuitemradio', { name: /柔/ }))
-    expect(screen.queryByRole('menuitemradio', { name: /柔/ })).toBeNull()
-    expect(trigger.textContent).toContain('柔')
+  it('选中文字后经浮动工具栏打开正文设置，颜色为点击切换', async () => {
+    await renderNoteShell(TEXT_NOTE)
+    selectEditorText()
+
+    const toolbar = await screen.findByRole('toolbar', { name: '正文格式' })
+    fireEvent.click(within(toolbar).getByRole('button', { name: '正文设置' }))
+
+    const panel = screen.getByRole('group', { name: '正文偏好设置' })
+    const soft = within(panel).getByRole('button', { name: '文字颜色：柔' })
+    expect(within(panel).getByRole('button', { name: '文字颜色：浅' })).toBeInTheDocument()
+    fireEvent.click(soft)
+    await waitFor(() => expect(soft).toHaveAttribute('aria-pressed', 'true'))
+
+    // 顶栏不再有 Aa 设置入口
+    expect(screen.queryByRole('button', { name: /Aa 设置/ })).toBeNull()
   })
 })
-
 describe('NoteShell 菜单交互（阶段 A1）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
