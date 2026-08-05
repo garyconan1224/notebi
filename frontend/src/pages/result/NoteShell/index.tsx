@@ -164,6 +164,12 @@ const TEXT_TONE_VALUE: Record<NoteEditorPrefs['textTone'], string> = {
   soft: 'var(--ink-2)',
 }
 
+const TONE_OPTIONS: Array<{ key: NoteEditorPrefs['textTone']; color: string; label: string }> = [
+  { key: 'ink', color: 'var(--fg2)', label: '深' },
+  { key: 'muted', color: 'var(--mut)', label: '柔' },
+  { key: 'soft', color: 'var(--ink-2)', label: '浅' },
+]
+
 const FONT_WEIGHT_VALUE: Record<NoteEditorPrefs['fontWeight'], number> = {
   regular: 400,
   medium: 500,
@@ -570,6 +576,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [retryingAutoSummary, setRetryingAutoSummary] = useState(false)
   const [retryingSpeakerAnalysis, setRetryingSpeakerAnalysis] = useState(false)
   const [editorPrefsOpen, setEditorPrefsOpen] = useState(false)
+  const [tonePickerOpen, setTonePickerOpen] = useState(false)
   const editorPrefsRef = useRef<HTMLDivElement>(null)
   const [editorPrefs, setEditorPrefs] = useState<NoteEditorPrefs>(readEditorPrefs)
   const pipelineTasks = useTaskStore((state) => state.tasks)
@@ -1122,10 +1129,15 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const videoSubtitle = activeTranscriptLine?.text ?? ''
   const audioSubtitle = activeTranscriptLine?.text ?? ''
 
-  const handleOpenImmersive = useCallback(() => {
-    setImmersiveOpen(true)
-    const noteType = String(((note?.frontmatter ?? {}) as Record<string, unknown>).type ?? '')
-    if (noteType === 'audio' && note?.media?.audio) setIsPip(true)
+  const handleToggleImmersive = useCallback(() => {
+    setImmersiveOpen((prev) => {
+      const next = !prev
+      if (next) {
+        const noteType = String(((note?.frontmatter ?? {}) as Record<string, unknown>).type ?? '')
+        if (noteType === 'audio' && note?.media?.audio) setIsPip(true)
+      }
+      return next
+    })
   }, [note])
 
   // Q2 沉浸式：Esc 退出；退出后焦点回到触发按钮。
@@ -2279,22 +2291,46 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 </div>
                 <div className="nibi-note-pref-group">
                   <span className="nibi-note-pref-label">颜色</span>
-                  <div className="nibi-note-pref-swatches">
-                    {[
-                      { key: 'ink', color: 'var(--fg2)', label: '深' },
-                      { key: 'muted', color: 'var(--mut)', label: '柔' },
-                      { key: 'soft', color: 'var(--ink-2)', label: '浅' },
-                    ].map((option) => (
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      type="button"
+                      className="nibi-note-pref-tone-trigger"
+                      aria-label="切换文字颜色"
+                      aria-expanded={tonePickerOpen}
+                      onClick={() => setTonePickerOpen((value) => !value)}
+                    >
+                      <span
+                        className="nibi-note-pref-swatch"
+                        style={{ '--swatch-color': TEXT_TONE_VALUE[editorPrefs.textTone] } as CSSProperties}
+                        aria-hidden="true"
+                      />
+                      {TONE_OPTIONS.find((option) => option.key === editorPrefs.textTone)?.label}
+                      <ChevronDown size={12} />
+                    </button>
+                    {tonePickerOpen && (
+                      <div className="nibi-note-pref-tone-popover" role="menu" aria-label="文字颜色选项">
+                        {TONE_OPTIONS.map((option) => (
                       <button
                         key={option.key}
-                        className={`nibi-note-pref-swatch${editorPrefs.textTone === option.key ? ' is-active' : ''}`}
-                        onClick={() => updateEditorPrefs({ textTone: option.key as NoteEditorPrefs['textTone'] })}
-                        style={{ '--swatch-color': option.color } as CSSProperties}
-                        title={option.label}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={editorPrefs.textTone === option.key}
+                        className={`nibi-note-pref-tone-option${editorPrefs.textTone === option.key ? ' is-active' : ''}`}
+                        onClick={() => {
+                          updateEditorPrefs({ textTone: option.key })
+                          setTonePickerOpen(false)
+                        }}
                       >
-                        <span>{option.label}</span>
+                        <span
+                          className="nibi-note-pref-swatch"
+                          style={{ '--swatch-color': option.color } as CSSProperties}
+                          aria-hidden="true"
+                        />
+                        {option.label}
                       </button>
-                    ))}
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="nibi-note-pref-group">
@@ -2495,8 +2531,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
           <button
             ref={immersiveTriggerRef}
             className="nibi-note-bar-btn nibi-note-bar-btn--label nibi-note-bar-btn--accent"
-            onClick={handleOpenImmersive}
-            title="打开沉浸式笔记"
+            onClick={handleToggleImmersive}
+            title={immersiveOpen ? '退出沉浸式笔记' : '打开沉浸式笔记'}
             aria-pressed={immersiveOpen}
           >
             <Sparkles size={14} /> 沉浸式

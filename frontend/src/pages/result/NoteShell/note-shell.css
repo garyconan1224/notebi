@@ -683,6 +683,72 @@
   color: oklch(100% 0 0);
 }
 
+.nibi-note-pref-tone-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px 0 6px;
+  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
+  border-radius: 999px;
+  background: var(--srf, #fff);
+  color: var(--fg2, #3d3929);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nibi-note-pref-tone-trigger .nibi-note-pref-swatch {
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+}
+
+.nibi-note-pref-tone-popover {
+  position: absolute;
+  left: 0;
+  top: 34px;
+  z-index: 130;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 132px;
+  padding: 8px;
+  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
+  border-radius: 10px;
+  background: var(--bg, #fff);
+  box-shadow: var(--shadow-md);
+}
+
+.nibi-note-pref-tone-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg2, #3d3929);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nibi-note-pref-tone-option:hover {
+  background: var(--bgalt, #f6f2ea);
+}
+
+.nibi-note-pref-tone-option.is-active {
+  color: var(--acc, #ff8a36);
+}
+
+.nibi-note-pref-tone-option .nibi-note-pref-swatch {
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+}
+
 .nibi-note-pref-actions {
   justify-content: space-between;
 }

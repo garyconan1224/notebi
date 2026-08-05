@@ -258,6 +258,26 @@ describe('NoteShell 文本编辑器工具栏（S4）', () => {
   })
 })
 
+describe('NoteShell 正文颜色切换（Q2）', () => {
+  it('颜色选项默认收起，点击触发按钮展开并可选中收起', async () => {
+    await renderNoteShell()
+    fireEvent.click(screen.getByRole('button', { name: /Aa 设置/ }))
+
+    // 三个颜色不再平直展开
+    expect(screen.queryByText('柔')).toBeNull()
+    expect(screen.queryByText('浅')).toBeNull()
+
+    const trigger = screen.getByRole('button', { name: '切换文字颜色' })
+    fireEvent.click(trigger)
+    expect(screen.getByRole('menuitemradio', { name: /柔/ })).toBeInTheDocument()
+    expect(screen.getByRole('menuitemradio', { name: /浅/ })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /柔/ }))
+    expect(screen.queryByRole('menuitemradio', { name: /柔/ })).toBeNull()
+    expect(trigger.textContent).toContain('柔')
+  })
+})
+
 describe('NoteShell 菜单交互（阶段 A1）', () => {
   beforeEach(() => {
     vi.clearAllMocks()

@@ -124,4 +124,18 @@ describe('NoteShell 沉浸式与顶栏（Q2）', () => {
     expect(trigger.getAttribute('aria-pressed')).toBe('false')
     expect(document.activeElement).toBe(trigger)
   })
+
+  it('再点同一「沉浸式」按钮直接退出', async () => {
+    renderShell()
+    await waitFor(() => expect(screen.getAllByTestId('note-editor').length).toBeGreaterThan(0))
+
+    const trigger = screen.getByRole('button', { name: /沉浸式/ })
+    fireEvent.click(trigger)
+    expect(screen.getByText(/退出沉浸式/)).not.toBeNull()
+    expect(trigger.getAttribute('aria-pressed')).toBe('true')
+
+    fireEvent.click(trigger)
+    await waitFor(() => expect(screen.queryByText(/退出沉浸式/)).toBeNull())
+    expect(trigger.getAttribute('aria-pressed')).toBe('false')
+  })
 })
