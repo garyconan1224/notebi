@@ -12,7 +12,7 @@ import uuid
 from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from shared.config import DATA_DIR
 from shared.appearance_store import (
@@ -43,6 +43,15 @@ class ObsidianSettings(BaseModel):
     direct_write: Optional[bool] = None
 
 
+class ExportSyncSettings(BaseModel):
+    """导出与同步的非敏感目的地默认值；API token 一律不保存。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    notion_parent_page_id: Optional[str] = Field(default=None, max_length=2000)
+    feishu_folder_token: Optional[str] = Field(default=None, max_length=500)
+
+
 class AppearancePatch(BaseModel):
     theme: Optional[Literal["paper", "graphite", "sage", "midnight"]] = None
     mode: Optional[Literal["light", "dark", "system"]] = None
@@ -53,6 +62,10 @@ class AppearancePatch(BaseModel):
     obsidian: Optional[ObsidianSettings] = Field(
         default=None,
         description="Q3/D3：Obsidian 直写目的地配置（非秘密；token 不保存）",
+    )
+    export_sync: Optional[ExportSyncSettings] = Field(
+        default=None,
+        description="导出与同步默认值（非秘密；token 不保存）",
     )
 
 
@@ -78,6 +91,8 @@ def patch_settings(body: AppearancePatch) -> Dict[str, Any]:
         patch["fonts"] = body.fonts
     if body.obsidian is not None:
         patch["obsidian"] = body.obsidian.model_dump(exclude_none=True)
+    if body.export_sync is not None:
+        patch["export_sync"] = body.export_sync.model_dump(exclude_none=True)
     return update_settings(patch)
 
 

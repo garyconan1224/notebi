@@ -28,6 +28,11 @@ DEFAULTS: dict[str, Any] = {
     "uploaded_fonts": [],
     # Q3 / D3：Obsidian 直写目的地（非秘密配置；token 一律不保存）
     "obsidian": {"vault_path": "", "subdir": "", "direct_write": False},
+    # 导出与同步：云笔记目的地的非敏感默认值（API token 一律不保存）
+    "export_sync": {
+        "notion_parent_page_id": "",
+        "feishu_folder_token": "",
+    },
 }
 
 
@@ -62,6 +67,14 @@ def load_settings() -> dict[str, Any]:
             "subdir": str((doc.get("obsidian") or {}).get("subdir") or ""),
             "direct_write": bool((doc.get("obsidian") or {}).get("direct_write") or False),
         },
+        "export_sync": {
+            "notion_parent_page_id": str(
+                (doc.get("export_sync") or {}).get("notion_parent_page_id") or ""
+            ),
+            "feishu_folder_token": str(
+                (doc.get("export_sync") or {}).get("feishu_folder_token") or ""
+            ),
+        },
     }
     return merged
 
@@ -92,5 +105,9 @@ def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
                 current["obsidian"][key] = str(patch["obsidian"][key] or "")
         if "direct_write" in patch["obsidian"]:
             current["obsidian"]["direct_write"] = bool(patch["obsidian"]["direct_write"])
+    if isinstance(patch.get("export_sync"), dict):
+        for key in ("notion_parent_page_id", "feishu_folder_token"):
+            if key in patch["export_sync"]:
+                current["export_sync"][key] = str(patch["export_sync"][key] or "")
     save_settings(current)
     return load_settings()
