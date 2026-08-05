@@ -208,7 +208,11 @@ describe('NoteShell summary switching', () => {
 
     await waitFor(() => expectAnyEditorToContain('主笔记正文'))
 
-    expect(document.querySelector('[data-testid="note-history-topbar"]')).not.toBeNull()
+    // 版本历史并入版本下拉：主笔记 / AI 总结 / 查看版本历史
+    fireEvent.click(screen.getByRole('button', { name: '主笔记' }))
+    fireEvent.click(screen.getByRole('button', { name: /查看版本历史/ }))
+
+    expect(document.querySelector('.note-history-panel')).not.toBeNull()
   })
 
   it('点击结果页标签会跳转到合集筛选', async () => {

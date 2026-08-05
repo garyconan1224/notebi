@@ -957,6 +957,34 @@
   box-shadow: var(--shadow-md);
 }
 
+.nibi-note-version-group-label {
+  padding: 6px 12px 2px;
+  color: var(--mut, #7c7464);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nibi-note-version-history {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  background: transparent;
+  color: var(--fg2, #3d3929);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nibi-note-version-history:hover {
+  background: var(--bgalt, #f6f2ea);
+  color: var(--fg, #191410);
+}
+
 .nibi-note-version-main,
 .nibi-note-version-choice {
   width: 100%;

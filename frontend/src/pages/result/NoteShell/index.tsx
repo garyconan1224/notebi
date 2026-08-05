@@ -2134,6 +2134,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
             </button>
             {templateDropOpen && (
               <div className="nibi-note-version-menu">
+                <div className="nibi-note-version-group-label">主笔记</div>
                 <button
                   className={`nibi-note-version-main${!activeSummaryId ? ' is-active' : ''}`}
                   onClick={() => {
@@ -2148,6 +2149,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                   {!activeSummaryId && <Check size={13} />}
                 </button>
                 <div className="nibi-note-version-divider" />
+                <div className="nibi-note-version-group-label">AI 总结</div>
                 {summaries.length === 0 ? (
                   <div className="nibi-note-version-empty">暂无 AI 总结版本，可点击“新建总结”生成。</div>
                 ) : (
@@ -2197,6 +2199,17 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                         )
                       })
                 )}
+                <div className="nibi-note-version-divider" />
+                <button
+                  type="button"
+                  className="nibi-note-version-history"
+                  onClick={() => {
+                    setTemplateDropOpen(false)
+                    setHistoryOpen(true)
+                  }}
+                >
+                  <History size={13} /> 查看版本历史
+                </button>
               </div>
             )}
           </div>
@@ -2208,15 +2221,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
           >
             <Plus size={14} />
             {creatingSummary ? '生成中…' : '新建总结'}
-          </button>
-          <button
-            data-testid="note-history-topbar"
-            className="nibi-note-bar-btn nibi-note-bar-btn--label"
-            type="button"
-            onClick={() => setHistoryOpen(true)}
-            title="查看和恢复正文历史版本"
-          >
-            <History size={14} />版本历史
           </button>
           {activeSummaryId && (
             <>
