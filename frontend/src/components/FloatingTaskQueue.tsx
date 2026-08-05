@@ -294,7 +294,7 @@ export function FloatingTaskQueue() {
         <button
           onClick={() => setOpen(true)}
           style={{
-            position: 'fixed', right: 24, bottom: 24, zIndex: 38,
+            position: 'fixed', right: 28, bottom: 96, zIndex: 38,
             display: 'flex', alignItems: 'center', gap: 10,
             padding: '10px 16px 10px 12px',
             background: 'var(--ink)', color: 'var(--bg)',
@@ -345,7 +345,7 @@ export function FloatingTaskQueue() {
       {open && (
         <div
           style={{
-            position: 'fixed', right: 24, bottom: 24, zIndex: 38,
+            position: 'fixed', right: 28, bottom: 96, zIndex: 38,
             width: 380, maxHeight: '70vh',
             background: 'var(--bg-elev)', border: '1px solid var(--line)',
             borderRadius: 16, boxShadow: 'var(--shadow-lg)',

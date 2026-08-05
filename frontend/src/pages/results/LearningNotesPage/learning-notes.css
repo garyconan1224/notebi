@@ -1494,7 +1494,7 @@
 /* 浮动按钮：笔记面板右下角 */
 .ln-chat-fab {
   position: fixed;
-  bottom: 24px;
+  bottom: 96px;
   right: 24px;
   z-index: 40;
   display: flex;
