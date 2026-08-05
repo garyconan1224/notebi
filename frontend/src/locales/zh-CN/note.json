@@ -14,7 +14,10 @@
     "saving": "保存中…",
     "aiSummary": "AI 总结",
     "summaryEmpty": "暂无 AI 总结版本，可点击“新建总结”生成。",
-    "summaryGroup": "总结"
+    "summaryGroup": "总结",
+    "immersive": "沉浸式",
+    "exitImmersive": "退出沉浸式笔记",
+    "enterImmersive": "打开沉浸式笔记"
   },
   "editor": {
     "paragraph": "正文",

@@ -16,5 +16,14 @@
     "loading": "加载中…",
     "success": "成功",
     "unknownError": "未知错误"
+  },
+  "nav": {
+    "home": "首页",
+    "notes": "笔记",
+    "collections": "合集",
+    "tasks": "任务中心",
+    "favorites": "收藏夹",
+    "knowledge": "知识库",
+    "settings": "设置"
   }
 }

@@ -14,7 +14,10 @@
     "saving": "Saving…",
     "aiSummary": "AI Summary",
     "summaryEmpty": "No AI summary versions yet. Create one to get started.",
-    "summaryGroup": "Summary"
+    "summaryGroup": "Summary",
+    "immersive": "Immersive",
+    "exitImmersive": "Exit Immersive",
+    "enterImmersive": "Open Immersive"
   },
   "editor": {
     "paragraph": "Paragraph",

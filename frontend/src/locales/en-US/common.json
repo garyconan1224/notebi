@@ -16,5 +16,14 @@
     "loading": "Loading…",
     "success": "Success",
     "unknownError": "Unknown error"
+  },
+  "nav": {
+    "home": "Home",
+    "notes": "Notes",
+    "collections": "Collections",
+    "tasks": "Task Center",
+    "favorites": "Favorites",
+    "knowledge": "Knowledge Base",
+    "settings": "Settings"
   }
 }
