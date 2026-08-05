@@ -63,6 +63,9 @@ const SUMMARY_FORMATS = [
   { value: 'html', label: 'HTML' },
   { value: 'pdf', label: 'PDF' },
   { value: 'docx', label: 'Word' },
+  { value: 'pptx', label: 'PPT' },
+  { value: 'long_image', label: '长图' },
+  { value: 'obsidian', label: 'Obsidian 包' },
 ]
 
 function readStoredState(itemId: string): StoredState | null {
