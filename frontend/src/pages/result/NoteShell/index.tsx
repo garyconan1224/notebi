@@ -47,7 +47,7 @@ import { SourceMdModal } from './SourceMdModal'
 import { NotionExportDialog } from './NotionExportDialog'
 import { FeishuExportDialog } from './FeishuExportDialog'
 import { ChapterEvidenceStrip } from './ChapterEvidenceStrip'
-import StoryboardStrip from './StoryboardStrip'
+import { ChapterTimelineStrip } from './ChapterTimelineStrip'
 import SpeakerDiarizationRow, { type SpeakerDiarizationInfo, type SpeakerDiarizationStatus } from './SpeakerDiarizationRow'
 import { withStatusToast } from '@/lib/statusToast'
 import { categorizeError } from '@/lib/errorCategories'
@@ -2706,9 +2706,15 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
             </div>
             {/* 控制条 + 时间线（在 player-wrap 外，避免 overflow:hidden 截断） */}
             {!isPip && transportNode}
-            {/* Q2 故事板：≤12 帧、独立于 VLM；无帧时整条不渲染，seek 走时间轴热区 */}
+            {/* Q3 融合时间轴：章节段 + 截帧同一条轨，点击跳转 */}
             {!isPip && (
-              <StoryboardStrip frames={timedVideoFrames} currentTime={currentTime} onSeek={handleSeek} />
+              <ChapterTimelineStrip
+                frames={timedVideoFrames}
+                chapters={videoEvidenceChapters}
+                duration={effectiveVideoDuration}
+                currentTime={currentTime}
+                onSeek={handleSeek}
+              />
             )}
             {/* 转录 */}
             {!isPip && Array.isArray(note.transcript) && (note.transcript as VideoResultTranscriptLine[]).length > 0 ? (

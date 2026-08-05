@@ -1662,6 +1662,73 @@
   transition: outline-color 0.25s ease;
 }
 
+/* ════ Q3：章节 + 截帧融合时间轴 ════ */
+.nibi-chapter-timeline {
+  padding: 8px 10px 4px;
+  border-bottom: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
+}
+
+.nibi-chapter-timeline-track {
+  position: relative;
+  height: 58px;
+}
+
+.nibi-chapter-timeline-seg {
+  position: absolute;
+  top: 4px;
+  height: 26px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bgalt, #f6f2ea);
+  color: var(--fg2, #3d3929);
+  font-size: 10px;
+  font-weight: 700;
+  text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.nibi-chapter-timeline-seg.is-active {
+  background: var(--accl, rgba(255, 138, 54, 0.16));
+  color: var(--acc, #ff8a36);
+}
+
+.nibi-chapter-timeline-seg:hover {
+  filter: brightness(0.96);
+}
+
+.nibi-chapter-timeline-frame {
+  position: absolute;
+  top: 30px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0;
+  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.12));
+  border-radius: 6px;
+  background: var(--srf, #fff);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.nibi-chapter-timeline-frame img {
+  width: 64px;
+  height: 36px;
+  object-fit: cover;
+  display: block;
+}
+
+.nibi-chapter-timeline-frame span {
+  padding: 1px 2px;
+  font-size: 9px;
+  color: var(--mut, #7c7464);
+  text-align: center;
+}
+
 /* ── 右栏（40%）：标签 + 结构化笔记 ── */
 .nibi-note-right {
   flex: 1 1 0;
