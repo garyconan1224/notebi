@@ -126,15 +126,41 @@ def llm_split_chapters(
     return chapters or [Chapter(title="全文", time_range="00:00~end")]
 
 
-def llm_global_summary(transcript_text: str, api_key: str) -> str:
-    """用 LLM 生成全局摘要。"""
+def llm_global_summary(
+    transcript_text: str,
+    api_key: str,
+    frames: list[dict[str, Any]] | None = None,
+) -> str:
+    """用 LLM 生成全局摘要；传入视频关键帧时按需内联配图。"""
     prompt = f"""请将以下视频转写内容总结为 150-300 字的中文教学摘要，突出核心知识点和学习要点：
 
 {transcript_text}
 
 只输出摘要文本，不要标题或格式。"""
+    if frames:
+        frame_lines = []
+        for i, fr in enumerate(frames):
+            sec = float(fr.get("sec") or fr.get("timestamp") or 0)
+            mm = int(sec) // 60
+            ss = int(sec) % 60
+            desc = str(fr.get("desc") or fr.get("scene_description") or "")
+            frame_lines.append(f"[图{i + 1} @{mm:02d}:{ss:02d}] {desc}")
+        prompt += (
+            "\n\n【关键帧清单】（已剔除过渡/重复画面）\n"
+            + "\n".join(frame_lines)
+            + "\n\n配图规则：\n"
+            "- 若某知识点在视频中有对应画面（演示/代码/UI/图表/对比），"
+            "在该句后另起一行输出 ![配图](*FRAME-[mm:ss])，mm:ss 用上面帧的时间戳，"
+            "选择最能代表该内容的帧。\n"
+            "- 纯口播内容不配图，宁缺毋滥；最多配 3 张。\n"
+            "- 只输出占位符，不要描述图片。"
+        )
+    result = _call_llm(prompt, api_key, max_tokens=1500, temperature=0.3).strip()
+    if frames:
+        from backend.app.services.frame_placeholder import resolve_frame_placeholders
 
-    return _call_llm(prompt, api_key, max_tokens=1500, temperature=0.3).strip()
+        result = resolve_frame_placeholders(result, frames)
+    return result
 
 
 def llm_final_synthesis(

@@ -3297,7 +3297,12 @@ def handle_note_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
                 elif _tweet_for_llm.strip() and not transcript_text.strip():
                     # 视频无语音但帖子有正文：直接用帖子正文生成摘要
                     _summary_input = f"【原帖正文】\n{_tweet_for_llm[:4000]}"
-                llm_summary = llm_global_summary(_summary_input, api_key) if _summary_input.strip() else ""
+                _frames_for_summary = _prev_result_llm.get("frames") or []
+                llm_summary = llm_global_summary(
+                    _summary_input,
+                    api_key,
+                    frames=_frames_for_summary if isinstance(_frames_for_summary, list) else None,
+                ) if _summary_input.strip() else ""
                 if llm_summary:
                     runner.append_log(task_id, f"📝 LLM 摘要生成完成（{len(llm_summary)} 字）")
             except Exception as e:
