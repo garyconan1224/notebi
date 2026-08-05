@@ -1088,9 +1088,10 @@ export async function downloadSubtitles(
   itemId: string,
   format: 'srt' | 'vtt' | 'ass' = 'srt',
   withSpeaker = false,
+  language: 'bilingual' | 'translation' | 'source' = 'bilingual',
 ): Promise<void> {
   const res = await http.get(`${BASE}/${workspaceId}/items/${itemId}/subtitles`, {
-    params: { format, with_speaker: withSpeaker },
+    params: { format, with_speaker: withSpeaker, language },
     responseType: 'blob',
   })
   const disposition = res.headers['content-disposition'] as string | undefined
@@ -1146,6 +1147,36 @@ export async function downloadTranscript(
   a.click()
   a.remove()
   URL.revokeObjectURL(url)
+}
+
+export type TranscriptDocFormat = 'txt' | 'md' | 'docx'
+
+/** GET /transcript?format=txt|md|docx — 转写文档格式导出（说话人/时间轴/语言选项） */
+export async function downloadTranscriptDoc(
+  workspaceId: string,
+  itemId: string,
+  options: {
+    format: TranscriptDocFormat
+    with_speaker: boolean
+    with_timestamp: boolean
+    language: 'bilingual' | 'translation' | 'source'
+  },
+  fallbackFilename: string,
+): Promise<void> {
+  const res = await http.get(`${BASE}/${workspaceId}/items/${itemId}/transcript`, {
+    params: {
+      format: options.format,
+      with_speaker: options.with_speaker,
+      with_timestamp: options.with_timestamp,
+      language: options.language,
+    },
+    responseType: 'blob',
+  })
+  await downloadBlobResponse(
+    res.data as Blob,
+    res.headers['content-disposition'] as string | undefined,
+    fallbackFilename,
+  )
 }
 
 /** GET /workspaces/{id}/ln — 获取学习笔记 markdown 原文 */
@@ -1459,9 +1490,10 @@ export async function downloadSoftSubMedia(
   itemId: string,
   subtitleFormat: 'srt' | 'vtt' | 'ass',
   fallbackFilename: string,
+  language: 'bilingual' | 'translation' | 'source' = 'bilingual',
 ): Promise<void> {
   const res = await http.get(`${BASE}/${workspaceId}/items/${itemId}/media-export`, {
-    params: { kind: 'softsub', subtitle_format: subtitleFormat },
+    params: { kind: 'softsub', subtitle_format: subtitleFormat, language },
     responseType: 'blob',
   })
   await downloadBlobResponse(res.data as Blob, res.headers['content-disposition'] as string | undefined, fallbackFilename)
@@ -1476,7 +1508,12 @@ export interface BurnSubtitleResult {
 export async function startBurnSubtitles(
   workspaceId: string,
   itemId: string,
-  options: { subtitle_format?: 'srt' | 'ass'; font_name?: string; font_size?: number } = {},
+  options: {
+    subtitle_format?: 'srt' | 'ass'
+    font_name?: string
+    font_size?: number
+    language?: 'bilingual' | 'translation' | 'source'
+  } = {},
 ): Promise<BurnSubtitleResult> {
   const res = await http.post<BurnSubtitleResult>(
     `${BASE}/${workspaceId}/items/${itemId}/media-export/burn`,

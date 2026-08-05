@@ -119,77 +119,57 @@ async function renderNoteShell(note: ItemNote = AUDIO_NOTE) {
   await screen.findAllByTestId('note-editor')
 }
 
-describe('NoteShell 导出菜单信息架构（阶段 A1）', () => {
+describe('NoteShell 统一导出面板（Q3 / D3）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.downloadTranscript.mockResolvedValue(undefined)
     useLnEditorStore.getState().resetFormatting()
   })
 
-  it('导出先选择内容来源，再选择文件格式', async () => {
+  it('打开导出面板：内容 / 格式 / 选项 / 目的地四段式', async () => {
     await renderNoteShell()
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
 
-    // Q3 / D2：内容按域分组；未选 AI 总结时不出现重复的「主笔记」来源
-    expect(screen.getByText('笔记')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /当前显示内容/ })).toBeInTheDocument()
-    const menu = within(document.querySelector('.nibi-note-export-menu') as HTMLElement)
-    expect(menu.queryByRole('button', { name: /^主笔记$/ })).toBeNull()
-    expect(screen.queryByText('Markdown')).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: /当前显示内容/ }))
-    expect(screen.getByText('选择格式')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Markdown' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'HTML' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '返回内容选择' })).toBeInTheDocument()
+    const panel = screen.getByRole('dialog', { name: '导出' })
+    expect(panel).toBeInTheDocument()
+    expect(screen.getByText('1 · 内容')).toBeInTheDocument()
+    expect(screen.getByText('2 · 格式')).toBeInTheDocument()
+    expect(screen.getByText('3 · 选项')).toBeInTheDocument()
+    expect(screen.getByText('4 · 目的地')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: '转写' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: '本地下载' })).toHaveAttribute('aria-checked', 'true')
   })
 
-  it('转写菜单项不包含笔记标题', async () => {
+  it('转写默认时间轴格式，切到文档格式出现「带时间轴」开关', async () => {
     await renderNoteShell()
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
-    fireEvent.click(screen.getByRole('button', { name: /转写文本 \/ 字幕/ }))
 
-    expect(screen.getByRole('button', { name: 'TXT 文章' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'SRT 字幕' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'VTT 字幕' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'ASS 字幕' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'PDF' })).not.toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'SRT' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: 'VTT' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'ASS' })).toBeInTheDocument()
+    // 时间轴格式不显示「带时间轴」开关
+    expect(screen.queryByLabelText('带时间轴')).toBeNull()
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Markdown' }))
+    expect(screen.getByLabelText('带时间轴')).toBeInTheDocument()
   })
 
-  it('按用途分组笔记与字幕导出格式', async () => {
+  it('文件名预览按 D10 规则实时更新', async () => {
     await renderNoteShell()
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
-    // Q3 / D2：未选总结时「当前显示内容」即主笔记，格式组内含 Obsidian 包
-    fireEvent.click(screen.getByRole('button', { name: /当前显示内容/ }))
 
-    const exportMenu = document.querySelector('.nibi-note-export-menu')
-    expect(exportMenu).not.toBeNull()
-    const menu = within(exportMenu as HTMLElement)
-    expect(menu.getByText('文档与打印')).toBeInTheDocument()
-    expect(menu.getByText('演示与阅读')).toBeInTheDocument()
-    expect(menu.getByText('知识管理')).toBeInTheDocument()
-    expect(menu.getByRole('button', { name: 'Obsidian 包' })).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: '返回内容选择' }))
-    fireEvent.click(screen.getByRole('button', { name: /转写文本 \/ 字幕/ }))
-    expect(within(document.querySelector('.nibi-note-export-menu') as HTMLElement).getByText('字幕格式')).toBeInTheDocument()
+    expect(screen.getByLabelText('文件名预览').textContent).toContain('_转写_仅原文.srt')
+    fireEvent.click(screen.getByRole('radio', { name: 'Markdown' }))
+    expect(screen.getByLabelText('文件名预览').textContent).toContain('_转写_仅原文.md')
   })
 
-  it('原始素材在导出菜单中，顶栏不再有独立原始素材按钮', async () => {
+  it('无说话人数据时禁用「带说话人」开关', async () => {
     await renderNoteShell()
-
-    // 顶栏不应有独立的"原始素材"按钮（在导出菜单外）
-    const topBarButtons = screen.getAllByRole('button')
-    const standaloneSourceButton = topBarButtons.find(
-      (btn) => btn.textContent?.includes('原始素材') && !btn.closest('.nibi-note-export-menu'),
-    )
-    // 打开导出菜单前，不应有独立的原始素材按钮
-    expect(standaloneSourceButton).toBeUndefined()
-
-    // 打开导出菜单后，原始素材应在菜单内
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
-    const exportMenu = document.querySelector('.nibi-note-export-menu')
-    expect(exportMenu?.textContent).toContain('原始素材')
+
+    const speaker = screen.getByRole('checkbox', { name: /带说话人/ }) as HTMLInputElement
+    expect(speaker).toBeDisabled()
+    expect(screen.getByText('该录音未识别到说话人')).toBeInTheDocument()
   })
 })
 
@@ -333,37 +313,38 @@ describe('NoteShell 菜单交互（阶段 A1）', () => {
     mocks.downloadTranscript.mockResolvedValue(undefined)
   })
 
-  it('单击外部一次关闭导出菜单', async () => {
+  it('点击面板外部关闭导出面板', async () => {
     await renderNoteShell()
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
-    expect(document.querySelector('.nibi-note-export-menu')).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: '导出' })).toBeTruthy()
 
-    // 点击菜单外部
-    fireEvent.mouseDown(document.body)
+    // 点击面板遮罩
+    fireEvent.mouseDown(document.querySelector('.nibi-export-panel-backdrop') as HTMLElement)
 
-    expect(document.querySelector('.nibi-note-export-menu')).toBeNull()
+    expect(screen.queryByRole('dialog', { name: '导出' })).toBeNull()
   })
 
-  it('Escape 关闭导出菜单', async () => {
+  it('Escape 关闭导出面板', async () => {
     await renderNoteShell()
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
-    expect(document.querySelector('.nibi-note-export-menu')).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: '导出' })).toBeTruthy()
 
     fireEvent.keyDown(document, { key: 'Escape' })
 
-    expect(document.querySelector('.nibi-note-export-menu')).toBeNull()
+    expect(screen.queryByRole('dialog', { name: '导出' })).toBeNull()
   })
 
-  it('打开 AI 菜单会关闭导出菜单，反向亦然', async () => {
+  it('打开导出面板会关闭 AI 菜单', async () => {
     await renderNoteShell()
 
-    // 先打开导出菜单
-    fireEvent.click(screen.getByRole('button', { name: '导出' }))
-    expect(document.querySelector('.nibi-note-export-menu')).toBeTruthy()
-
-    // 打开 AI 菜单
+    // 先打开 AI 菜单
     fireEvent.click(screen.getByRole('button', { name: 'AI 工具' }))
-    expect(document.querySelector('.nibi-note-export-menu')).toBeNull()
+    expect(screen.getByText('问 AI')).toBeTruthy()
+
+    // 打开导出面板 → AI 菜单关闭
+    fireEvent.click(screen.getByRole('button', { name: '导出' }))
+    expect(screen.queryByText('问 AI')).toBeNull()
+    expect(screen.getByRole('dialog', { name: '导出' })).toBeTruthy()
   })
 })
 
@@ -410,39 +391,45 @@ describe('Q3 媒体导出与转写选项', () => {
     transcript: [{ t_sec: 0, t_str: '00:00', text: '字幕内容' }],
   }
 
-  it('视频笔记导出菜单包含媒体域（原视频 / 软字幕 / 烧录）', async () => {
+  it('视频笔记导出面板媒体页包含原视频 / 软字幕 / 烧录', async () => {
     await renderNoteShell(VIDEO_NOTE)
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
 
-    expect(screen.getByText('媒体')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /原视频（不重新编码）/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /视频 \+ 软字幕（SRT）/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /视频 \+ 软字幕（VTT）/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /烧录字幕到视频/ })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('radio', { name: '媒体文件' }))
+    expect(screen.getByRole('radio', { name: '原视频' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: '视频 + 软字幕 SRT' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: '视频 + 软字幕 VTT' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: '烧录字幕视频' })).toBeInTheDocument()
+    // 媒体文件不支持云笔记目的地
+    expect(screen.queryByRole('radio', { name: 'Notion' })).toBeNull()
+    expect(screen.queryByRole('radio', { name: 'Obsidian' })).toBeNull()
   })
 
-  it('音频笔记不显示媒体域（无视频可导出）', async () => {
+  it('音频笔记媒体页只提供「仅音频文件」', async () => {
     await renderNoteShell()
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
-    expect(screen.queryByText('媒体')).toBeNull()
-    expect(screen.getByText('转录与字幕')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('radio', { name: '媒体文件' }))
+    expect(screen.getByRole('radio', { name: '仅音频文件' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.queryByRole('radio', { name: '烧录字幕视频' })).toBeNull()
   })
 
-  it('转写格式步骤提供「区分说话人」选项（不再作为独立内容源）', async () => {
+  it('转写页提供说话人 / 语言选项', async () => {
     await renderNoteShell(VIDEO_NOTE)
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
 
-    // 一级菜单不再有独立的「转写文本（区分说话人）」来源
-    expect(screen.queryByRole('button', { name: /转写文本（区分说话人）/ })).toBeNull()
-
-    fireEvent.click(screen.getByRole('button', { name: /转写文本 \/ 字幕/ }))
-    const toggle = screen.getByText('区分说话人')
-    expect(toggle).toBeInTheDocument()
+    const speaker = screen.getByRole('checkbox', { name: /带说话人/ }) as HTMLInputElement
+    expect(speaker).toBeDisabled()
+    expect(screen.getByRole('radio', { name: '仅原文' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: '双语' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: '仅翻译' })).toBeInTheDocument()
   })
 
-  it('笔记域提供写入 Obsidian 入口', async () => {
+  it('文本内容目的地包含 Obsidian / Notion / 飞书', async () => {
     await renderNoteShell(VIDEO_NOTE)
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
-    expect(screen.getByRole('button', { name: /写入 Obsidian/ })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Notion' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: '飞书' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Obsidian' })).toBeInTheDocument()
   })
 })

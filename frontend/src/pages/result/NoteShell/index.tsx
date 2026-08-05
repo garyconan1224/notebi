@@ -17,7 +17,7 @@ import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 
-import { createChapterSummaries, downloadItemNoteExport, downloadOriginalMedia, downloadSoftSubMedia, downloadSubtitles, downloadTranscript, exportItemNoteObsidian, exportNoteToObsidianVault, getItemNote, putItemNote, startBurnSubtitles, updateSpeakerMap, type ItemNoteExportFormat, type TranscriptExportMode } from '@/services/workspaces'
+import { createChapterSummaries, downloadItemNoteExport, downloadOriginalMedia, downloadSoftSubMedia, downloadSubtitles, downloadTranscript, downloadTranscriptDoc, exportItemNoteObsidian, exportNoteToObsidianVault, getItemNote, putItemNote, startBurnSubtitles, updateSpeakerMap, type ItemNoteExportFormat, type TranscriptExportMode } from '@/services/workspaces'
 import { fetchSettings } from '@/services/settings'
 import type { VideoResultTranscriptLine } from '@/services/workspaces'
 import type { ItemNote, NoteChapter } from '@/types/workspace'
@@ -48,6 +48,7 @@ import { NotionExportDialog } from './NotionExportDialog'
 import { FeishuExportDialog } from './FeishuExportDialog'
 import { ChapterEvidenceStrip } from './ChapterEvidenceStrip'
 import { ChapterTimelineStrip } from './ChapterTimelineStrip'
+import { NoteExportPanel, type ExportDestination, type ExportPlan } from './NoteExportPanel'
 import SpeakerDiarizationRow, { type SpeakerDiarizationInfo, type SpeakerDiarizationStatus } from './SpeakerDiarizationRow'
 import { withStatusToast } from '@/lib/statusToast'
 import { categorizeError } from '@/lib/errorCategories'
@@ -536,6 +537,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [askAiWidth, setAskAiWidth] = useState(400)
   const [exportOpen, setExportOpen] = useState(false)
   const [exportSource, setExportSource] = useState<NoteExportSource | null>(null)
+  const [exportPanelOpen, setExportPanelOpen] = useState(false)
   const [exportBusy, setExportBusy] = useState<NoteExportBusy | null>(null)
   // Q3：转写导出的「区分说话人」选项（选项而非独立内容源）
   const [transcriptWithSpeaker, setTranscriptWithSpeaker] = useState(false)
@@ -1593,7 +1595,9 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     }
   }, [workspaceId, itemId, exportBaseName, showOperationNotice])
 
-  const handleStartBurn = useCallback(async () => {
+  const handleStartBurn = useCallback(async (
+    language: 'bilingual' | 'translation' | 'source' = 'bilingual',
+  ) => {
     setMediaExporting('burn')
     try {
       // 字幕字体/字号读取 Q6 字幕槽位设置（缺省交给后端 ffmpeg 默认样式）
@@ -1608,6 +1612,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
       const result = await startBurnSubtitles(workspaceId, itemId, {
         subtitle_format: 'srt',
         font_name: fontName,
+        language,
       })
       showOperationNotice(`烧录任务已开始（${result.task_id}），可在任务中心查看进度`, 'success')
       setExportOpen(false)
@@ -1839,6 +1844,75 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     setEditorPrefs(DEFAULT_EDITOR_PREFS)
   }, [])
 
+  // Q3 / D3：统一导出面板 → 本地执行
+  const exportPanelTitle = String(((note?.frontmatter ?? {}) as Record<string, unknown>).title ?? '')
+  const handleExportPlan = useCallback((plan: ExportPlan) => {
+    setExportPanelOpen(false)
+    const { content, format, options } = plan
+    if (content === 'transcript') {
+      if (format === 'srt' || format === 'vtt' || format === 'ass') {
+        void downloadSubtitles(
+          workspaceId,
+          itemId,
+          format,
+          options.withSpeaker,
+          options.language,
+        ).then(() => {
+          showOperationNotice(`${format.toUpperCase()} 字幕已开始下载`, 'success')
+        }).catch(() => showOperationNotice('字幕导出失败，请重试', 'error'))
+        return
+      }
+      const ext = format
+      void downloadTranscriptDoc(
+        workspaceId,
+        itemId,
+        {
+          format: format as 'txt' | 'md' | 'docx',
+          with_speaker: options.withSpeaker,
+          with_timestamp: options.withTimestamp,
+          language: options.language,
+        },
+        `${exportPanelTitle || '转写'}_转写.${ext}`,
+      ).then(() => {
+        showOperationNotice('转写文档已开始下载', 'success')
+      }).catch(() => showOperationNotice('转写导出失败，请重试', 'error'))
+      return
+    }
+    if (content === 'summary') {
+      void handleDownloadNoteExport(format as ItemNoteExportFormat)
+      return
+    }
+    if (format === 'original' || format === 'audio') {
+      void handleExportOriginalMedia()
+      return
+    }
+    if (format.startsWith('softsub-')) {
+      void handleExportSoftSub(format.replace('softsub-', '') as 'srt' | 'vtt' | 'ass')
+      return
+    }
+    if (format === 'burn') {
+      void handleStartBurn(options.language)
+      return
+    }
+  }, [
+    workspaceId,
+    itemId,
+    exportPanelTitle,
+    showOperationNotice,
+    handleDownloadNoteExport,
+    handleExportOriginalMedia,
+    handleExportSoftSub,
+    handleStartBurn,
+  ])
+
+  // Q3 / D3：统一导出面板 → 云目的地（沿用现有对话框 / Obsidian 直写）
+  const handleExportCloud = useCallback((destination: Exclude<ExportDestination, 'local'>) => {
+    setExportPanelOpen(false)
+    if (destination === 'notion') setNotionExportOpen(true)
+    else if (destination === 'feishu') setFeishuExportOpen(true)
+    else void handleObsidianDirectWrite()
+  }, [handleObsidianDirectWrite])
+
   // ─── loading / error ───
   if (loading) {
     return (
@@ -1881,6 +1955,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     : (fallbackTags.length > 0 ? { custom_tags: fallbackTags } : {})
   const hasTags = hasRenderableTags(tags)
   const activeSummary = summaries.find((x) => x.summary_id === activeSummaryId)
+
   // Q2：顶栏只显示「主笔记」，修订号只出现在版本历史/下拉里
   const versionButtonLabel = activeSummary
     ? `${summaryGroupLabel(summaryGroupKey(activeSummary))} · ${activeSummary.name || `V${activeSummary.version}`}`
@@ -2389,12 +2464,11 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
               className="nibi-note-bar-btn nibi-note-bar-btn--label"
               onClick={() => {
                 setAiToolsOpen(false)
-                setExportSource(null)
-                setExportOpen((v) => !v)
+                setExportPanelOpen(true)
               }}
               title="导出"
             >
-              <Download size={14} /> 导出<ChevronDown size={11} />
+              <Download size={14} /> 导出
             </button>
             {exportOpen && (
               <div className="nibi-note-export-menu">
@@ -3342,6 +3416,21 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         onTextAlignChange={
           isTextNote ? (align) => updateEditorPrefs({ textAlign: align }) : undefined
         }
+      />
+
+      <NoteExportPanel
+        open={exportPanelOpen}
+        onOpenChange={setExportPanelOpen}
+        itemId={itemId}
+        title={title}
+        isVideoNote={isVideoNote}
+        isAudioNote={isAudioNote}
+        hasSpeakerData={speakerIds.length > 0}
+        translationsAvailable={Boolean(
+          note.translations && Object.keys(note.translations).length > 0,
+        )}
+        onExport={handleExportPlan}
+        onCloud={handleExportCloud}
       />
 
       {/* VN4.3 新建/重新生成总结弹窗（从 AI 工具菜单触发） */}
