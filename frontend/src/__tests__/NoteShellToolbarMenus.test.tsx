@@ -418,15 +418,17 @@ describe('Q3 媒体导出与转写选项', () => {
     transcript: [{ t_sec: 0, t_str: '00:00', text: '字幕内容' }],
   }
 
-  it('视频笔记导出面板媒体页包含原视频 / 软字幕 / 烧录', async () => {
+  it('视频笔记导出面板媒体页只有原视频 + 带字幕开关', async () => {
     await renderNoteShell(VIDEO_NOTE)
     fireEvent.click(screen.getByRole('button', { name: '导出' }))
 
     fireEvent.click(screen.getByRole('radio', { name: '媒体文件' }))
     expect(screen.getByRole('radio', { name: '原视频' })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: '视频 + 软字幕 SRT' })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: '视频 + 软字幕 VTT' })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: '烧录字幕视频' })).toBeInTheDocument()
+    // SRT/VTT/烧录不再在媒体页出现，字幕区分放转录页
+    expect(screen.queryByRole('radio', { name: /软字幕/ })).toBeNull()
+    expect(screen.queryByRole('radio', { name: /烧录/ })).toBeNull()
+    const subtitle = screen.getByRole('checkbox', { name: '带字幕' }) as HTMLInputElement
+    expect(subtitle).toBeInTheDocument()
     // 媒体文件不支持云笔记目的地
     expect(screen.queryByRole('radio', { name: 'Notion' })).toBeNull()
     expect(screen.queryByRole('radio', { name: 'Obsidian' })).toBeNull()

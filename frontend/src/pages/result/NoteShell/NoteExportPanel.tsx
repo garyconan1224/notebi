@@ -65,7 +65,6 @@ const SUMMARY_FORMATS = [
   { value: 'docx', label: 'Word' },
   { value: 'pptx', label: 'PPT' },
   { value: 'long_image', label: '长图' },
-  { value: 'obsidian', label: 'Obsidian 包' },
 ]
 
 function readStoredState(itemId: string): StoredState | null {
@@ -95,6 +94,7 @@ export function NoteExportPanel({
   const [format, setFormat] = useState('srt')
   const [withSpeaker, setWithSpeaker] = useState(false)
   const [withTimestamp, setWithTimestamp] = useState(true)
+  const [withSubtitle, setWithSubtitle] = useState(false)
   const [language, setLanguage] = useState<ExportLanguage>('bilingual')
   const [destination, setDestination] = useState<ExportDestination>('local')
 
@@ -132,13 +132,7 @@ export function NoteExportPanel({
   const mediaFormats = content === 'media'
     ? isAudioNote
       ? [{ value: 'audio', label: '仅音频文件' }]
-      : [
-          { value: 'original', label: '原视频' },
-          { value: 'softsub-srt', label: '视频 + 软字幕 SRT' },
-          { value: 'softsub-vtt', label: '视频 + 软字幕 VTT' },
-          { value: 'softsub-ass', label: '视频 + 软字幕 ASS' },
-          { value: 'burn', label: '烧录字幕视频' },
-        ]
+      : [{ value: 'original', label: '原视频' }]
     : []
 
   const filename = useMemo(() => {
@@ -152,22 +146,26 @@ export function NoteExportPanel({
       return `${safeTitle}_总结.${format}`
     }
     if (content === 'media') {
+      if (withSubtitle && format === 'original') return `${safeTitle}_视频_${LANGUAGE_LABEL[effectiveLanguage]}字幕.zip`
       if (format === 'original') return `${safeTitle}_视频_原始.mp4`
       if (format === 'audio') return `${safeTitle}_音频.m4a`
       if (format === 'burn') return `${safeTitle}_视频_${LANGUAGE_LABEL[effectiveLanguage]}字幕.mp4`
       return `${safeTitle}_视频_${LANGUAGE_LABEL[effectiveLanguage]}字幕.zip`
     }
     return safeTitle
-  }, [title, content, format, effectiveLanguage, withSpeaker])
+  }, [title, content, format, effectiveLanguage, withSpeaker, withSubtitle])
 
   const selectFormat = (value: string) => {
     setFormat(value)
   }
 
   const handlePrimary = () => {
+    const effectiveFormat = content === 'media' && format === 'original' && withSubtitle
+      ? 'softsub-srt'
+      : format
     const plan: ExportPlan = {
       content,
-      format,
+      format: effectiveFormat,
       options: {
         withSpeaker,
         withTimestamp,
@@ -308,6 +306,7 @@ export function NoteExportPanel({
           )}
         </div>
 
+        {content !== 'summary' && (
         <div className="nibi-export-step">
           <div className="nibi-export-step-label">3 · 选项</div>
           <div className="nibi-export-options">
@@ -335,8 +334,17 @@ export function NoteExportPanel({
                 )}
               </>
             )}
-            {content !== 'summary' && (
-              <div className="nibi-export-language" role="radiogroup" aria-label="语言">
+            {content === 'media' && isVideoNote && (
+              <label>
+                <input
+                  type="checkbox"
+                  checked={withSubtitle}
+                  onChange={(event) => setWithSubtitle(event.target.checked)}
+                />
+                带字幕
+              </label>
+            )}
+            <div className="nibi-export-language" role="radiogroup" aria-label="语言">
                 {(['bilingual', 'translation', 'source'] as ExportLanguage[]).map((value) => (
                   <button
                     key={value}
@@ -351,9 +359,9 @@ export function NoteExportPanel({
                   </button>
                 ))}
               </div>
-            )}
           </div>
         </div>
+        )}
 
         <div className="nibi-export-step">
           <div className="nibi-export-step-label">4 · 目的地</div>
