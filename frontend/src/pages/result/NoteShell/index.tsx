@@ -1140,6 +1140,15 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     })
   }, [note])
 
+  // Q3：问 AI 回答中的【素材 N】点击后跳到当前素材的转录证据区并短暂高亮。
+  const handleOpenChatSource = useCallback(() => {
+    const wrap = document.querySelector<HTMLElement>('.nibi-note-transcript-wrap')
+    if (!wrap) return
+    wrap.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    wrap.classList.add('is-source-flash')
+    window.setTimeout(() => wrap.classList.remove('is-source-flash'), 1600)
+  }, [])
+
   // Q2 沉浸式：Esc 退出；退出后焦点回到触发按钮。
   const closeImmersive = useCallback(() => {
     setImmersiveOpen(false)
@@ -3325,6 +3334,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
           onOpenChange={setAskAiOpen}
           onWidthChange={setAskAiWidth}
           onSaveAnswer={handleSaveAiAnswer}
+          onOpenSource={handleOpenChatSource}
           hideTrigger
         />
       )}
