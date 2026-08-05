@@ -1,3 +1,4 @@
+import '@/locales/i18n'
 import { vi } from 'vitest'
 
 const createStorage = (): Storage => {

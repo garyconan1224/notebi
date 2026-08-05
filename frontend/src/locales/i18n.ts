@@ -2,9 +2,11 @@ import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 
 import zhCommon from './zh-CN/common.json'
+import zhNote from './zh-CN/note.json'
 import zhSettings from './zh-CN/settings.json'
 import zhProviders from './zh-CN/providers.json'
 import enCommon from './en-US/common.json'
+import enNote from './en-US/note.json'
 import enSettings from './en-US/settings.json'
 import enProviders from './en-US/providers.json'
 
@@ -29,12 +31,12 @@ const resolveInitialLang = (): LangCode => {
 
 void i18n.use(initReactI18next).init({
   resources: {
-    'zh-CN': { common: zhCommon, settings: zhSettings, providers: zhProviders },
-    'en-US': { common: enCommon, settings: enSettings, providers: enProviders },
+    'zh-CN': { common: zhCommon, settings: zhSettings, providers: zhProviders, note: zhNote },
+    'en-US': { common: enCommon, settings: enSettings, providers: enProviders, note: enNote },
   },
   lng: resolveInitialLang(),
   fallbackLng: 'en-US',
-  ns: ['common', 'settings', 'providers'],
+  ns: ['common', 'settings', 'providers', 'note'],
   defaultNS: 'common',
   interpolation: { escapeValue: false },
   returnNull: false,
