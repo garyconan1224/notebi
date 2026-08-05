@@ -1,6 +1,7 @@
 import { Check, CheckCircle2, Clock, FileAudio, FileText, Image as ImageIcon, Layers, Link2, PlayCircle, Search, Upload, Video } from 'lucide-react'
 import type { BatchSourceItem, BatchSourceResolveResponse, SniffResult } from '@/services/workspaces'
 import type { LibraryItem } from '@/services/library'
+import { decodeProxySrc } from './linkCover'
 
 /* ─── helpers (shared with modal) ─── */
 
@@ -449,8 +450,16 @@ export function MaterialSourcePanel({
                 referrerPolicy="no-referrer"
                 onError={(e) => {
                   const img = e.currentTarget
-                  const fallback = previewImageFallback(img.src)
-                  if (fallback && img.dataset.fallbackApplied !== 'true') {
+                  if (img.dataset.fallbackApplied === 'true') {
+                    img.style.visibility = 'hidden'
+                    img.parentElement?.classList.add('sniff-thumb--fallback')
+                    return
+                  }
+                  const original = decodeProxySrc(img.src)
+                  const fallback =
+                    previewImageFallback(original) ||
+                    (original !== img.src ? original : '')
+                  if (fallback) {
                     img.dataset.fallbackApplied = 'true'
                     img.src = fallback
                     return

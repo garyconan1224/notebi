@@ -42,6 +42,7 @@ import {
   libraryItemKey,
   normalizePreviewImageUrl,
 } from './MaterialSourcePanel'
+import { previewSrcForProxy } from './linkCover'
 import { WorkspacePicker } from './WorkspacePicker'
 import { NoteSettingsPanel, type NoteMediaKind, type SpeakerCountChoice, type StyleOption } from './NoteSettingsPanel'
 
@@ -432,7 +433,12 @@ export function AddMaterialModal({
   // 稳定原始值供 link-preview effect 依赖（避免 effectiveSniff 对象身份抖动）
   const sniffThumbnail = effectiveSniff?.thumbnail ?? null
   const sniffTitle = effectiveSniff?.title ?? null
-  const previewThumbUrl = normalizePreviewImageUrl(sniffThumbnail || coverUrl)
+  // 图片链接没有封面时，把链接本身当作封面；远程封面统一走后端代理，规避防盗链。
+  const previewThumbUrl = previewSrcForProxy(
+    effectiveSniff?.primary_type === 'image'
+      ? sniffThumbnail || coverUrl || effectiveUrl
+      : sniffThumbnail || coverUrl,
+  )
   const workspaceSummary = workspaceIds[0] ? getWorkspaceLabel(workspaceIds[0], '当前合集') : ''
   const sourceSummary = isLocalFile
     ? (localFileName || '本地文件')

@@ -173,6 +173,41 @@ describe('AddMaterialModal', () => {
     expect(document.querySelector('[data-slot="dialog-content"]')?.className).toContain('!max-w-none')
   })
 
+  it('图片链接无封面时用链接本身作为封面并经代理展示', async () => {
+    fetchLinkPreviewMock.mockResolvedValue({
+      title: null,
+      description: null,
+      image_url: null,
+      source: 'fallback',
+    })
+    render(
+      <AddMaterialModal
+        open
+        onOpenChange={vi.fn()}
+        workspaceIds={[]}
+        urlValue="https://example.com/photo.png"
+        sniffResult={{
+          primary_type: 'image',
+          possible_types: ['image'],
+          platform: 'example',
+          title: '示例图片',
+          thumbnail: null,
+          content_type_header: 'image/png',
+        }}
+      />,
+    )
+
+    const img = await waitFor(() => {
+      const node = document.querySelector('.sniff-thumb img')
+      if (!node) throw new Error('封面未渲染')
+      return node as HTMLImageElement
+    })
+    expect(img.getAttribute('src')).toContain('/api/image_proxy?url=')
+    expect(decodeURIComponent(img.getAttribute('src') ?? '')).toContain(
+      'https://example.com/photo.png',
+    )
+  })
+
   it('切换到音频笔记后从 style_audio 加载风格模板', async () => {
     render(
       <AddMaterialModal
@@ -514,7 +549,10 @@ describe('AddMaterialModal', () => {
 
     await waitFor(() => {
       const image = document.body.querySelector('.sniff-thumb img') as HTMLImageElement | null
-      expect(image?.getAttribute('src')).toBe('https://i1.hdslb.com/bfs/archive/cover.jpg@100w_100h_1c.png')
+      expect(image?.getAttribute('src')).toBe(
+        '/api/image_proxy?url=' +
+          encodeURIComponent('https://i1.hdslb.com/bfs/archive/cover.jpg@100w_100h_1c.png'),
+      )
     })
   })
 
