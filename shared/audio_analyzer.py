@@ -276,10 +276,14 @@ def run_diarization(
 def export_srt(
     segments: List[Dict[str, Any]],
     speaker_map: Optional[Dict[Tuple[float, float], str]] = None,
+    translations: Optional[List[str]] = None,
+    language: str = "bilingual",
+    with_speaker: bool = True,
 ) -> str:
     """transcript_segments → .srt 字符串。
 
     每个 segment 必须含 start / end / text；可选 speaker。speaker_map 用 (start,end) 元组覆盖。
+    language: bilingual（原文+翻译）/ translation（仅翻译，缺失回退原文）/ source（仅原文）。
     """
     lines: List[str] = []
     for i, seg in enumerate(segments, start=1):
@@ -296,7 +300,11 @@ def export_srt(
             speaker = speaker_map.get((start, end))
         if speaker is None:
             speaker = seg.get("speaker")
-        line_text = f"[{speaker}] {text}" if speaker else text
+        translation = ""
+        if translations and 0 <= i - 1 < len(translations):
+            translation = str(translations[i - 1] or "").strip()
+        body = _subtitle_body(text, translation, language)
+        line_text = f"[{speaker}] {body}" if (speaker and with_speaker) else body
         lines.append(str(i))
         lines.append(f"{_fmt_srt_time(start)} --> {_fmt_srt_time(end)}")
         lines.append(line_text)
@@ -405,10 +413,13 @@ def export_transcript_by_speaker(
 def export_vtt(
     segments: List[Dict[str, Any]],
     speaker_map: Optional[Dict[Tuple[float, float], str]] = None,
+    translations: Optional[List[str]] = None,
+    language: str = "bilingual",
+    with_speaker: bool = True,
 ) -> str:
     """transcript_segments → WebVTT 字符串。"""
     lines: List[str] = ["WEBVTT", ""]
-    for seg in segments:
+    for i, seg in enumerate(segments, start=1):
         try:
             start = float(seg.get("start") or 0.0)
             end = float(seg.get("end") or start)
@@ -422,7 +433,11 @@ def export_vtt(
             speaker = speaker_map.get((start, end))
         if speaker is None:
             speaker = seg.get("speaker")
-        line_text = f"<v {speaker}>{text}</v>" if speaker else text
+        translation = ""
+        if translations and 0 <= i - 1 < len(translations):
+            translation = str(translations[i - 1] or "").strip()
+        body = _subtitle_body(text, translation, language)
+        line_text = f"<v {speaker}>{body}</v>" if (speaker and with_speaker) else body
         lines.append(f"{_fmt_vtt_time(start)} --> {_fmt_vtt_time(end)}")
         lines.append(line_text)
         lines.append("")
@@ -433,11 +448,14 @@ def export_ass(
     segments: List[Dict[str, Any]],
     title: str = "NoteBi Export",
     speaker_map: Optional[Dict[Tuple[float, float], str]] = None,
+    translations: Optional[List[str]] = None,
+    language: str = "bilingual",
+    with_speaker: bool = True,
 ) -> str:
     """transcript_segments → ASS (Advanced SubStation Alpha) 字符串。"""
     header = _ASS_HEADER.format(title=title)
     lines: List[str] = [header]
-    for seg in segments:
+    for i, seg in enumerate(segments, start=1):
         try:
             start = float(seg.get("start") or 0.0)
             end = float(seg.get("end") or start)
@@ -451,9 +469,23 @@ def export_ass(
             speaker = speaker_map.get((start, end))
         if speaker is None:
             speaker = seg.get("speaker")
-        line_text = f"{speaker}: {text}" if speaker else text
+        translation = ""
+        if translations and 0 <= i - 1 < len(translations):
+            translation = str(translations[i - 1] or "").strip()
+        body = _subtitle_body(text, translation, language)
+        line_text = f"{speaker}: {body}" if (speaker and with_speaker) else body
         lines.append(f"Dialogue: 0,{_fmt_ass_time(start)},{_fmt_ass_time(end)},Default,,0,0,0,,{line_text}")
     return "\n".join(lines)
+
+
+def _subtitle_body(text: str, translation: str, language: str) -> str:
+    """按 language 组合原文与翻译；缺失时回退（D8）。"""
+    if language == "source":
+        return text
+    if language == "translation":
+        return translation or text
+    # bilingual：原文 + 换行 + 翻译（无翻译时只保留原文）
+    return f"{text}\n{translation}" if translation else text
 
 
 _ASS_HEADER = """[Script Info]

@@ -148,24 +148,98 @@ def _build_transcript_txt(transcript: Any) -> str:
 
 
 def _build_srt(transcript: List[Dict[str, Any]]) -> str:
-    """把 transcript 列表转为 SRT 格式字符串。"""
+    """把 transcript 列表转为 SRT 格式字符串。
+
+    优先使用真实 start/end；缺 end 时用下一段 start，最后一段 +5s（不再 t_sec+3 假区间）。
+    """
     lines: list[str] = []
     for i, entry in enumerate(transcript, start=1):
-        t_sec = entry.get("t_sec", 0)
+        start_sec = float(entry.get("start") if entry.get("start") is not None else entry.get("t_sec") or 0)
+        end_sec = float(entry.get("end") if entry.get("end") is not None else (
+            transcript[i]["start"] if i < len(transcript) and transcript[i].get("start") is not None
+            else transcript[i].get("t_sec") if i < len(transcript) else None
+        ) or (start_sec + 5.0))
         text = entry.get("edited_text") or entry.get("text") or ""
         # SRT 时间格式: HH:MM:SS,mmm --> HH:MM:SS,mmm
-        h = t_sec // 3600
-        m = (t_sec % 3600) // 60
-        s = t_sec % 60
-        start_ts = f"{h:02d}:{m:02d}:{s:02d},000"
-        # 结束时间 = 开始 + 3 秒（粗略）
-        end_sec = t_sec + 3
-        eh = end_sec // 3600
-        em = (end_sec % 3600) // 60
-        es = end_sec % 60
-        end_ts = f"{eh:02d}:{em:02d}:{es:02d},000"
+        start_ms = max(0, int(round(start_sec * 1000)))
+        end_ms = max(0, int(round(end_sec * 1000)))
+        start_ts = (
+            f"{start_ms // 3600000:02d}:{(start_ms % 3600000) // 60000:02d}:"
+            f"{(start_ms // 1000) % 60:02d},{start_ms % 1000:03d}"
+        )
+        end_ts = (
+            f"{end_ms // 3600000:02d}:{(end_ms % 3600000) // 60000:02d}:"
+            f"{(end_ms // 1000) % 60:02d},{end_ms % 1000:03d}"
+        )
         lines.append(f"{i}\n{start_ts} --> {end_ts}\n{text}\n")
     return "\n".join(lines)
+
+
+def _flat_translation_lines(results: Dict[str, Any], count: int) -> List[str]:
+    """把 results.translations[target_lang]（与转写行对齐的列表）拍平成字符串数组。"""
+    translations = results.get("translations") or {}
+    if not isinstance(translations, dict):
+        return []
+    for _lang, lines in translations.items():
+        if not isinstance(lines, list):
+            continue
+        flat: List[str] = []
+        for line in lines[:count]:
+            if isinstance(line, dict):
+                flat.append(str(line.get("text") or line.get("translated") or ""))
+            else:
+                flat.append(str(line or ""))
+        return flat
+    return []
+
+
+def _build_transcript_document(
+    segments: List[Dict[str, Any]],
+    fmt: str,
+    with_speaker: bool,
+    with_timestamp: bool,
+    translations: List[str],
+    language: str,
+) -> str:
+    """把转写渲染成 TXT / Markdown 文档（支持说话人、时间轴、双语）。"""
+    rows: List[str] = []
+    for i, seg in enumerate(segments):
+        text = str(seg.get("edited_text") or seg.get("text") or "").strip()
+        if not text:
+            continue
+        translation = translations[i] if i < len(translations) else ""
+        if language == "translation":
+            body = translation or text
+        elif language == "bilingual":
+            body = f"{text}\n{translation}" if translation else text
+        else:
+            body = text
+        prefix = ""
+        if with_timestamp:
+            start = float(seg.get("start") or seg.get("t_sec") or 0)
+            prefix += f"[{int(start) // 60:02d}:{int(start) % 60:02d}] "
+        if with_speaker and seg.get("speaker"):
+            prefix += f"[{seg['speaker']}] "
+        rows.append(f"{prefix}{body}")
+    if fmt == "md":
+        return "\n\n".join(rows)
+    return "\n".join(rows)
+
+
+def _build_transcript_docx(title: str, content: str) -> bytes:
+    """python-docx 生成 Word 文档字节。"""
+    from docx import Document
+
+    doc = Document()
+    doc.add_heading(title or "转写文本", level=0)
+    for paragraph in content.split("\n"):
+        if paragraph.strip():
+            doc.add_paragraph(paragraph)
+    import io as _io
+
+    buf = _io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
 
 
 def _sanitize_zip_prefix(name: str) -> str:
@@ -733,12 +807,21 @@ def export_transcript(
     workspace_id: str,
     item_id: str,
     mode: str = "article",
+    format: str = "txt",
+    with_speaker: bool = False,
+    with_timestamp: bool = True,
+    language: str = "bilingual",
 ) -> StreamingResponse:
-    """导出无时间轴文章，或按重命名后说话人归组的无时间轴文章。"""
+    """导出转写文本：TXT / Markdown / Word，支持说话人、时间轴与语言选项。"""
     if mode not in _TRANSCRIPT_MODE_SUFFIX:
         raise HTTPException(
             status_code=400,
             detail=f"unsupported mode: {mode!r}, use article/speaker_grouped",
+        )
+    if format not in ("txt", "md", "docx"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"unsupported format: {format!r}, use txt/md/docx",
         )
 
     rec = _store.get(workspace_id)
@@ -754,8 +837,27 @@ def export_transcript(
     raw = results.get("segments") or results.get("transcript_segments") or results.get("transcript") or []
     segments = _normalize_segments(raw)
     fallback = results.get("transcript") if isinstance(results.get("transcript"), str) else ""
+    translations = _flat_translation_lines(results, len(segments))
     if mode == "article":
-        content = export_transcript_article(segments) or _build_transcript_txt(fallback)
+        if format == "docx":
+            text_content = _build_transcript_document(
+                segments, "txt", with_speaker, with_timestamp, translations, language,
+            ) or _build_transcript_txt(fallback)
+            blob = _build_transcript_docx(item.name or "转写文本", text_content)
+            safe_title = (item.name or "untitled").replace("/", "_").replace("\\", "_")[:50]
+            filename = f"{safe_title}-{_TRANSCRIPT_MODE_SUFFIX[mode]}.docx"
+            return StreamingResponse(
+                io.BytesIO(blob),
+                media_type=(
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                ),
+                headers={
+                    "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+                },
+            )
+        content = _build_transcript_document(
+            segments, format, with_speaker, with_timestamp, translations, language,
+        ) or _build_transcript_txt(fallback)
     else:
         content = export_transcript_by_speaker(
             segments,
@@ -766,10 +868,12 @@ def export_transcript(
 
     content = _with_transcript_metadata(item.name or "未命名内容", mode, content)
     safe_title = (item.name or "untitled").replace("/", "_").replace("\\", "_")[:50]
-    filename = f"{safe_title}-{_TRANSCRIPT_MODE_SUFFIX[mode]}.txt"
+    ext = "md" if format == "md" else "txt"
+    filename = f"{safe_title}-{_TRANSCRIPT_MODE_SUFFIX[mode]}.{ext}"
+    media_type = "text/markdown; charset=utf-8" if format == "md" else "text/plain; charset=utf-8"
     return StreamingResponse(
         io.BytesIO(content.encode("utf-8")),
-        media_type="text/plain; charset=utf-8",
+        media_type=media_type,
         headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
         },
@@ -781,10 +885,14 @@ def export_subtitles(
     workspace_id: str,
     item_id: str,
     format: str = "srt",
+    language: str = "bilingual",
+    with_speaker: bool = True,
 ) -> StreamingResponse:
-    """导出字幕文件（独立 .srt / .vtt / .ass 下载）。"""
+    """导出字幕文件（独立 .srt / .vtt / .ass 下载），支持双语与说话人开关。"""
     if format not in ("srt", "vtt", "ass"):
         raise HTTPException(status_code=400, detail=f"unsupported format: {format!r}, use srt/vtt/ass")
+    if language not in ("bilingual", "translation", "source"):
+        raise HTTPException(status_code=400, detail="language must be bilingual/translation/source")
 
     rec = _store.get(workspace_id)
     if rec is None:
@@ -812,6 +920,8 @@ def export_subtitles(
             if original and original in raw_speaker_map:
                 seg["speaker"] = raw_speaker_map[original]
 
+    translations = _flat_translation_lines(results, len(segments))
+
     # 无 transcript 时返回空 SRT（不走 demo fixture，避免 visual_only 路径数据串扰）
     if not segments:
         empty_srt = "1\n00:00:00,000 --> 00:00:00,000\n\n"
@@ -827,13 +937,29 @@ def export_subtitles(
     title = item.name or "untitled"
 
     if format == "srt":
-        content = export_srt(segments)
+        content = export_srt(
+            segments,
+            translations=translations,
+            language=language,
+            with_speaker=with_speaker,
+        )
         ext = "srt"
     elif format == "vtt":
-        content = export_vtt(segments)
+        content = export_vtt(
+            segments,
+            translations=translations,
+            language=language,
+            with_speaker=with_speaker,
+        )
         ext = "vtt"
     else:
-        content = export_ass(segments, title=title)
+        content = export_ass(
+            segments,
+            title=title,
+            translations=translations,
+            language=language,
+            with_speaker=with_speaker,
+        )
         ext = "ass"
 
     safe_title = title.replace("/", "_").replace("\\", "_").replace(" ", "_")[:50]

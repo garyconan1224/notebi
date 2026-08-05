@@ -104,13 +104,32 @@ def build_subtitle_content(
     segments: List[Dict[str, Any]],
     subtitle_format: str,
     title: str,
+    translations: Optional[List[str]] = None,
+    language: str = "bilingual",
+    with_speaker: bool = True,
 ) -> str:
     if subtitle_format == "srt":
-        return export_srt(segments)
+        return export_srt(
+            segments,
+            translations=translations,
+            language=language,
+            with_speaker=with_speaker,
+        )
     if subtitle_format == "vtt":
-        return export_vtt(segments)
+        return export_vtt(
+            segments,
+            translations=translations,
+            language=language,
+            with_speaker=with_speaker,
+        )
     if subtitle_format == "ass":
-        return export_ass(segments, title=title)
+        return export_ass(
+            segments,
+            title=title,
+            translations=translations,
+            language=language,
+            with_speaker=with_speaker,
+        )
     raise MediaExportError(400, f"不支持的字幕格式：{subtitle_format}（可选 srt/vtt/ass）")
 
 

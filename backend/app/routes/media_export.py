@@ -158,6 +158,7 @@ def media_export(
     item_id: str,
     kind: Literal["original", "softsub"] = "original",
     subtitle_format: Literal["srt", "vtt", "ass"] = "srt",
+    language: Literal["bilingual", "translation", "source"] = "bilingual",
 ):
     """kind=original：流式复制本地媒体（绝不重编码）。
     kind=softsub：媒体 + 字幕打包 zip。"""
@@ -180,7 +181,12 @@ def media_export(
             detail="没有可用字幕：该素材尚未完成转写。可先跑转写，或仅导出原视频。",
         )
     try:
-        content = build_subtitle_content(segments, subtitle_format, item.name or "media")
+        content = build_subtitle_content(
+            segments,
+            subtitle_format,
+            item.name or "media",
+            language=language,
+        )
     except MediaExportError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     blob = build_softsub_zip(media_path, content, subtitle_format, base_name)
@@ -196,6 +202,7 @@ class BurnRequest(BaseModel):
     subtitle_format: Literal["srt", "ass"] = "srt"
     font_name: str = Field(default="", max_length=120)
     font_size: int = Field(default=0, ge=0, le=200)
+    language: Literal["bilingual", "translation", "source"] = "bilingual"
 
 
 @router.post("/{workspace_id}/items/{item_id}/media-export/burn", status_code=202)
@@ -238,7 +245,12 @@ def start_burn(workspace_id: str, item_id: str, body: BurnRequest):
     )
     _pipeline_runner.store.create(record)
 
-    srt_content = build_subtitle_content(segments, body.subtitle_format, item.name or "media")
+    srt_content = build_subtitle_content(
+        segments,
+        body.subtitle_format,
+        item.name or "media",
+        language=body.language,
+    )
     suffix = ".srt" if body.subtitle_format == "srt" else ".ass"
     tmp_dir = Path(DATA_DIR) / "tmp" / "burn"
     tmp_dir.mkdir(parents=True, exist_ok=True)
