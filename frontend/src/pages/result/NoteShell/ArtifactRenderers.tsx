@@ -6,8 +6,8 @@
  * - action_items / key_cards / flashcards / glossary / timeline：语义组件；
  * - 旧产物（无 content_json）：由调用方回退 Markdown 并标注「旧版产物」。
  */
-import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 
 export interface MindMapNode {
   id: string
@@ -176,45 +176,76 @@ export function exportMindMapPng(root: MindMapNode, title: string): Promise<void
   })
 }
 
-/* ── 思维导图交互组件（HTML 可折叠树）───────────────────────── */
+/* ── 思维导图交互组件（SVG 节点 + 连线画布）─────────────────── */
 
-function MindMapBranch({ node, depth }: { node: MindMapNode; depth: number }) {
-  const [open, setOpen] = useState(depth < 2)
-  const hasChildren = (node.children?.length ?? 0) > 0
-  return (
-    <li className="mindmap-node">
-      <div className="mindmap-node-row" data-depth={Math.min(depth, 3)}>
-        {hasChildren ? (
-          <button
-            type="button"
-            className="mindmap-toggle"
-            aria-expanded={open}
-            aria-label={open ? `折叠 ${node.text}` : `展开 ${node.text}`}
-            onClick={() => setOpen((value) => !value)}
-          >
-            {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-          </button>
-        ) : (
-          <span className="mindmap-leaf-dot" aria-hidden="true" />
-        )}
-        <span className="mindmap-node-text">{node.text}</span>
-      </div>
-      {hasChildren && open && (
-        <ul className="mindmap-children">
-          {node.children.map((child) => (
-            <MindMapBranch key={child.id} node={child} depth={depth + 1} />
-          ))}
-        </ul>
-      )}
-    </li>
-  )
+function pruneCollapsed(node: MindMapNode, collapsed: Set<string>): MindMapNode {
+  return {
+    ...node,
+    children: collapsed.has(node.id)
+      ? []
+      : (node.children || []).map((child) => pruneCollapsed(child, collapsed)),
+  }
 }
 
 export function MindMapTree({ data, title }: { data: MindMapData; title: string }) {
   const [scale, setScale] = useState(1)
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [focusedId, setFocusedId] = useState<string | null>(null)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const viewportRef = useRef<HTMLDivElement | null>(null)
+  const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null)
+
   const zoom = (delta: number) => {
     setScale((value) => Math.max(0.6, Math.min(1.6, Number((value + delta).toFixed(1)))))
   }
+
+  useEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault()
+      zoom(event.deltaY < 0 ? 0.1 : -0.1)
+    }
+    viewport.addEventListener('wheel', onWheel, { passive: false })
+    return () => viewport.removeEventListener('wheel', onWheel)
+  }, [])
+
+  const { nodes, width, height } = useMemo(() => {
+    const pruned = pruneCollapsed(data.root, collapsed)
+    return layoutMindMap(pruned)
+  }, [data, collapsed])
+
+  const hasChildrenMap = useMemo(() => {
+    const map = new Map<string, boolean>()
+    const walk = (node: MindMapNode) => {
+      map.set(node.id, (node.children?.length ?? 0) > 0)
+      ;(node.children || []).forEach(walk)
+    }
+    walk(data.root)
+    return map
+  }, [data])
+
+  const nodeById = useMemo(() => {
+    const map = new Map<string, MindMapNode>()
+    const walk = (node: MindMapNode) => {
+      map.set(node.id, node)
+      ;(node.children || []).forEach(walk)
+    }
+    walk(data.root)
+    return map
+  }, [data])
+
+  const toggleNode = (node: MindMapNode) => {
+    setFocusedId(node.id)
+    if (!node.children || node.children.length === 0) return
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (next.has(node.id)) next.delete(node.id)
+      else next.add(node.id)
+      return next
+    })
+  }
+
   return (
     <div className="mindmap-wrap">
       <div className="mindmap-actions">
@@ -225,15 +256,96 @@ export function MindMapTree({ data, title }: { data: MindMapData; title: string 
         <button type="button" onClick={() => exportMindMapPng(data.root, title)}>导出 PNG</button>
         <button type="button" onClick={() => exportMindMapSvg(data.root, title)}>导出 SVG</button>
       </div>
-      <div className="mindmap-viewport">
+      <div
+        ref={viewportRef}
+        className="mindmap-viewport"
+        onPointerDown={(event) => {
+          dragRef.current = {
+            startX: event.clientX,
+            startY: event.clientY,
+            panX: pan.x,
+            panY: pan.y,
+          }
+        }}
+        onPointerMove={(event) => {
+          if (!dragRef.current) return
+          setPan({
+            x: dragRef.current.panX + (event.clientX - dragRef.current.startX),
+            y: dragRef.current.panY + (event.clientY - dragRef.current.startY),
+          })
+        }}
+        onPointerUp={() => {
+          dragRef.current = null
+        }}
+        onPointerLeave={() => {
+          dragRef.current = null
+        }}
+      >
         <div
           className="mindmap-canvas"
           data-testid="mindmap-canvas"
-          style={{ transform: `scale(${scale})` }}
+          style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})` }}
         >
-          <ul className="mindmap-tree">
-            <MindMapBranch node={data.root} depth={0} />
-          </ul>
+          <svg
+            width={width}
+            height={height}
+            viewBox={`0 0 ${width} ${height}`}
+            role="img"
+            aria-label="思维导图画布"
+          >
+            {nodes.map((laid) => {
+              if (!laid.parent) return null
+              const x1 = laid.parent.x + NODE_W
+              const y1 = laid.parent.y + NODE_H / 2
+              const x2 = laid.x
+              const y2 = laid.y + NODE_H / 2
+              const midX = (x1 + x2) / 2
+              return (
+                <path
+                  key={`edge-${laid.node.id}`}
+                  className="mindmap-edge"
+                  d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`}
+                />
+              )
+            })}
+            {nodes.map((laid) => {
+              const hasChildren = hasChildrenMap.get(laid.node.id) ?? false
+              const isCollapsed = collapsed.has(laid.node.id)
+              const isFocused = focusedId === laid.node.id
+              return (
+                <g
+                  key={laid.node.id}
+                  transform={`translate(${laid.x}, ${laid.y})`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={hasChildren ? `${isCollapsed ? '展开' : '折叠'} ${laid.node.text}` : laid.node.text}
+                  aria-expanded={hasChildren ? !isCollapsed : undefined}
+                  className={`mindmap-node${laid.depth === 0 ? ' is-root' : ''}${isFocused ? ' is-focused' : ''}${isCollapsed ? ' is-collapsed' : ''}`}
+                  onClick={() => {
+                    const original = nodeById.get(laid.node.id)
+                    if (original) toggleNode(original)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      const original = nodeById.get(laid.node.id)
+                      if (original) toggleNode(original)
+                    }
+                  }}
+                >
+                  <rect width={NODE_W} height={NODE_H} rx="7" />
+                  <text x={10} y={NODE_H / 2 + 4}>
+                    {truncate(laid.node.text)}
+                  </text>
+                  {hasChildren && (
+                    <text className="mindmap-node-caret" x={NODE_W - 16} y={NODE_H / 2 + 4}>
+                      {isCollapsed ? '▸' : '▾'}
+                    </text>
+                  )}
+                </g>
+              )
+            })}
+          </svg>
         </div>
       </div>
     </div>

@@ -21,7 +21,7 @@ function artifact(patch: Partial<NoteArtifact>): NoteArtifact {
 }
 
 describe('Q4 AI 产物语义渲染', () => {
-  it('思维导图渲染自有树而非 <pre>，支持折叠', () => {
+  it('思维导图渲染节点连线画布而非 <pre>，支持缩放与折叠', () => {
     const contentJson = {
       root: {
         id: 'n0',
@@ -41,11 +41,18 @@ describe('Q4 AI 产物语义渲染', () => {
     expect(screen.getByRole('button', { name: '导出 PNG' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '导出 SVG' })).toBeInTheDocument()
     const canvas = screen.getByTestId('mindmap-canvas')
-    expect(canvas).toHaveStyle({ transform: 'scale(1)' })
+    expect(canvas).toHaveStyle({ transform: 'translate(0px, 0px) scale(1)' })
     fireEvent.click(screen.getByRole('button', { name: '放大思维导图' }))
-    expect(canvas).toHaveStyle({ transform: 'scale(1.1)' })
+    expect(canvas).toHaveStyle({ transform: 'translate(0px, 0px) scale(1.1)' })
     fireEvent.click(screen.getByRole('button', { name: '重置思维导图缩放' }))
-    expect(canvas).toHaveStyle({ transform: 'scale(1)' })
+    expect(canvas).toHaveStyle({ transform: 'translate(0px, 0px) scale(1)' })
+
+    // 节点可折叠：点击「分支一」后叶子隐藏，再点恢复
+    const branch = screen.getByRole('button', { name: /折叠 分支一/ })
+    fireEvent.click(branch)
+    expect(screen.queryByText('叶子')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /展开 分支一/ }))
+    expect(screen.getByText('叶子')).toBeInTheDocument()
   })
 
   it('mindMapToSvg 生成真实 SVG（含节点与连线）', () => {

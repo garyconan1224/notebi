@@ -260,29 +260,16 @@
 .mindmap-zoom-value { min-width: 38px; align-self: center; text-align: center; color: var(--fg3); font-size: 12px; }
 .mindmap-viewport { overflow: auto; min-height: 180px; padding: 4px; }
 .mindmap-canvas { width: max-content; min-width: 100%; transform-origin: top left; transition: transform 120ms ease; }
-.mindmap-tree, .mindmap-children { list-style: none; margin: 0; padding-left: 0; }
-.mindmap-children { padding-left: 20px; border-left: 1px solid var(--bdr); margin-left: 8px; }
-.mindmap-node-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 4px;
-  border-radius: var(--rs, 6px);
-}
-.mindmap-node-row:hover { background: var(--bgalt); }
-.mindmap-node-row[data-depth='0'] .mindmap-node-text { font-weight: 700; color: var(--acc-text, var(--acc)); }
-.mindmap-toggle {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  border: none;
-  background: transparent;
-  color: var(--mut);
-  cursor: pointer;
-}
-.mindmap-leaf-dot { width: 5px; height: 5px; border-radius: 99px; background: var(--bdrs); margin: 0 6px; }
-.mindmap-node-text { font-size: 13px; color: var(--fg2); }
+.mindmap-edge { fill: none; stroke: var(--bdrs, rgba(25, 20, 16, 0.25)); stroke-width: 1.5; }
+.mindmap-node { cursor: pointer; outline: none; }
+.mindmap-node rect { fill: var(--srf, #fff); stroke: var(--bdr, rgba(25, 20, 16, 0.16)); stroke-width: 1.2; }
+.mindmap-node text { font-size: 12.5px; font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: var(--fg2, #3d3929); }
+.mindmap-node.is-root rect { fill: var(--acc, #ff8a36); stroke: var(--acc-text, #e07a1f); }
+.mindmap-node.is-root text { fill: #fff; font-weight: 700; }
+.mindmap-node.is-focused rect { stroke: var(--acc, #ff8a36); stroke-width: 2; }
+.mindmap-node.is-collapsed rect { stroke-dasharray: 4 3; }
+.mindmap-node .mindmap-node-caret { fill: var(--mut, #7c7464); font-size: 10px; }
+.mindmap-node:hover rect { filter: brightness(0.97); }
 
 /* 行动项 */
 .artifact-action-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
