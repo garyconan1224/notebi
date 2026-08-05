@@ -15,6 +15,7 @@ import { SummariesTab } from '@/components/SummariesTab'
 import './tokens.css'
 import './image-result.css'
 import { ItemTagsPanel } from '@/components/workspace/ItemTagsPanel'
+import { previewSrcForProxy } from '@/components/workspace/linkCover'
 
 export default function ImageResultPage() {
   const { workspaceId = '', itemId = '' } = useParams<{ workspaceId: string; itemId: string }>()
@@ -155,7 +156,7 @@ export default function ImageResultPage() {
 
         {/* 原图区域 */}
         <div className="im-viewer">
-          <img src={result.image.image_url} alt={result.image.title} />
+          <img src={previewSrcForProxy(result.image.image_url)} alt={result.image.title} />
         </div>
       </div>
 

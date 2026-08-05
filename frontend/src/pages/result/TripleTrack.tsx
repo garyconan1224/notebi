@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { VideoResultFrame, VideoResultTranscriptLine } from '@/services/workspaces'
+import { previewSrcForProxy } from '@/components/workspace/linkCover'
 // helpers.ts 暴露 nearestFrameIdx，避免本文件同时导出组件 + 工具函数（react-refresh 限制）
 
 /**
@@ -119,7 +120,7 @@ export function TripleTrack({
               >
                 {f.image_path ? (
                   <img
-                    src={f.image_path}
+                    src={previewSrcForProxy(f.image_path)}
                     alt={f.title || f.ts}
                     style={{
                       width: '100%',
