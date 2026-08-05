@@ -1,12 +1,10 @@
 /**
- * Q6：共享正文编辑工具栏（EditorToolbar）。
+ * Q6：正文编辑工具栏（浮动式）。
  *
- * 从文本笔记抽出，视频/音频/图文/文本四类笔记共用同一组件：
- * 段落下拉（正文/H1/H2/H3）+ 粗体/斜体/删除线/链接/引用/
- * 无序/有序/待办/行内代码/代码块/清除格式。
- * 通过 lnEditorStore 作用于当前挂载的 Milkdown 编辑器；
- * 窄窗水平滚动（声明横滚豁免），不覆盖正文。
+ * 在 milkdown 编辑器内选中非空文字时出现在选区上方（Word 风格），不再固定于顶部；
+ * 点击空白、Esc 或滚动后隐藏。通过 lnEditorStore 作用于当前挂载的 Milkdown 编辑器。
  */
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AlignCenter,
   AlignLeft,
@@ -22,6 +20,7 @@ import {
   ListTodo,
   Quote,
   Strikethrough,
+  Underline,
 } from 'lucide-react'
 
 import { useLnEditorStore } from '@/store/lnEditorStore'
@@ -86,6 +85,69 @@ interface EditorToolbarProps {
 export function EditorToolbar({ textAlign, onTextAlignChange }: EditorToolbarProps) {
   const formatting = useLnEditorStore((state) => state.formattingState)
   const applyFormat = useLnEditorStore((state) => state.applyFormat)
+  const wrapSelection = useLnEditorStore((state) => state.wrapSelection)
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
+  const dismissedRef = useRef(false)
+  const lastSelectionKeyRef = useRef('')
+
+  const updatePosition = useCallback(() => {
+    const selection = window.getSelection()
+    if (
+      !selection ||
+      selection.isCollapsed ||
+      selection.rangeCount === 0 ||
+      !selection.anchorNode
+    ) {
+      setPosition(null)
+      return
+    }
+    const selectionKey = `${selection.anchorNode === selection.focusNode ? selection.anchorNode.nodeType : 'x'}:${selection.anchorOffset}:${selection.focusOffset}`
+    if (dismissedRef.current && selectionKey === lastSelectionKeyRef.current) {
+      // Esc 后同一选区不重复弹出
+      setPosition(null)
+      return
+    }
+    dismissedRef.current = false
+    lastSelectionKeyRef.current = selectionKey
+    const anchor = selection.anchorNode.nodeType === Node.ELEMENT_NODE
+      ? (selection.anchorNode as Element)
+      : selection.anchorNode.parentElement
+    if (!anchor?.closest('.note-milkdown')) {
+      setPosition(null)
+      return
+    }
+    const rect = selection.getRangeAt(0).getBoundingClientRect()
+    if (rect.width === 0 && rect.height === 0) {
+      setPosition(null)
+      return
+    }
+    const barWidth = 560
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - barWidth - 8))
+    const top = rect.top < 56 ? rect.bottom + 8 : rect.top - 46
+    setPosition({ top: Math.max(8, top), left })
+  }, [])
+
+  useEffect(() => {
+    const onSelectionChange = () => {
+      // mousedown 工具条本身会先触发 selectionchange，延后一拍避免误关闭
+      window.setTimeout(updatePosition, 0)
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        dismissedRef.current = true
+        setPosition(null)
+      }
+    }
+    const onScroll = () => setPosition(null)
+    document.addEventListener('selectionchange', onSelectionChange)
+    window.addEventListener('keydown', onKeyDown)
+    document.addEventListener('scroll', onScroll, true)
+    return () => {
+      document.removeEventListener('selectionchange', onSelectionChange)
+      window.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('scroll', onScroll, true)
+    }
+  }, [updatePosition])
 
   const handleLink = () => {
     const href = window.prompt('链接地址', 'https://')
@@ -96,8 +158,16 @@ export function EditorToolbar({ textAlign, onTextAlignChange }: EditorToolbarPro
   const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
   const mod = isMac ? '⌘' : 'Ctrl+'
 
+  if (!position) return null
+
   return (
-    <div className="ed-toolbar" role="toolbar" aria-label="正文格式">
+    <div
+      className="ed-toolbar ed-toolbar--floating"
+      role="toolbar"
+      aria-label="正文格式"
+      style={{ top: position.top, left: position.left }}
+      onMouseDown={(event) => event.preventDefault()}
+    >
       <select
         className="ed-toolbar-paragraph"
         aria-label="段落格式"
@@ -116,6 +186,15 @@ export function EditorToolbar({ textAlign, onTextAlignChange }: EditorToolbarPro
       </ToolbarButton>
       <ToolbarButton format="italic" label="斜体" shortcut={`${mod}I`} active={formatting.italic} disabled={!formatting.canItalic}>
         <Italic size={14} />
+      </ToolbarButton>
+      <ToolbarButton
+        label="下划线"
+        onClick={() => {
+          wrapSelection('<u>', '</u>')
+          window.setTimeout(updatePosition, 0)
+        }}
+      >
+        <Underline size={14} />
       </ToolbarButton>
       <ToolbarButton format="strike" label="删除线" active={formatting.strike} disabled={!formatting.canStrike}>
         <Strikethrough size={14} />

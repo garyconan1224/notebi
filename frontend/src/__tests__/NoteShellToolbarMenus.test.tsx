@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -63,7 +63,11 @@ vi.mock('@/pages/result/NoteShell/MilkdownEditor', () => ({
     markdown: string
     registerCommands?: boolean
   }) => (
-    <div data-testid="note-editor" data-register-commands={String(registerCommands)}>
+    <div
+      data-testid="note-editor"
+      data-register-commands={String(registerCommands)}
+      className="note-milkdown"
+    >
       {markdown}
     </div>
   ),
@@ -189,13 +193,38 @@ describe('NoteShell 导出菜单信息架构（阶段 A1）', () => {
   })
 })
 
-describe('NoteShell 文本编辑器工具栏（S4）', () => {
+describe('NoteShell 浮动正文格式工具栏（Q6）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     useLnEditorStore.getState().resetFormatting()
   })
 
-  it('提供四个可访问的可执行格式按钮并反映选中状态', async () => {
+  function selectEditorText() {
+    const editor = screen.getAllByTestId('note-editor')[0]
+    const textNode = editor.firstChild as Node
+    const range = document.createRange()
+    range.selectNodeContents(textNode)
+    ;(range as Range & { getBoundingClientRect: () => DOMRect }).getBoundingClientRect = vi.fn(
+      () =>
+        ({
+          top: 120,
+          left: 160,
+          width: 90,
+          height: 20,
+          right: 250,
+          bottom: 140,
+          x: 160,
+          y: 120,
+          toJSON: () => ({}),
+        }) as DOMRect,
+    )
+    const selection = window.getSelection()
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+    document.dispatchEvent(new Event('selectionchange'))
+  }
+
+  it('选中正文文字后出现浮动工具栏并提供格式操作', async () => {
     const runFormat = vi.fn(() => true)
     useLnEditorStore.getState().setFormatFn(runFormat)
     useLnEditorStore.getState().setFormattingState({
@@ -226,35 +255,55 @@ describe('NoteShell 文本编辑器工具栏（S4）', () => {
     })
 
     await renderNoteShell(TEXT_NOTE)
+    selectEditorText()
 
-    const bold = screen.getByRole('button', { name: '加粗' })
+    const toolbar = await screen.findByRole('toolbar', { name: '正文格式' })
+    const bold = within(toolbar).getByRole('button', { name: '加粗' })
     expect(bold).not.toBeDisabled()
     expect(bold).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: '斜体' })).not.toBeDisabled()
+    expect(within(toolbar).getByRole('button', { name: '斜体' })).not.toBeDisabled()
     // Q6：H2 开关升级为段落下拉（正文/H1/H2/H3）
-    const paragraph = screen.getByRole('combobox', { name: '段落格式' })
+    const paragraph = within(toolbar).getByRole('combobox', { name: '段落格式' })
     expect(paragraph).not.toBeDisabled()
     fireEvent.change(paragraph, { target: { value: '2' } })
     expect(runFormat).toHaveBeenCalledWith('heading', '2')
-    expect(screen.getByRole('button', { name: '无序列表' })).not.toBeDisabled()
-    expect(screen.getByRole('button', { name: '删除线' })).not.toBeDisabled()
-    expect(screen.getByRole('button', { name: '链接' })).not.toBeDisabled()
-    expect(screen.getByRole('button', { name: '引用' })).not.toBeDisabled()
-    expect(screen.getByRole('button', { name: '有序列表' })).not.toBeDisabled()
-    expect(screen.getByRole('button', { name: '待办列表' })).not.toBeDisabled()
-    expect(screen.getByRole('button', { name: '代码块' })).not.toBeDisabled()
-    expect(screen.getByRole('button', { name: '左对齐' })).toHaveAttribute('aria-pressed', 'true')
-    fireEvent.click(screen.getByRole('button', { name: '居中' }))
-    expect(screen.getByRole('button', { name: '居中' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(toolbar).getByRole('button', { name: '下划线' })).not.toBeDisabled()
+    expect(within(toolbar).getByRole('button', { name: '无序列表' })).not.toBeDisabled()
+    expect(within(toolbar).getByRole('button', { name: '删除线' })).not.toBeDisabled()
+    expect(within(toolbar).getByRole('button', { name: '链接' })).not.toBeDisabled()
+    expect(within(toolbar).getByRole('button', { name: '引用' })).not.toBeDisabled()
+    expect(within(toolbar).getByRole('button', { name: '有序列表' })).not.toBeDisabled()
+    expect(within(toolbar).getByRole('button', { name: '待办列表' })).not.toBeDisabled()
+    expect(within(toolbar).getByRole('button', { name: '代码块' })).not.toBeDisabled()
+    expect(within(toolbar).getByRole('button', { name: '左对齐' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(within(toolbar).getByRole('button', { name: '居中' }))
+    expect(within(toolbar).getByRole('button', { name: '居中' })).toHaveAttribute('aria-pressed', 'true')
     expect(
       screen.getAllByTestId('note-editor').map(
         (editor) => editor.getAttribute('data-register-commands'),
       ),
     ).toEqual(['true', 'false'])
 
-    fireEvent.mouseDown(screen.getByRole('button', { name: '无序列表' }))
-    fireEvent.click(screen.getByRole('button', { name: '无序列表' }))
+    fireEvent.mouseDown(within(toolbar).getByRole('button', { name: '无序列表' }))
+    fireEvent.click(within(toolbar).getByRole('button', { name: '无序列表' }))
     expect(runFormat).toHaveBeenCalledWith('bulletList')
+  })
+
+  it('未选中文字时不显示浮动工具栏', async () => {
+    await renderNoteShell(TEXT_NOTE)
+    expect(screen.queryByRole('toolbar', { name: '正文格式' })).toBeNull()
+  })
+
+  it('Esc 关闭浮动工具栏', async () => {
+    await renderNoteShell(TEXT_NOTE)
+    selectEditorText()
+    const toolbar = await screen.findByRole('toolbar', { name: '正文格式' })
+    expect(toolbar).toBeInTheDocument()
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await waitFor(() =>
+      expect(screen.queryByRole('toolbar', { name: '正文格式' })).toBeNull(),
+    )
   })
 })
 

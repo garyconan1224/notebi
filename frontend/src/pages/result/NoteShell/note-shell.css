@@ -595,6 +595,52 @@
   font-weight: 700;
 }
 
+.nibi-note-pref-hint {
+  color: var(--mut, #7c7464);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.nibi-floating-format-bar {
+  position: fixed;
+  z-index: 220;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.1));
+  border-radius: 10px;
+  background: var(--bg, #fff);
+  box-shadow: var(--shadow-md);
+}
+
+.nibi-floating-format-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--fg2, #3d3929);
+  cursor: pointer;
+}
+
+.nibi-floating-format-btn:hover {
+  background: var(--bgalt, #f6f2ea);
+}
+
+.nibi-floating-format-btn.is-active {
+  background: var(--accl, rgba(255, 138, 54, 0.12));
+  color: var(--acc, #ff8a36);
+}
+
+.nibi-floating-format-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
 .nibi-note-pref-segment,
 .nibi-note-pref-swatches,
 .nibi-note-pref-stepper,
@@ -3841,6 +3887,17 @@
   scrollbar-width: thin;
   scrollbar-color: var(--bdrs, rgba(25, 20, 16, 0.12)) transparent;
   flex-shrink: 0;
+}
+
+.ed-toolbar--floating {
+  position: fixed;
+  z-index: 220;
+  max-width: min(92vw, 620px);
+  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.1));
+  border-radius: 10px;
+  background: var(--bg, #fff);
+  box-shadow: var(--shadow-md);
+  white-space: nowrap;
 }
 
 .ed-toolbar-paragraph {

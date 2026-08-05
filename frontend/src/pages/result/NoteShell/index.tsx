@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Bold, BookOpenCheck, Brain, Camera, Check, ChevronDown, Code2, Copy, Download, ExternalLink, FileDown, FileText, FileType, Film, History, Image, Italic, List, MessageCircle, Minus, Pause, Pencil, Play, Plus, Presentation, RefreshCw, Sparkles, Strikethrough, Subtitles, Trash2, Type, Underline, X } from 'lucide-react'
+import { ArrowLeft, BookOpenCheck, Brain, Camera, Check, ChevronDown, Copy, Download, ExternalLink, FileDown, FileText, FileType, Film, History, Image, List, MessageCircle, Minus, Pause, Pencil, Play, Plus, Presentation, RefreshCw, Sparkles, Subtitles, Trash2, Type, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
@@ -41,7 +41,6 @@ import { NewSummaryModal } from '@/components/NewSummaryModal'
 import { FloatingAskAi } from './FloatingAskAi'
 import { AiArtifactPanel } from './AiArtifactPanel'
 import type { NoteArtifactKind } from '@/services/noteArtifacts'
-import { useLnEditorStore } from '@/store/lnEditorStore'
 import { useTaskStore } from '@/store/taskStore'
 import type { TaskRecord } from '@/types/task'
 import { SourceMdModal } from './SourceMdModal'
@@ -1840,19 +1839,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     setEditorPrefs(DEFAULT_EDITOR_PREFS)
   }, [])
 
-  const handleWrapSelection = useCallback((before: string, after: string, label: string) => {
-    const applied = useLnEditorStore.getState().wrapSelection(before, after)
-    if (!applied) {
-      toast.error('未找到可编辑的笔记正文')
-      return
-    }
-    toast.success(`已插入${label}标记`)
-  }, [])
-
-  const handleApplyBold = useCallback(() => {
-    handleWrapSelection('**', '**', '加粗')
-  }, [handleWrapSelection])
-
   // ─── loading / error ───
   if (loading) {
     return (
@@ -2077,7 +2063,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   // ── 提取正文 JSX（视频 / 非视频布局复用）──
   const noteContent = (
     <div className="nibi-note-editor-panel">
-      <EditorToolbar />
       <MilkdownEditor key={milkdownKey} markdown={editingBody} onMarkdownChange={handleEditorChange} onSeek={handleSeek} />
     </div>
   )
@@ -2366,23 +2351,9 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 </div>
                 <div className="nibi-note-pref-group">
                   <span className="nibi-note-pref-label">选中文字</span>
-                  <div className="nibi-note-format-row">
-                    <button className="nibi-note-pref-icon-btn" onClick={handleApplyBold} title="加粗">
-                      <Bold size={13} />
-                    </button>
-                    <button className="nibi-note-pref-icon-btn" onClick={() => handleWrapSelection('*', '*', '斜体')} title="斜体">
-                      <Italic size={13} />
-                    </button>
-                    <button className="nibi-note-pref-icon-btn" onClick={() => handleWrapSelection('<u>', '</u>', '下划线')} title="下划线">
-                      <Underline size={13} />
-                    </button>
-                    <button className="nibi-note-pref-icon-btn" onClick={() => handleWrapSelection('~~', '~~', '删除线')} title="删除线">
-                      <Strikethrough size={13} />
-                    </button>
-                    <button className="nibi-note-pref-icon-btn" onClick={() => handleWrapSelection('`', '`', '行内代码')} title="行内代码">
-                      <Code2 size={13} />
-                    </button>
-                  </div>
+                  <span className="nibi-note-pref-hint">
+                    在正文中选中文字后，格式工具栏会出现在选区旁。
+                  </span>
                 </div>
                 <div className="nibi-note-pref-group">
                   <span className="nibi-note-pref-label">段落对齐</span>
@@ -2830,8 +2801,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 {/* 正文（MilkdownEditor 渲染 h2/h3/p/ul/blockquote → 设计稿 .note-section 自动匹配） */}
                 <div className="note-section" style={{ marginTop: summaries.length > 0 ? 0 : 16 }}>
                   <div className="nibi-note-editor-panel">
-                    {/* Q6：四类笔记共用同一编辑工具栏 */}
-                    <EditorToolbar />
                     <MilkdownEditor key={milkdownKey} markdown={editingBody} onMarkdownChange={handleEditorChange} onSeek={handleSeek} />
                   </div>
                 </div>
@@ -3047,8 +3016,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 {/* 正文 */}
                 <div id="audio-note" className="note-section" style={{ marginTop: summaries.length > 0 ? 0 : 16 }}>
                   <div className="nibi-note-editor-panel">
-                    {/* Q6：四类笔记共用同一编辑工具栏 */}
-                    <EditorToolbar />
                     <MilkdownEditor key={milkdownKey} markdown={editingBody} onMarkdownChange={handleEditorChange} onSeek={handleSeek} />
                   </div>
                 </div>
@@ -3168,8 +3135,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 {/* 正文 */}
                 <div className="note-section" style={{ marginTop: summaries.length > 0 ? 0 : 16 }}>
                   <div className="nibi-note-editor-panel">
-                    {/* Q6：四类笔记共用同一编辑工具栏 */}
-                    <EditorToolbar />
                     <MilkdownEditor key={milkdownKey} markdown={editingBody} onMarkdownChange={handleEditorChange} onSeek={handleSeek} />
                   </div>
                 </div>
@@ -3190,10 +3155,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
           <div className="nibi-note-left nibi-text-left">
             <div className="nibi-text-editor-content">
               <div className="nibi-note-editor-panel">
-                <EditorToolbar
-                  textAlign={editorPrefs.textAlign}
-                  onTextAlignChange={(align) => updateEditorPrefs({ textAlign: align })}
-                />
                 <MilkdownEditor
                   key={milkdownKey}
                   markdown={editingBody}
@@ -3368,6 +3329,14 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
           onClose={() => setArtifactTool(null)}
         />
       )}
+
+      {/* Q6：浮动正文格式工具栏（选中文字后出现，全页只挂一份） */}
+      <EditorToolbar
+        textAlign={isTextNote ? editorPrefs.textAlign : undefined}
+        onTextAlignChange={
+          isTextNote ? (align) => updateEditorPrefs({ textAlign: align }) : undefined
+        }
+      />
 
       {/* VN4.3 新建/重新生成总结弹窗（从 AI 工具菜单触发） */}
       {showNewSummaryModal && (
