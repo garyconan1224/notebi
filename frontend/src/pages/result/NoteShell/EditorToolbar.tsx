@@ -102,7 +102,6 @@ interface EditorToolbarProps {
 export function EditorToolbar({ textAlign, onTextAlignChange, editorPrefs, onEditorPrefsChange }: EditorToolbarProps) {
   const formatting = useLnEditorStore((state) => state.formattingState)
   const applyFormat = useLnEditorStore((state) => state.applyFormat)
-  const wrapSelection = useLnEditorStore((state) => state.wrapSelection)
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
   const [prefsOpen, setPrefsOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -227,13 +226,7 @@ export function EditorToolbar({ textAlign, onTextAlignChange, editorPrefs, onEdi
         <ToolbarButton format="italic" label="斜体" shortcut={`${mod}I`} active={formatting.italic} disabled={!formatting.canItalic}>
           <Italic size={14} />
         </ToolbarButton>
-        <ToolbarButton
-          label="下划线"
-          onClick={() => {
-            wrapSelection('<u>', '</u>')
-            window.setTimeout(updatePosition, 0)
-          }}
-        >
+        <ToolbarButton format="underline" label="下划线" active={formatting.underline} disabled={!formatting.canUnderline}>
           <Underline size={14} />
         </ToolbarButton>
         <ToolbarButton format="strike" label="删除线" active={formatting.strike} disabled={!formatting.canStrike}>

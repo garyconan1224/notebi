@@ -16,6 +16,7 @@ export type EditorFormat =
   | 'orderedList'
   | 'taskList'
   | 'codeBlock'
+  | 'underline'
   | 'clearFormat'
 
 export interface EditorFormattingState {
@@ -32,6 +33,7 @@ export interface EditorFormattingState {
   orderedList: boolean
   taskList: boolean
   codeBlock: boolean
+  underline: boolean
   canBold: boolean
   canItalic: boolean
   canStrike: boolean
@@ -44,6 +46,7 @@ export interface EditorFormattingState {
   canTaskList: boolean
   canCodeBlock: boolean
   canClearFormat: boolean
+  canUnderline: boolean
 }
 
 export const EMPTY_EDITOR_FORMATTING_STATE: EditorFormattingState = {
@@ -59,6 +62,7 @@ export const EMPTY_EDITOR_FORMATTING_STATE: EditorFormattingState = {
   orderedList: false,
   taskList: false,
   codeBlock: false,
+  underline: false,
   canBold: false,
   canItalic: false,
   canStrike: false,
@@ -71,6 +75,7 @@ export const EMPTY_EDITOR_FORMATTING_STATE: EditorFormattingState = {
   canTaskList: false,
   canCodeBlock: false,
   canClearFormat: false,
+  canUnderline: false,
 }
 
 function markIsActive(state: EditorState, markName: string): boolean {
@@ -190,7 +195,7 @@ function clearFormattingCommand(state: EditorState): Command | null {
   const listItem = state.schema.nodes.list_item
   return (currentState, dispatch) => {
     const schema = currentState.schema
-    let tr = currentState.tr
+    const tr = currentState.tr
     let anyChange = false
 
     const run = (cmd: Command): boolean => {
@@ -302,6 +307,10 @@ function commandForFormat(
       : setBlockType(codeBlock)
   }
   if (format === 'taskList') return taskListCommand(state)
+  if (format === 'underline') {
+    const underline = state.schema.marks.underline
+    return underline ? toggleMark(underline) : null
+  }
   if (format === 'clearFormat') return clearFormattingCommand(state)
   if (format === 'orderedList') {
     const orderedList = state.schema.nodes.ordered_list
@@ -332,6 +341,7 @@ export function getEditorFormattingState(state: EditorState): EditorFormattingSt
     orderedList: commandForFormat(state, 'orderedList'),
     taskList: commandForFormat(state, 'taskList'),
     codeBlock: commandForFormat(state, 'codeBlock'),
+    underline: commandForFormat(state, 'underline'),
     clearFormat: commandForFormat(state, 'clearFormat'),
   }
   const level = headingLevelOf(state)
@@ -348,6 +358,7 @@ export function getEditorFormattingState(state: EditorState): EditorFormattingSt
     orderedList: selectionIsInNode(state, 'ordered_list'),
     taskList: selectionIsTaskList(state),
     codeBlock: selectionIsInNode(state, 'code_block'),
+    underline: markIsActive(state, 'underline'),
     canBold: Boolean(commands.bold?.(state)),
     canItalic: Boolean(commands.italic?.(state)),
     canStrike: Boolean(commands.strike?.(state)),
@@ -360,6 +371,7 @@ export function getEditorFormattingState(state: EditorState): EditorFormattingSt
     canTaskList: Boolean(commands.taskList?.(state)),
     canCodeBlock: Boolean(commands.codeBlock?.(state)),
     canClearFormat: Boolean(commands.clearFormat?.(state)),
+    canUnderline: Boolean(commands.underline?.(state)),
   }
 }
 

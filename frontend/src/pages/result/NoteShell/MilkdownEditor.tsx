@@ -10,7 +10,7 @@
  * 基线（createNoteSeedGuard），规范化不触发保存，真实编辑才保存。
  */
 import { useEffect, useRef } from 'react'
-import { Editor, rootCtx, defaultValueCtx, prosePluginsCtx, editorViewCtx, serializerCtx } from '@milkdown/core'
+import { Editor, rootCtx, defaultValueCtx, prosePluginsCtx, editorViewCtx, serializerCtx, marksCtx, remarkPluginsCtx } from '@milkdown/core'
 import { Plugin, TextSelection } from '@milkdown/prose/state'
 import { Milkdown, MilkdownProvider, useEditor, useInstance } from '@milkdown/react'
 import { commonmark } from '@milkdown/preset-commonmark'
@@ -22,6 +22,7 @@ import '@milkdown/theme-nord/style.css'
 import { timestampPlugin, unescapeNoteTimestamps } from './milkdownTimestamp'
 import { createNoteSeedGuard, type NoteSeedGuard } from './milkdownSeedGuard'
 import { stripUnresolvedFramePlaceholders } from './frameMarkdown'
+import { underlineHtmlRemarkPlugin, underlineMarkSchema } from './underlineMark'
 import { useLnEditorStore } from '@/store/lnEditorStore'
 import {
   getEditorFormattingState,
@@ -58,6 +59,8 @@ function MilkdownEditorInner({
         .config((ctx: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
           ctx.set(rootCtx, root)
           ctx.set(defaultValueCtx, safeMarkdown)
+          ctx.update(remarkPluginsCtx, (plugins: any) => [...plugins, { plugin: underlineHtmlRemarkPlugin, options: {} }])
+          ctx.update(marksCtx, (marks: any) => [...marks, ['underline', underlineMarkSchema]])
           ctx.get(listenerCtx)
             .markdownUpdated((_ctx: any, md: string) => { // eslint-disable-line @typescript-eslint/no-explicit-any
               // 先反转义时间码方括号（Milkdown commonmark 序列化器会把 [ 转义成 \[），

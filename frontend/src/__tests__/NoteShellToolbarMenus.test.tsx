@@ -219,6 +219,7 @@ describe('NoteShell 浮动正文格式工具栏（Q6）', () => {
       orderedList: false,
       taskList: false,
       codeBlock: false,
+      underline: false,
       headingLevel: 0,
       canBold: true,
       canItalic: true,
@@ -231,6 +232,7 @@ describe('NoteShell 浮动正文格式工具栏（Q6）', () => {
       canOrderedList: true,
       canTaskList: true,
       canCodeBlock: true,
+      canUnderline: true,
       canClearFormat: false,
     })
 
