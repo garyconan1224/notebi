@@ -10,6 +10,7 @@
  *   - NoteEditor：轻量 CodeMirror 编辑器（注册到 lnEditorStore，复用截图插入能力）
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, BookOpenCheck, Brain, Camera, Check, ChevronDown, Copy, Download, ExternalLink, FileDown, FileText, FileType, Film, History, Image, List, MessageCircle, Pause, Pencil, Play, Plus, Presentation, RefreshCw, Sparkles, Subtitles, Trash2, X } from 'lucide-react'
@@ -514,6 +515,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [creatingChapterTaskId, setCreatingChapterTaskId] = useState<string | null>(null)
   const [retryingAutoSummary, setRetryingAutoSummary] = useState(false)
   const [retryingSpeakerAnalysis, setRetryingSpeakerAnalysis] = useState(false)
+  const { t } = useTranslation('note')
   const [editorPrefs, setEditorPrefs] = useState<NoteEditorPrefs>(readEditorPrefs)
   const pipelineTasks = useTaskStore((state) => state.tasks)
   const addPipelineTask = useTaskStore((state) => state.addTask)
@@ -1872,7 +1874,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   // Q2：顶栏只显示「主笔记」，修订号只出现在版本历史/下拉里
   const versionButtonLabel = activeSummary
     ? `${summaryGroupLabel(summaryGroupKey(activeSummary))} · ${activeSummary.name || `V${activeSummary.version}`}`
-    : '主笔记'
+    : t('shell.mainNote')
 
   // 7.3: 视频笔记三列布局标志
   const isVideoNote = itemType === 'video' && !!note.media?.video?.url
@@ -1968,7 +1970,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         {saveStatus === 'idle' && '自动保存'}
       </span>
       <button className="btn-ghost" onClick={() => setHistoryOpen(true)}>
-        <History size={13} />版本历史
+        <History size={13} />{t('shell.versionHistory')}
       </button>
     </span>
   )
@@ -2116,7 +2118,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
             </button>
             {templateDropOpen && (
               <div className="nibi-note-version-menu">
-                <div className="nibi-note-version-group-label">主笔记</div>
+                <div className="nibi-note-version-group-label">{t('shell.mainNote')}</div>
                 <button
                   className={`nibi-note-version-main${!activeSummaryId ? ' is-active' : ''}`}
                   onClick={() => {
@@ -2125,7 +2127,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                   }}
                 >
                   <span>
-                    <strong>主笔记 v{noteVersion}</strong>
+                    <strong>{t('shell.mainNote')} v{noteVersion}</strong>
                     {noteCreatedAt && <small>{noteCreatedAt}</small>}
                   </span>
                   {!activeSummaryId && <Check size={13} />}
@@ -2133,7 +2135,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 <div className="nibi-note-version-divider" />
                 <div className="nibi-note-version-group-label">AI 总结</div>
                 {summaries.length === 0 ? (
-                  <div className="nibi-note-version-empty">暂无 AI 总结版本，可点击“新建总结”生成。</div>
+                  <div className="nibi-note-version-empty">{t('shell.summaryEmpty')}</div>
                 ) : (
                   orderedSummaries.map((s) => {
                         const isActive = s.summary_id === activeSummaryId
@@ -2190,7 +2192,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                     setHistoryOpen(true)
                   }}
                 >
-                  <History size={13} /> 查看版本历史
+                  <History size={13} /> {t('shell.viewVersionHistory')}
                 </button>
               </div>
             )}
@@ -2199,10 +2201,10 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
             className="nibi-note-bar-btn nibi-note-bar-btn--label nibi-note-bar-btn--accent"
             onClick={() => setShowNewSummaryModal(true)}
             disabled={creatingSummary}
-            title="新建总结"
+            title={t('shell.newSummary')}
           >
             <Plus size={14} />
-            {creatingSummary ? '生成中…' : '新建总结'}
+            {creatingSummary ? t('shell.newSummary') : t('shell.newSummary')}
           </button>
           {activeSummaryId && (
             <>
@@ -2212,7 +2214,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 onClick={() => void handleCopyActiveSummary()}
                 title="复制当前 AI 总结内容"
               >
-                <Copy size={14} />复制总结
+                <Copy size={14} />{t('shell.copySummary')}
               </button>
               <button
                 className="nibi-note-bar-btn nibi-note-bar-btn--label"
@@ -2221,13 +2223,13 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 disabled={creatingSummary}
                 title="按当前总结的模板重新生成"
               >
-                <RefreshCw size={14} />重新生成总结
+                <RefreshCw size={14} />{t('shell.regenerateSummary')}
               </button>
             </>
           )}
           {sourceUrl && (
             <a className="nibi-note-bar-btn nibi-note-bar-btn--label" href={sourceUrl} target="_blank" rel="noreferrer" title="打开原视频">
-              <ExternalLink size={14} /> 原视频
+              <ExternalLink size={14} /> {t('shell.originalVideo')}
             </a>
           )}
           <div style={{ position: 'relative' }} ref={exportDropRef}>
