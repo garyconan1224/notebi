@@ -1,7 +1,7 @@
 import { Check, CheckCircle2, Clock, FileAudio, FileText, Image as ImageIcon, Layers, Link2, PlayCircle, Search, Upload, Video } from 'lucide-react'
 import type { BatchSourceItem, BatchSourceResolveResponse, SniffResult } from '@/services/workspaces'
 import type { LibraryItem } from '@/services/library'
-import { decodeProxySrc } from './linkCover'
+import { decodeProxySrc, previewSrcForProxy } from './linkCover'
 
 /* ─── helpers (shared with modal) ─── */
 
@@ -327,7 +327,7 @@ export function MaterialSourcePanel({
                       <span className="batch-source-thumb" data-empty={item.thumbnail ? undefined : 'true'}>
                         {item.thumbnail ? (
                           <img
-                            src={item.thumbnail}
+                            src={previewSrcForProxy(item.thumbnail)}
                             alt=""
                             referrerPolicy="no-referrer"
                             onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
@@ -410,7 +410,7 @@ export function MaterialSourcePanel({
                     </span>
                     <span className="existing-material-thumb">
                       {item.thumbnail ? (
-                        <img src={item.thumbnail} alt="" loading="lazy" />
+                        <img src={previewSrcForProxy(item.thumbnail)} alt="" loading="lazy" />
                       ) : (
                         itemTypeLabel(item.type).slice(0, 1)
                       )}
