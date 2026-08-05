@@ -2241,7 +2241,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
               }}
               title="导出"
             >
-              <Download size={14} /> 导出
+              <Download size={14} /> {t('shell.export')}
             </button>
             {exportOpen && (
               <div className="nibi-note-export-menu">
@@ -2363,10 +2363,10 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
             ref={immersiveTriggerRef}
             className="nibi-note-bar-btn nibi-note-bar-btn--label nibi-note-bar-btn--accent"
             onClick={handleToggleImmersive}
-            title={immersiveOpen ? '退出沉浸式笔记' : '打开沉浸式笔记'}
+            title={immersiveOpen ? t('shell.exitImmersive') : t('shell.enterImmersive')}
             aria-pressed={immersiveOpen}
           >
-            <Sparkles size={14} /> 沉浸式
+            <Sparkles size={14} /> {t('shell.immersive')}
           </button>
           <div style={{ position: 'relative' }} ref={aiToolsDropRef}>
             <button
@@ -2377,7 +2377,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
               }}
               title="AI 工具"
             >
-              <Brain size={14} /> AI 工具<ChevronDown size={11} />
+              <Brain size={14} /> {t('shell.aiTools')}<ChevronDown size={11} />
             </button>
             {aiToolsOpen && (
               <div className="nibi-note-ai-menu">

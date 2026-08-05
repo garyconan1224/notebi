@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Home,
@@ -36,16 +37,16 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'home',       path: '/',           icon: Home,         label: '首页' },
-  { id: 'notes',      path: '/notes',      icon: FileText,     label: '笔记' },
-  { id: 'collections', path: '/collections', icon: FolderOpen, label: '合集' },
-  { id: 'tasks',      path: '/tasks',      icon: ListChecks,   label: '任务中心' },
+  { id: 'home',       path: '/',           icon: Home,         label: 'home' },
+  { id: 'notes',      path: '/notes',      icon: FileText,     label: 'notes' },
+  { id: 'collections', path: '/collections', icon: FolderOpen, label: 'collections' },
+  { id: 'tasks',      path: '/tasks',      icon: ListChecks,   label: 'tasks' },
 ]
 
 const BOTTOM_ITEMS: NavItem[] = [
-  { id: 'favorites',   path: '/favorites',   icon: Star,       label: '收藏夹' },
-  { id: 'knowledge',   path: '/knowledge',   icon: Search,     label: '知识库' },
-  { id: 'settings',    path: '/settings',    icon: Settings,   label: '设置' },
+  { id: 'favorites',   path: '/favorites',   icon: Star,       label: 'favorites' },
+  { id: 'knowledge',   path: '/knowledge',   icon: Search,     label: 'knowledge' },
+  { id: 'settings',    path: '/settings',    icon: Settings,   label: 'settings' },
 ]
 
 interface SidebarBtnProps {
@@ -158,18 +159,19 @@ function formatBytes(bytes: number): string {
 /** 后端地址（与 .env 默认一致） */
 const BACKEND_ADDR = `127.0.0.1:${import.meta.env.VITE_BACKEND_PORT ?? '8001'}`
 
-function pageTitleForPath(pathname: string): string | undefined {
+function pageTitleForPath(pathname: string, t: (key: string) => string): string | undefined {
   if (pathname === '/') return '工作台'
-  if (pathname.startsWith('/notes')) return '笔记'
-  if (pathname.startsWith('/tasks')) return '任务中心'
-  if (pathname.startsWith('/collections') || pathname.startsWith('/workspaces')) return '合集'
-  if (pathname.startsWith('/knowledge') || pathname.startsWith('/search')) return '知识库'
-  if (pathname.startsWith('/favorites')) return '收藏夹'
-  if (pathname.startsWith('/settings')) return '设置'
+  if (pathname.startsWith('/notes')) return t('nav.notes')
+  if (pathname.startsWith('/tasks')) return t('nav.tasks')
+  if (pathname.startsWith('/collections') || pathname.startsWith('/workspaces')) return t('nav.collections')
+  if (pathname.startsWith('/knowledge') || pathname.startsWith('/search')) return t('nav.knowledge')
+  if (pathname.startsWith('/favorites')) return t('nav.favorites')
+  if (pathname.startsWith('/settings')) return t('nav.settings')
   return undefined
 }
 
 export function AppShell({ children }: AppShellProps) {
+  const { t } = useTranslation('common')
   const location = useLocation()
   const navigate = useNavigate()
   const { stats } = useSystemStats()
@@ -209,7 +211,7 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden print:block print:h-auto print:overflow-visible">
-      <PageTitle title={pageTitleForPath(location.pathname)} />
+      <PageTitle title={pageTitleForPath(location.pathname, t)} />
       {/* ── Sidebar ── */}
       <nav
         aria-label="主导航"
@@ -285,7 +287,7 @@ export function AppShell({ children }: AppShellProps) {
           <SidebarBtn
             key={item.id}
             icon={item.icon}
-            label={item.label}
+            label={t(`nav.${item.id}`)}
             active={isActive(item)}
             collapsed={collapsed}
             onClick={() => navigate(item.path)}
@@ -303,7 +305,7 @@ export function AppShell({ children }: AppShellProps) {
           <SidebarBtn
             key={item.id}
             icon={item.icon}
-            label={item.label}
+            label={t(`nav.${item.id}`)}
             active={isActive(item)}
             collapsed={collapsed}
             onClick={() => navigate(item.path)}
