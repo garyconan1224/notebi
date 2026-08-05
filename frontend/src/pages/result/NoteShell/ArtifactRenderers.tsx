@@ -8,6 +8,7 @@
  * - 旧产物（无 content_json）：由调用方回退 Markdown 并标注「旧版产物」。
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 
 export interface MindMapNode {
@@ -232,6 +233,7 @@ function newMindMapId(): string {
 }
 
 export function MindMapTree({ data, title, workspaceId, itemId, artifactId, onUpdated }: MindMapTreeProps) {
+  const { t } = useTranslation('note')
   const [treeData, setTreeData] = useState<MindMapData>(data)
   const [scale, setScale] = useState(1)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
@@ -330,7 +332,7 @@ export function MindMapTree({ data, title, workspaceId, itemId, artifactId, onUp
   }
 
   const handleAddChild = (nodeId: string) => {
-    const text = window.prompt('子节点名称', '')
+    const text = window.prompt(t('mindmap.addChild'), '')
     if (text == null) return
     const childText = text.trim()
     if (!childText) return
@@ -348,7 +350,7 @@ export function MindMapTree({ data, title, workspaceId, itemId, artifactId, onUp
 
   const handleDelete = (node: MindMapNode) => {
     if (node.id === treeData.root.id) return
-    if (!window.confirm(`删除节点「${node.text}」及其子节点？`)) return
+    if (!window.confirm(t('mindmap.deleteConfirm', { name: node.text }))) return
     persist(updateTree((root) => {
       const prune = (parent: MindMapNode) => {
         parent.children = (parent.children || []).filter((child) => {
@@ -364,12 +366,12 @@ export function MindMapTree({ data, title, workspaceId, itemId, artifactId, onUp
   return (
     <div className="mindmap-wrap">
       <div className="mindmap-actions">
-        <button type="button" aria-label="缩小思维导图" onClick={() => zoom(-0.1)}><ZoomOut size={14} /></button>
+        <button type="button" aria-label={t('mindmap.zoomOut')} onClick={() => zoom(-0.1)}><ZoomOut size={14} /></button>
         <span className="mindmap-zoom-value" aria-live="polite">{Math.round(scale * 100)}%</span>
-        <button type="button" aria-label="放大思维导图" onClick={() => zoom(0.1)}><ZoomIn size={14} /></button>
-        <button type="button" aria-label="重置思维导图缩放" onClick={() => setScale(1)}><RotateCcw size={14} /></button>
-        <button type="button" onClick={() => exportMindMapPng(treeData.root, title)}>导出 PNG</button>
-        <button type="button" onClick={() => exportMindMapSvg(treeData.root, title)}>导出 SVG</button>
+        <button type="button" aria-label={t('mindmap.zoomIn')} onClick={() => zoom(0.1)}><ZoomIn size={14} /></button>
+        <button type="button" aria-label={t('mindmap.resetZoom')} onClick={() => setScale(1)}><RotateCcw size={14} /></button>
+        <button type="button" onClick={() => exportMindMapPng(treeData.root, title)}>{t('mindmap.exportPng')}</button>
+        <button type="button" onClick={() => exportMindMapSvg(treeData.root, title)}>{t('mindmap.exportSvg')}</button>
       </div>
       <div
         ref={viewportRef}
@@ -503,7 +505,7 @@ export function MindMapTree({ data, title, workspaceId, itemId, artifactId, onUp
               <input
                 ref={editInputRef}
                 value={editing.text}
-                aria-label="编辑节点名称"
+                aria-label={t('mindmap.editNode')}
                 onChange={(event) => setEditing({ ...editing, text: event.target.value })}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') commitRename()

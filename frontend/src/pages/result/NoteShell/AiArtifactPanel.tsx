@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Download, FilePlus2, Sparkles, Trash2, X } from 'lucide-react'
 
 import {
@@ -113,6 +114,7 @@ export function AiArtifactPanel({
   itemId,
   onClose,
 }: AiArtifactPanelProps) {
+  const { t } = useTranslation('note')
   const [kind, setKind] = useState<NoteArtifactKind>(initialKind)
   const [artifacts, setArtifacts] = useState<NoteArtifact[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -215,9 +217,9 @@ export function AiArtifactPanel({
               : item,
           ),
         )
-        toast.success('思维导图已保存')
+        toast.success(t('mindmap.saved'))
       })
-      .catch(() => toast.error('思维导图保存失败，请重试'))
+      .catch(() => toast.error(t('mindmap.saveFailed')))
   }
 
   const handleDelete = async (artifact: NoteArtifact) => {

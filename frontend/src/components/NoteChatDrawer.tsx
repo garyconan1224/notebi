@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Copy, History, Loader2, MessageCircle, Plus, Save, Send, Trash2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -175,24 +176,25 @@ export default function NoteChatDrawer({
 
   const handleClearActiveChat = async () => {
     if (!chatId || streaming) return
-    if (!window.confirm('清空当前会话后无法恢复。确认继续吗？')) return
+    if (!window.confirm(t('askAi.clearChat'))) return
     try {
       await deleteChat(workspaceId, chatId)
       handleStartNewChat()
       await refreshChatSummaries()
       toast.success('当前会话已清空')
     } catch {
-      toast.error('清空当前会话失败，请重试')
+      toast.error(t('askAi.clearChat'))
     }
   }
 
+  const { t } = useTranslation('note')
   const handleCopyAnswer = async (answer: string) => {
     try {
       if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable')
       await navigator.clipboard.writeText(answer)
-      toast.success('回答已复制')
+      toast.success(t('askAi.copied'))
     } catch {
-      toast.error('复制失败，请手动选择文本')
+      toast.error(t('askAi.copyFailed'))
     }
   }
 
@@ -202,7 +204,7 @@ export default function NoteChatDrawer({
         <div className="note-chat-header">
           <div className="note-chat-title">
             <MessageCircle size={14} />
-            <span>问 AI</span>
+            <span>{t('askAi.title')}</span>
           </div>
           {mode === 'drawer' && (
             <Button size="sm" variant="ghost" title="关闭" onClick={handleClose}>
@@ -216,15 +218,15 @@ export default function NoteChatDrawer({
 
       <div className="note-chat-session-tools">
         <div className="note-chat-session-actions">
-          <button type="button" onClick={() => setSessionsOpen((value) => !value)} aria-label="历史会话">
-            <History size={13} /> 历史{chatSummaries.length ? ` (${chatSummaries.length})` : ''}
+          <button type="button" onClick={() => setSessionsOpen((value) => !value)} aria-label={t('askAi.history')}>
+            <History size={13} /> {t('askAi.history')}{chatSummaries.length ? ` (${chatSummaries.length})` : ''}
           </button>
-          <button type="button" onClick={handleStartNewChat} aria-label="新建会话">
-            <Plus size={13} /> 新建
+          <button type="button" onClick={handleStartNewChat} aria-label={t('askAi.newChat')}>
+            <Plus size={13} /> {t('askAi.newChat')}
           </button>
           {chatId && (
-            <button type="button" onClick={() => void handleClearActiveChat()} aria-label="清空当前会话" disabled={streaming}>
-              <Trash2 size={13} /> 清空
+            <button type="button" onClick={() => void handleClearActiveChat()} aria-label={t('askAi.clearChat')} disabled={streaming}>
+              <Trash2 size={13} /> {t('askAi.clearChat')}
             </button>
           )}
         </div>
@@ -266,7 +268,7 @@ export default function NoteChatDrawer({
         <div ref={scrollRef} className="note-chat-messages-inner">
           {history.length === 0 && !streaming && (
             <p className="note-chat-empty">
-              问个问题吧 · Enter 发送 / Shift+Enter 换行
+              {t('askAi.emptyHint')}
             </p>
           )}
           {history.map((m) => (
@@ -350,6 +352,7 @@ interface BubbleProps {
 }
 
 function Bubble({ role, content, pending, hideSourceIndex = false, onCopy, onSave, onOpenSource }: BubbleProps) {
+  const { t } = useTranslation('note')
   const isUser = role === 'user'
   return (
     <div className={cn('note-chat-bubble-row', isUser && 'note-chat-bubble-user')}>
@@ -368,8 +371,8 @@ function Bubble({ role, content, pending, hideSourceIndex = false, onCopy, onSav
       </div>
       {!isUser && !pending && content && (onCopy || onSave) && (
         <div className="note-chat-answer-actions">
-          {onCopy && <button type="button" aria-label="复制回答" onClick={() => void onCopy(content)}><Copy size={12} />复制</button>}
-          {onSave && <button type="button" aria-label="保存为笔记" onClick={() => onSave(content)}><Save size={12} />保存</button>}
+          {onCopy && <button type="button" aria-label={t('askAi.copyAnswer')} onClick={() => void onCopy(content)}><Copy size={12} />{t('askAi.copyAnswer')}</button>}
+          {onSave && <button type="button" aria-label={t('askAi.saveAsNote')} onClick={() => onSave(content)}><Save size={12} />{t('askAi.saveAsNote')}</button>}
         </div>
       )}
     </div>
