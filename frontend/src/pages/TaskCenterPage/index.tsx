@@ -300,8 +300,8 @@ export default function TaskCenterPage() {
       <div className="task-center-shell">
         <PageHeader
           eyebrow="TASK CENTER · LOCAL"
-          title="任务中心"
-          description="批量任务是默认视图；运行过程、失败项与诊断入口保持透明。"
+          title={t('tasks.pageTitle')}
+          description={t('tasks.pageDesc')}
           actions={(
             <>
               <button

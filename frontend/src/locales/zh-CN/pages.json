@@ -44,7 +44,9 @@
     "openSummary": "打开完整总结",
     "diagnostics": "诊断信息",
     "taskId": "任务编号",
-    "batchId": "批次编号"
+    "batchId": "批次编号",
+    "pageTitle": "任务中心",
+    "pageDesc": "批量任务是默认视图；运行过程、失败项与诊断入口保持透明。"
   },
   "favorites": {
     "title": "收藏夹",

@@ -44,7 +44,9 @@
     "openSummary": "Open Full Summary",
     "diagnostics": "Diagnostics",
     "taskId": "Task ID",
-    "batchId": "Batch ID"
+    "batchId": "Batch ID",
+    "pageTitle": "Task Center",
+    "pageDesc": "Batches are the default view; running progress, failures, and diagnostics stay transparent."
   },
   "favorites": {
     "title": "Favorites",
