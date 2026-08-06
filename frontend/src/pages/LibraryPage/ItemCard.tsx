@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import type { LibraryItem } from '@/services/library'
 import { Play, Star } from 'lucide-react'
@@ -44,6 +45,7 @@ interface ItemCardProps {
 }
 
 export function ItemCard({ item, selected, selectMode, onToggleSelect, onDelete, onToggleFavorite, onUploadCover, onResetCover }: ItemCardProps) {
+  const { t } = useTranslation('pages')
   const navigate = useNavigate()
   const state = primaryStatusToState(item.primary_task_status)
   const stateLabel = STATE_LABEL[state] || 'queued'
@@ -66,7 +68,7 @@ export function ItemCard({ item, selected, selectMode, onToggleSelect, onDelete,
   if (item.results_summary.has_transcript) summaryBits.push('已转写')
   if (item.results_summary.has_summary) summaryBits.push('已总结')
   if (item.has_chapters) summaryBits.push('章节')
-  if (item.type === 'video' && (item.frames_count ?? 0) > 0) summaryBits.push(`${item.frames_count} 帧`)
+  if (item.type === 'video' && (item.frames_count ?? 0) > 0) summaryBits.push(`${t('library.frames', { count: item.frames_count })}`)
   if (item.has_subtitle) summaryBits.push('字幕')
   const fallbackSummaryLine = summaryBits.length > 0
     ? summaryBits.join(' · ')
@@ -201,7 +203,7 @@ export function ItemCard({ item, selected, selectMode, onToggleSelect, onDelete,
       <div className="note-card-body">
         <div className="note-title-row">
           <span className="note-type-dot" />
-          <h3>{item.name || '未命名'}</h3>
+          <h3>{item.name || t('library.untitled')}</h3>
         </div>
 
         <p className="note-summary">{summaryLine}</p>
@@ -209,7 +211,7 @@ export function ItemCard({ item, selected, selectMode, onToggleSelect, onDelete,
         <div className="note-status-line">
           <span className={statusClass}>{statusText[state] ?? stateLabel}</span>
           {hasDur && <span className="note-inline-chip">{dur}</span>}
-          {item.favorite && <span className="note-inline-chip">已收藏</span>}
+          {item.favorite && <span className="note-inline-chip">{t('library.favorited')}</span>}
         </div>
 
         {tags.length > 0 && (

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ArrowRight, FileText, Image, Mic, Play } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
@@ -148,6 +149,7 @@ function ActivityIcon({ type }: { type: LibraryItem['type'] }) {
 }
 
 export function RecentTasks({ tasks: tasksProp }: RecentTasksProps) {
+  const { t } = useTranslation('pages')
   const navigate = useNavigate()
   const [items, setItems] = useState<LibraryItem[]>([])
   const [loading, setLoading] = useState(tasksProp == null)
@@ -215,7 +217,7 @@ export function RecentTasks({ tasks: tasksProp }: RecentTasksProps) {
       {activeTasks.length > 0 && (
         <div className="wb-activity" aria-label="正在处理">
           <div className="sec-h">
-            <h2 className="sec-title">正在处理</h2>
+            <h2 className="sec-title">{t('workbench.processing')}</h2>
             <button className="sec-link" onClick={() => navigate('/tasks')}>
               任务中心 <ArrowRight size={13} />
             </button>
@@ -248,13 +250,13 @@ export function RecentTasks({ tasks: tasksProp }: RecentTasksProps) {
       )}
 
       <div className="sec-h">
-        <h2 className="sec-title">最近笔记</h2>
+        <h2 className="sec-title">{t('workbench.recentNotes')}</h2>
         <button className="sec-link" onClick={() => navigate('/notes')}>
           全部 · {noteItems.length} <ArrowRight size={13} />
         </button>
       </div>
 
-      {loading && <div className="wb-recent-state" role="status">正在读取本地笔记…</div>}
+      {loading && <div className="wb-recent-state" role="status">{t('workbench.loading')}</div>}
       {!loading && loadFailed && (
         <EmptyState title="笔记暂时无法读取" description="请确认 NoteBi 后端已启动后重试" />
       )}
@@ -298,7 +300,7 @@ export function RecentTasks({ tasks: tasksProp }: RecentTasksProps) {
                   </div>
                   {item.description && <p className="note-summary">{item.description}</p>}
                   <div className="note-meta-row">
-                    <span>{item.workspace_name || '本地笔记'}</span>
+                    <span>{item.workspace_name || t('workbench.localNote')}</span>
                     {item.duration_seconds != null && <span>{Math.round(item.duration_seconds)} 秒</span>}
                   </div>
                   <div className="note-card-actions">
