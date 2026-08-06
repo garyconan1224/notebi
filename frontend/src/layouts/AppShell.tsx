@@ -112,7 +112,7 @@ function SidebarStatus({
   if (collapsed) {
     return (
       <div className="mt-2 flex flex-col items-center gap-2">
-        <ThemeSwitcher />
+        <ThemeSwitcher compact />
         <span
           className="size-2 rounded-full"
           style={{ background: online ? 'var(--accent-green)' : 'var(--accent-pink)' }}
