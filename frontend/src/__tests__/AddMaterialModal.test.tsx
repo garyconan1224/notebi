@@ -209,6 +209,50 @@ describe('AddMaterialModal', () => {
     )
   })
 
+  it('单条 B 站视频复用批量解析器拿封面（与批量策略一致）', async () => {
+    resolveBatchSourceMock.mockResolvedValueOnce({
+      source_type: 'bilibili_multipart',
+      source_url: 'https://www.bilibili.com/video/BV1fjGG6AEAP',
+      title: '批量来源',
+      items: [{
+        source_url: 'https://www.bilibili.com/video/BV1fjGG6AEAP?p=1',
+        title: '视频标题',
+        platform: 'bilibili',
+        index: 1,
+        duration_seconds: 331,
+        thumbnail: 'http://i0.hdslb.com/bfs/archive/cover.jpg',
+        external_id: 'BV1fjGG6AEAP:p1',
+      }],
+    })
+    render(
+      <AddMaterialModal
+        open
+        onOpenChange={vi.fn()}
+        workspaceIds={[]}
+        urlValue="https://www.bilibili.com/video/BV1fjGG6AEAP/"
+        sniffResult={{
+          primary_type: 'video',
+          possible_types: ['video'],
+          platform: 'bilibili',
+          title: null,
+          thumbnail: null,
+          content_type_header: null,
+        }}
+      />,
+    )
+
+    const img = await waitFor(() => {
+      const node = document.querySelector('.sniff-thumb img')
+      if (!node) throw new Error('封面未渲染')
+      return node as HTMLImageElement
+    })
+    expect(resolveBatchSourceMock).toHaveBeenCalledWith('https://www.bilibili.com/video/BV1fjGG6AEAP/')
+    expect(img.getAttribute('src')).toContain('/api/image_proxy?url=')
+    expect(decodeURIComponent(img.getAttribute('src') ?? '')).toContain(
+      'http://i0.hdslb.com/bfs/archive/cover.jpg',
+    )
+  })
+
   it('B站链接已失效时给出明确提示而不是只显示占位', async () => {
     fetchLinkPreviewMock.mockResolvedValue({
       title: '视频去哪了呢？_哔哩哔哩_bilibili',

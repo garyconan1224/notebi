@@ -658,6 +658,28 @@ export function AddMaterialModal({
     return () => { cancelled = true }
   }, [open, effectiveUrl, sniffThumbnail, sniffTitle])
 
+  // 单条 B 站视频封面：与「批量合集」走同一后端解析器（_resolve_bilibili_multipart_source 直接取
+  // view API 的 pic）。批量能稳定出封面、单条偶发没有，是因为单条此前只依赖 link-preview 的
+  // get_meta/yt-dlp 链路，易被 B 站风控打掉；这里补一条与批量完全一致的取封面路径。
+  const sniffPlatform = effectiveSniff?.platform ?? null
+  const sniffPrimaryType = effectiveSniff?.primary_type ?? null
+  useEffect(() => {
+    if (!open || isBatchMode || !effectiveUrl) return
+    if (sniffThumbnail) return
+    if (sniffPlatform !== 'bilibili' || sniffPrimaryType !== 'video') return
+    let cancelled = false
+    resolveBatchSource(effectiveUrl)
+      .then((result) => {
+        if (cancelled) return
+        const thumb = result.items?.[0]?.thumbnail
+        if (thumb && !sniffThumbnail) {
+          setCoverUrl(normalizePreviewImageUrl(thumb))
+        }
+      })
+      .catch(() => { /* 批量解析失败不阻塞：link-preview 仍会兜底 */ })
+    return () => { cancelled = true }
+  }, [open, isBatchMode, effectiveUrl, sniffThumbnail, sniffPlatform, sniffPrimaryType])
+
   const selectWorkspace = useCallback((workspaceId: string) => {
     if (!onWorkspaceIdsChange) return
     const next = workspaceIds[0] === workspaceId ? [] : [workspaceId]

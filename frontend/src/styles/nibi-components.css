@@ -407,6 +407,8 @@
 .batch-source-result {
   margin-top: 10px;
   display: grid;
+  /* 隐式 auto 列会按内容 max-content 撑宽，长标题(nowrap)会把列表撑出面板；改为 1fr 后标题列才能收缩出省略号 */
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
