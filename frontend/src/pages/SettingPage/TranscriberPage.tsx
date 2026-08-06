@@ -43,23 +43,26 @@ import type { TranscriberType } from '@/store/configStore'
  *   2. `cached === true` → 已就绪，绿色 outline；
  *   3. 其他              → 待下载 N MB / 大小未知，中性灰色。
  */
-const modelStatusText = (status: WhisperModelStatus): string => {
+const modelStatusText = (
+  status: WhisperModelStatus,
+  t: (k: string, o?: Record<string, unknown>) => string,
+): string => {
   if (status.pending_mb > 0) {
     const total = status.estimated_size_mb
     const doneTotal = status.done_mb + status.pending_mb
     const pct = total > 0 ? Math.min(99, Math.round((doneTotal / total) * 100)) : null
-    return pct !== null ? `下载中 ${pct}%` : `下载中 ${doneTotal.toFixed(0)} MB`
+    return pct !== null ? t('transcriber.downloadingPct', { pct }) : t('transcriber.downloadingMb', { mb: doneTotal.toFixed(0) })
   }
   if (status.cached) {
-    return '已就绪'
+    return t('transcriber.ready')
   }
   const sizeLabel =
     status.estimated_size_mb > 0
       ? status.estimated_size_mb >= 1024
         ? `${(status.estimated_size_mb / 1024).toFixed(1)} GB`
         : `${status.estimated_size_mb} MB`
-      : '大小未知'
-  return `待下载 ${sizeLabel}`
+      : t('transcriber.sizeUnknown')
+  return t('transcriber.pendingDownload', { size: sizeLabel })
 }
 
 const nativeSelectClassName =
@@ -309,8 +312,8 @@ const TranscriberPage = () => {
               htmlFor="whisper-model-size"
               label={t('transcriber.engine.modelSize')}
               hint={draft.type === 'mlx-whisper'
-                ? '选择 Apple Silicon 上使用的 MLX 模型规格；可先在“本地模型”下载。'
-                : t('transcriber.engine.modelSize') + ' — tiny 最快，large-v3 最精准'}
+                ? t('transcriber.mlxModelHint')
+                : t('transcriber.engine.modelSize') + t('transcriber.modelSizeSuffix')}
               dirty={dirty.whisper_model_size}
             >
               <select
@@ -327,7 +330,7 @@ const TranscriberPage = () => {
                     : undefined
                   return (
                     <option key={size} value={size}>
-                      {status ? `${size} · ${modelStatusText(status)}` : size}
+                      {status ? `${size} · ${modelStatusText(status, t)}` : size}
                     </option>
                   )
                 })}
@@ -337,7 +340,7 @@ const TranscriberPage = () => {
             {/* Faster Whisper 的缓存状态由原有探测接口提供；MLX 详情在本地模型中心。 */}
             {(draft.type === 'fast-whisper' || draft.type === 'auto') && cacheDir && (
               <p className="mt-2 text-xs text-muted-foreground">
-                模型缓存目录：<code className="rounded bg-muted px-1 py-0.5 text-[11px]">{cacheDir}</code>
+                {t('transcriber.modelCacheDir', { dir: cacheDir })}
               </p>
             )}
           </div>
@@ -363,7 +366,7 @@ const TranscriberPage = () => {
               htmlFor="groq-api-key"
               label={t('transcriber.engine.groqApiKey')}
               required
-              hint="Groq API Key（获取：https://console.groq.com/keys）"
+              hint={t('transcriber.groqApiKeyHint')}
               dirty={dirty.groq_api_key}
             >
               <Input
@@ -400,8 +403,8 @@ const TranscriberPage = () => {
       {/* ── Section · 识别参数 ── */}
       <Section
         icon={<Cpu className="size-4" />}
-        title="识别参数"
-        description="配置语言识别和计算设备"
+        title={t('transcriber.recognitionParams')}
+        description={t('transcriber.recognitionParamsDesc')}
       >
         <div className="space-y-6">
           {/* 语言偏好 */}
@@ -434,7 +437,7 @@ const TranscriberPage = () => {
             <FieldRow
               htmlFor="device"
               label={t('transcriber.device.label')}
-              hint="CUDA 仅在探测到可用 NVIDIA 显卡时可选；不可用时自动使用 CPU。"
+              hint={t('transcriber.cudaHint')}
               dirty={dirty.device}
             >
               <select
@@ -456,17 +459,17 @@ const TranscriberPage = () => {
           {draft.type === 'mlx-whisper' && (
             <FieldRow
               label={t('transcriber.device.label')}
-              hint="MLX Whisper 仅在 Apple 设备上运行，无需手动选择设备。"
+              hint={t('transcriber.mlxDeviceHint')}
             >
               <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
-                Apple GPU · Metal（由 MLX 自动管理）
+                {t('transcriber.mlxDeviceValue')}
               </div>
             </FieldRow>
           )}
           {draft.type === 'auto' && (
             <FieldRow
               label={t('transcriber.device.label')}
-              hint="自动模式按上方硬件探测结果选择设备，无需手动指定。"
+              hint={t('transcriber.autoDeviceHint')}
             >
               <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
                 跟随自动硬件策略
@@ -480,16 +483,16 @@ const TranscriberPage = () => {
       {(draft.type === 'auto' || draft.type === 'fast-whisper') && (
         <Section
           icon={<Zap className="size-4" />}
-          title="转录加速"
-          description="调整转录引擎性能参数，提速 30-50%"
+          title={t('transcriber.speedup')}
+          description={t('transcriber.speedupDesc')}
         >
           <div className="space-y-6">
             {/* VAD 静默跳过 */}
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-sm font-medium">VAD 静默跳过</span>
+                <span className="text-sm font-medium">{t('transcriber.vadLabel')}</span>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  自动检测并跳过无人声片段，省 10-30% 耗时
+                  {t('transcriber.vadHint')}
                 </p>
               </div>
               <button
@@ -512,8 +515,8 @@ const TranscriberPage = () => {
             {/* CPU 线程数 */}
             <FieldRow
               htmlFor="cpu-threads"
-              label="CPU 线程数"
-              hint="更多线程 = 更快计算，但会占用更多 CPU 资源"
+              label={t('transcriber.cpuThreads')}
+              hint={t('transcriber.cpuThreadsHint')}
               dirty={dirty.cpu_threads}
             >
               <select
@@ -522,11 +525,11 @@ const TranscriberPage = () => {
                 value={String(draft.cpu_threads)}
                 onChange={(e) => patch({ cpu_threads: Number(e.target.value) })}
               >
-                <option value="0">自动</option>
-                <option value="2">2 线程</option>
-                <option value="4">4 线程</option>
-                <option value="6">6 线程</option>
-                <option value="8">8 线程</option>
+                <option value="0">{t('transcriber.threadAuto')}</option>
+                <option value="2">{t('transcriber.threadsN', { n: 2 })}</option>
+                <option value="4">{t('transcriber.threadsN', { n: 4 })}</option>
+                <option value="6">{t('transcriber.threadsN', { n: 6 })}</option>
+                <option value="8">{t('transcriber.threadsN', { n: 8 })}</option>
               </select>
             </FieldRow>
 
@@ -546,8 +549,8 @@ const TranscriberPage = () => {
             {showAdvanced && (
               <FieldRow
                 htmlFor="beam-size"
-                label="Beam 宽度"
-                hint="越低越快。3 以上质量几乎无差别"
+                label={t('transcriber.beamWidth')}
+                hint={t('transcriber.beamWidthHint')}
                 dirty={dirty.beam_size}
               >
                 <select
@@ -556,11 +559,11 @@ const TranscriberPage = () => {
                   value={String(draft.beam_size)}
                   onChange={(e) => patch({ beam_size: Number(e.target.value) })}
                 >
-                  <option value="1">1（最快·贪心）</option>
+                  <option value="1">{t('transcriber.beam1')}</option>
                   <option value="2">2</option>
-                  <option value="3">3（推荐）</option>
+                  <option value="3">{t('transcriber.beam3')}</option>
                   <option value="4">4</option>
-                  <option value="5">5（默认·最准）</option>
+                  <option value="5">{t('transcriber.beam5')}</option>
                 </select>
               </FieldRow>
             )}
