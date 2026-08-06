@@ -73,12 +73,11 @@
   "mindmap": {
     "exportPng": "导出 PNG",
     "exportSvg": "导出 SVG",
-    "zoomOut": "缩小思维导图",
-    "zoomIn": "放大思维导图",
-    "resetZoom": "重置思维导图缩放",
-    "editNode": "编辑节点名称",
-    "addChild": "子节点名称",
-    "deleteConfirm": "删除节点「{{name}}」及其子节点？",
+    "exportFailed": "导出失败，请重试",
+    "insertAsImage": "插入为图片",
+    "insertAsOutline": "插入为大纲",
+    "insertImageFailed": "插入图片失败，请重试",
+    "newNode": "新节点",
     "saved": "思维导图已保存",
     "saveFailed": "思维导图保存失败，请重试"
   },

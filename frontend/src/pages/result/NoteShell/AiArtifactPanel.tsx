@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Download, FilePlus2, Sparkles, Trash2, X } from 'lucide-react'
 
@@ -14,16 +14,22 @@ import { toast } from 'sonner'
 import { useLnEditorStore } from '@/store/lnEditorStore'
 import { useTaskStore } from '@/store/taskStore'
 import type { TaskRecord } from '@/types/task'
+import { uploadLnScreenshot } from '@/services/lnScreenshots'
 import {
   ActionItemsView,
   FlashcardsView,
   GlossaryView,
   KeyCardsView,
-  MindMapTree,
   TimelineView,
   type ArtifactContentJson,
-  type MindMapData,
 } from './ArtifactRenderers'
+import {
+  MindMapView,
+  mindMapToMarkdown,
+  type MindMapData,
+  type MindMapExportHandle,
+  type MindMapExportRef,
+} from './MindMapView'
 
 import './ai-artifact-panel.css'
 
@@ -63,20 +69,23 @@ interface ArtifactContentViewProps {
   workspaceId?: string
   itemId?: string
   onMindMapUpdated?: (artifact: NoteArtifact, contentJson: MindMapData) => void
+  mindMapExportRef?: MindMapExportRef
 }
 
-export function ArtifactContentView({ artifact, workspaceId, itemId, onMindMapUpdated }: ArtifactContentViewProps) {
+export function ArtifactContentView({ artifact, workspaceId, itemId, onMindMapUpdated, mindMapExportRef }: ArtifactContentViewProps) {
   const contentJson = (artifact.content_json ?? null) as ArtifactContentJson
 
   if (artifact.kind === 'mind_map' && contentJson && (contentJson as MindMapData).root) {
     return (
-      <MindMapTree
+      <MindMapView
+        key={artifact.artifact_id}
         data={contentJson as MindMapData}
         title={artifact.title}
         workspaceId={workspaceId}
         itemId={itemId}
         artifactId={artifact.artifact_id}
         onUpdated={(next) => onMindMapUpdated?.(artifact, next)}
+        exportRef={mindMapExportRef}
       />
     )
   }
@@ -120,6 +129,7 @@ export function AiArtifactPanel({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [taskId, setTaskId] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const mindMapExportRef = useRef<MindMapExportHandle | null>(null)
   const tasks = useTaskStore((state) => state.tasks)
   const addTask = useTaskStore((state) => state.addTask)
 
@@ -222,6 +232,27 @@ export function AiArtifactPanel({
       .catch(() => toast.error(t('mindmap.saveFailed')))
   }
 
+  /** 插入为图片：snapdom 截图 → 复用 ln-screenshots 上传通道 → 编辑器 image 节点（保持导图视觉格式）。 */
+  const insertMindMapAsImage = async (target: NoteArtifact) => {
+    const handle = mindMapExportRef.current
+    if (!handle) return
+    try {
+      const blob = await handle.getPngBlob()
+      const { url } = await uploadLnScreenshot(workspaceId, blob, Date.now())
+      useLnEditorStore.getState().insertAtCursor(`\n\n![${target.title}](${url})\n\n`)
+    } catch {
+      toast.error(t('mindmap.insertImageFailed'))
+    }
+  }
+
+  /** 插入为大纲：优先取当前编辑中的导图数据，回退产物 content_json，转 Markdown 嵌套列表。 */
+  const insertMindMapAsOutline = (target: NoteArtifact) => {
+    const handle = mindMapExportRef.current
+    const data = handle?.getData() ?? (target.content_json as MindMapData | null)
+    if (!data?.root) return
+    useLnEditorStore.getState().insertAtCursor(`\n\n${mindMapToMarkdown(data)}\n\n`)
+  }
+
   const handleDelete = async (artifact: NoteArtifact) => {
     await deleteNoteArtifact(workspaceId, itemId, artifact.artifact_id)
     setArtifacts((current) => current.filter((item) => item.artifact_id !== artifact.artifact_id))
@@ -302,17 +333,32 @@ export function AiArtifactPanel({
                     </div>
                   </div>
                 ) : (
-                  <ArtifactContentView artifact={selected} workspaceId={workspaceId} itemId={itemId} onMindMapUpdated={handleMindMapUpdated} />
+                  <ArtifactContentView
+                    artifact={selected}
+                    workspaceId={workspaceId}
+                    itemId={itemId}
+                    onMindMapUpdated={handleMindMapUpdated}
+                    mindMapExportRef={mindMapExportRef}
+                  />
                 )}
                 <footer>
-                  {selected.kind !== 'selection_rewrite' && (
+                  {selected.kind === 'mind_map' && selected.content_json && (selected.content_json as MindMapData).root ? (
+                    <>
+                      <button type="button" onClick={() => void insertMindMapAsImage(selected)}>
+                        <FilePlus2 size={14} /> {t('mindmap.insertAsImage')}
+                      </button>
+                      <button type="button" onClick={() => insertMindMapAsOutline(selected)}>
+                        <FilePlus2 size={14} /> {t('mindmap.insertAsOutline')}
+                      </button>
+                    </>
+                  ) : selected.kind !== 'selection_rewrite' ? (
                     <button
                       type="button"
                       onClick={() => useLnEditorStore.getState().insertAtCursor(`\n\n${selected.content_md}\n\n`)}
                     >
                       <FilePlus2 size={14} /> 插入笔记
                     </button>
-                  )}
+                  ) : null}
                   <button type="button" onClick={() => downloadArtifact(selected)}>
                     <Download size={14} /> 导出 Markdown
                   </button>
