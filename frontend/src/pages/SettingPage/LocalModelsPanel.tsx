@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Download, RefreshCw } from 'lucide-react'
 
@@ -12,36 +13,38 @@ import {
 const PYANNOTE_ACCESS_URL = 'https://huggingface.co/pyannote/speaker-diarization-community-1'
 
 /** S5: 模型家族 → 用途分组标题（以真实后端 family 值为准；未知家族归“其他”） */
-const FAMILY_PURPOSE: Record<string, string> = {
-  'fast-whisper': '语音转写',
-  'mlx-whisper': '语音转写',
-  'asr': '语音转写',
-  'ocr': '图片文字识别',
-  'vision': '图片理解',
-  'speaker-embedding': '说话人识别',
-  'speaker-diarization': '说话人识别',
+const FAMILY_PURPOSE_KEY: Record<string, string> = {
+  'fast-whisper': 'localModels.familyAsr',
+  'mlx-whisper': 'localModels.familyAsr',
+  'asr': 'localModels.familyAsr',
+  'ocr': 'localModels.familyOcr',
+  'vision': 'localModels.familyVision',
+  'speaker-embedding': 'localModels.familySpeaker',
+  'speaker-diarization': 'localModels.familySpeaker',
 }
 
-function purposeLabel(family: string): string {
-  return FAMILY_PURPOSE[family] ?? '其他'
+function purposeLabel(family: string, t: (k: string) => string): string {
+  const key = FAMILY_PURPOSE_KEY[family]
+  return key ? t(key) : t('localModels.familyOther')
 }
 
-function formatSize(size: number): string {
-  if (!size) return '大小由模型运行时确认'
-  return size >= 1024 ? `${(size / 1024).toFixed(1)} GB` : `${Math.round(size)} MB`
+function formatSize(size: number, t: (k: string, o?: Record<string, unknown>) => string): string {
+  if (!size) return t('localModels.sizeUnknown')
+  return size >= 1024 ? t('localModels.sizeGb', { gb: (size / 1024).toFixed(1) }) : t('localModels.sizeMb', { mb: Math.round(size) })
 }
 
-function statusLabel(model: LocalModelStatus): string {
-  if (model.status === 'needs_token') return '需要 Token'
-  if (!model.compatible) return '当前设备不支持'
-  if (model.status === 'ready' || model.cached) return '已就绪'
-  if (model.status === 'downloading') return `下载中 ${Math.round(model.progress * 100)}%`
-  if (model.status === 'failed') return '下载失败'
-  if (model.status === 'not_verified') return '尚未验证'
-  return '待下载'
+function statusLabel(model: LocalModelStatus, t: (k: string, o?: Record<string, unknown>) => string): string {
+  if (model.status === 'needs_token') return t('localModels.statusNeedsToken')
+  if (!model.compatible) return t('localModels.statusUnsupported')
+  if (model.status === 'ready' || model.cached) return t('localModels.statusReady')
+  if (model.status === 'downloading') return t('localModels.statusDownloading', { percent: Math.round(model.progress * 100) })
+  if (model.status === 'failed') return t('localModels.statusFailed')
+  if (model.status === 'not_verified') return t('localModels.statusNotVerified')
+  return t('localModels.statusPending')
 }
 
 export default function LocalModelsPanel() {
+  const { t } = useTranslation('settings')
   const [models, setModels] = useState<LocalModelStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState('')
@@ -50,11 +53,11 @@ export default function LocalModelsPanel() {
     try {
       setModels(await listLocalModels())
     } catch {
-      toast.error('读取本地模型状态失败')
+      toast.error(t('localModels.loadFailed'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => { void refresh() }, [refresh])
   const downloading = models.some((model) => model.status === 'downloading')
@@ -67,22 +70,22 @@ export default function LocalModelsPanel() {
   const byPurpose = useMemo(() => {
     const groups = new Map<string, LocalModelStatus[]>()
     for (const model of models) {
-      const purpose = purposeLabel(model.family)
+      const purpose = purposeLabel(model.family, t)
       const current = groups.get(purpose) ?? []
       current.push(model)
       groups.set(purpose, current)
     }
     return [...groups.entries()]
-  }, [models])
+  }, [models, t])
 
   const startDownload = async (model: LocalModelStatus) => {
     setBusyId(model.model_id)
     try {
       await downloadLocalModel(model.model_id)
-      toast.success(`${model.title} 已开始后台下载`)
+      toast.success(t('localModels.downloadStarted', { title: model.title }))
       await refresh()
     } catch {
-      toast.error(`${model.title} 无法开始下载`)
+      toast.error(t('localModels.downloadStartFailed', { title: model.title }))
     } finally {
       setBusyId('')
     }
@@ -92,30 +95,30 @@ export default function LocalModelsPanel() {
     setBusyId(model.model_id)
     try {
       await activateLocalModel(model.model_id)
-      toast.success(`${model.title} 已设为默认转写模型`)
+      toast.success(t('localModels.activated', { title: model.title }))
       await refresh()
     } catch {
-      toast.error(`${model.title} 尚未就绪，无法切换`)
+      toast.error(t('localModels.activateFailed', { title: model.title }))
     } finally {
       setBusyId('')
     }
   }
 
-  if (loading) return <div className="settings-empty">正在读取本地模型状态…</div>
+  if (loading) return <div className="settings-empty">{t('localModels.loading')}</div>
 
   return (
     <div className="settings-subpanel">
       <section className="settings-card">
         <div className="settings-row">
           <div>
-            <div className="settings-row-label">本地模型下载与切换</div>
+            <div className="settings-row-label">{t('localModels.panelTitle')}</div>
             <div className="settings-row-hint">
-              仅在点击下载后联网；下载完成后可直接使用“切换使用”启用。下载期间进度每 2 秒更新一次。
+              {t('localModels.panelHint')}
             </div>
           </div>
           <div className="settings-row-control">
             <button type="button" className="btn-ghost" onClick={() => void refresh()}>
-              <RefreshCw size={14} /> 刷新状态
+              <RefreshCw size={14} /> {t('localModels.refresh')}
             </button>
           </div>
         </div>
@@ -131,36 +134,36 @@ export default function LocalModelsPanel() {
                     <strong>{model.title}</strong>
                     <p>{model.description}</p>
                     <details className="local-model-details">
-                      <summary>技术详情</summary>
-                      <small>缓存：{model.cache_dir} · {formatSize(model.estimated_size_mb)}</small>
+                      <summary>{t('localModels.techDetails')}</summary>
+                      <small>{t('localModels.cache', { dir: model.cache_dir, size: formatSize(model.estimated_size_mb, t) })}</small>
                     </details>
                     {model.model_id === 'pyannote' && !ready && (
                       <small className="local-model-guidance">
                         {model.status === 'failed'
-                          ? 'Community-1 的访问许可阻止了下载。'
-                          : '下载前需要使用当前 Hugging Face Token 所属账号接受 Community-1 访问许可。'}
-                        <a href={PYANNOTE_ACCESS_URL} target="_blank" rel="noreferrer">打开模型授权页</a>
-                        {'，完成后刷新状态并重新下载。'}
+                          ? t('localModels.pyannoteBlocked')
+                          : t('localModels.pyannoteNeedLicense')}
+                        <a href={PYANNOTE_ACCESS_URL} target="_blank" rel="noreferrer">{t('localModels.openLicense')}</a>
+                        {t('localModels.thenRefresh')}
                       </small>
                     )}
                     {model.status === 'downloading' && (
-                      <div className="local-model-progress" role="progressbar" aria-label={`${model.title}下载进度`} aria-valuenow={Math.round(model.progress * 100)}>
+                      <div className="local-model-progress" role="progressbar" aria-label={t('localModels.downloadAria', { title: model.title })} aria-valuenow={Math.round(model.progress * 100)}>
                         <span style={{ width: `${Math.round(model.progress * 100)}%` }} />
                       </div>
                     )}
                     {model.status === 'failed' && (
-                      <p className="local-model-failure">下载失败，可以重试。若多次失败，请检查网络或模型授权。</p>
+                      <p className="local-model-failure">{t('localModels.downloadFailedHint')}</p>
                     )}
                     {model.error && (
                       <details className="local-model-raw-error">
-                        <summary>原始错误</summary>
+                        <summary>{t('localModels.rawError')}</summary>
                         <small>{model.error}</small>
                       </details>
                     )}
                   </div>
                   <div className="local-model-actions">
-                    <span data-status={model.status}>{statusLabel(model)}</span>
-                    {model.active && <span className="local-model-active">当前使用</span>}
+                    <span data-status={model.status}>{statusLabel(model, t)}</span>
+                    {model.active && <span className="local-model-active">{t('localModels.activeNow')}</span>}
                     {(model.family === 'fast-whisper' || model.family === 'mlx-whisper') && (
                       <button
                         type="button"
@@ -168,7 +171,7 @@ export default function LocalModelsPanel() {
                         disabled={!ready || isBusy || model.active}
                         onClick={() => void activate(model)}
                       >
-                        {model.active ? '使用中' : '切换使用'}
+                        {model.active ? t('localModels.using') : t('localModels.switchUse')}
                       </button>
                     )}
                     {!ready && (
@@ -178,7 +181,7 @@ export default function LocalModelsPanel() {
                         disabled={!model.compatible || isBusy || model.status === 'needs_token'}
                         onClick={() => void startDownload(model)}
                       >
-                        <Download size={14} /> {isBusy ? '下载中…' : model.status === 'failed' ? '重试' : '下载'}
+                        <Download size={14} /> {isBusy ? t('localModels.downloading') : model.status === 'failed' ? t('localModels.retry') : t('localModels.download')}
                       </button>
                     )}
                   </div>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Trash2, RotateCcw, AlertTriangle } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -17,6 +18,7 @@ import type { WorkspaceRecord } from '@/types/workspace'
  * 极简版：不做批量勾选 / 过滤 / 排序——后续 N3 设置页重组再增强。
  */
 export default function TrashPage() {
+  const { t } = useTranslation('settings')
   const [items, setItems] = useState<WorkspaceRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -29,11 +31,11 @@ export default function TrashPage() {
       const data = await listWorkspaces({ trashedOnly: true })
       setItems(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载失败')
+      setError(err instanceof Error ? err.message : t('trash.loadFailed'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void reload()
@@ -45,14 +47,14 @@ export default function TrashPage() {
       await restoreWorkspace(wsId)
       setItems((prev) => prev.filter((w) => w.workspace_id !== wsId))
     } catch (err) {
-      setError(err instanceof Error ? err.message : '恢复失败')
+      setError(err instanceof Error ? err.message : t('trash.restoreFailed'))
     } finally {
       setBusyId(null)
     }
   }
 
   const handlePermanentDelete = async (wsId: string, name: string) => {
-    if (!window.confirm(`彻底删除「${name}」？\n此操作将删除任务记录和所有上传的素材文件，无法恢复。`)) {
+    if (!window.confirm(t('trash.confirmDelete', { name }))) {
       return
     }
     setBusyId(wsId)
@@ -60,7 +62,7 @@ export default function TrashPage() {
       await permanentlyDeleteWorkspace(wsId)
       setItems((prev) => prev.filter((w) => w.workspace_id !== wsId))
     } catch (err) {
-      setError(err instanceof Error ? err.message : '删除失败')
+      setError(err instanceof Error ? err.message : t('trash.deleteFailed'))
     } finally {
       setBusyId(null)
     }
@@ -68,7 +70,7 @@ export default function TrashPage() {
 
   const handleEmptyTrash = async () => {
     if (items.length === 0) return
-    if (!window.confirm(`确认清空垃圾桶？将彻底删除 ${items.length} 个任务及其所有上传素材，无法恢复。`)) {
+    if (!window.confirm(t('trash.confirmEmpty', { count: items.length }))) {
       return
     }
     setBusyId('__all__')
@@ -76,7 +78,7 @@ export default function TrashPage() {
       await emptyWorkspaceTrash()
       setItems([])
     } catch (err) {
-      setError(err instanceof Error ? err.message : '清空失败')
+      setError(err instanceof Error ? err.message : t('trash.emptyFailed'))
     } finally {
       setBusyId(null)
     }
@@ -86,9 +88,9 @@ export default function TrashPage() {
     <div className="mx-auto max-w-5xl space-y-6 p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-[28px] font-semibold tracking-tight">任务垃圾桶</h1>
+          <h1 className="text-[28px] font-semibold tracking-tight">{t('trash.title')}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            已软删除的任务保留在此处，可恢复或彻底删除。彻底删除将连带清理上传的素材文件。
+            {t('trash.subtitle')}
           </p>
         </div>
         <Button
@@ -98,7 +100,7 @@ export default function TrashPage() {
           disabled={items.length === 0 || busyId === '__all__'}
         >
           <Trash2 className="size-4" />
-          清空垃圾桶
+          {t('trash.emptyTrash')}
         </Button>
       </div>
 
@@ -110,7 +112,7 @@ export default function TrashPage() {
       )}
 
       {loading ? (
-        <div className="space-y-2" role="status" aria-label="加载中">
+        <div className="space-y-2" role="status" aria-label={t('trash.loadingAria')}>
           <Skeleton className="h-14 w-full" />
           <Skeleton className="h-14 w-full" />
           <Skeleton className="h-14 w-full" />
@@ -118,7 +120,7 @@ export default function TrashPage() {
       ) : items.length === 0 ? (
         <div className="rounded-md border border-dashed border-border p-12 text-center">
           <Trash2 className="mx-auto mb-3 size-8 text-muted-foreground/60" />
-          <p className="text-sm text-muted-foreground">垃圾桶是空的</p>
+          <p className="text-sm text-muted-foreground">{t('trash.empty')}</p>
         </div>
       ) : (
         <ul className="space-y-2">
@@ -130,8 +132,10 @@ export default function TrashPage() {
               <div className="min-w-0 flex-1">
                 <div className="truncate text-base font-medium">{ws.name}</div>
                 <div className="mt-0.5 text-xs text-muted-foreground">
-                  {ws.items.length} 个素材 · 更新于{' '}
-                  {new Date(ws.updated_at).toLocaleString()}
+                  {t('trash.itemMeta', {
+                    count: ws.items.length,
+                    date: new Date(ws.updated_at).toLocaleString(),
+                  })}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -142,7 +146,7 @@ export default function TrashPage() {
                   disabled={busyId !== null}
                 >
                   <RotateCcw className="size-4" />
-                  恢复
+                  {t('trash.restore')}
                 </Button>
                 <Button
                   variant="destructive"
@@ -151,7 +155,7 @@ export default function TrashPage() {
                   disabled={busyId !== null}
                 >
                   <Trash2 className="size-4" />
-                  彻底删除
+                  {t('trash.delete')}
                 </Button>
               </div>
             </li>

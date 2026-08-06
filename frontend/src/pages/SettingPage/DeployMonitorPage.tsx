@@ -10,6 +10,7 @@ import { Section } from '@/components/ui/section'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { useHealthPulse } from '@/hooks/useHealthPulse'
 import http from '@/services/client'
+import { useTranslation } from 'react-i18next'
 
 import './deploy-monitor.css'
 
@@ -58,17 +59,17 @@ interface LogsResponse {
   has_more_older: boolean
 }
 
-const STAGE_LABELS: Record<string, string> = {
-  PENDING: '等待开始',
-  DOWNLOAD: '下载媒体',
-  PROBE: '识别媒体信息',
-  FRAMES: '提取关键画面',
-  ASR: '语音转写',
-  VLM: '画面理解',
-  DIARIZATION: '区分说话人',
-  SUM: '生成总结',
-  SUMMARY: '生成总结',
-  STORE: '保存笔记',
+const STAGE_KEYS: Record<string, string> = {
+  PENDING: 'monitor.stage.pending',
+  DOWNLOAD: 'monitor.stage.download',
+  PROBE: 'monitor.stage.probe',
+  FRAMES: 'monitor.stage.frames',
+  ASR: 'monitor.stage.asr',
+  VLM: 'monitor.stage.vlm',
+  DIARIZATION: 'monitor.stage.diarization',
+  SUM: 'monitor.stage.sum',
+  SUMMARY: 'monitor.stage.sum',
+  STORE: 'monitor.stage.store',
 }
 
 const LOG_POLL_MS = 2000
@@ -103,35 +104,30 @@ function scopeOptions(logs: LogEntry[], field: LogScopeField, selected: string) 
   return [...options].map(([value, label]) => ({ value, label }))
 }
 
-function formatUptime(seconds: number): string {
+function formatUptime(seconds: number, t: (k: string, o?: Record<string, unknown>) => string): string {
   if (!Number.isFinite(seconds) || seconds < 0) return '—'
   const days = Math.floor(seconds / 86400)
   const hours = Math.floor((seconds % 86400) / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
-  if (days > 0) return `${days} 天 ${hours} 小时`
-  if (hours > 0) return `${hours} 小时 ${minutes} 分钟`
-  return `${minutes} 分钟`
+  if (days > 0) return t('monitor.uptimeDays', { days, hours })
+  if (hours > 0) return t('monitor.uptimeHours', { hours, minutes })
+  return t('monitor.uptimeMinutes', { minutes })
 }
 
-function formatTime(value: string): string {
+function formatTime(value: string, locale: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat(locale, {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
   }).format(date)
 }
 
-function formatDuration(value?: number) {
+function formatDuration(value: number | undefined, t: (k: string, o?: Record<string, unknown>) => string) {
   if (typeof value !== 'number' || value < 0) return ''
-  if (value < 1000) return `${Math.round(value)} 毫秒`
-  return `${(value / 1000).toFixed(1)} 秒`
-}
-
-function stageLabel(stage?: string) {
-  if (!stage) return ''
-  return STAGE_LABELS[stage.toUpperCase()] || stage
+  if (value < 1000) return t('monitor.durationMs', { ms: Math.round(value) })
+  return t('monitor.durationSec', { s: (value / 1000).toFixed(1) })
 }
 
 /** 人能理解的摘要：优先结构化 summary，旧日志回退到 message。 */
@@ -167,6 +163,12 @@ function matchesScope(
 }
 
 export default function DeployMonitorPage() {
+  const { t, i18n } = useTranslation('settings')
+  const stageLabel = (stage?: string) => {
+    if (!stage) return ''
+    const key = STAGE_KEYS[stage.toUpperCase()]
+    return key ? t(key) : stage
+  }
   const health = useHealthPulse(5000)
   const initialParams = useRef(new URLSearchParams(window.location.search))
   const [logs, setLogs] = useState<LogEntry[]>([])
@@ -339,17 +341,16 @@ export default function DeployMonitorPage() {
       <div className="deploy-monitor-shell">
         <PageHeader
           eyebrow="RUNTIME · LOCAL"
-          title="诊断日志"
-          description="每条事件优先展示摘要、可能原因与建议操作；原始模块名与技术细节收进事件详情。"
+          title={t('monitor.title')}
+          description={t('monitor.description')}
           actions={(
             <div className="monitor-health">
               <StatusBadge status={health.online ? 'success' : 'offline'}>
-                {health.online ? '在线' : '离线'}
+                {health.online ? t('monitor.status.online') : t('monitor.status.offline')}
               </StatusBadge>
               {health.online && health.data && (
                 <span>
-                  {health.data.version || '版本未知'} · 已运行{' '}
-                  {formatUptime(health.data.uptime_sec)}
+                  {health.data.version || t('monitor.versionUnknown')} · {t('monitor.running', { uptime: formatUptime(health.data.uptime_sec, t) })}
                 </span>
               )}
             </div>
@@ -357,8 +358,8 @@ export default function DeployMonitorPage() {
         />
 
         <Section
-          title="诊断事件"
-          description="处理事件与排错日志来自同一条实时事件流；最新事件始终在最上方。"
+          title={t('monitor.eventsTitle')}
+          description={t('monitor.eventsDescription')}
           action={(
             <button
               type="button"
@@ -368,56 +369,56 @@ export default function DeployMonitorPage() {
               {paused
                 ? <Play className="size-4" />
                 : <Pause className="size-4" />}
-              {paused ? '恢复更新' : '暂停更新'}
+              {paused ? t('monitor.resume') : t('monitor.pause')}
             </button>
           )}
         >
           <div className="monitor-diagnostic-controls">
             <select
-              aria-label="日志级别"
+              aria-label={t('monitor.levelAria')}
               className="input"
               value={levelFilter}
               onChange={(event) => setLevelFilter(event.target.value)}
             >
-              <option value="all">全部级别</option>
+              <option value="all">{t('monitor.allLevels')}</option>
               <option value="DEBUG">DEBUG</option>
               <option value="INFO">INFO</option>
               <option value="WARNING">WARNING</option>
               <option value="ERROR">ERROR</option>
             </select>
             <select
-              aria-label="任务 ID"
+              aria-label={t('monitor.taskAria')}
               className="input"
               value={taskFilter}
               onChange={(event) => setTaskFilter(event.target.value)}
             >
-              <option value="">全部任务</option>
+              <option value="">{t('monitor.allTasks')}</option>
               {taskOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
             <select
-              aria-label="批次 ID"
+              aria-label={t('monitor.batchAria')}
               className="input"
               value={batchFilter}
               onChange={(event) => setBatchFilter(event.target.value)}
             >
-              <option value="">全部批次</option>
+              <option value="">{t('monitor.allBatches')}</option>
               {batchOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
             <select
-              aria-label="合集 ID"
+              aria-label={t('monitor.workspaceAria')}
               className="input"
               value={workspaceFilter}
               onChange={(event) => setWorkspaceFilter(event.target.value)}
             >
-              <option value="">全部合集</option>
+              <option value="">{t('monitor.allWorkspaces')}</option>
               {workspaceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
             <input
-              aria-label="关键词"
+              aria-label={t('monitor.keywordAria')}
               className="input"
               value={keywordFilter}
               onChange={(event) => setKeywordFilter(event.target.value)}
-              placeholder="关键词"
+              placeholder={t('monitor.keywordPlaceholder')}
             />
             <button
               type="button"
@@ -426,11 +427,11 @@ export default function DeployMonitorPage() {
               onClick={() => void exportDiagnostics()}
             >
               <Download className="size-4" />
-              {exporting ? '导出中…' : '导出诊断'}
+              {exporting ? t('monitor.exporting') : t('monitor.export')}
             </button>
           </div>
           <p className="monitor-privacy">
-            导出内容已自动脱敏，不包含 API 密钥和 Cookie。
+            {t('monitor.privacy')}
           </p>
           {hasMore && (
             <button type="button" className="btn" onClick={() => void loadOlder()}>
@@ -440,7 +441,7 @@ export default function DeployMonitorPage() {
 
           <div className="monitor-activity-list">
             {visibleEvents.length === 0 && (
-              <div className="monitor-empty">当前过滤条件下没有诊断事件</div>
+              <div className="monitor-empty">{t('monitor.empty')}</div>
             )}
             {visibleEvents.map((log) => (
               <article
@@ -453,33 +454,32 @@ export default function DeployMonitorPage() {
                   <div className="monitor-activity-heading">
                     <div>
                       <strong>{summaryOf(log)}</strong>
-                      <span>{formatTime(log.timestamp)}</span>
+                      <span>{formatTime(log.timestamp, i18n.language)}</span>
                     </div>
                     <b data-level={log.level}>{log.level}</b>
                   </div>
                   {log.probable_cause && (
-                    <p className="monitor-cause">可能原因：{log.probable_cause}</p>
+                    <p className="monitor-cause">{t('monitor.cause', { cause: log.probable_cause })}</p>
                   )}
                   {log.suggested_action && (
-                    <p className="monitor-action">建议操作：{log.suggested_action}</p>
+                    <p className="monitor-action">{t('monitor.action', { action: log.suggested_action })}</p>
                   )}
                   <div className="monitor-activity-meta">
-                    {stageLabel(log.stage) && <span>环节 {stageLabel(log.stage)}</span>}
+                    {stageLabel(log.stage) && <span>{t('monitor.stageMeta', { stage: stageLabel(log.stage) })}</span>}
                     {log.details?.task_title && <span>{log.details.task_title}</span>}
-                    {log.task_id && <span>任务 {log.task_id}</span>}
-                    {log.batch_id && <span>批次 {log.batch_id}</span>}
-                    {log.workspace_id && <span>合集 {log.workspace_id}</span>}
-                    {log.correlation_id && <span>关联 {log.correlation_id}</span>}
+                    {log.task_id && <span>{t('monitor.taskMeta', { id: log.task_id })}</span>}
+                    {log.batch_id && <span>{t('monitor.batchMeta', { id: log.batch_id })}</span>}
+                    {log.workspace_id && <span>{t('monitor.workspaceMeta', { id: log.workspace_id })}</span>}
+                    {log.correlation_id && <span>{t('monitor.correlationMeta', { id: log.correlation_id })}</span>}
                     {typeof log.progress === 'number' && (
-                      <span>进度 {Math.round(log.progress * 100)}%</span>
+                      <span>{t('monitor.progressMeta', { percent: Math.round(log.progress * 100) })}</span>
                     )}
-                    {typeof log.duration_ms === 'number' && formatDuration(log.duration_ms) && (
-                      <span>本环节 {formatDuration(log.duration_ms)}</span>
+                    {typeof log.duration_ms === 'number' && formatDuration(log.duration_ms, t) && (
+                      <span>{t('monitor.durationMeta', { duration: formatDuration(log.duration_ms, t) })}</span>
                     )}
                     {typeof log.retry_count === 'number' && log.retry_count > 0 && (
                       <span>
-                        已重试 {log.retry_count}
-                        {typeof log.retry_max === 'number' ? `/${log.retry_max}` : ''} 次
+                        {t('monitor.retryMeta', { count: `${log.retry_count}${typeof log.retry_max === 'number' ? `/${log.retry_max}` : ''}` })}
                       </span>
                     )}
                   </div>
@@ -487,7 +487,7 @@ export default function DeployMonitorPage() {
                     <div
                       className="monitor-progress"
                       role="progressbar"
-                      aria-label={`${summaryOf(log)}进度`}
+                      aria-label={t('monitor.progressAria', { summary: summaryOf(log) })}
                       aria-valuemin={0}
                       aria-valuemax={100}
                       aria-valuenow={Math.round(log.progress * 100)}
@@ -496,22 +496,22 @@ export default function DeployMonitorPage() {
                     </div>
                   )}
                   <details className="monitor-event-detail">
-                    <summary>技术详情</summary>
+                    <summary>{t('monitor.detailSummary')}</summary>
                     <div className="monitor-event-detail-body">
-                      <div>级别：{log.level}</div>
-                      <div>模块：{log.category}</div>
-                      {log.stage && <div>阶段：{log.stage}</div>}
-                      {log.operation && <div>操作：{log.operation}</div>}
-                      {log.component && <div>组件：{log.component}</div>}
-                      {log.event_code && <div>事件代码：{log.event_code}</div>}
-                      {log.error_code && <div>错误代码：{log.error_code}</div>}
-                      {log.outcome && <div>结果：{log.outcome}</div>}
-                      {log.engine && <div>引擎：{log.engine}</div>}
-                      {log.provider && <div>供应商：{log.provider}</div>}
-                      {log.model && <div>模型：{log.model}</div>}
-                      {log.device && <div>设备：{log.device}</div>}
+                      <div>{t('monitor.detailLevel', { value: log.level })}</div>
+                      <div>{t('monitor.detailModule', { value: log.category })}</div>
+                      {log.stage && <div>{t('monitor.detailStage', { value: log.stage })}</div>}
+                      {log.operation && <div>{t('monitor.detailOperation', { value: log.operation })}</div>}
+                      {log.component && <div>{t('monitor.detailComponent', { value: log.component })}</div>}
+                      {log.event_code && <div>{t('monitor.detailEventCode', { value: log.event_code })}</div>}
+                      {log.error_code && <div>{t('monitor.detailErrorCode', { value: log.error_code })}</div>}
+                      {log.outcome && <div>{t('monitor.detailOutcome', { value: log.outcome })}</div>}
+                      {log.engine && <div>{t('monitor.detailEngine', { value: log.engine })}</div>}
+                      {log.provider && <div>{t('monitor.detailProvider', { value: log.provider })}</div>}
+                      {log.model && <div>{t('monitor.detailModel', { value: log.model })}</div>}
+                      {log.device && <div>{t('monitor.detailDevice', { value: log.device })}</div>}
                       {log.summary && log.summary !== log.message && (
-                        <div>原始日志：{log.message}</div>
+                        <div>{t('monitor.detailRaw', { value: log.message })}</div>
                       )}
                       {log.technical_detail && (
                         <code className="monitor-technical">{log.technical_detail}</code>

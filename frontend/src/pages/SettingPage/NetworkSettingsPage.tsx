@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { FieldRow } from '@/components/ui/field-row'
@@ -7,7 +8,6 @@ import {
   getNetworkConfig,
   updateNetworkConfig,
   testNetworkTarget,
-  ROUTING_MODE_DESCRIPTIONS,
   type NetworkConfig,
   type NetworkTestResult,
 } from '@/services/network'
@@ -21,6 +21,7 @@ import {
  * - 保存闭环：GET → 修改 → PATCH → GET 读回
  */
 const NetworkSettingsPage = () => {
+  const { t } = useTranslation('settings')
   const setSaveBar = useSettingsShellStore((s) => s.setSaveBar)
   const resetSaveBar = useSettingsShellStore((s) => s.resetSaveBar)
 
@@ -38,12 +39,12 @@ const NetworkSettingsPage = () => {
       setConfig(data)
       setDraft(data)
     } catch (err) {
-      toast.error('加载网络配置失败')
+      toast.error(t('network.loadFailed'))
       console.error(err)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     loadConfig()
@@ -62,17 +63,17 @@ const NetworkSettingsPage = () => {
       const readBack = await getNetworkConfig()
       if (readBack.routing_mode === draft.routing_mode && readBack.global_proxy === draft.global_proxy) {
         setConfig(readBack)
-        toast.success('已保存并读回验证')
+        toast.success(t('network.savedVerified'))
       } else {
-        toast.error('保存后读回不一致，请重试')
+        toast.error(t('network.saveMismatch'))
       }
     } catch (err) {
-      toast.error('保存失败')
+      toast.error(t('network.saveFailed'))
       console.error(err)
     } finally {
       setSaving(false)
     }
-  }, [draft])
+  }, [draft, t])
 
   // 重置
   const handleReset = useCallback(() => {
@@ -84,12 +85,12 @@ const NetworkSettingsPage = () => {
     try {
       setTestResult(await testNetworkTarget(target))
     } catch (err) {
-      toast.error('连通性测试失败')
+      toast.error(t('network.testFailed'))
       console.error(err)
     } finally {
       setTestingTarget('')
     }
-  }, [])
+  }, [t])
 
   // SaveBar 桥接
   useEffect(() => {
@@ -103,21 +104,21 @@ const NetworkSettingsPage = () => {
   }, [isDirty, saving, handleSave, handleReset, setSaveBar, resetSaveBar])
 
   if (loading) {
-    return <div className="settings-panel p-6">加载中…</div>
+    return <div className="settings-panel p-6">{t('network.loading')}</div>
   }
 
   return (
     <div className="settings-panel">
       <div className="settings-header">
         <div>
-          <h2>网络设置</h2>
-          <div className="settings-header-desc">配置联网方式和代理</div>
+          <h2>{t('network.title')}</h2>
+          <div className="settings-header-desc">{t('network.subtitle')}</div>
         </div>
       </div>
 
       {/* ── Section A · 连接模式 ── */}
       <div className="settings-section">
-        <div className="settings-section-title">连接模式</div>
+        <div className="settings-section-title">{t('network.connectMode')}</div>
         <div className="settings-card">
           <div className="px-6 py-4 space-y-3">
             {(['smart', 'direct', 'proxy'] as const).map((mode) => (
@@ -131,11 +132,11 @@ const NetworkSettingsPage = () => {
                 />
                 <div>
                   <div className="font-medium">
-                    {mode === 'smart' && '智能分流'}
-                    {mode === 'direct' && '全部直连'}
-                    {mode === 'proxy' && '全部代理'}
+                    {mode === 'smart' && t('network.routingModes.smart')}
+                    {mode === 'direct' && t('network.routingModes.direct')}
+                    {mode === 'proxy' && t('network.routingModes.proxy')}
                   </div>
-                  <div className="text-sm text-muted-foreground">{ROUTING_MODE_DESCRIPTIONS[mode]}</div>
+                  <div className="text-sm text-muted-foreground">{t(`network.routingModes.${mode}Desc`)}</div>
                 </div>
               </label>
             ))}
@@ -145,25 +146,25 @@ const NetworkSettingsPage = () => {
 
       {/* ── Section B · 全局代理 ── */}
       <div className="settings-section">
-        <div className="settings-section-title">全局代理</div>
+        <div className="settings-section-title">{t('network.globalProxy')}</div>
         <div className="settings-card">
           <FieldRow
             htmlFor="global-proxy"
-            label="代理地址"
-            hint="支持 HTTP、HTTPS、SOCKS。示例：http://127.0.0.1:7890 或 socks5://127.0.0.1:1080"
+            label={t('network.proxyLabel')}
+            hint={t('network.proxyHint')}
           >
             <Input
               id="global-proxy"
               type="text"
               value={draft.global_proxy}
               onChange={(e) => setDraft((prev) => ({ ...prev, global_proxy: e.target.value }))}
-              placeholder="http://127.0.0.1:7890"
+              placeholder={t('network.proxyPlaceholder')}
               className="text-sm font-mono"
             />
           </FieldRow>
           {draft.routing_mode === 'proxy' && !draft.global_proxy && (
             <div className="px-6 pb-4 text-sm text-amber-600">
-              提示：全部代理模式需要配置代理地址，否则海外站点将直连
+              {t('network.proxyWarning')}
             </div>
           )}
         </div>
@@ -171,30 +172,30 @@ const NetworkSettingsPage = () => {
 
       {/* ── Section C · 智能路由说明 ── */}
       <div className="settings-section">
-        <div className="settings-section-title">智能路由规则</div>
+        <div className="settings-section-title">{t('network.smartRules')}</div>
         <div className="settings-card">
           <div className="px-6 py-4 text-sm space-y-2">
             <div className="flex items-center gap-2">
               <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
-              <span>直连：Bilibili、抖音、小红书、腾讯视频、优酷、爱奇艺</span>
+              <span>{t('network.ruleDirect')}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="inline-block w-2 h-2 rounded-full bg-blue-500" />
-              <span>代理：YouTube、Twitter/X、Instagram、TikTok</span>
+              <span>{t('network.ruleProxy')}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="inline-block w-2 h-2 rounded-full bg-gray-400" />
-              <span>其他：默认直连</span>
+              <span>{t('network.ruleOther')}</span>
             </div>
           </div>
           <div className="border-t px-6 py-4">
-            <div className="mb-3 text-sm font-medium">按实际目标测试</div>
+            <div className="mb-3 text-sm font-medium">{t('network.testTitle')}</div>
             <div className="flex flex-wrap gap-2">
               {[
-                ['测试 Bilibili', 'https://www.bilibili.com/'],
-                ['测试 YouTube', 'https://www.youtube.com/'],
-                ['测试 Tavily', 'https://api.tavily.com/'],
-                ['测试模型服务', 'https://api.openai.com/'],
+                ['Bilibili', 'https://www.bilibili.com/'],
+                ['YouTube', 'https://www.youtube.com/'],
+                ['Tavily', 'https://api.tavily.com/'],
+                ['Model', 'https://api.openai.com/'],
               ].map(([label, target]) => (
                 <button
                   key={target}
@@ -203,7 +204,7 @@ const NetworkSettingsPage = () => {
                   disabled={testingTarget === target}
                   onClick={() => void handleTest(target)}
                 >
-                  {testingTarget === target ? '测试中…' : label}
+                  {testingTarget === target ? t('network.testing') : t(`network.test${label}`)}
                 </button>
               ))}
             </div>
@@ -212,9 +213,9 @@ const NetworkSettingsPage = () => {
                 className="mt-3 rounded border p-3 text-sm"
                 role="status"
               >
-                <div>{testResult.ok ? '连接成功' : '连接失败'} · {testResult.elapsed_ms} ms</div>
+                <div>{testResult.ok ? t('network.ok') : t('network.fail')} · {testResult.elapsed_ms} ms</div>
                 <div className="text-muted-foreground">
-                  {testResult.route}；{testResult.proxy_used ? '已使用代理' : '未使用代理'}；{testResult.message}
+                  {testResult.route} · {testResult.proxy_used ? t('network.proxyUsed') : t('network.proxyNotUsed')} · {testResult.message}
                 </div>
               </div>
             )}

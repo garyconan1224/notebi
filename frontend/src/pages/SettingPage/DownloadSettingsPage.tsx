@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { FieldRow } from '@/components/ui/field-row'
@@ -43,6 +44,7 @@ const DEFAULT_CONFIG: DownloadConfig = {
 }
 
 const DownloadSettingsPage = () => {
+  const { t } = useTranslation('settings')
   const setSaveBar = useSettingsShellStore((s) => s.setSaveBar)
   const resetSaveBar = useSettingsShellStore((s) => s.resetSaveBar)
 
@@ -59,12 +61,12 @@ const DownloadSettingsPage = () => {
       setConfig(res.data)
       setDraft(res.data)
     } catch (err) {
-      toast.error('加载下载配置失败')
+      toast.error(t('download.loadFailed'))
       console.error(err)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     loadConfig()
@@ -81,14 +83,14 @@ const DownloadSettingsPage = () => {
       // GET 读回验证
       const res = await http.get<DownloadConfig>('/download_config')
       setConfig(res.data)
-      toast.success('已保存并读回验证')
+      toast.success(t('download.savedVerified'))
     } catch (err) {
-      toast.error('保存失败')
+      toast.error(t('download.saveFailed'))
       console.error(err)
     } finally {
       setSaving(false)
     }
-  }, [draft])
+  }, [draft, t])
 
   // 重置
   const handleReset = useCallback(() => {
@@ -102,10 +104,10 @@ const DownloadSettingsPage = () => {
       )
       setCookieMessage(res.data.message)
     } catch (err) {
-      toast.error('Cookie 测试失败')
+      toast.error(t('download.cookieTestFailed'))
       console.error(err)
     }
-  }, [])
+  }, [t])
 
   const handleCookieImport = useCallback(async (file: File | undefined) => {
     if (!file) return
@@ -116,24 +118,24 @@ const DownloadSettingsPage = () => {
         '/download_config/import-cookie',
         body,
       )
-      if (!res.data.success) throw new Error(res.data.error || '导入失败')
+      if (!res.data.success) throw new Error(res.data.error || t('download.importFailed'))
       await loadConfig()
-      toast.success('Cookie 文件已安全导入')
+      toast.success(t('download.cookieImported'))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Cookie 导入失败')
+      toast.error(err instanceof Error ? err.message : t('download.cookieImportFailed'))
     }
-  }, [loadConfig])
+  }, [loadConfig, t])
 
   const handleCookieDelete = useCallback(async () => {
     try {
       await http.delete('/download_config/cookie')
       await loadConfig()
-      toast.success('Cookie 文件已删除')
+      toast.success(t('download.cookieDeleted'))
     } catch (err) {
-      toast.error('删除 Cookie 文件失败')
+      toast.error(t('download.cookieDeleteFailed'))
       console.error(err)
     }
-  }, [loadConfig])
+  }, [loadConfig, t])
 
   // SaveBar 桥接
   useEffect(() => {
@@ -148,9 +150,9 @@ const DownloadSettingsPage = () => {
 
   // 文件名模板预设
   const filenamePresets = [
-    { label: '仅标题', value: '%(title)s.%(ext)s' },
-    { label: '标题-ID', value: '%(title)s-%(id)s.%(ext)s' },
-    { label: '上传者-标题', value: '%(uploader)s-%(title)s.%(ext)s' },
+    { label: t('download.presetTitleOnly'), value: '%(title)s.%(ext)s' },
+    { label: t('download.presetTitleId'), value: '%(title)s-%(id)s.%(ext)s' },
+    { label: t('download.presetUploaderTitle'), value: '%(uploader)s-%(title)s.%(ext)s' },
   ]
 
   const generatePreview = (template: string): string => {
@@ -162,41 +164,41 @@ const DownloadSettingsPage = () => {
   }
 
   if (loading) {
-    return <div className="settings-panel p-6">加载中…</div>
+    return <div className="settings-panel p-6">{t('download.loading')}</div>
   }
 
   return (
     <div className="settings-panel">
       <div className="settings-header">
         <div>
-          <h2>下载配置</h2>
-          <div className="settings-header-desc">配置媒体下载的存储路径、文件命名和并发参数</div>
+          <h2>{t('download.title')}</h2>
+          <div className="settings-header-desc">{t('download.subtitle')}</div>
         </div>
       </div>
 
       {/* ── Section A · 存储与命名 ── */}
       <div className="settings-section">
-        <div className="settings-section-title">存储与命名</div>
+        <div className="settings-section-title">{t('download.storageSection')}</div>
         <div className="settings-card">
           <FieldRow
             htmlFor="output-dir"
-            label="输出目录"
-            hint="留空将使用默认目录（data/videos/）"
+            label={t('download.outputDirLabel')}
+            hint={t('download.outputDirHint')}
           >
             <Input
               id="output-dir"
               type="text"
               value={draft.output_dir}
               onChange={(e) => setDraft((prev) => ({ ...prev, output_dir: e.target.value }))}
-              placeholder="留空使用默认目录"
+              placeholder={t('download.outputDirPlaceholder')}
               className="text-sm"
             />
           </FieldRow>
 
           <FieldRow
             htmlFor="filename-template"
-            label="文件名模板"
-            hint="使用 yt-dlp 模板语法，如 %(title)s / %(id)s"
+            label={t('download.templateLabel')}
+            hint={t('download.templateHint')}
           >
             <div className="space-y-3">
               <Input
@@ -224,7 +226,7 @@ const DownloadSettingsPage = () => {
                 ))}
               </div>
               <div style={{ padding: 8, borderRadius: 'var(--rs)', background: 'var(--bgalt)', fontSize: 'var(--xs)', color: 'var(--mut)' }}>
-                示例预览: {generatePreview(draft.filename_template)}
+                {t('download.preview')}{generatePreview(draft.filename_template)}
               </div>
             </div>
           </FieldRow>
@@ -233,13 +235,13 @@ const DownloadSettingsPage = () => {
 
       {/* ── Section B · Cookie 设置 ── */}
       <div className="settings-section">
-        <div className="settings-section-title">Cookie 设置</div>
+        <div className="settings-section-title">{t('download.cookieSection')}</div>
         <div className="settings-card">
           <div className="px-6 py-4 space-y-3">
             {([
-              { value: 'none', label: '不使用 Cookie', desc: '匿名下载，部分视频可能无法获取' },
-              { value: 'browser', label: '从浏览器读取', desc: '下载时自动从浏览器获取 Cookie' },
-              { value: 'file', label: '使用 Cookie 文件', desc: '使用导入的 cookies.txt 文件' },
+              { value: 'none', label: t('download.cookieNone'), desc: t('download.cookieNoneDesc') },
+              { value: 'browser', label: t('download.cookieBrowser'), desc: t('download.cookieBrowserDesc') },
+              { value: 'file', label: t('download.cookieFile'), desc: t('download.cookieFileDesc') },
             ] as const).map((mode) => (
               <label key={mode.value} className="flex items-start gap-3 cursor-pointer">
                 <input
@@ -259,7 +261,7 @@ const DownloadSettingsPage = () => {
 
           {draft.cookie_mode === 'browser' && (
             <>
-              <FieldRow htmlFor="cookie-browser" label="浏览器" hint="选择要读取 Cookie 的浏览器">
+              <FieldRow htmlFor="cookie-browser" label={t('download.browserLabel')} hint={t('download.browserHint')}>
                 <select
                   id="cookie-browser"
                   value={draft.cookie_browser}
@@ -274,14 +276,14 @@ const DownloadSettingsPage = () => {
               </FieldRow>
               <FieldRow
                 htmlFor="cookie-profile"
-                label="浏览器 Profile"
-                hint="多用户浏览器可填写 Profile 目录名；默认用户请留空"
+                label={t('download.profileLabel')}
+                hint={t('download.profileHint')}
               >
                 <Input
                   id="cookie-profile"
                   value={draft.cookie_profile}
                   onChange={(e) => setDraft((prev) => ({ ...prev, cookie_profile: e.target.value }))}
-                  placeholder="例如 Profile 1"
+                  placeholder={t('download.profilePlaceholder')}
                 />
               </FieldRow>
             </>
@@ -289,10 +291,10 @@ const DownloadSettingsPage = () => {
 
           <div className="border-t px-6 py-4 space-y-3 text-sm">
             <p className="text-muted-foreground">
-              浏览器 Cookie 被占用时，请关闭浏览器后再测试；指定 Profile 只在多用户场景填写。
+              {t('download.cookieNote1')}
             </p>
             <p className="text-muted-foreground">
-              文件回退仅接受 Netscape 格式 cookies.txt。请从可信扩展导出，不要把 Cookie 正文粘贴到页面或日志。
+              {t('download.cookieNote2')}
             </p>
             <div className="flex flex-wrap gap-2">
               <button type="button" className="chip" onClick={() => void handleCookieTest()}>
@@ -304,7 +306,7 @@ const DownloadSettingsPage = () => {
                   className="sr-only"
                   type="file"
                   accept=".txt,text/plain"
-                  aria-label="导入 cookies.txt"
+                  aria-label={t('download.importCookieAria')}
                   onChange={(event) => void handleCookieImport(event.target.files?.[0])}
                 />
               </label>
@@ -319,12 +321,12 @@ const DownloadSettingsPage = () => {
 
       {/* ── Section C · 高级参数 ── */}
       <div className="settings-section">
-        <div className="settings-section-title">高级参数</div>
+        <div className="settings-section-title">{t('download.advancedSection')}</div>
         <div className="settings-card">
           <FieldRow
             htmlFor="concurrency-limit"
-            label="并发下载数"
-            hint="同时下载的分片数量，范围 1-8，默认 2"
+            label={t('download.concurrencyLabel')}
+            hint={t('download.concurrencyHint')}
           >
             <Input
               id="concurrency-limit"
@@ -339,8 +341,8 @@ const DownloadSettingsPage = () => {
 
           <FieldRow
             htmlFor="retry-count"
-            label="重试次数"
-            hint="连接失败时的重试次数，范围 0-10，默认 2"
+            label={t('download.retryLabel')}
+            hint={t('download.retryHint')}
           >
             <Input
               id="retry-count"
@@ -355,8 +357,8 @@ const DownloadSettingsPage = () => {
 
           <FieldRow
             htmlFor="socket-timeout"
-            label="连接超时（秒）"
-            hint="网络连接超时时间，范围 5-300 秒，默认 30"
+            label={t('download.timeoutLabel')}
+            hint={t('download.timeoutHint')}
           >
             <Input
               id="socket-timeout"

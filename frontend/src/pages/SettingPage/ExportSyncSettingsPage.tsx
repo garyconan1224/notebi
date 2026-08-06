@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { fetchSettings, patchSettings } from '@/services/settings'
 
@@ -26,6 +27,7 @@ const DEFAULT_EXPORT_SYNC: ExportSyncDraft = {
  * 飞书文件夹 Token。API Token 一律不保存，仍只在单次导出时输入。
  */
 export function ExportSyncSettingsPage() {
+  const { t } = useTranslation('settings')
   const [obsidian, setObsidian] = useState<ObsidianDraft>(DEFAULT_OBSIDIAN)
   const [exportSync, setExportSync] = useState<ExportSyncDraft>(DEFAULT_EXPORT_SYNC)
   const [saving, setSaving] = useState(false)
@@ -40,12 +42,12 @@ export function ExportSyncSettingsPage() {
         if (settings.export_sync) setExportSync(settings.export_sync)
       })
       .catch(() => {
-        if (active) setStatus('读取失败，请稍后重试')
+        if (active) setStatus(t('exportSync.loadFailed'))
       })
     return () => {
       active = false
     }
-  }, [])
+  }, [t])
 
   const save = async () => {
     setSaving(true)
@@ -54,9 +56,9 @@ export function ExportSyncSettingsPage() {
       const saved = await patchSettings({ obsidian, export_sync: exportSync })
       if (saved.obsidian) setObsidian(saved.obsidian)
       if (saved.export_sync) setExportSync(saved.export_sync)
-      setStatus('已保存')
+      setStatus(t('exportSync.saved'))
     } catch {
-      setStatus('保存失败，请检查后重试')
+      setStatus(t('exportSync.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -66,27 +68,27 @@ export function ExportSyncSettingsPage() {
     <section className="settings-panel" aria-labelledby="export-sync-title">
       <header className="settings-header">
         <div>
-          <h2 id="export-sync-title">导出与同步</h2>
+          <h2 id="export-sync-title">{t('exportSync.title')}</h2>
           <p className="settings-header-desc">
-            集中管理导出目的地默认值；API Token 不会保存到 NoteBi，仅在单次导出时输入。
+            {t('exportSync.subtitle')}
           </p>
         </div>
       </header>
 
       <div className="settings-section">
-        <div className="settings-section-title">Obsidian</div>
+        <div className="settings-section-title">{t('exportSync.obsidianSection')}</div>
         <div className="settings-card">
           <label className="settings-row">
             <span className="settings-row-label">
-              <strong>Vault 路径</strong>
-              <span className="settings-row-hint">Obsidian 仓库在本机的完整路径</span>
+              <strong>{t('exportSync.vaultLabel')}</strong>
+              <span className="settings-row-hint">{t('exportSync.vaultHint')}</span>
             </span>
             <span className="settings-row-control">
               <input
                 className="settings-input"
-                aria-label="Obsidian Vault 路径"
+                aria-label={t('exportSync.vaultAria')}
                 value={obsidian.vault_path}
-                placeholder="例如 /Users/你/Documents/My Vault"
+                placeholder={t('exportSync.vaultPlaceholder')}
                 onChange={(event) =>
                   setObsidian((current) => ({ ...current, vault_path: event.target.value }))
                 }
@@ -95,15 +97,15 @@ export function ExportSyncSettingsPage() {
           </label>
           <label className="settings-row">
             <span className="settings-row-label">
-              <strong>笔记子目录</strong>
-              <span className="settings-row-hint">留空时写入 Vault 根目录</span>
+              <strong>{t('exportSync.subdirLabel')}</strong>
+              <span className="settings-row-hint">{t('exportSync.subdirHint')}</span>
             </span>
             <span className="settings-row-control">
               <input
                 className="settings-input"
-                aria-label="Obsidian 子目录"
+                aria-label={t('exportSync.subdirAria')}
                 value={obsidian.subdir}
-                placeholder="例如 NoteBi"
+                placeholder={t('exportSync.subdirPlaceholder')}
                 onChange={(event) =>
                   setObsidian((current) => ({ ...current, subdir: event.target.value }))
                 }
@@ -112,14 +114,14 @@ export function ExportSyncSettingsPage() {
           </label>
           <div className="settings-row">
             <span className="settings-row-label">
-              <strong>允许本地直写</strong>
-              <span className="settings-row-hint">关闭后仍可下载 Obsidian ZIP 包</span>
+              <strong>{t('exportSync.directWriteLabel')}</strong>
+              <span className="settings-row-hint">{t('exportSync.directWriteHint')}</span>
             </span>
             <span className="settings-row-control">
               <label>
                 <input
                   type="checkbox"
-                  aria-label="启用 Obsidian 直写"
+                  aria-label={t('exportSync.directWriteAria')}
                   checked={obsidian.direct_write}
                   onChange={(event) =>
                     setObsidian((current) => ({
@@ -135,19 +137,19 @@ export function ExportSyncSettingsPage() {
       </div>
 
       <div className="settings-section">
-        <div className="settings-section-title">云笔记默认值</div>
+        <div className="settings-section-title">{t('exportSync.cloudSection')}</div>
         <div className="settings-card">
           <label className="settings-row">
             <span className="settings-row-label">
-              <strong>Notion 默认父页面</strong>
-              <span className="settings-row-hint">导出对话框会预填，仍可临时修改</span>
+              <strong>{t('exportSync.notionLabel')}</strong>
+              <span className="settings-row-hint">{t('exportSync.prefillHint')}</span>
             </span>
             <span className="settings-row-control">
               <input
                 className="settings-input"
-                aria-label="Notion 默认父页面 ID 或链接"
+                aria-label={t('exportSync.notionAria')}
                 value={exportSync.notion_parent_page_id}
-                placeholder="页面 ID 或页面链接"
+                placeholder={t('exportSync.notionPlaceholder')}
                 onChange={(event) =>
                   setExportSync((current) => ({
                     ...current,
@@ -159,15 +161,15 @@ export function ExportSyncSettingsPage() {
           </label>
           <label className="settings-row">
             <span className="settings-row-label">
-              <strong>飞书默认文件夹</strong>
-              <span className="settings-row-hint">导出对话框会预填，仍可临时修改</span>
+              <strong>{t('exportSync.feishuLabel')}</strong>
+              <span className="settings-row-hint">{t('exportSync.prefillHint')}</span>
             </span>
             <span className="settings-row-control">
               <input
                 className="settings-input"
-                aria-label="飞书默认文件夹 Token"
+                aria-label={t('exportSync.feishuAria')}
                 value={exportSync.feishu_folder_token}
-                placeholder="文件夹 Token"
+                placeholder={t('exportSync.feishuPlaceholder')}
                 onChange={(event) =>
                   setExportSync((current) => ({
                     ...current,
@@ -179,9 +181,9 @@ export function ExportSyncSettingsPage() {
           </label>
           <div className="settings-row">
             <span className="settings-row-label">
-              <strong>Token 安全说明</strong>
+              <strong>{t('exportSync.tokenLabel')}</strong>
               <span className="settings-row-hint">
-                Notion 集成令牌 / 飞书访问令牌不在此保存，仅在单次导出时输入，请求结束即丢弃。
+                {t('exportSync.tokenHint')}
               </span>
             </span>
             <span className="settings-row-control">
@@ -191,7 +193,7 @@ export function ExportSyncSettingsPage() {
                 disabled={saving}
                 onClick={() => void save()}
               >
-                {saving ? '保存中…' : '保存导出与同步设置'}
+                {saving ? t('exportSync.saving') : t('exportSync.saveButton')}
               </button>
               {status && (
                 <span role="status" className="settings-row-hint">
