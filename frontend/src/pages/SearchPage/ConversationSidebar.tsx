@@ -1,4 +1,5 @@
 import { MessageSquare, Plus, Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { KnowledgeConversation } from '@/types/knowledgeConversation'
 
 interface Props {
@@ -16,14 +17,15 @@ export function ConversationSidebar({
   onNew,
   onDelete,
 }: Props) {
+  const { t } = useTranslation('pages')
   return (
-    <nav className="knowledge-conversations" aria-label="知识库会话">
+    <nav className="knowledge-conversations" aria-label={t('knowledge.conversationsTitle')}>
       <div className="knowledge-panel-heading">
         <div>
           <span>CONVERSATIONS</span>
-          <strong>会话</strong>
+          <strong>{t('knowledge.conversations')}</strong>
         </div>
-        <button type="button" onClick={onNew} aria-label="新建知识库会话">
+        <button type="button" onClick={onNew} aria-label={t('knowledge.newConversationAria')}>
           <Plus size={16} />
         </button>
       </div>
@@ -41,7 +43,7 @@ export function ConversationSidebar({
             >
               <MessageSquare size={14} />
               <span>
-                <strong>{conversation.title || '新会话'}</strong>
+                <strong>{conversation.title || t('knowledge.newConversation')}</strong>
                 <small>
                   {conversation.messages.length} 条消息
                 </small>
@@ -50,7 +52,7 @@ export function ConversationSidebar({
             <button
               type="button"
               className="knowledge-conversation-delete"
-              aria-label={`删除会话 ${conversation.title}`}
+              aria-label={t('knowledge.deleteConversation', { title: conversation.title })}
               onClick={() => onDelete(conversation.conversation_id)}
             >
               <Trash2 size={13} />
@@ -58,7 +60,7 @@ export function ConversationSidebar({
           </div>
         ))}
         {conversations.length === 0 && (
-          <p className="knowledge-panel-empty">暂无会话，提出第一个问题即可创建。</p>
+          <p className="knowledge-panel-empty">{t('knowledge.noConversations')}</p>
         )}
       </div>
     </nav>

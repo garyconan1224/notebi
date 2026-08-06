@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, ExternalLink, FileSearch } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import type { KnowledgeSourceSnapshot } from '@/types/knowledgeConversation'
 
@@ -20,31 +21,32 @@ export function SourcePreviewPanel({
   activeSourceId,
   onSelect,
 }: Props) {
+  const { t } = useTranslation('pages')
   const index = Math.max(
     0,
     sources.findIndex(source => source.source_id === activeSourceId),
   )
   const source = sources[index]
   return (
-    <aside className="knowledge-source-preview" aria-label="来源预览">
+    <aside className="knowledge-source-preview" aria-label={t('knowledge.sourcePreview')}>
       <div className="knowledge-panel-heading">
         <div>
           <span>EVIDENCE</span>
-          <strong>来源预览</strong>
+          <strong>{t('knowledge.sourcePreview')}</strong>
         </div>
         {sources.length > 0 && <small>{index + 1} / {sources.length}</small>}
       </div>
       {!source ? (
         <div className="knowledge-source-empty">
           <FileSearch size={22} />
-          <p>点击回答中的引用或来源，在这里核对原文。</p>
+          <p>{t('knowledge.sourcePreviewHint')}</p>
         </div>
       ) : (
         <div className="knowledge-source-card">
           <div className="knowledge-source-nav">
             <button
               type="button"
-              aria-label="上一个来源"
+              aria-label={t('knowledge.prevSource')}
               disabled={index === 0}
               onClick={() => onSelect(sources[index - 1].source_id)}
             >
@@ -52,7 +54,7 @@ export function SourcePreviewPanel({
             </button>
             <button
               type="button"
-              aria-label="下一个来源"
+              aria-label={t('knowledge.nextSource')}
               disabled={index >= sources.length - 1}
               onClick={() => onSelect(sources[index + 1].source_id)}
             >
@@ -60,12 +62,12 @@ export function SourcePreviewPanel({
             </button>
           </div>
           <div className="knowledge-source-meta">
-            <span>{source.workspace_name || '未命名合集'}</span>
-            <span>{source.item_type || source.source_type || '内容'}</span>
+            <span>{source.workspace_name || t('knowledge.untitledCollection')}</span>
+            <span>{source.item_type || source.source_type || t('knowledge.content')}</span>
             {source.start_ms != null && <span>{formatTime(source.start_ms)}</span>}
           </div>
-          <h3>{source.item_title || source.title || '未命名来源'}</h3>
-          <p>{source.excerpt || source.chunk_excerpt || '暂无可预览片段'}</p>
+          <h3>{source.item_title || source.title || t('knowledge.untitledSource')}</h3>
+          <p>{source.excerpt || source.chunk_excerpt || t('knowledge.noPreviewSegments')}</p>
           {typeof source.score === 'number' && (
             <small>匹配分 {source.score.toFixed(2)}</small>
           )}

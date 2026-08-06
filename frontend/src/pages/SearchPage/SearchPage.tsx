@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { RefreshCw, RotateCcw } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -52,13 +53,14 @@ function scopeItemRefs(scope: KnowledgeScope): KnowledgeItemRef[] | undefined {
 }
 
 function scopeItemsFor(
+  t: (k: string, o?: Record<string, unknown>) => string,
   workspaces: WorkspaceRecord[],
 ): KnowledgeScopeItemOption[] {
   const seen = new Set<string>()
   return workspaces.flatMap(workspace => workspace.items.map(item => ({
     workspaceId: workspace.workspace_id,
     itemId: item.item_id,
-    name: item.name || '未命名笔记',
+    name: item.name || t('knowledge.untitledNote'),
     workspaceName: workspace.name,
     type: item.type,
   }))).filter(item => {
@@ -79,11 +81,12 @@ function newestAssistantSources(
     ?.sources ?? []
 }
 
-function messageSourceLabel(source: KnowledgeSourceSnapshot) {
-  return source.item_title || source.title || source.excerpt || '来源'
+function messageSourceLabel(t: (k: string, o?: Record<string, unknown>) => string, source: KnowledgeSourceSnapshot) {
+  return source.item_title || source.title || source.excerpt || t('knowledge.source')
 }
 
 export default function SearchPage() {
+  const { t } = useTranslation('pages')
   const [searchParams] = useSearchParams()
   const initialized = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
@@ -133,9 +136,9 @@ export default function SearchPage() {
       setPendingQuestion('')
       setLastError('')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '加载会话失败')
+      toast.error(error instanceof Error ? error.message : t('knowledge.loadConversationsFailed'))
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     if (initialized.current) return
@@ -151,7 +154,7 @@ export default function SearchPage() {
         setStatus(currentStatus)
         setConversations(conversationPage.items)
         const validIds = new Set(records.map(record => record.workspace_id))
-        const itemOptions = scopeItemsFor(records)
+        const itemOptions = scopeItemsFor(t, records)
         const urlIds = (searchParams.get('workspace_ids') ?? '')
           .split(',')
           .filter(id => validIds.has(id))
@@ -207,10 +210,10 @@ export default function SearchPage() {
           )
         }
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : '加载知识库失败')
+        toast.error(error instanceof Error ? error.message : t('knowledge.loadKnowledgeFailed'))
       }
     })()
-  }, [searchParams])
+  }, [t, searchParams])
 
   const handleScopeChange = useCallback((next: KnowledgeScope) => {
     setScope(next)
@@ -225,10 +228,10 @@ export default function SearchPage() {
           item.conversation_id === updated.conversation_id ? updated : item
         )))
       }).catch(error => {
-        toast.error(error instanceof Error ? error.message : '保存会话范围失败')
+        toast.error(error instanceof Error ? error.message : t('knowledge.saveScopeFailed'))
       })
     }
-  }, [activeConversation])
+  }, [t, activeConversation])
 
   const createConversation = useCallback(async () => {
     try {
@@ -248,13 +251,13 @@ export default function SearchPage() {
       setLastError('')
       return created
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '新建会话失败')
+      toast.error(error instanceof Error ? error.message : t('knowledge.newConversationFailed'))
       return null
     }
-  }, [scope])
+  }, [t, scope])
 
   const removeConversation = useCallback(async (conversationId: string) => {
-    if (!window.confirm('只删除这段问答记录，不会删除合集、素材或索引。继续吗？')) return
+    if (!window.confirm(t('knowledge.deleteConversationConfirm'))) return
     try {
       await deleteKnowledgeConversation(conversationId)
       const next = conversations.filter(
@@ -268,9 +271,9 @@ export default function SearchPage() {
         if (next[0]) await selectConversation(next[0].conversation_id)
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '删除会话失败')
+      toast.error(error instanceof Error ? error.message : t('knowledge.deleteConversationFailed'))
     }
-  }, [activeConversation, conversations, selectConversation])
+  }, [t, activeConversation, conversations, selectConversation])
 
   const runQuery = useCallback(async () => {
     const question = query.trim()
@@ -280,7 +283,7 @@ export default function SearchPage() {
       && scope.workspaceIds.length === 0
       && (scope.itemRefs?.length ?? 0) === 0
     ) {
-      toast.warning('请至少选择一个合集或笔记')
+      toast.warning(t('knowledge.chooseScopeFirst'))
       return
     }
     setLastError('')
@@ -302,7 +305,7 @@ export default function SearchPage() {
         setStreamSources(result.sources)
         setActiveSourceId(result.sources[0]?.source_id ?? null)
       } catch (error) {
-        const message = error instanceof Error ? error.message : '原文搜索失败'
+        const message = error instanceof Error ? error.message : t('knowledge.sourceSearchFailed')
         setLastError(message)
         toast.error(message)
       } finally {
@@ -362,7 +365,7 @@ export default function SearchPage() {
       }
       setPhase('idle')
     } catch (error) {
-      const message = error instanceof Error ? error.message : '知识库回答失败'
+      const message = error instanceof Error ? error.message : t('knowledge.knowledgeAnswerFailed')
       if (!controller.signal.aborted) {
         setLastError(message)
         setPhase('failed')
@@ -374,7 +377,7 @@ export default function SearchPage() {
       abortRef.current = null
       setLoading(false)
     }
-  }, [activeConversation, createConversation, mode, query, scope])
+  }, [t, activeConversation, createConversation, mode, query, scope])
 
   const retryMessage = useCallback(async (message: KnowledgeMessage) => {
     if (!activeConversation) return
@@ -390,22 +393,22 @@ export default function SearchPage() {
       setStreamSources(regenerated.sources)
       setActiveSourceId(regenerated.sources[0]?.source_id ?? null)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '重新生成失败')
+      toast.error(error instanceof Error ? error.message : t('knowledge.regenerateFailed'))
     }
-  }, [activeConversation])
+  }, [t, activeConversation])
 
   const refreshIndex = useCallback(async () => {
     setRefreshing(true)
     try {
       const next = await rebuildKnowledge(true)
       setStatus(next)
-      toast.success('索引刷新已开始')
+      toast.success(t('knowledge.indexRefreshStarted'))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '索引刷新失败')
+      toast.error(error instanceof Error ? error.message : t('knowledge.indexRefreshFailed'))
     } finally {
       setRefreshing(false)
     }
-  }, [])
+  }, [t])
 
   const updateWorkspace = useCallback((record: WorkspaceRecord) => {
     setWorkspaces(previous => previous.map(item => (
@@ -421,7 +424,7 @@ export default function SearchPage() {
     ),
     [activeConversation, exactResult, streamSources],
   )
-  const scopeItems = useMemo(() => scopeItemsFor(workspaces), [workspaces])
+  const scopeItems = useMemo(() => scopeItemsFor(t, workspaces), [t, workspaces])
 
   return (
     <div className="nibi-search-scope knowledge-workspace">
@@ -433,11 +436,11 @@ export default function SearchPage() {
         onDelete={conversationId => void removeConversation(conversationId)}
       />
 
-      <main className="knowledge-message-column" aria-label="知识库消息">
+      <main className="knowledge-message-column" aria-label={t('knowledge.kbMessage')}>
         <header className="knowledge-toolbar">
           <div>
             <span className="search-kicker">KNOWLEDGE · EVIDENCE FIRST</span>
-            <h1>知识库</h1>
+            <h1>{t('knowledge.knowledge')}</h1>
           </div>
           <div className="knowledge-toolbar-actions">
             <KnowledgeScopePicker
@@ -446,7 +449,7 @@ export default function SearchPage() {
               scope={scope}
               onChange={handleScopeChange}
             />
-            <div className="search-mode-group" aria-label="检索方式">
+            <div className="search-mode-group" aria-label={t('knowledge.retrievalMode')}>
               <button
                 type="button"
                 aria-pressed={mode === 'smart'}
@@ -457,7 +460,7 @@ export default function SearchPage() {
               </button>
               <button
                 type="button"
-                aria-label="找原文"
+                aria-label={t('knowledge.findOriginal')}
                 aria-pressed={mode === 'exact'}
                 data-active={mode === 'exact'}
                 onClick={() => setMode('exact')}
@@ -475,7 +478,7 @@ export default function SearchPage() {
                 size={13}
                 className={refreshing || status?.running ? 'animate-spin' : ''}
               />
-              {status?.ready ? '索引已就绪' : status?.running ? '索引构建中' : '刷新索引'}
+              {status?.ready ? t('knowledge.indexReady') : status?.running ? t('knowledge.indexBuilding') : t('knowledge.refreshIndex')}
             </button>
           </div>
         </header>
@@ -496,10 +499,10 @@ export default function SearchPage() {
                 {message.role === 'user' ? '你' : 'NoteBi'}
               </div>
               {message.status === 'insufficient_evidence' ? (
-                <p>现有合集中没有足够证据。</p>
+                <p>{t('knowledge.noEvidence')}</p>
               ) : (
                 <p>{message.content || (
-                  message.status === 'failed' ? message.error : '处理中…'
+                  message.status === 'failed' ? message.error : t('knowledge.processing')
                 )}</p>
               )}
               {message.role === 'assistant' && message.sources.length > 0 && (
@@ -509,9 +512,9 @@ export default function SearchPage() {
                       type="button"
                       key={source.source_id}
                       onClick={() => setActiveSourceId(source.source_id)}
-                      aria-label={`查看来源 ${index + 1}`}
+                      aria-label={t('knowledge.viewSource', { index: index + 1 })}
                     >
-                      [{index + 1}] {messageSourceLabel(source)}
+                      [{index + 1}] {messageSourceLabel(t, source)}
                     </button>
                   ))}
                 </div>
@@ -537,12 +540,12 @@ export default function SearchPage() {
             <article className="knowledge-message knowledge-message-assistant knowledge-pending">
               <div className="knowledge-message-role">NoteBi</div>
               {loading && (
-                <div className="knowledge-progress" aria-label="回答进度">
-                  <span data-active>正在检索</span>
+                <div className="knowledge-progress" aria-label={t('knowledge.answerProgress')}>
+                  <span data-active>{t('knowledge.retrieving')}</span>
                   {streamSources.length > 0 && (
                     <span data-active>找到 {streamSources.length} 个来源</span>
                   )}
-                  {phase === 'generating' && <span data-active>正在生成</span>}
+                  {phase === 'generating' && <span data-active>{t('knowledge.generating')}</span>}
                 </div>
               )}
               {!loading && streamSources.length > 0 && (
@@ -571,7 +574,7 @@ export default function SearchPage() {
                       onClick={() => setActiveSourceId(source.source_id)}
                       aria-label={`查看来源 ${index + 1}`}
                     >
-                      [{index + 1}] {messageSourceLabel(source)}
+                      [{index + 1}] {messageSourceLabel(t, source)}
                     </button>
                   ))}
                 </div>

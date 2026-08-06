@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { Bookmark, ChevronDown, ChevronUp, ExternalLink, File, FileText, Film, Image, Mic } from 'lucide-react'
 import { toast } from 'sonner'
@@ -32,6 +33,7 @@ function isFavorite(source: SearchSource, workspaces: WorkspaceRecord[]) {
 }
 
 export function SearchResultView({ result, workspaces, onWorkspaceChange }: Props) {
+  const { t } = useTranslation('pages')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [activeSource, setActiveSource] = useState<string | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
@@ -73,9 +75,9 @@ export function SearchResultView({ result, workspaces, onWorkspaceChange }: Prop
         ? await unfavoriteItem(source.workspace_id, source.item_id)
         : await favoriteItem(source.workspace_id, source.item_id)
       onWorkspaceChange(record)
-      toast.success(favorite ? '已取消收藏' : '已加入收藏夹')
+      toast.success(favorite ? t('knowledge.unfavorited') : t('knowledge.favorited'))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '收藏状态更新失败')
+      toast.error(error instanceof Error ? error.message : t('knowledge.favoriteFailed'))
     } finally {
       setSaving(null)
     }
@@ -94,17 +96,17 @@ export function SearchResultView({ result, workspaces, onWorkspaceChange }: Prop
           <div className="search-source-cover"><TypeIcon type={source.item_type} /></div>
           <div className="search-source-info">
             <div className="search-source-title">
-              <span>[{label ?? index + 1}] {source.item_title || '（无标题）'}</span>
+              <span>[{label ?? index + 1}] {source.item_title || t('knowledge.noTitle')}</span>
               <span className="search-source-actions">
                 <button
                   onClick={() => toggleFavorite(source)}
                   disabled={saving === source.source_id}
-                  aria-label={favorite ? '取消收藏' : '收藏来源'}
+                  aria-label={favorite ? t('knowledge.unfavorite') : t('knowledge.favoriteSource')}
                   data-active={favorite}
                 >
                   <Bookmark size={14} fill={favorite ? 'currentColor' : 'none'} />
                 </button>
-                <Link to={source.jump_url} aria-label="跳转到原文">
+                <Link to={source.jump_url} aria-label={t('knowledge.jumpToOriginal')}>
                   <ExternalLink size={14} />
                 </Link>
               </span>
@@ -114,7 +116,7 @@ export function SearchResultView({ result, workspaces, onWorkspaceChange }: Prop
                 {ITEM_TYPE_TEXT[source.item_type] ?? source.item_type}
               </span>
               <span>{source.workspace_name}</span>
-              <span>{source.field === 'transcript' ? '转写原文' : '内容原文'}</span>
+              <span>{source.field === 'transcript' ? t('knowledge.transcriptSource') : t('knowledge.contentSource')}</span>
               {source.start_ms != null && (
                 <span>{Math.floor(source.start_ms / 1000)} 秒</span>
               )}
@@ -137,7 +139,7 @@ export function SearchResultView({ result, workspaces, onWorkspaceChange }: Prop
               })}
             >
               {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-              {open ? '收起定位信息' : '展开定位信息'}
+              {open ? t('knowledge.collapseLoc') : t('knowledge.expandLoc')}
             </button>
           </div>
         </article>
@@ -148,15 +150,15 @@ export function SearchResultView({ result, workspaces, onWorkspaceChange }: Prop
   return (
     <>
       {result.mode !== 'exact' && (
-        <section className="search-answer" aria-label="知识库回答">
-          <div className="search-answer-label">知识库回答</div>
+        <section className="search-answer" aria-label={t('knowledge.kbAnswer')}>
+          <div className="search-answer-label">{t('knowledge.kbAnswer')}</div>
           <div className="search-answer-body">
             {result.answer_status === 'insufficient_evidence'
-              ? '现有合集中没有足够证据'
-              : result.answer || '（模型未返回内容）'}
+              ? t('knowledge.noEvidenceShort')
+              : result.answer || t('knowledge.noModelOutput')}
           </div>
           {citations.length > 0 ? (
-            <div className="search-citations" aria-label="回答引用">
+            <div className="search-citations" aria-label={t('knowledge.answerCitations')}>
               {citations.map(citation => (
                 <button
                   key={citation.source_id}
@@ -164,7 +166,7 @@ export function SearchResultView({ result, workspaces, onWorkspaceChange }: Prop
                   onClick={() => focusSource(
                     result.sources.findIndex(s => s.source_id === citation.source_id)
                   )}
-                  aria-label={`查看来源 ${citation.number}`}
+                  aria-label={t('knowledge.viewCitation', { index: citation.number })}
                 >
                   [{citation.number}]
                 </button>
@@ -172,7 +174,7 @@ export function SearchResultView({ result, workspaces, onWorkspaceChange }: Prop
             </div>
           ) : (
             result.answer && (
-              <p className="search-no-citations">本回答未包含可核验的引用标记。</p>
+              <p className="search-no-citations">{t('knowledge.noCitations')}</p>
             )
           )}
         </section>
@@ -180,8 +182,8 @@ export function SearchResultView({ result, workspaces, onWorkspaceChange }: Prop
 
       {/* 引用来源 */}
       {citedSources.length > 0 && (
-        <section aria-label="引用来源">
-          <div className="search-sources-heading">引用来源（{citedSources.length}）</div>
+        <section aria-label={t('knowledge.citationSources')}>
+          <div className="search-sources-heading">{t('knowledge.citationSources')}（{citedSources.length}）</div>
           <ul className="search-source-list">
             {citedSources.map(({ source, index, number }) =>
               renderSourceCard(source, index, number)
@@ -192,14 +194,14 @@ export function SearchResultView({ result, workspaces, onWorkspaceChange }: Prop
 
       {/* 相关原文（默认折叠） */}
       {result.mode !== 'exact' && relatedSources.length > 0 && (
-        <section aria-label="相关原文">
+        <section aria-label={t('knowledge.relatedSources')}>
           <button
             className="search-related-toggle"
             onClick={() => setShowRelated(v => !v)}
             aria-expanded={showRelated}
           >
             {showRelated ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-            相关原文（{relatedSources.length}）
+            {t('knowledge.relatedSources')}（{relatedSources.length}）
           </button>
           {showRelated && (
             <ul className="search-source-list">
@@ -213,8 +215,8 @@ export function SearchResultView({ result, workspaces, onWorkspaceChange }: Prop
 
       {/* exact 模式：所有结果平铺 */}
       {result.mode === 'exact' && (
-        <section aria-label="原文结果">
-          <div className="search-sources-heading">原文结果（{result.sources.length}）</div>
+        <section aria-label={t('knowledge.sourceResults')}>
+          <div className="search-sources-heading">{t('knowledge.sourceResults')}（{result.sources.length}）</div>
           <ul className="search-source-list">
             {result.sources.map((source, index) => renderSourceCard(source, index))}
           </ul>

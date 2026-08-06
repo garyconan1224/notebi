@@ -1,4 +1,5 @@
 import { Search as SearchIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   history: string[]
@@ -7,11 +8,12 @@ interface Props {
 }
 
 export function SearchEmptyState({ history, onSearch, onQuery }: Props) {
+  const { t } = useTranslation('pages')
   return (
     <section className="search-empty">
       <SearchIcon size={20} />
-      <div className="search-empty-title">从一个具体问题开始</div>
-      <div className="search-empty-desc">回答会附带原文来源，可直接跳回内容核验。</div>
+      <div className="search-empty-title">{t('knowledge.emptyTitle')}</div>
+      <div className="search-empty-desc">{t('knowledge.emptyDesc')}</div>
       {history.length > 0 && (
         <div className="search-history-chips">
           {history.map(item => (

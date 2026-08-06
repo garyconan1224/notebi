@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Check, ChevronDown, Search as SearchIcon } from 'lucide-react'
 import type { KnowledgeItemRef } from '@/types/knowledgeConversation'
 import type { WorkspaceRecord } from '@/types/workspace'
@@ -81,26 +82,27 @@ export function persistScope(scope: KnowledgeScope): void {
 
 /** 范围摘要文案。合集和单篇笔记按并集检索。 */
 export function scopeSummary(
+  t: (k: string, o?: Record<string, unknown>) => string,
   scope: KnowledgeScope,
   workspaces: WorkspaceRecord[],
   items: KnowledgeScopeItemOption[] = [],
 ): string {
-  if (scope.type === 'all') return '全部笔记'
+  if (scope.type === 'all') return t('knowledge.allNotes')
   const itemRefs = scope.itemRefs ?? []
   const count = scope.workspaceIds.length + itemRefs.length
-  if (count === 0) return '请选择范围'
+  if (count === 0) return t('knowledge.chooseScope')
   if (count === 1 && scope.workspaceIds.length === 1) {
     const workspace = workspaces.find(item => item.workspace_id === scope.workspaceIds[0])
-    return workspace?.name ?? '已选 1 个合集'
+    return workspace?.name ?? t('knowledge.oneCollection')
   }
   if (count === 1 && itemRefs.length === 1) {
     const ref = itemRefs[0]
     const item = items.find(option => (
       option.workspaceId === ref.workspace_id && option.itemId === ref.item_id
     ))
-    return item ? `笔记：${item.name}` : '已选 1 篇笔记'
+    return item ? t('knowledge.noteItem', { name: item.name }) : t('knowledge.oneNote')
   }
-  return `已选 ${scope.workspaceIds.length} 个合集、${itemRefs.length} 篇笔记`
+  return t('knowledge.multiScope', { workspaces: scope.workspaceIds.length, notes: itemRefs.length })
 }
 
 export function KnowledgeScopePicker({
@@ -109,6 +111,7 @@ export function KnowledgeScopePicker({
   scope,
   onChange,
 }: KnowledgeScopePickerProps) {
+  const { t } = useTranslation('pages')
   const [open, setOpen] = useState(false)
   const [filter, setFilter] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
@@ -190,7 +193,7 @@ export function KnowledgeScopePicker({
   }, [onChange])
 
   const isAll = scope.type === 'all'
-  const summary = scopeSummary(scope, workspaces, items)
+  const summary = scopeSummary(t, scope, workspaces, items)
   const selectedCount = scope.workspaceIds.length + selectedItemRefs.length
 
   return (
@@ -201,22 +204,22 @@ export function KnowledgeScopePicker({
         onClick={() => setOpen(value => !value)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label="知识库范围"
+        aria-label={t('knowledge.scopeTitle')}
       >
         <span className="scope-picker-label">{summary}</span>
         <ChevronDown size={14} />
       </button>
 
       {open && (
-        <div className="scope-picker-popover" role="listbox" aria-label="选择知识库范围">
+        <div className="scope-picker-popover" role="listbox" aria-label={t('knowledge.chooseScopeTitle')}>
           <div className="scope-picker-search">
             <SearchIcon size={13} />
             <input
               ref={inputRef}
               value={filter}
               onChange={event => setFilter(event.target.value)}
-              placeholder="搜索合集或笔记…"
-              aria-label="搜索合集或笔记"
+              placeholder={t('knowledge.searchPlaceholder')}
+              aria-label={t('knowledge.searchAria')}
             />
           </div>
 
@@ -240,7 +243,7 @@ export function KnowledgeScopePicker({
           </div>
 
           <div className="scope-picker-list">
-            <div className="scope-picker-section-label">合集</div>
+            <div className="scope-picker-section-label">{t('knowledge.collectionsTab')}</div>
             {filteredWorkspaces.map(workspace => {
               const checked = isAll || scope.workspaceIds.includes(workspace.workspace_id)
               return (
@@ -256,11 +259,11 @@ export function KnowledgeScopePicker({
                     {checked && <Check size={13} />}
                   </span>
                   <span className="scope-picker-name">{workspace.name}</span>
-                  <span className="scope-picker-meta">合集</span>
+                  <span className="scope-picker-meta">{t('knowledge.collectionsTab')}</span>
                 </button>
               )
             })}
-            <div className="scope-picker-section-label">单个笔记</div>
+            <div className="scope-picker-section-label">{t('knowledge.notesTab')}</div>
             {filteredItems.map(item => {
               const checked = isAll || selectedItemRefs.some(ref => (
                 ref.workspace_id === item.workspaceId && ref.item_id === item.itemId
@@ -283,7 +286,7 @@ export function KnowledgeScopePicker({
               )
             })}
             {filteredWorkspaces.length === 0 && filteredItems.length === 0 && (
-              <div className="scope-picker-empty">无匹配合集或笔记</div>
+              <div className="scope-picker-empty">{t('knowledge.noMatch')}</div>
             )}
           </div>
         </div>

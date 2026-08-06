@@ -1,4 +1,5 @@
 import { Search, Send, Square } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   value: string
@@ -19,10 +20,11 @@ export function KnowledgeComposer({
   onSubmit,
   onStop,
 }: Props) {
+  const { t } = useTranslation('pages')
   return (
     <div className="knowledge-composer">
       <textarea
-        aria-label="知识库提问"
+        aria-label={t('knowledge.composerTitle')}
         value={value}
         onChange={event => onChange(event.target.value)}
         onKeyDown={event => {
@@ -37,13 +39,13 @@ export function KnowledgeComposer({
         }}
         placeholder={
           mode === 'smart'
-            ? '向选中的合集提问。Enter 发送，Shift+Enter 换行。'
-            : '输入标题、摘要或原文关键词。'
+            ? t('knowledge.composerHint')
+            : t('knowledge.composerSearchHint')
         }
         disabled={disabled}
       />
       {loading ? (
-        <button type="button" onClick={onStop} aria-label="停止生成">
+        <button type="button" onClick={onStop} aria-label={t('knowledge.stopGenerating')}>
           <Square size={14} /> 停止
         </button>
       ) : (
@@ -51,10 +53,10 @@ export function KnowledgeComposer({
           type="button"
           onClick={onSubmit}
           disabled={disabled || !value.trim()}
-          aria-label={mode === 'smart' ? '发送问题' : '查找原文'}
+          aria-label={mode === 'smart' ? t('knowledge.sendQuestion') : t('knowledge.findSource')}
         >
           {mode === 'smart' ? <Send size={14} /> : <Search size={14} />}
-          {mode === 'smart' ? '发送' : '查找原文'}
+          {mode === 'smart' ? t('knowledge.send') : '查找原文'}
         </button>
       )}
     </div>

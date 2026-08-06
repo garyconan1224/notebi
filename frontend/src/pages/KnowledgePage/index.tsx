@@ -42,8 +42,8 @@ type WorkspaceOption = {
   kind: string
 }
 
-function formatDate(value: string | null | undefined): string {
-  if (!value) return '尚未建立'
+function formatDate(t: (k: string, o?: Record<string, unknown>) => string, value: string | null | undefined): string {
+  if (!value) return t('knowledge.notReady')
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString('zh-CN', {
@@ -54,16 +54,16 @@ function formatDate(value: string | null | undefined): string {
   })
 }
 
-function statusText(status: KnowledgeStatus | null): string {
-  if (!status) return '正在读取索引状态'
+function statusText(status: KnowledgeStatus | null, t: (k: string, o?: Record<string, unknown>) => string): string {
+  if (!status) return t('knowledge.readingStatus')
   if (status.running) {
-    return `正在建立索引 ${status.rebuild.processed_workspaces}/${status.rebuild.total_workspaces}`
+    return t('knowledge.buildingIndex', { w: status.rebuild.processed_workspaces, t: status.rebuild.total_workspaces })
   }
-  if (status.item_count <= 0) return '暂无可收录笔记'
+  if (status.item_count <= 0) return t('knowledge.noNotes')
   if (!status.ready) {
-    return `待刷新 ${status.indexed_item_count}/${status.item_count} 个素材`
+    return t('knowledge.pendingRefresh', { indexed: status.indexed_item_count, total: status.item_count })
   }
-  return `已收录 ${status.indexed_workspace_count} 个合集 / ${status.indexed_item_count} 个素材`
+  return t('knowledge.indexed', { workspaces: status.indexed_workspace_count, items: status.indexed_item_count })
 }
 
 export default function KnowledgePage() {
@@ -127,13 +127,13 @@ export default function KnowledgePage() {
       setStatus(next)
       return next
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '读取知识库状态失败'
+      const msg = err instanceof Error ? err.message : t('knowledge.readFailed')
       toast.error(msg)
       return null
     } finally {
       setLoadingStatus(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void refreshStatus()
@@ -161,18 +161,18 @@ export default function KnowledgePage() {
   const selectedWorkspaceCount = selectedWorkspaceIds.length
   const placeholderText = status?.ready
     ? selectedWorkspaceCount > 0
-      ? `向 ${selectedWorkspaceCount} 个合集提问`
-      : '向所有笔记提问'
-    : '索引就绪后可提问'
+      ? t('knowledge.askCollections', { count: selectedWorkspaceCount })
+      : t('knowledge.askAll')
+    : t('knowledge.askWhenReady')
 
   const handleRebuild = async () => {
     setRebuilding(true)
     try {
       const next = await rebuildKnowledge(true)
       setStatus(next)
-      toast.success('已开始刷新知识库索引')
+      toast.success(t('knowledge.refreshStarted'))
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '刷新索引失败'
+      const msg = err instanceof Error ? err.message : t('knowledge.refreshFailed')
       toast.error(msg)
     } finally {
       setRebuilding(false)
@@ -182,7 +182,7 @@ export default function KnowledgePage() {
   const handleNewConversation = () => {
     setMessages([])
     setInput('')
-    toast.success('已开启新对话')
+    toast.success(t('knowledge.newConversation'))
   }
 
   const toggleWorkspace = (wsId: string) => {
@@ -200,7 +200,7 @@ export default function KnowledgePage() {
     const question = input.trim()
     if (!question || asking) return
     if (!status?.ready) {
-      toast.error('知识库索引还未就绪，请先刷新索引')
+      toast.error(t('knowledge.indexNotReady'))
       return
     }
 
@@ -221,14 +221,14 @@ export default function KnowledgePage() {
       const assistantMessage: KnowledgeMessage = {
         id: `a-${Date.now()}`,
         role: 'assistant',
-        content: res.answer || '（没有生成回答）',
+        content: res.answer || t('knowledge.noAnswer'),
         sources: res.sources ?? [],
       }
       setMessages((prev) => [...prev, assistantMessage])
       if (res.status) setStatus(res.status)
     } catch (err: unknown) {
       const detail = isAxiosError(err) ? err.response?.data?.detail : undefined
-      const msg = typeof detail === 'string' ? detail : err instanceof Error ? err.message : '提问失败'
+      const msg = typeof detail === 'string' ? detail : err instanceof Error ? err.message : t('knowledge.askFailed')
       toast.error(msg)
       setMessages((prev) => prev.filter((m) => m.id !== userMessage.id))
       void refreshStatus()
@@ -277,7 +277,7 @@ export default function KnowledgePage() {
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <div className="rounded-md border border-border bg-card px-3 py-2">
             <div className="text-xs text-muted-foreground">{t('knowledge.status')}</div>
-            <div className="mt-1 text-sm font-medium text-foreground">{statusText(status)}</div>
+            <div className="mt-1 text-sm font-medium text-foreground">{statusText(status, t)}</div>
           </div>
           <div className="rounded-md border border-border bg-card px-3 py-2">
             <div className="text-xs text-muted-foreground">{t('knowledge.coverage')}</div>
@@ -291,7 +291,7 @@ export default function KnowledgePage() {
           <div className="rounded-md border border-border bg-card px-3 py-2">
             <div className="text-xs text-muted-foreground">{t('knowledge.lastUpdated')}</div>
             <div className="mt-1 text-sm font-medium text-foreground">
-              {formatDate(status?.last_indexed_at)}
+              {formatDate(t, status?.last_indexed_at)}
             </div>
           </div>
         </div>
@@ -317,8 +317,8 @@ export default function KnowledgePage() {
               >
                 <Plus size={12} />
                 {selectedWorkspaceCount > 0
-                  ? `已选 ${selectedWorkspaceCount} 个合集`
-                  : '全部笔记'}
+                  ? t('knowledge.selectedCollections', { count: selectedWorkspaceCount })
+                  : t('knowledge.allNotes')}
               </Button>
               {pickerOpen && (
                 <div className="absolute left-0 top-full z-50 mt-1 max-h-64 w-72 overflow-y-auto rounded-md border border-border bg-card shadow-lg">
@@ -379,10 +379,10 @@ export default function KnowledgePage() {
               onClick={handleNewConversation}
               disabled={messages.length === 0}
               className="gap-1 text-xs"
-              title="开启新对话"
+              title={t('knowledge.openNewChat')}
             >
               <MessageSquarePlus size={14} />
-              新对话
+              {t('knowledge.newChat')}
             </Button>
           </div>
 
@@ -390,12 +390,12 @@ export default function KnowledgePage() {
             {messages.length === 0 && !asking ? (
               <div className="flex h-full min-h-[260px] items-center justify-center text-center text-sm text-muted-foreground">
                 {status?.item_count === 0
-                  ? '先去做几篇笔记，知识库会自动收录。'
+                  ? t('knowledge.makeNotesFirst')
                   : status?.ready
                     ? selectedWorkspaceCount > 0
-                      ? `已限定 ${selectedWorkspaceCount} 个合集，输入问题开始提问。`
-                      : '向所有笔记提问，答案会附上来源。'
-                    : '刷新索引后开始提问。'}
+                      ? t('knowledge.scopedHint', { count: selectedWorkspaceCount })
+                      : t('knowledge.allNotesHint')
+                    : t('knowledge.refreshThenAsk')}
               </div>
             ) : (
               <div className="flex flex-col gap-4">
@@ -445,6 +445,7 @@ function MessageBubble({
   message: KnowledgeMessage
   onOpenSource: (source: SearchSource) => void
 }) {
+  const { t } = useTranslation('pages')
   const isUser = message.role === 'user'
   return (
     <div className={cn('flex flex-col gap-2', isUser ? 'items-end' : 'items-start')}>
@@ -474,7 +475,7 @@ function MessageBubble({
                 <ArrowUpRight size={13} className="shrink-0 text-muted-foreground" />
               </div>
               <p className="mt-1 line-clamp-2 text-muted-foreground">
-                {source.chunk_excerpt || '无片段预览'}
+                {source.chunk_excerpt || t('knowledge.noPreview')}
               </p>
             </button>
           ))}
