@@ -124,7 +124,8 @@
     "alreadyInSuffix": "{{count}} already in it",
     "heroTitle": "Every note you've made is collected here.",
     "heroSubtitle": "Videos, audio, images, and text each keep their own entry; only the most needed actions stay on the first level.",
-    "importContent": "Import content"
+    "importContent": "Import content",
+    "filter": "Filter"
   },
   "workbench": {
     "heroTitle": "Turn content into clear notes",

@@ -124,7 +124,8 @@
     "alreadyInSuffix": "{{count}} 项已在其中",
     "heroTitle": "所有做过的笔记，都在这里汇总。",
     "heroSubtitle": "视频、音频、图片和文本都保留各自入口，只把最需要的操作放在第一层。",
-    "importContent": "导入内容"
+    "importContent": "导入内容",
+    "filter": "筛选"
   },
   "workbench": {
     "heroTitle": "把内容变成清晰笔记",

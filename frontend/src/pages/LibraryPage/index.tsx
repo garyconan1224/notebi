@@ -683,7 +683,7 @@ export default function LibraryPage() {
               onClick={() => setFilterOpen((value) => !value)}
             >
               <Filter size={13} />
-              筛选{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+              {t('library.filter')}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
             </button>
             {filterOpen && (
               <div className="lib-filter-popover">
@@ -737,7 +737,7 @@ export default function LibraryPage() {
                 {showAll && chipCounts?.all === 0 ? emptyTitle : t('library.noMatchNotes')}
               </div>
               <div className="empty-state-desc">
-                {showAll && chipCounts?.all === 0 ? emptyDesc : '试试切换筛选条件或清除 chip'}
+                {showAll && chipCounts?.all === 0 ? emptyDesc : t('library.noMatchHint')}
               </div>
             </div>
           ) : (
