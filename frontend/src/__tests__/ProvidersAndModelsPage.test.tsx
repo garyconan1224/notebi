@@ -28,11 +28,6 @@ vi.mock('@/store/configStore', () => ({
 }))
 
 // Mock i18n
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, fallback?: string) => fallback || key,
-  }),
-}))
 
 // Mock sonner
 const toastMocks = vi.hoisted(() => ({

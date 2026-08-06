@@ -219,7 +219,7 @@ const ModelManagementPage = () => {
           : p
       ))
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '保存默认模型失败'
+      const msg = e instanceof Error ? e.message : t('model.saveDefaultFailed')
       toast.error(msg)
       return
     }
@@ -248,14 +248,14 @@ const ModelManagementPage = () => {
           ? { embeddingProviderId: providerId, embeddingModelId: modelId }
           : { embeddingProviderId: '', embeddingModelId: '' },
       )
-      toast.success(next ? '已保存默认嵌入模型' : '已清除默认嵌入模型')
+      toast.success(next ? t('model.embeddingSaved') : t('model.embeddingCleared'))
     } else {
       setConfig(
         next
           ? { rerankProviderId: providerId, rerankModelId: modelId }
           : { rerankProviderId: '', rerankModelId: '' },
       )
-      toast.success(next ? '已保存默认重排模型' : '已清除默认重排模型')
+      toast.success(next ? t('model.rerankSaved') : t('model.rerankCleared'))
     }
   }
 
@@ -314,8 +314,8 @@ const ModelManagementPage = () => {
     { key: 'all', label: t('model.filter.all') },
     { key: 'chat', label: t('model.filter.chat') },
     { key: 'vision', label: t('model.filter.vision') },
-    { key: 'embedding', label: '嵌入' },
-    { key: 'rerank', label: '重排' },
+    { key: 'embedding', label: t('model.embedding') },
+    { key: 'rerank', label: t('model.rerank') },
   ]
 
   return (

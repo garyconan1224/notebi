@@ -315,9 +315,9 @@ const ProvidersManagementPage = () => {
       {/* ── 区段头部 ── */}
       <div className="settings-header">
         <div>
-          <h2>模型与渠道</h2>
+          <h2>{t('providersMgmt.pageTitle')}</h2>
           <div className="settings-header-desc">
-            API 提供方管理 · 认证配置 · 连接测试
+            {t('providersMgmt.subtitle')}
           </div>
         </div>
         <div className="settings-header-actions">
@@ -334,7 +334,7 @@ const ProvidersManagementPage = () => {
 
       {/* ── 提供商卡片网格 ── */}
       <div className="settings-section">
-        <div className="settings-section-title">API 提供方 · Providers</div>
+        <div className="settings-section-title">{t('providersMgmt.eyebrow')}</div>
         {providers.length === 0 ? (
           <div className="settings-empty">
             <Zap className="settings-empty-icon size-8" />
@@ -354,7 +354,7 @@ const ProvidersManagementPage = () => {
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="pc-name">{p.name}</div>
-                      <div className="pc-sub">{p.kind === 'anthropic' ? 'Anthropic · 对话/视觉' : 'OpenAI 兼容 · 通用'}</div>
+                      <div className="pc-sub">{p.kind === 'anthropic' ? t('providersMgmt.kindAnthropic') : t('providersMgmt.kindOpenAICompat')}</div>
                     </div>
                     <button
                       type="button"
@@ -394,20 +394,20 @@ const ProvidersManagementPage = () => {
                     <div>
                       <span className="stat-label">STATUS</span>
                       <span className="stat-value" style={{ color: p.enabled ? 'var(--ok)' : 'var(--mut)' }}>
-                        {p.enabled ? '● 已启用' : '○ 已停用'}
+                        {p.enabled ? t('providersMgmt.enabled') : t('providersMgmt.disabled')}
                       </span>
                     </div>
                     <div>
-                      <span className="stat-label">类型</span>
+                      <span className="stat-label">{t('providersMgmt.type')}</span>
                       <span className="stat-value">{p.kind === 'anthropic' ? 'Anthropic' : 'OpenAI'}</span>
                     </div>
                     <div>
-                      <span className="stat-label">测试</span>
+                      <span className="stat-label">{t('providersMgmt.test')}</span>
                       <span className="stat-value">
                         {tr
                           ? tr.ok
-                            ? <span style={{ color: 'var(--ok)' }}>✓ 通过</span>
-                            : <span style={{ color: 'var(--err)' }}>✗ 失败</span>
+                            ? <span style={{ color: 'var(--ok)' }}>{t('providersMgmt.pass')}</span>
+                            : <span style={{ color: 'var(--err)' }}>{t('providersMgmt.fail')}</span>
                           : '—'}
                       </span>
                     </div>
@@ -424,12 +424,12 @@ const ProvidersManagementPage = () => {
                       {testing ? (
                         <>
                           <Loader2 className="size-3.5 animate-spin" />
-                          测试中…
+                          {t('providersMgmt.testing')}
                         </>
                       ) : tr ? (
                         <>
                           <Check size={12} style={{ color: tr.ok ? 'var(--ok)' : 'var(--err)' }} />
-                          {tr.ok ? '连接正常' : '重新测试'}
+                          {tr.ok ? t('providersMgmt.connected') : t('providersMgmt.retest')}
                         </>
                       ) : (
                         <>

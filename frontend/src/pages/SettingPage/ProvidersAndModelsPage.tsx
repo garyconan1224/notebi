@@ -27,7 +27,7 @@ export default function ProvidersAndModelsPage() {
         {/* 区块一：服务渠道 */}
         <Section
           title={t('layout.menu.providers', '供应商管理')}
-          subtitle="配置 AI 服务供应商的 API 密钥和连接"
+          subtitle={t('providerDefaults.subtitle')}
           expanded={expandProviders}
           onToggle={() => setExpandProviders((v) => !v)}
         >
@@ -36,8 +36,8 @@ export default function ProvidersAndModelsPage() {
 
         {/* 区块二：默认模型 */}
         <Section
-          title="默认模型"
-          subtitle="为对话、视觉、嵌入、重排分别指定全局默认模型"
+          title={t('providerDefaults.defaultsTitle')}
+          subtitle={t('providerDefaults.defaultsDesc')}
           expanded={expandDefaults}
           onToggle={() => setExpandDefaults((v) => !v)}
         >
@@ -151,6 +151,7 @@ function modelListFromPayload(payload: unknown): ParsedModelList {
 }
 
 function DefaultModelsSection() {
+  const { t } = useTranslation('settings')
   const configStore = useConfigStore()
   const [providers, setProviders] = useState<ProviderOption[]>([])
   const [defaultProviderFor, setDefaultProviderFor] = useState<Record<string, string>>({})
@@ -293,7 +294,7 @@ function DefaultModelsSection() {
     // on it with an empty role value to clear the default_models entry.
     const effectiveProviderId = providerId || defaults[role]?.providerId
     if (!effectiveProviderId) {
-      toast.error('没有关联的供应商，无法保存')
+      toast.error(t('providerDefaults.noProvider'))
       return
     }
     try {
@@ -306,7 +307,7 @@ function DefaultModelsSection() {
       const readBack = data.providers.find((p) => p.id === effectiveProviderId)?.defaultModels?.[role] ?? ''
       if (readBack !== (modelId || '')) {
         applyProvidersData(data)
-        toast.error(`保存未生效：后端读回为「${readBack || '未设置'}」，与目标「${modelId || '未设置'}」不一致`)
+        toast.error(t('providerDefaults.saveMismatch', { readBack: readBack || t('providerDefaults.unset'), target: modelId || t('providerDefaults.unset') }))
         return
       }
       // 读回一致：以后端权威数据刷新界面
@@ -318,18 +319,18 @@ function DefaultModelsSection() {
       configStore.setConfig({ [providerKey]: modelId ? providerId : '', [modelKey]: modelId || '' })
       toast.success(
         modelId
-          ? `已设置默认${ROLE_LABELS[role]}模型：${modelId}`
-          : `已清除默认${ROLE_LABELS[role]}模型`,
+          ? t('providerDefaults.setDefault', { role: ROLE_LABEL_KEY[role], model: modelId })
+          : t('providerDefaults.clearedDefault', { role: ROLE_LABEL_KEY[role] }),
       )
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '保存失败'
-      toast.error(`保存失败：${msg}`)
+      const msg = err instanceof Error ? err.message : t('providerDefaults.saveFailed')
+      toast.error(t('providerDefaults.saveFailedMsg', { msg }))
     }
   }
 
   if (loading) {
     return (
-      <div className="space-y-3 py-4" role="status" aria-label="加载中">
+      <div className="space-y-3 py-4" role="status" aria-label={t('providerDefaults.loading')}>
         <Skeleton className="h-16 w-full" />
         <Skeleton className="h-16 w-full" />
       </div>
@@ -346,7 +347,7 @@ function DefaultModelsSection() {
 
   return (
     <div className="space-y-4">
-      {(Object.keys(ROLE_LABELS) as Array<'chat' | 'vision' | 'embedding' | 'rerank'>).map((role) => {
+      {(Object.keys(ROLE_LABEL_KEY) as Array<'chat' | 'vision' | 'embedding' | 'rerank'>).map((role) => {
         const current = defaults[role]
         // 新建的 OpenAI 兼容 provider 初始只声明 chat；模型角色由用户在
         // 此处选择后再持久化为 capability。因此不能用旧 capability 把它
@@ -360,8 +361,8 @@ function DefaultModelsSection() {
           <ModelRolePicker
             key={role}
             role={role}
-            label={ROLE_LABELS[role]}
-            description={ROLE_DESCRIPTIONS[role]}
+            label={t(ROLE_LABEL_KEY[role])}
+            description={t(ROLE_DESC_KEY[role])}
             currentProviderId={current.providerId}
             currentModelId={current.modelId}
             currentProviderName={currentProviderName}
@@ -374,18 +375,18 @@ function DefaultModelsSection() {
   )
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  chat: '对话模型',
-  vision: '视觉模型',
-  embedding: '嵌入模型',
-  rerank: '重排模型',
+const ROLE_LABEL_KEY: Record<string, string> = {
+  chat: 'providerDefaults.chat',
+  vision: 'providerDefaults.vision',
+  embedding: 'providerDefaults.embedding',
+  rerank: 'providerDefaults.rerank',
 }
 
-const ROLE_DESCRIPTIONS: Record<string, string> = {
-  chat: '用于摘要、问答、脚本生成等文本任务',
-  vision: '用于视频帧分析、图片理解等多模态任务',
-  embedding: '用于知识库索引的文本向量化',
-  rerank: '用于知识库检索结果的精排',
+const ROLE_DESC_KEY: Record<string, string> = {
+  chat: 'providerDefaults.chatDesc',
+  vision: 'providerDefaults.visionDesc',
+  embedding: 'providerDefaults.embeddingDesc',
+  rerank: 'providerDefaults.rerankDesc',
 }
 
 // ── 能力感知（第 2 批）────────────────────────────────────
@@ -470,6 +471,7 @@ function ModelRolePicker({
   providers: ProviderOption[]
   onSave: (providerId: string, modelId: string) => void
 }) {
+  const { t } = useTranslation('settings')
   const [selectedProviderId, setSelectedProviderId] = useState(currentProviderId)
   const [selectedModelId, setSelectedModelId] = useState(currentModelId)
   const [open, setOpen] = useState(false)
@@ -550,7 +552,7 @@ function ModelRolePicker({
 
   const displayText = currentModelId
     ? `${currentProviderName} / ${currentModelId}`
-    : '（未设置，使用系统默认）'
+    : t('providerDefaults.unsetHint')
 
   const renderModelRow = (mId: string, support: RoleSupport) => {
     const mName = activeProvider?.modelNames?.[mId] ?? mId
@@ -610,25 +612,25 @@ function ModelRolePicker({
           aria-haspopup="dialog"
           className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-3 py-1.5 text-xs text-foreground hover:bg-muted/60"
         >
-          {currentModelId ? '更换' : '设置'}
+          {currentModelId ? t('providerDefaults.change') : t('providerDefaults.set')}
           <ChevronDown size={12} />
         </button>
         {open && (
           <div
             ref={popoverRef}
             role="dialog"
-            aria-label={`选择默认${label}`}
+            aria-label={t('providerDefaults.selectDefault', { label })}
             className="absolute right-0 top-full z-50 mt-1 w-72 rounded-md border border-border bg-card shadow-lg"
           >
             <div className="border-b border-border px-3 py-2">
-              <span className="text-xs font-medium text-muted-foreground">选择默认{label}</span>
+              <span className="text-xs font-medium text-muted-foreground">{t('providerDefaults.selectDefault', { label })}</span>
             </div>
             <div className="max-h-72 overflow-y-auto p-2 space-y-2">
               {/* 供应商搜索 */}
               <div className="flex items-center gap-1.5 rounded border border-border px-2 py-1">
                 <Search size={11} className="text-muted-foreground shrink-0" />
                 <input
-                  placeholder="搜索供应商..."
+                  placeholder={t('providerDefaults.searchProvider')}
                   value={providerSearch}
                   onChange={(e) => setProviderSearch(e.target.value)}
                   className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
@@ -636,7 +638,7 @@ function ModelRolePicker({
               </div>
               {/* 供应商选择 */}
               <div>
-                <div className="mb-1 text-[10px] text-muted-foreground uppercase">供应商</div>
+                <div className="mb-1 text-[10px] text-muted-foreground uppercase">{t('providerDefaults.provider')}</div>
                 <select
                   value={selectedProviderId}
                   onChange={(e) => {
@@ -647,7 +649,7 @@ function ModelRolePicker({
                   }}
                   className="w-full rounded border border-border bg-background px-2 py-1 text-xs"
                 >
-                  <option value="">-- 选择供应商 --</option>
+                  <option value="">{t('providerDefaults.selectProvider')}</option>
                   {providerOptions.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name} ({p.kind})
@@ -655,7 +657,7 @@ function ModelRolePicker({
                   ))}
                 </select>
                 {providerQuery && providerOptions.length === 0 && (
-                  <div className="mt-1 text-xs text-muted-foreground">无匹配供应商</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{t('providerDefaults.noMatchProvider')}</div>
                 )}
               </div>
               {/* 模型搜索 */}
@@ -663,7 +665,7 @@ function ModelRolePicker({
                 <div className="flex items-center gap-1.5 rounded border border-border px-2 py-1">
                   <Search size={11} className="text-muted-foreground shrink-0" />
                   <input
-                    placeholder="搜索模型..."
+                    placeholder={t('providerDefaults.searchModel')}
                     value={modelSearch}
                     onChange={(e) => setModelSearch(e.target.value)}
                     className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
@@ -672,12 +674,12 @@ function ModelRolePicker({
               )}
               {/* 用途能力筛选 */}
               {selectedProviderId && models.length > 0 && (
-                <div className="flex flex-wrap gap-1" role="group" aria-label="用途能力筛选">
+                <div className="flex flex-wrap gap-1" role="group" aria-label={t('providerDefaults.capabilityFilter')}>
                   {(
                     [
-                      ['all', '全部'],
-                      ['supported', '支持当前用途'],
-                      ['unverified', '未验证'],
+                      ['all', t('providerDefaults.all')],
+                      ['supported', t('providerDefaults.supportsCurrent')],
+                      ['unverified', t('providerDefaults.unverified')],
                     ] as const
                   ).map(([value, text]) => (
                     <button
@@ -700,7 +702,7 @@ function ModelRolePicker({
               {/* 模型列表：推荐区 + 次级区 */}
               {selectedProviderId && models.length > 0 && visibleRecommended.length > 0 && (
                 <div>
-                  <div className="mb-1 text-[10px] text-muted-foreground uppercase">推荐</div>
+                  <div className="mb-1 text-[10px] text-muted-foreground uppercase">{t('providerDefaults.recommended')}</div>
                   <div className="space-y-1">
                     {visibleRecommended.map((e) => renderModelRow(e.mId, e.support))}
                   </div>
@@ -708,7 +710,7 @@ function ModelRolePicker({
               )}
               {selectedProviderId && models.length > 0 && visibleOthers.length > 0 && (
                 <div>
-                  <div className="mb-1 text-[10px] text-muted-foreground uppercase">其他模型</div>
+                  <div className="mb-1 text-[10px] text-muted-foreground uppercase">{t('providerDefaults.otherModels')}</div>
                   <div className="space-y-1 max-h-32 overflow-y-auto">
                     {visibleOthers.map((e) => renderModelRow(e.mId, e.support))}
                   </div>
@@ -716,14 +718,14 @@ function ModelRolePicker({
               )}
               {selectedProviderId && models.length === 0 && activeProvider?.modelsError && (
                 <div className="text-xs text-destructive py-1">
-                  模型加载失败：{activeProvider.modelsError}
+                  {t('providerDefaults.modelsLoadFailed', { error: activeProvider.modelsError })}
                 </div>
               )}
               {selectedProviderId && models.length === 0 && !activeProvider?.modelsError && (
-                <div className="text-xs text-muted-foreground py-1">该供应商暂无模型</div>
+                <div className="text-xs text-muted-foreground py-1">{t('providerDefaults.noModels')}</div>
               )}
               {selectedProviderId && models.length > 0 && nothingVisible && (
-                <div className="text-xs text-muted-foreground py-1">无匹配模型</div>
+                <div className="text-xs text-muted-foreground py-1">{t('providerDefaults.noMatchModel')}</div>
               )}
             </div>
             <div className="flex items-center justify-between border-t border-border px-3 py-2">
