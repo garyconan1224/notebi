@@ -112,7 +112,7 @@ function SidebarStatus({
   if (collapsed) {
     return (
       <div className="mt-2 flex flex-col items-center gap-2">
-        <ThemeSwitcher compact />
+        <ThemeSwitcher iconOnly />
         <span
           className="size-2 rounded-full"
           style={{ background: online ? 'var(--accent-green)' : 'var(--accent-pink)' }}
@@ -126,7 +126,7 @@ function SidebarStatus({
     <div className="mt-2 rounded-xl border border-border bg-muted/35 p-2">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-[11px] font-medium text-muted-foreground">状态</span>
-        <ThemeSwitcher />
+        <ThemeSwitcher iconOnly />
       </div>
       <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
         <span

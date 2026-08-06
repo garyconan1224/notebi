@@ -4,26 +4,32 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ThemeSwitcher from '@/components/ThemeSwitcher'
 
-const setModeMock = vi.fn()
+const mocks = vi.hoisted(() => {
+  const state = { mode: 'light' }
+  const setModeMock = vi.fn(async (next: string) => {
+    state.mode = next
+  })
+  return { state, setModeMock }
+})
 
 vi.mock('@/store/appearanceStore', () => ({
   useAppearanceStore: vi.fn((selector) => {
-    const state = {
-      mode: 'light',
+    const storeState = {
+      mode: mocks.state.mode,
       saving: false,
-      setMode: setModeMock,
+      setMode: mocks.setModeMock,
     }
-    return selector ? selector(state) : state
+    return selector ? selector(storeState) : storeState
   }),
 }))
 
 describe('ThemeSwitcher', () => {
   beforeEach(() => {
-    setModeMock.mockReset()
-    setModeMock.mockResolvedValue(undefined)
+    mocks.state.mode = 'light'
+    mocks.setModeMock.mockClear()
   })
 
-  it('非 compact：渲染三段式 radiogroup', () => {
+  it('非 iconOnly：渲染三段式 radiogroup', () => {
     render(<ThemeSwitcher />)
     expect(screen.getByRole('radiogroup', { name: '明暗模式' })).toBeTruthy()
     expect(screen.getByRole('radio', { name: /浅色/ })).toBeTruthy()
@@ -31,19 +37,22 @@ describe('ThemeSwitcher', () => {
     expect(screen.getByRole('radio', { name: /跟随系统/ })).toBeTruthy()
   })
 
-  it('compact：只渲染图标按钮，点击弹出选项菜单并可切换', async () => {
-    render(<ThemeSwitcher compact />)
-    // 折叠态不渲染三段式
-    expect(screen.queryByRole('radiogroup', { name: '明暗模式' })).toBeNull()
-    const trigger = screen.getByRole('button', { name: '明暗模式' })
-    expect(trigger).toBeTruthy()
+  it('iconOnly：只显示一个图标按钮，点击循环 浅色→深色→跟随系统→浅色', () => {
+    const renderOnce = (mode: string) => {
+      mocks.state.mode = mode
+      const view = render(<ThemeSwitcher iconOnly />)
+      expect(screen.queryByRole('radiogroup', { name: '明暗模式' })).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: '明暗模式' }))
+      view.unmount()
+    }
 
-    fireEvent.pointerDown(trigger)
-    const dark = await screen.findByRole('menuitem', { name: /深色/ })
-    expect(screen.getByRole('menuitem', { name: /浅色/ })).toBeTruthy()
-    expect(screen.getByRole('menuitem', { name: /跟随系统/ })).toBeTruthy()
+    renderOnce('light')
+    expect(mocks.setModeMock).toHaveBeenLastCalledWith('dark')
 
-    fireEvent.click(dark)
-    expect(setModeMock).toHaveBeenCalledWith('dark')
+    renderOnce('dark')
+    expect(mocks.setModeMock).toHaveBeenLastCalledWith('system')
+
+    renderOnce('system')
+    expect(mocks.setModeMock).toHaveBeenLastCalledWith('light')
   })
 })
