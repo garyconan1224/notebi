@@ -13,6 +13,7 @@ import {
   Share2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useTranslation } from 'react-i18next'
 import { useHealthPulse } from '@/hooks/useHealthPulse'
 import { useSettingsShellStore } from '@/store/settingsShellStore'
 
@@ -50,6 +51,7 @@ interface NavGroup {
  * 导航项按照现有 router 子页组织，不强行凑设计稿数量。
  */
 export function SettingsShell() {
+  const { t } = useTranslation('settings')
   const health = useHealthPulse(0)
   const version = health.data?.version ?? 'v0.4.0'
   const location = useLocation()
@@ -60,43 +62,43 @@ export function SettingsShell() {
 
   const navGroups: NavGroup[] = [
     {
-      label: '常规与外观',
+      label: t('shell.nav.groupGeneral'),
       items: [
-        { path: '/settings/general', icon: <Languages size={16} />, label: '界面与语言' },
+        { path: '/settings/general', icon: <Languages size={16} />, label: t('shell.nav.interfaceLanguage') },
       ],
     },
     {
-      label: 'AI 与模型',
+      label: t('shell.nav.groupAi'),
       items: [
-        { path: '/settings/providers-models', icon: <Cpu size={16} />, label: '服务渠道与模型' },
+        { path: '/settings/providers-models', icon: <Cpu size={16} />, label: t('shell.nav.providersModels') },
       ],
     },
     {
-      label: '分析与生成',
+      label: t('shell.nav.groupAnalysis'),
       items: [
-        { path: '/settings/analysis-defaults', icon: <Sliders size={16} />, label: '分析默认偏好' },
+        { path: '/settings/analysis-defaults', icon: <Sliders size={16} />, label: t('shell.nav.analysisDefaults') },
       ],
     },
     {
-      label: '导入与网络',
+      label: t('shell.nav.groupImport'),
       items: [
-        { path: '/settings/download', icon: <IcDownload size={16} />, label: '下载与存储路径' },
-        { path: '/settings/network', icon: <Wifi size={16} />, label: '网络与代理' },
+        { path: '/settings/download', icon: <IcDownload size={16} />, label: t('shell.nav.downloadStorage') },
+        { path: '/settings/network', icon: <Wifi size={16} />, label: t('shell.nav.networkProxy') },
       ],
     },
     {
-      label: '笔记与数据',
+      label: t('shell.nav.groupNotes'),
       items: [
-        { path: '/settings/style-templates', icon: <Palette size={16} />, label: '笔记模板' },
-        { path: '/settings/export-sync', icon: <Share2 size={16} />, label: '导出与同步' },
-        { path: '/settings/trash', icon: <Trash2 size={16} />, label: '垃圾桶' },
+        { path: '/settings/style-templates', icon: <Palette size={16} />, label: t('shell.nav.noteTemplates') },
+        { path: '/settings/export-sync', icon: <Share2 size={16} />, label: t('shell.nav.exportSync') },
+        { path: '/settings/trash', icon: <Trash2 size={16} />, label: t('shell.nav.trash') },
       ],
     },
     {
-      label: '诊断与关于',
+      label: t('shell.nav.groupDiagnostics'),
       items: [
-        { path: '/settings/monitor', icon: <Monitor size={16} />, label: '诊断日志' },
-        { path: '/settings/about', icon: <Info size={16} />, label: '关于 NoteBi' },
+        { path: '/settings/monitor', icon: <Monitor size={16} />, label: t('shell.nav.diagnosticsLogs') },
+        { path: '/settings/about', icon: <Info size={16} />, label: t('shell.nav.aboutNoteBi') },
       ],
     },
   ]
@@ -105,17 +107,15 @@ export function SettingsShell() {
     <div className="settings-wrap">
       {/* 设置页只保留一个紧凑页面头；全局品牌与返回路径由 AppShell 负责。 */}
       <div className="settings-head">
-        <h1>设置</h1>
-        <p>
-          管理界面、模型、分析、下载与诊断。每项变更会在保存后读回确认。
-        </p>
+        <h1>{t('shell.nav.title')}</h1>
+        <p>{t('shell.nav.subtitle')}</p>
       </div>
 
       {/* ── 左 + 右布局 ── */}
       <div className="settings-layout">
         {/* 左侧导航 */}
         <aside className="settings-sidebar">
-          <div className="settings-nav-title">设置分类</div>
+          <div className="settings-nav-title">{t('shell.nav.navTitle')}</div>
           <nav className="settings-nav" role="navigation" aria-label="settings-navigation">
             {navGroups.map((group) => (
               <div className="settings-nav-group" key={group.label}>
@@ -155,7 +155,7 @@ export function SettingsShell() {
           {!childOwnsSaveBar && (saveBar.onSave || saveBar.onReset) && (
             <div className="settings-header-actions settings-shared-savebar">
               <span className="text-xs text-[var(--mut)]">
-                {dirty ? `${saveBar.dirtyCount} 项未保存` : '所有变更已保存'}
+                {dirty ? t('shell.saveBar.dirtyCount', { count: saveBar.dirtyCount }) : t('shell.saveBar.allSaved')}
               </span>
               <button
                 type="button"
@@ -171,7 +171,7 @@ export function SettingsShell() {
                 onClick={saveBar.onSave}
                 disabled={!dirty || saving}
               >
-                {saving ? '保存中…' : '保存'}
+                {saving ? t('shell.saveBar.saving') : t('shell.saveBar.save')}
               </button>
             </div>
           )}

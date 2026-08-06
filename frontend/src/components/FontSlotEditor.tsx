@@ -11,24 +11,35 @@
 import { useRef, useState } from 'react'
 import { Upload } from 'lucide-react'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 
-import { useAppearanceStore, FONT_SLOT_LABELS, FONT_SLOT_SCOPE } from '@/store/appearanceStore'
+import { useAppearanceStore } from '@/store/appearanceStore'
 import type { FontSlotId } from '@/services/settings'
 
-const PREVIEW_TEXT = 'NoteBi 笔记 · 00:07 背景与动机 Aa Bb 123'
+const SLOT_LABEL_KEY: Record<FontSlotId, string> = {
+  ui: 'general.fontSlot.uiLabel',
+  cap: 'general.fontSlot.capLabel',
+  sum: 'general.fontSlot.sumLabel',
+}
+const SLOT_SCOPE_KEY: Record<FontSlotId, string> = {
+  ui: 'general.fontSlot.uiScope',
+  cap: 'general.fontSlot.capScope',
+  sum: 'general.fontSlot.sumScope',
+}
 
 interface BuiltinCandidate {
   label: string
+  labelKey?: string
   family: string | null
 }
 
 const BUILTIN_CANDIDATES: BuiltinCandidate[] = [
-  { label: '系统无衬线（默认）', family: null },
-  { label: '系统衬线', family: "'Songti SC', 'SimSun', Georgia, serif" },
+  { label: '系统无衬线（默认）', labelKey: 'general.fontSlot.candidateSystemSans', family: null },
+  { label: '系统衬线', labelKey: 'general.fontSlot.candidateSystemSerif', family: "'Songti SC', 'SimSun', Georgia, serif" },
   { label: 'Inter', family: "'Inter', system-ui, sans-serif" },
   { label: 'Noto Sans SC', family: "'Noto Sans SC', system-ui, sans-serif" },
   { label: 'Noto Serif SC', family: "'Noto Serif SC', 'Songti SC', Georgia, serif" },
-  { label: '得意黑（展示）', family: "'Smiley Sans', 'Noto Serif SC', Georgia, serif" },
+  { label: '得意黑（展示）', labelKey: 'general.fontSlot.candidateSmileySans', family: "'Smiley Sans', 'Noto Serif SC', Georgia, serif" },
   { label: 'JetBrains Mono', family: "'JetBrains Mono', ui-monospace, monospace" },
 ]
 
@@ -42,6 +53,8 @@ const MAX_FONT_BYTES = 20 * 1024 * 1024
 const ALLOWED_EXTENSIONS = ['.woff2', '.woff', '.ttf', '.otf']
 
 export function FontSlotEditor({ slot }: { slot: FontSlotId }) {
+  const { t } = useTranslation('settings')
+  const slotLabel = t(SLOT_LABEL_KEY[slot])
   const value = useAppearanceStore((state) => state.fonts[slot])
   const uploadedFonts = useAppearanceStore((state) => state.uploaded_fonts)
   const setFontSlot = useAppearanceStore((state) => state.setFontSlot)
@@ -72,18 +85,18 @@ export function FontSlotEditor({ slot }: { slot: FontSlotId }) {
       for (const file of Array.from(files)) {
         const ext = file.name.includes('.') ? `.${file.name.split('.').pop()!.toLowerCase()}` : ''
         if (!ALLOWED_EXTENSIONS.includes(ext)) {
-          toast.error(`「${file.name}」不是支持的字体格式（WOFF2/WOFF/TTF/OTF）`)
+          toast.error(t('general.fontSlot.unsupportedFormat', { name: file.name }))
           continue
         }
         if (file.size > MAX_FONT_BYTES) {
-          toast.error(`「${file.name}」超过 20MB 限制`)
+          toast.error(t('general.fontSlot.tooLarge', { name: file.name }))
           continue
         }
         try {
           await uploadFont(slot, file)
-          toast.success(`字体「${file.name}」已应用到${FONT_SLOT_LABELS[slot]}`)
+          toast.success(t('general.fontSlot.applied', { name: file.name, slot: slotLabel }))
         } catch (err) {
-          toast.error(err instanceof Error ? err.message : '字体上传失败')
+          toast.error(err instanceof Error ? err.message : t('general.fontSlot.uploadFailed'))
         }
       }
     } finally {
@@ -94,21 +107,21 @@ export function FontSlotEditor({ slot }: { slot: FontSlotId }) {
 
   const handleRemoveUploaded = async (fontId: string, family: string) => {
     if (value === family || inUseElsewhere(family)) {
-      toast.error('该字体仍在使用：请先在相应槽位恢复默认链再删除')
+      toast.error(t('general.fontSlot.inUse'))
       return
     }
     try {
       await removeFont(fontId)
-      toast.success('本地字体已删除')
+      toast.success(t('general.fontSlot.deleted'))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '删除失败')
+      toast.error(err instanceof Error ? err.message : t('general.fontSlot.deleteFailed'))
     }
   }
 
   return (
     <div className="font-slot-card" data-slot={slot}>
       <div className="font-slot-head">
-        <strong>{FONT_SLOT_LABELS[slot]}</strong>
+        <strong>{slotLabel}</strong>
         <button
           type="button"
           className="btn-ghost"
@@ -116,18 +129,18 @@ export function FontSlotEditor({ slot }: { slot: FontSlotId }) {
           disabled={value === null}
           onClick={() => void setFontSlot(slot, null)}
         >
-          恢复默认
+          {t('general.fontSlot.reset')}
         </button>
       </div>
-      <p className="font-slot-scope">{FONT_SLOT_SCOPE[slot]}</p>
+      <p className="font-slot-scope">{t(SLOT_SCOPE_KEY[slot])}</p>
 
       <div className="font-slot-preview" style={previewStyle} aria-hidden="true">
-        {PREVIEW_TEXT}
+        {t('general.fontSlot.previewText')}
       </div>
 
       <select
         className="font-slot-select"
-        aria-label={`${FONT_SLOT_LABELS[slot]}候选`}
+        aria-label={t('general.fontSlot.optionsAria', { label: slotLabel })}
         value={value ?? ''}
         onChange={(event) => {
           const next = event.target.value
@@ -142,7 +155,7 @@ export function FontSlotEditor({ slot }: { slot: FontSlotId }) {
             style={{ fontFamily: candidate.family ?? undefined }}
             onMouseEnter={() => setPreviewFamily(candidate.family)}
           >
-            {candidate.label}
+            {candidate.labelKey ? t(candidate.labelKey) : candidate.label}
           </option>
         ))}
         {uploadedFonts.map((font) => (
@@ -152,7 +165,7 @@ export function FontSlotEditor({ slot }: { slot: FontSlotId }) {
             style={{ fontFamily: `'${font.family}', sans-serif` }}
             onMouseEnter={() => setPreviewFamily(`'${font.family}', sans-serif`)}
           >
-            {font.family}（本地）
+            {t('general.fontSlot.uploadedOption', { family: font.family })}
           </option>
         ))}
       </select>
@@ -162,14 +175,14 @@ export function FontSlotEditor({ slot }: { slot: FontSlotId }) {
           {uploadedFonts.map((font) => (
             <li key={font.id}>
               <span style={{ fontFamily: `'${font.family}', sans-serif` }}>{font.family}</span>
-              <span className="kw">本地</span>
+              <span className="kw">{t('general.fontSlot.local')}</span>
               <button
                 type="button"
                 className="btn-ghost"
                 style={{ fontSize: 12, padding: '1px 6px' }}
                 onClick={() => void handleRemoveUploaded(font.id, font.family)}
               >
-                移除
+                {t('general.fontSlot.remove')}
               </button>
             </li>
           ))}
@@ -178,7 +191,7 @@ export function FontSlotEditor({ slot }: { slot: FontSlotId }) {
 
       <label className="font-slot-upload">
         <Upload size={12} />
-        {busy ? '上传中…' : '上传本地字体（WOFF2/WOFF/TTF/OTF ≤20MB）'}
+        {busy ? t('general.fontSlot.uploading') : t('general.fontSlot.upload')}
         <input
           ref={fileInputRef}
           type="file"

@@ -1,13 +1,17 @@
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { LangSwitcher } from '@/components/LangSwitcher'
 import ThemeSwitcher from '@/components/ThemeSwitcher'
 import FontSlotEditor from '@/components/FontSlotEditor'
 import { THEME_PACKAGES } from '@/lib/appearanceThemes'
 import { useAppearanceStore } from '@/store/appearanceStore'
 import type { FontSlotId } from '@/services/settings'
+import type { LangCode } from '@/locales/i18n'
 
 const FONT_SLOTS: FontSlotId[] = ['ui', 'cap', 'sum']
 
 export function GeneralSettingsPage() {
+  const { i18n, t } = useTranslation('settings')
   const theme = useAppearanceStore((state) => state.theme)
   const saving = useAppearanceStore((state) => state.saving)
   const setTheme = useAppearanceStore((state) => state.setTheme)
@@ -16,22 +20,48 @@ export function GeneralSettingsPage() {
   const acceptMigration = useAppearanceStore((state) => state.acceptMigration)
   const dismissMigration = useAppearanceStore((state) => state.dismissMigration)
 
+  // 语言草稿：下拉只改草稿；页头「确定/取消」真正切换/还原（对齐分析默认偏好页的页头按钮布局）
+  const currentLang: LangCode = i18n.language === 'en-US' ? 'en-US' : 'zh-CN'
+  const [langDraft, setLangDraft] = useState<LangCode>(currentLang)
+  const langDirty = langDraft !== currentLang
+  useEffect(() => {
+    setLangDraft(currentLang)
+  }, [currentLang])
+
   return (
     <section className="settings-panel" aria-labelledby="general-settings-title">
       <header className="settings-header">
         <div>
-          <h2 id="general-settings-title">常规与外观</h2>
-          <p className="settings-header-desc">
-            界面语言和外观只影响 NoteBi 的显示，不改变总结输出语言。
-          </p>
+          <h2 id="general-settings-title">{t('general.title')}</h2>
+          <p className="settings-header-desc">{t('general.subtitle')}</p>
         </div>
+        {langDirty && (
+          <div className="settings-header-actions">
+            <button
+              type="button"
+              className="settings-reset-btn"
+              onClick={() => setLangDraft(currentLang)}
+            >
+              {t('general.langCancel')}
+            </button>
+            <button
+              type="button"
+              className="settings-save-btn"
+              onClick={() => void i18n.changeLanguage(langDraft)}
+            >
+              {t('general.langConfirm')}
+            </button>
+          </div>
+        )}
       </header>
 
       {pendingMigration && (
         <div className="settings-migration-banner" role="status">
           <span>
-            旧的强调配色「{pendingMigration.legacyAccent}」已升级为完整主题，建议切换到
-            「{THEME_PACKAGES.find((t) => t.id === pendingMigration.suggestedTheme)?.name}」，也可以任选其他主题。
+            {t('general.migrationTitle', {
+              legacy: pendingMigration.legacyAccent,
+              suggested: THEME_PACKAGES.find((pkg) => pkg.id === pendingMigration.suggestedTheme)?.name,
+            })}
           </span>
           <span className="settings-migration-actions">
             <button
@@ -39,31 +69,31 @@ export function GeneralSettingsPage() {
               className="btn-ghost"
               onClick={() => void acceptMigration(pendingMigration.suggestedTheme)}
             >
-              使用建议主题
+              {t('general.migrationApply')}
             </button>
             <button type="button" className="btn-ghost" onClick={dismissMigration}>
-              保持当前
+              {t('general.migrationKeep')}
             </button>
           </span>
         </div>
       )}
 
       <div className="settings-section">
-        <div className="settings-section-title">界面</div>
+        <div className="settings-section-title">{t('general.interfaceSection')}</div>
         <div className="settings-card">
           <div className="settings-row">
             <div className="settings-row-label">
-              <strong>界面语言</strong>
-              <span>菜单、按钮和提示文字</span>
+              <strong>{t('general.languageLabel')}</strong>
+              <span>{t('general.languageHint')}</span>
             </div>
             <div className="settings-row-control">
-              <LangSwitcher />
+              <LangSwitcher value={langDraft} onChange={setLangDraft} />
             </div>
           </div>
           <div className="settings-row">
             <div className="settings-row-label">
-              <strong>外观主题</strong>
-              <span>浅色、深色或跟随系统</span>
+              <strong>{t('general.themeLabel')}</strong>
+              <span>{t('general.themeHint')}</span>
             </div>
             <div className="settings-row-control">
               <ThemeSwitcher />
@@ -73,8 +103,8 @@ export function GeneralSettingsPage() {
       </div>
 
       <div className="settings-section">
-        <div className="settings-section-title">主题套餐</div>
-        <div className="theme-package-grid" role="radiogroup" aria-label="主题套餐">
+        <div className="settings-section-title">{t('general.themePackageSection')}</div>
+        <div className="theme-package-grid" role="radiogroup" aria-label={t('general.themePackageAria')}>
           {THEME_PACKAGES.map((pkg) => (
             <button
               key={pkg.id}
@@ -91,7 +121,7 @@ export function GeneralSettingsPage() {
                 <span style={{ background: pkg.swatches.acc }} />
               </span>
               <strong>{pkg.name}</strong>
-              <span className="theme-package-desc">{pkg.desc}</span>
+              <span className="theme-package-desc">{t(`general.themePackage.${pkg.id}`)}</span>
               <span
                 className="theme-package-preset"
                 role="button"
@@ -108,7 +138,7 @@ export function GeneralSettingsPage() {
                   }
                 }}
               >
-                套用该主题推荐字体
+                {t('general.applyFontPreset')}
               </span>
             </button>
           ))}
@@ -116,7 +146,7 @@ export function GeneralSettingsPage() {
       </div>
 
       <div className="settings-section">
-        <div className="settings-section-title">字体</div>
+        <div className="settings-section-title">{t('general.fontSection')}</div>
         <div className="font-slot-grid">
           {FONT_SLOTS.map((slot) => (
             <FontSlotEditor key={slot} slot={slot} />
