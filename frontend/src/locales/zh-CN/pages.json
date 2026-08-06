@@ -54,7 +54,21 @@
     "favorited": "收藏",
     "favoritedAt": "收藏于 {time}",
     "open": "打开",
-    "allGroups": "全部分组"
+    "allGroups": "全部分组",
+    "unFavorite": "取消收藏",
+    "searchPlaceholder": "搜索收藏标题或合集",
+    "newGroupPlaceholder": "新分组名称",
+    "allTab": "全部",
+    "typeVideo": "视频",
+    "typeAudio": "音频",
+    "typeImage": "图片",
+    "typeText": "文字",
+    "unfavoriteFailed": "取消收藏失败：{{msg}}",
+    "unknownError": "未知错误",
+    "empty": "还没有收藏内容",
+    "emptyFor": "还没有{{type}}收藏",
+    "transferSkipped": "{{count}} 条内容在当前资料库中不存在，已跳过。",
+    "transferFailed": "收藏导入失败"
   },
   "knowledge": {
     "title": "知识库",

@@ -22,7 +22,7 @@ export function FavoriteOrganizer(props: Props) {
       <label className="fav-search">
         <Search size={14} />
         <input value={props.search} onChange={event => props.onSearch(event.target.value)}
-          placeholder="搜索收藏标题或合集" />
+          placeholder={t('favorites.searchPlaceholder')} />
       </label>
       <select value={props.groupId} onChange={event => props.onGroup(event.target.value)}>
         <option value="__all__">{t('favorites.allGroups')}</option>
@@ -36,7 +36,7 @@ export function FavoriteOrganizer(props: Props) {
         <input value={props.newGroup}
           onChange={event => props.onNewGroup(event.target.value)}
           onKeyDown={event => event.key === 'Enter' && void props.onAddGroup()}
-          placeholder="新分组名称" />
+          placeholder={t('favorites.newGroupPlaceholder')} />
         <button onClick={() => void props.onAddGroup()} disabled={!props.newGroup.trim()}>
           <Plus size={14} />新建
         </button>

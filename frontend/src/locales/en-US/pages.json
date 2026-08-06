@@ -54,7 +54,21 @@
     "favorited": "Favorited",
     "favoritedAt": "Favorited {time}",
     "open": "Open",
-    "allGroups": "All Groups"
+    "allGroups": "All Groups",
+    "unFavorite": "Unfavorite",
+    "searchPlaceholder": "Search favorites by title or collection",
+    "newGroupPlaceholder": "New group name",
+    "allTab": "All",
+    "typeVideo": "Videos",
+    "typeAudio": "Audio",
+    "typeImage": "Images",
+    "typeText": "Text",
+    "unfavoriteFailed": "Failed to unfavorite: {{msg}}",
+    "unknownError": "Unknown error",
+    "empty": "No favorites yet",
+    "emptyFor": "No {{type}} favorites yet",
+    "transferSkipped": "{{count}} items don't exist in the current library and were skipped.",
+    "transferFailed": "Failed to import favorites"
   },
   "knowledge": {
     "title": "Knowledge Base",

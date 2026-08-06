@@ -1,4 +1,5 @@
 import { Download, Upload } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import {
   exportFavoriteMetadata,
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function FavoriteTransferActions({ onImported }: Props) {
+  const { t } = useTranslation('pages')
   const exportFavorites = async () => {
     const payload = await exportFavoriteMetadata()
     const url = URL.createObjectURL(new Blob(
@@ -29,10 +31,10 @@ export function FavoriteTransferActions({ onImported }: Props) {
       const payload = JSON.parse(await file.text()) as Record<string, unknown>
       const result = await importFavoriteMetadata(payload)
       onImported(result.skipped
-        ? `${result.skipped} 条内容在当前资料库中不存在，已跳过。`
+        ? t('favorites.transferSkipped', { count: result.skipped })
         : null)
     } catch (error) {
-      onImported(error instanceof Error ? error.message : '收藏导入失败')
+      onImported(error instanceof Error ? error.message : t('favorites.transferFailed'))
     }
   }
 

@@ -32,7 +32,7 @@ export function FavoriteCard({ entry, onUnfavorite }: Props) {
           <span className="media-chip">{TYPE_LABEL[entry.item_type] || 'ITEM'}</span>
           <button
             className="fav-unfav-btn"
-            title="取消收藏"
+            title={t('favorites.unFavorite')}
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()

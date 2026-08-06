@@ -10,7 +10,6 @@ import {
   type FavoriteGroup,
   type ResolvedFavorite,
 } from '@/services/workspaces'
-import { ITEM_TYPE_TEXT } from '@/types/workspace'
 import { FavoriteCard } from './FavoriteCard'
 import { FavoriteOrganizer } from './FavoriteOrganizer'
 import { FavoriteTransferActions } from './FavoriteTransferActions'
@@ -18,12 +17,12 @@ import './favorites.css'
 
 type TabKey = 'all' | 'video' | 'audio' | 'image' | 'text'
 
-const TAB_DEFS: { key: TabKey; label: string }[] = [
-  { key: 'all', label: '全部' },
-  { key: 'video', label: ITEM_TYPE_TEXT.video },
-  { key: 'audio', label: ITEM_TYPE_TEXT.audio },
-  { key: 'image', label: ITEM_TYPE_TEXT.image },
-  { key: 'text', label: ITEM_TYPE_TEXT.text },
+const TAB_DEFS: { key: TabKey; labelKey: string }[] = [
+  { key: 'all', labelKey: 'favorites.allTab' },
+  { key: 'video', labelKey: 'favorites.typeVideo' },
+  { key: 'audio', labelKey: 'favorites.typeAudio' },
+  { key: 'image', labelKey: 'favorites.typeImage' },
+  { key: 'text', labelKey: 'favorites.typeText' },
 ]
 
 export default function FavoritesPage() {
@@ -97,7 +96,7 @@ export default function FavoritesPage() {
         e => !(e.workspace_id === entry.workspace_id && e.item_id === entry.item_id),
       ))
     } catch (err) {
-      toast.error('取消收藏失败：' + (err instanceof Error ? err.message : '未知错误'))
+      toast.error(t('favorites.unfavoriteFailed', { msg: err instanceof Error ? err.message : t('favorites.unknownError') }))
     }
   }
 
@@ -148,14 +147,14 @@ export default function FavoritesPage() {
 
       {/* Filter tabs */}
       <div className="fav-tabs">
-        {TAB_DEFS.map((t) => (
+        {TAB_DEFS.map((tabDef) => (
           <button
-            key={t.key}
-            className={`fav-tab${tab === t.key ? ' fav-tab--active' : ''}`}
-            onClick={() => setTab(t.key)}
+            key={tabDef.key}
+            className={`fav-tab${tab === tabDef.key ? ' fav-tab--active' : ''}`}
+            onClick={() => setTab(tabDef.key)}
           >
-            {t.label}
-            <span>{counts[t.key]}</span>
+            {t(tabDef.labelKey)}
+            <span>{counts[tabDef.key]}</span>
           </button>
         ))}
       </div>
@@ -173,7 +172,7 @@ export default function FavoritesPage() {
         <div className="empty-state">
           <div className="empty-state-icon"><Star size={24} strokeWidth={1.5} /></div>
           <div className="empty-state-title">
-            {tab === 'all' ? '还没有收藏内容' : `还没有${TAB_DEFS.find(t => t.key === tab)?.label ?? ''}收藏`}
+            {tab === 'all' ? t('favorites.empty') : t('favorites.emptyFor', { type: t(TAB_DEFS.find(td => td.key === tab)?.labelKey ?? '') })}
           </div>
           <div className="empty-state-desc">{t('favorites.hint')}</div>
         </div>
