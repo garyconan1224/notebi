@@ -3,19 +3,20 @@
  * 外观事实源为后端设置（appearanceStore），本组件只做展示与触发。
  *
  * iconOnly：侧栏（折叠/展开共用）场景——只显示当前模式图标，每次点击在
- * 浅色 → 深色 → 跟随系统 之间循环切换；避免三段式（含文字标签，约 180px）
- * 在窄侧栏里横向溢出，也避免展开态占一整行。
+ * 浅色 → 深色 → 跟随系统 之间循环切换；避免三段式（含文字标签）在窄侧栏
+ * 里横向溢出，也避免展开态占一整行。
  */
 import { Monitor, Moon, Sun } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { FC } from 'react'
 
 import { useAppearanceStore } from '@/store/appearanceStore'
 import type { ThemeMode } from '@/services/settings'
 
-const MODE_OPTIONS: Array<{ value: ThemeMode; label: string; icon: typeof Sun }> = [
-  { value: 'light', label: '浅色', icon: Sun },
-  { value: 'dark', label: '深色', icon: Moon },
-  { value: 'system', label: '跟随系统', icon: Monitor },
+const MODE_OPTIONS: Array<{ value: ThemeMode; icon: typeof Sun }> = [
+  { value: 'light', icon: Sun },
+  { value: 'dark', icon: Moon },
+  { value: 'system', icon: Monitor },
 ]
 
 const MODE_ICON: Record<ThemeMode, typeof Sun> = {
@@ -30,13 +31,14 @@ interface ThemeSwitcherProps {
 }
 
 const ThemeSwitcher: FC<ThemeSwitcherProps> = ({ iconOnly = false }) => {
+  const { t } = useTranslation('common')
   const mode = useAppearanceStore((state) => state.mode)
   const saving = useAppearanceStore((state) => state.saving)
   const setMode = useAppearanceStore((state) => state.setMode)
 
   if (iconOnly) {
     const ActiveIcon = MODE_ICON[mode]
-    const currentLabel = MODE_OPTIONS.find((option) => option.value === mode)?.label ?? mode
+    const currentLabel = t(`theme.${mode}`)
     const cycle = () => {
       const index = MODE_OPTIONS.findIndex((option) => option.value === mode)
       const next = MODE_OPTIONS[(index + 1) % MODE_OPTIONS.length].value
@@ -45,8 +47,8 @@ const ThemeSwitcher: FC<ThemeSwitcherProps> = ({ iconOnly = false }) => {
     return (
       <button
         type="button"
-        aria-label="明暗模式"
-        title={`明暗模式：${currentLabel}（点击切换）`}
+        aria-label={t('theme.modeAria')}
+        title={t('theme.modeTitle', { mode: currentLabel })}
         disabled={saving}
         onClick={cycle}
         className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
@@ -57,10 +59,11 @@ const ThemeSwitcher: FC<ThemeSwitcherProps> = ({ iconOnly = false }) => {
   }
 
   return (
-    <div className="mode-segment" role="radiogroup" aria-label="明暗模式">
+    <div className="mode-segment" role="radiogroup" aria-label={t('theme.modeAria')}>
       {MODE_OPTIONS.map((option) => {
         const Icon = option.icon
         const active = mode === option.value
+        const label = t(`theme.${option.value}`)
         return (
           <button
             key={option.value}
@@ -70,10 +73,10 @@ const ThemeSwitcher: FC<ThemeSwitcherProps> = ({ iconOnly = false }) => {
             disabled={saving}
             className={`mode-segment-option${active ? ' is-active' : ''}`}
             onClick={() => void setMode(option.value)}
-            title={`${option.label}模式`}
+            title={label}
           >
             <Icon size={14} />
-            {option.label}
+            {label}
           </button>
         )
       })}

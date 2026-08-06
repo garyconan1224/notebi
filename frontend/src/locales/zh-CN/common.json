@@ -12,10 +12,10 @@
     "title": ""
   },
   "status": {
-    "failed": "失败",
-    "loading": "加载中…",
-    "success": "成功",
-    "unknownError": "未知错误"
+    "title": "状态",
+    "online": "在线",
+    "offline": "离线",
+    "backend": "后端 {{addr}} · {{state}}"
   },
   "nav": {
     "home": "首页",
@@ -24,6 +24,14 @@
     "tasks": "任务中心",
     "favorites": "收藏夹",
     "knowledge": "知识库",
-    "settings": "设置"
+    "settings": "设置",
+    "new": "新建"
+  },
+  "theme": {
+    "light": "浅色",
+    "dark": "深色",
+    "system": "跟随系统",
+    "modeAria": "明暗模式",
+    "modeTitle": "明暗模式：{{mode}}（点击切换）"
   }
 }

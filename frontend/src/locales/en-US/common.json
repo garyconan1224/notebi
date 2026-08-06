@@ -12,10 +12,10 @@
     "title": "form.title"
   },
   "status": {
-    "failed": "Failed",
-    "loading": "Loading…",
-    "success": "Success",
-    "unknownError": "Unknown error"
+    "title": "Status",
+    "online": "Online",
+    "offline": "Offline",
+    "backend": "Backend {{addr}} · {{state}}"
   },
   "nav": {
     "home": "Home",
@@ -24,6 +24,14 @@
     "tasks": "Task Center",
     "favorites": "Favorites",
     "knowledge": "Knowledge Base",
-    "settings": "Settings"
+    "settings": "Settings",
+    "new": "New"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "modeAria": "Theme mode",
+    "modeTitle": "Theme mode: {{mode}} (click to switch)"
   }
 }
