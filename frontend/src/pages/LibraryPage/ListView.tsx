@@ -88,7 +88,7 @@ export function ListView({ items, selectMode, selectedSet, selectionKey, onToggl
                   <button
                     className="lv-delete-btn"
                     onClick={() => onDelete(item)}
-                    title="删除"
+                    title={t('library.delete')}
                   >
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14" />

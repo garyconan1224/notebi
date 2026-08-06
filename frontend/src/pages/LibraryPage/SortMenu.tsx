@@ -1,14 +1,16 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'
 import { useLibraryStore, SORT_OPTIONS } from '@/store/libraryStore'
 
 export function SortMenu() {
+  const { t } = useTranslation('pages')
   const sortBy = useLibraryStore((s) => s.sortBy)
   const setSortBy = useLibraryStore((s) => s.setSortBy)
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  const currentLabel = SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? '排序'
+  const currentLabel = SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? t('library.sort')
 
   const close = useCallback(() => setOpen(false), [])
 

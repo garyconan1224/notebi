@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Trash2, Plus, Inbox, Filter, FolderInput, FolderPlus } from 'lucide-react'
 import { toast } from 'sonner'
@@ -158,6 +159,7 @@ function sortLibraryEntries(entries: LibraryEntry[], sortBy: SortBy): LibraryEnt
 }
 
 export default function LibraryPage() {
+  const { t } = useTranslation('pages')
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const intentFilter = searchParams.get('intent') || ''
@@ -221,11 +223,11 @@ export default function LibraryPage() {
       const res = await fetchLibrary(false)
       setData(res)
     } catch {
-      setError('加载资料库失败，请确认后端已启动')
+      setError(t('library.loadFailed'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     load()
@@ -393,8 +395,8 @@ export default function LibraryPage() {
   }, [pageEntries])
 
   const handleDeleteOne = useCallback(async (item: LibraryItem) => {
-    const label = item.name || '未命名'
-    const ok = window.confirm(`确定删除「${label}」？`)
+    const label = item.name || t('library.untitled')
+    const ok = window.confirm(t('library.confirmDeleteItem', { label }))
     if (!ok) return
     try {
       await deleteItem(item.workspace_id, item.item_id)
@@ -402,32 +404,32 @@ export default function LibraryPage() {
       // related_task_ids 缺失时不兜底 removeByProject——后端已删任务，下一轮轮询会同步掉。
       const tids = item.related_task_ids ?? []
       if (tids.length > 0) useTaskStore.getState().removeTasks(tids)
-      toast.success(`已删除「${label}」`)
+      toast.success(t('library.deletedItem', { label }))
       load()
     } catch {
-      toast.error('删除失败，请重试')
+      toast.error(t('library.deleteFailed'))
     }
-  }, [load])
+  }, [t, load])
 
   const handleDeleteWorkspace = useCallback(async (wsId: string) => {
     const ws = data?.workspaces.find((w) => w.workspace_id === wsId)
-    const label = ws?.name || '未命名合集'
-    const ok = window.confirm(`确定删除合集「${label}」？`)
+    const label = ws?.name || t('library.untitled')
+    const ok = window.confirm(t('library.confirmDeleteCollection', { label }))
     if (!ok) return
     try {
       await deleteWorkspace(wsId)
       // 1-C：即时移除该 workspace 关联的所有任务
       useTaskStore.getState().removeByProject(wsId)
-      toast.success(`已删除合集「${label}」`)
+      toast.success(t('library.deletedCollection', { label }))
       load()
     } catch {
-      toast.error('删除合集失败，请重试')
+      toast.error(t('library.deleteCollectionFailed'))
     }
-  }, [data, load])
+  }, [t, data, load])
 
   const handleBatchDelete = useCallback(async () => {
     if (selectedSet.size === 0) return
-    const ok = window.confirm(`确定删除选中的 ${selectedSet.size} 项？此操作不可撤销。`)
+    const ok = window.confirm(t('library.confirmDeleteSelected', { count: selectedSet.size }))
     if (!ok) return
     setDeleting(true)
     try {
@@ -478,26 +480,26 @@ export default function LibraryPage() {
       if (itemTaskIds.length > 0) store.removeTasks(itemTaskIds)
       fulfilledWorkspaceIds.forEach((pid) => store.removeByProject(pid))
       if (failedCount > 0) {
-        toast.warning(`已删除 ${removedCount} 项，${failedCount} 项删除失败`)
+        toast.warning(t('library.deletedSome', { removed: removedCount, failed: failedCount }))
       } else {
-        toast.success(`已删除 ${removedCount} 项`)
+        toast.success(t('library.deletedAll', { removed: removedCount }))
       }
       setSelectedSet(new Set())
       load()
     } catch {
-      toast.error('批量删除失败，请重试')
+      toast.error(t('library.batchDeleteFailed'))
     } finally {
       setDeleting(false)
     }
-  }, [selectedSet, load, itemsByWorkspace])
+  }, [t, selectedSet, load, itemsByWorkspace])
 
   const handleBatchAddToCollection = useCallback(async () => {
     if (!collectionTargetId) {
-      toast.error('请先选择目标合集')
+      toast.error(t('library.chooseTargetFirst'))
       return
     }
     if (selectedItemRefs.length === 0) {
-      toast.error('请选择要归入合集的笔记')
+      toast.error(t('library.chooseNotesFirst'))
       return
     }
     setAddingToCollection(true)
@@ -505,104 +507,104 @@ export default function LibraryPage() {
     try {
       const res = await batchAddItemsToWorkspace(collectionTargetId, selectedItemRefs)
       if (res.added > 0) {
-        toast.success(`已将 ${res.added} 项归入「${targetName}」${res.skipped ? `，${res.skipped} 项已在其中` : ''}`)
+        toast.success(t('library.movedTo', { added: res.added, target: targetName, skipped: res.skipped ? `，${t('library.alreadyInSuffix', { count: res.skipped })}` : '' }))
         setSelectedSet(new Set())
         setSelecting(false)
       } else if (res.skipped > 0) {
-        toast.info(`选中内容已在「${targetName}」中`)
+        toast.info(t('library.alreadyIn', { target: targetName }))
       } else {
-        toast.error('没有笔记被归入合集')
+        toast.error(t('library.nothingMoved'))
       }
       if (res.failed > 0) {
         toast.error(`${res.failed} 项加入失败，请检查目标合集类型`)
       }
       await load()
     } catch {
-      toast.error('归入合集失败，请重试')
+      toast.error(t('library.moveFailedGeneric'))
     } finally {
       setAddingToCollection(false)
     }
-  }, [collectionTargetId, selectedItemRefs, collectionTargets, load])
+  }, [t, collectionTargetId, selectedItemRefs, collectionTargets, load])
 
   const handleCreateCollection = useCallback(async () => {
     setCreatingWorkspace(true)
     try {
-      const name = '新笔记合集'
+      const name = t('library.newCollection')
       await createWorkspace({ name })
       setSelectedFilters(['collection'])
-      toast.success('已创建笔记合集')
+      toast.success(t('library.createdCollection'))
       await load()
     } catch {
-      toast.error('创建合集失败，请重试')
+      toast.error(t('library.createCollectionFailed'))
     } finally {
       setCreatingWorkspace(false)
     }
-  }, [load, setSelectedFilters])
+  }, [t, load, setSelectedFilters])
 
   const handleRenameWorkspace = useCallback(async (workspaceId: string, name: string) => {
     try {
       await updateWorkspace(workspaceId, { name })
-      toast.success(`已重命名为「${name}」`)
+      toast.success(t('library.renamedTo', { name }))
       await load()
     } catch {
-      toast.error('重命名合集失败，请重试')
+      toast.error(t('library.renameFailed'))
     }
-  }, [load])
+  }, [t, load])
 
   const handleUploadWorkspaceCover = useCallback(async (workspaceId: string, file: File) => {
     try {
       await uploadWorkspaceCover(workspaceId, file)
-      toast.success('合集封面已更新')
+      toast.success(t('library.coverUpdated'))
       await load()
     } catch {
-      toast.error('合集封面上传失败，请选择 JPG、PNG、WebP 或 GIF 图片')
+      toast.error(t('library.coverUploadFailed'))
     }
-  }, [load])
+  }, [t, load])
 
   const handleResetWorkspaceCover = useCallback(async (workspaceId: string) => {
     try {
       await resetWorkspaceCover(workspaceId)
-      toast.success('已恢复自动合集封面')
+      toast.success(t('library.coverRestored'))
       await load()
     } catch {
       toast.error('恢复自动合集封面失败，请重试')
     }
-  }, [load])
+  }, [t, load])
 
   const handleUploadItemCover = useCallback(async (item: LibraryItem, file: File) => {
     try {
       await uploadItemCover(item.workspace_id, item.item_id, file)
-      toast.success('素材封面已更新')
+      toast.success(t('library.itemCoverUpdated'))
       await load()
     } catch {
-      toast.error('素材封面上传失败，请选择 JPG、PNG、WebP 或 GIF 图片')
+      toast.error(t('library.itemCoverUploadFailed'))
     }
-  }, [load])
+  }, [t, load])
 
   const handleResetItemCover = useCallback(async (item: LibraryItem) => {
     try {
       await resetItemCover(item.workspace_id, item.item_id)
-      toast.success('已恢复自动素材封面')
+      toast.success(t('library.itemCoverRestored'))
       await load()
     } catch {
       toast.error('恢复自动素材封面失败，请重试')
     }
-  }, [load])
+  }, [t, load])
 
   const handleToggleFavorite = useCallback(async (item: LibraryItem) => {
     try {
       if (item.favorite) {
         await unfavoriteItem(item.workspace_id, item.item_id)
-        toast.success('已取消收藏')
+        toast.success(t('library.unfavorited'))
       } else {
         await favoriteItem(item.workspace_id, item.item_id)
-        toast.success('已加入笔记收藏')
+        toast.success(t('library.favorited'))
       }
       await load()
     } catch {
-      toast.error('收藏状态更新失败，请重试')
+      toast.error(t('library.favoriteFailed'))
     }
-  }, [load])
+  }, [t, load])
 
   const chipCounts = useMemo(() => {
     if (!data) return undefined
@@ -620,8 +622,8 @@ export default function LibraryPage() {
     }
   }, [data, scopedItems, collectionWorkspaces, collectionWorkspaceIds, itemsByWorkspace])
 
-  const emptyTitle = '暂无笔记'
-  const emptyDesc = '去工作台添加学习素材，或粘贴一个链接开始吧'
+  const emptyTitle = t('library.noNotes')
+  const emptyDesc = t('library.noNotesHint')
 
   const pageTone = 'note'
   const pageKicker = 'NOTE LIBRARY'
@@ -637,15 +639,15 @@ export default function LibraryPage() {
         <div>
           <div className="lib-kicker">{pageKicker} · LOCAL</div>
           <h2>
-            所有做过的笔记，都在这里汇总。
+            {t('library.heroTitle')}
           </h2>
           <p>
-            视频、音频、图片和文本都保留各自入口，只把最需要的操作放在第一层。
+            {t('library.heroSubtitle')}
           </p>
           <div className="lib-hero-actions">
             <button className="lib-cta lib-cta-primary" onClick={() => navigate('/')}>
               <Plus size={15} />
-              导入内容
+              {t('library.importContent')}
             </button>
             <button
               className="lib-cta lib-cta-secondary"
@@ -653,7 +655,7 @@ export default function LibraryPage() {
               disabled={creatingWorkspace}
             >
               <FolderPlus size={15} />
-              {creatingWorkspace ? '创建中…' : '新建合集'}
+              {creatingWorkspace ? t('library.creating') : t('library.newCollectionBtn')}
             </button>
           </div>
         </div>
@@ -668,7 +670,7 @@ export default function LibraryPage() {
             </svg>
             <input
               type="text"
-              placeholder="搜索标题、来源、摘要..."
+              placeholder={t('library.searchPlaceholder')}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
@@ -686,18 +688,18 @@ export default function LibraryPage() {
             {filterOpen && (
               <div className="lib-filter-popover">
                 <div>
-                  <span>内容类型与状态</span>
+                  <span>{t('library.contentTypeStatus')}</span>
                   <FilterChips counts={chipCounts} />
                 </div>
                 <div>
-                  <span>排序</span>
+                  <span>{t('library.sort')}</span>
                   <SortMenu />
                 </div>
               </div>
             )}
           </div>
           {hasVisibleEntries && (
-            <button className="btn btn-sm" onClick={enterSelectMode}>选择</button>
+            <button className="btn btn-sm" onClick={enterSelectMode}>{t('library.select')}</button>
           )}
           <ViewToggle />
         </div>
@@ -707,7 +709,7 @@ export default function LibraryPage() {
       {loading && (
         <div className="empty-state">
           <div className="spinner" />
-          <div className="empty-state-desc">加载资料库…</div>
+          <div className="empty-state-desc">{t('library.loadingLibrary')}</div>
         </div>
       )}
 
@@ -732,7 +734,7 @@ export default function LibraryPage() {
                 )}
               </div>
               <div className="empty-state-title">
-                {showAll && chipCounts?.all === 0 ? emptyTitle : '没有匹配的笔记'}
+                {showAll && chipCounts?.all === 0 ? emptyTitle : t('library.noMatchNotes')}
               </div>
               <div className="empty-state-desc">
                 {showAll && chipCounts?.all === 0 ? emptyDesc : '试试切换筛选条件或清除 chip'}
@@ -771,7 +773,7 @@ export default function LibraryPage() {
             </div>
           )}
           {hasVisibleEntries && pageCount > 1 && (
-            <nav className="lib-pagination" aria-label="笔记分页">
+            <nav className="lib-pagination" aria-label={t('library.pagination')}>
               <button
                 type="button"
                 className="btn btn-sm"
@@ -795,9 +797,9 @@ export default function LibraryPage() {
       )}
 
       {selectMode && (
-        <div className="lib-selection-dock" role="toolbar" aria-label="批量操作">
+        <div className="lib-selection-dock" role="toolbar" aria-label={t('library.batchOps')}>
           <strong>已选 {selectedItemRefs.length} 项</strong>
-          <button className="btn btn-sm" onClick={selectAll}>全选</button>
+          <button className="btn btn-sm" onClick={selectAll}>{t('library.selectAll')}</button>
           {collectionWorkspaces.length > 0 && (
             <div className="batch-collection-control">
               <button
@@ -813,14 +815,14 @@ export default function LibraryPage() {
                 })}
               >
                 <FolderInput size={13} />
-                目标合集：{selectedCollectionName || '请选择'}
+                目标合集：{selectedCollectionName || t('library.pleaseSelect')}
               </button>
               {collectionPickerOpen && (
                 <div className="collection-picker">
                   <input
                     className="input"
-                    aria-label="搜索合集"
-                    placeholder="搜索合集"
+                    aria-label={t('library.searchCollection')}
+                    placeholder={t('library.searchCollection')}
                     value={collectionQuery}
                     onChange={(event) => {
                       setCollectionQuery(event.target.value)
@@ -829,7 +831,7 @@ export default function LibraryPage() {
                   />
                   <div className="collection-picker-list">
                     {filteredCollectionWorkspaces.length === 0 ? (
-                      <span>没有匹配的合集</span>
+                      <span>{t('library.noMatchCollections')}</span>
                     ) : visibleCollectionTargets.map((workspace) => (
                       <button
                         key={workspace.workspace_id}
@@ -860,7 +862,7 @@ export default function LibraryPage() {
                 disabled={addingToCollection || selectedItemRefs.length === 0 || !collectionTargetId}
                 onClick={handleBatchAddToCollection}
               >
-                {addingToCollection ? '处理中…' : '加入合集'}
+                {addingToCollection ? t('library.processing') : t('library.addToCollection')}
               </button>
             </div>
           )}
@@ -872,7 +874,7 @@ export default function LibraryPage() {
             <Trash2 size={13} />
             删除{selectedSet.size > 0 ? ` (${selectedSet.size})` : ''}
           </button>
-          <button className="btn btn-sm" onClick={clearSelection}>完成</button>
+          <button className="btn btn-sm" onClick={clearSelection}>{t('library.done')}</button>
         </div>
       )}
     </div>

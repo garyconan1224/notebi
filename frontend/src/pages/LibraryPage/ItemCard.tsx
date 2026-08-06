@@ -58,28 +58,28 @@ export function ItemCard({ item, selected, selectMode, onToggleSelect, onDelete,
   const isError = state === 'error'
 
   const statusText: Record<string, string> = {
-    done: '已完成',
-    running: '运行中',
-    queued: '等待中',
-    error: '失败',
+    done: t('library.statusDone'),
+    running: t('library.statusRunning'),
+    queued: t('library.statusWaiting'),
+    error: t('library.statusFailed'),
   }
 
   const summaryBits: string[] = []
-  if (item.results_summary.has_transcript) summaryBits.push('已转写')
-  if (item.results_summary.has_summary) summaryBits.push('已总结')
-  if (item.has_chapters) summaryBits.push('章节')
+  if (item.results_summary.has_transcript) summaryBits.push(t('library.transcribed'))
+  if (item.results_summary.has_summary) summaryBits.push(t('library.summarized'))
+  if (item.has_chapters) summaryBits.push(t('library.chapters'))
   if (item.type === 'video' && (item.frames_count ?? 0) > 0) summaryBits.push(`${t('library.frames', { count: item.frames_count })}`)
-  if (item.has_subtitle) summaryBits.push('字幕')
+  if (item.has_subtitle) summaryBits.push(t('library.subtitles'))
   const fallbackSummaryLine = summaryBits.length > 0
     ? summaryBits.join(' · ')
     : state === 'error'
-      ? '处理失败，请检查链接或重新提交。'
+      ? t('library.processingFailedHint')
       : isRunning
-        ? '正在生成结构化笔记与素材索引。'
-        : '等待开始分析。'
+        ? t('library.processingHint')
+        : t('library.waitingHint')
   const summaryLine = item.description?.trim() || fallbackSummaryLine
 
-  const actionLabel = isDone ? '打开' : '进度'
+  const actionLabel = isDone ? t('library.open') : t('library.progress')
   const progressPct = isDone ? 100 : isRunning ? 46 : isError ? 100 : 18
 
   const handleCardClick = () => {
@@ -92,7 +92,7 @@ export function ItemCard({ item, selected, selectMode, onToggleSelect, onDelete,
       if (tid) {
         navigate(`/processing/${tid}`)
       } else {
-        toast.info('该笔记尚在分析中，请从任务面板查看进度')
+        toast.info(t('library.analysisInProgress'))
       }
     }
   }
@@ -107,7 +107,7 @@ export function ItemCard({ item, selected, selectMode, onToggleSelect, onDelete,
   const tags = visibleTags(item.tags)
 
   const metaLabels: string[] = [srcLabel || item.source]
-  if (item.type === 'video' && (item.frames_count ?? 0) > 0) metaLabels.push(`${item.frames_count} 帧`)
+  if (item.type === 'video' && (item.frames_count ?? 0) > 0) metaLabels.push(t('library.frames', { count: item.frames_count }))
 
   return (
     <article
@@ -141,7 +141,7 @@ export function ItemCard({ item, selected, selectMode, onToggleSelect, onDelete,
           </div>
         )}
         {!hasThumb && item.type === 'unknown' && (
-          <div className="cover-icon cover-icon--unknown" aria-label="待识别内容" />
+          <div className="cover-icon cover-icon--unknown" aria-label={t('library.unknownType')} />
         )}
 
         {/* selection / actions overlay */}
@@ -167,7 +167,7 @@ export function ItemCard({ item, selected, selectMode, onToggleSelect, onDelete,
             <>
               <button
                 onClick={(e) => { e.stopPropagation(); onToggleFavorite?.(item) }}
-                title={item.favorite ? '取消收藏' : '收藏'}
+                title={item.favorite ? t('library.unfavorite') : t('library.favorite')}
                 className={`card-fav-btn${item.favorite ? ' card-fav-btn--active' : ''}`}
               >
                 <Star size={13} fill={item.favorite ? 'currentColor' : 'none'} />
@@ -215,7 +215,7 @@ export function ItemCard({ item, selected, selectMode, onToggleSelect, onDelete,
         </div>
 
         {tags.length > 0 && (
-          <div className="note-tag-row" aria-label="内容标签">
+          <div className="note-tag-row" aria-label={t('library.contentTags')}>
             {tags.map((tag) => <span key={tag} className="note-tag-chip">{tag}</span>)}
           </div>
         )}
@@ -232,7 +232,7 @@ export function ItemCard({ item, selected, selectMode, onToggleSelect, onDelete,
         </div>
 
         <div className="note-card-actions">
-          <span>{isDone ? summaryBits[0] || '已完成' : isRunning ? '生成中…' : ''}</span>
+          <span>{isDone ? summaryBits[0] || '已完成' : isRunning ? t('library.generating') : ''}</span>
           <button className="note-open" onClick={(e) => { e.stopPropagation(); handleCardClick() }}>
             {actionLabel}
           </button>

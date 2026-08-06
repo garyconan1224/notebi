@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { FolderCog, Tags } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function BatchOrganizeControl({ items, onDone }: Props) {
+  const { t } = useTranslation('pages')
   const [tags, setTags] = useState('')
   const [folders, setFolders] = useState<WorkspaceFolder[]>([])
   const [folderId, setFolderId] = useState('')
@@ -37,7 +39,7 @@ export function BatchOrganizeControl({ items, onDone }: Props) {
   const apply = async () => {
     const customTags = tags.split(/[,，]/).map(tag => tag.trim()).filter(Boolean)
     if (!customTags.length && !folderId) {
-      toast.warning('请输入标签或选择文件夹')
+      toast.warning(t('library.batchTagsPlaceholder'))
       return
     }
     setBusy(true)
@@ -46,11 +48,11 @@ export function BatchOrganizeControl({ items, onDone }: Props) {
         tags: customTags.length ? { custom_tags: customTags } : undefined,
         folderId: folderId || undefined,
       })
-      toast.success(`已整理 ${result.changed} 项${result.failed ? `，${result.failed} 项失败` : ''}`)
+      toast.success(t('library.batchOrganized', { changed: result.changed, failed: result.failed ? `，${result.failed} 项失败` : '' }))
       setTags('')
       await onDone()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '批量整理失败')
+      toast.error(error instanceof Error ? error.message : t('library.batchOrganizeFailed'))
     } finally {
       setBusy(false)
     }
@@ -69,27 +71,27 @@ export function BatchOrganizeControl({ items, onDone }: Props) {
   return (
     <div className="batch-organize-control">
       <label><Tags size={13} /><input value={tags}
-        onChange={event => setTags(event.target.value)} placeholder="标签，用逗号分隔" /></label>
+        onChange={event => setTags(event.target.value)} placeholder={t('library.tagsCommaHint')} /></label>
       {workspaceId && (
         <>
           <select value={folderId} onChange={event => setFolderId(event.target.value)}>
-            <option value="">不移动文件夹</option>
+            <option value="">{t('library.noMoveFolder')}</option>
             {folders.map(folder => (
               <option key={folder.folder_id} value={folder.folder_id}>{folder.name}</option>
             ))}
           </select>
           <input value={newFolderName}
             onChange={event => setNewFolderName(event.target.value)}
-            placeholder="新文件夹" aria-label="新文件夹名称" />
+            placeholder={t('library.newFolder')} aria-label={t('library.newFolderName')} />
           <button className="btn btn-sm" onClick={() => void addFolder()}
-            disabled={!newFolderName.trim()} title="新建文件夹">
+            disabled={!newFolderName.trim()} title={t('library.createFolder')}>
             <FolderCog size={13} />
           </button>
         </>
       )}
       <button className="btn btn-sm" disabled={busy || items.length === 0}
         onClick={() => void apply()}>
-        {busy ? '整理中…' : `整理 (${items.length})`}
+        {busy ? t('library.organizing') : t('library.organize', { count: items.length })}
       </button>
     </div>
   )

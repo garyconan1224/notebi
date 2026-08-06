@@ -13,31 +13,31 @@ const TYPE_TONE: Record<string, { badge: string; label: string }> = {
   text: { badge: 'collection-mini--text', label: 'TEXT' },
 }
 
-const TYPE_NAME: Record<string, string> = {
-  video: '视频',
-  audio: '音频',
-  image: '图文',
-  text: '文本',
+const TYPE_NAME_KEY: Record<string, string> = {
+  video: 'library.typeVideo',
+  audio: 'library.typeAudio',
+  image: 'library.typeImage',
+  text: 'library.typeText',
 }
 
-function formatRelative(iso: string): string {
+function formatRelative(iso: string, t: (k: string, o?: Record<string, unknown>) => string): string {
   if (!iso) return ''
   try {
     const deltaDays = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
-    if (deltaDays <= 0) return '今天'
-    if (deltaDays === 1) return '昨天'
-    if (deltaDays < 7) return `${deltaDays} 天前`
-    return `${Math.floor(deltaDays / 7)} 周前`
+    if (deltaDays <= 0) return t('library.today')
+    if (deltaDays === 1) return t('library.yesterday')
+    if (deltaDays < 7) return t('library.daysAgo', { count: deltaDays })
+    return t('library.weeksAgo', { count: Math.floor(deltaDays / 7) })
   } catch {
     return iso.slice(0, 10)
   }
 }
 
-function buildSourceSummary(items: LibraryItem[]): string {
+function buildSourceSummary(items: LibraryItem[], t: (k: string, o?: Record<string, unknown>) => string): string {
   const labels = Array.from(new Set(items.map((item) => TYPE_TONE[item.type]?.label ?? item.type)))
-  if (labels.length === 0) return '空合集'
-  if (labels.length === 1) return `来自${labels[0]}`
-  return `来自${labels.slice(0, 2).join(' / ')}`
+  if (labels.length === 0) return t('library.emptyCollectionCard')
+  if (labels.length === 1) return t('library.fromSource', { source: labels[0] })
+  return t('library.fromSource', { source: labels.slice(0, 2).join(' / ') })
 }
 
 function getPreviewSlots(items: LibraryItem[]): Array<LibraryItem | null> {
@@ -103,10 +103,10 @@ export function WorkspaceCard({
 
   const typeMix = Object.entries(workspace.items_count_by_type ?? {})
     .filter(([, count]) => count > 0)
-    .map(([type, count]) => `${TYPE_NAME[type] ?? type} ${count}`)
+    .map(([type, count]) => `${t(TYPE_NAME_KEY[type] ?? '') || type} ${count}`)
     .join(' · ')
   const summaryText = workspace.items_count > 0
-    ? `${typeMix || `${t('library.itemsCount', { count: workspace.items_count })}`}，可继续生成融合笔记或补充新素材。`
+    ? `${typeMix || t('library.itemsCount', { count: workspace.items_count })}{t('library.continueHint')}`
     : `${t('library.emptyCollection')}：适合按主题收纳视频、音频、图片和文本。`
   const coverThumbnail = workspace.cover_thumbnail
   const collectionTags = useMemo(() => aggregateTags(items), [items])
@@ -178,7 +178,7 @@ export function WorkspaceCard({
 
         {coverThumbnail ? (
           <div className="collection-hero-cover">
-            <img src={previewSrcForProxy(coverThumbnail)} alt={`${workspace.name} 封面`} loading="lazy" />
+            <img src={previewSrcForProxy(coverThumbnail)} alt={t('library.coverAria', { name: workspace.name })} loading="lazy" />
             <div className="collection-hero-overlay">
               <span>NOTE COLLECTION</span>
               <strong>{t('library.itemsCount', { count: workspace.items_count })}</strong>
@@ -250,11 +250,11 @@ export function WorkspaceCard({
 
         <div className="note-status-line">
           <span className="note-inline-chip note-inline-chip--done">{t('library.folder')}</span>
-          <span className="note-inline-chip">笔记合集</span>
+          <span className="note-inline-chip">{t('library.collection')}</span>
         </div>
 
         {collectionTags.length > 0 && (
-          <div className="note-tag-row" aria-label="合集标签">
+          <div className="note-tag-row" aria-label={t('library.collectionTags')}>
             {collectionTags.map((tag) => <span key={tag} className="note-tag-chip">{tag}</span>)}
           </div>
         )}
@@ -262,11 +262,11 @@ export function WorkspaceCard({
         <div className="note-meta-row">
           <span>{t('library.collectionCol')}</span>
           <span>{t('library.itemsCount', { count: workspace.items_count })}</span>
-          <span>{t('library.updated', { time: formatRelative(workspace.updated_at) })}</span>
+          <span>{t('library.updated', { time: formatRelative(workspace.updated_at, t) })}</span>
         </div>
 
         <div className="note-card-actions">
-          <span>{buildSourceSummary(previewItems)}</span>
+          <span>{buildSourceSummary(previewItems, t)}</span>
           <button className="note-open" onClick={(event) => {
             event.stopPropagation()
             navigate(`/workspaces/${workspace.workspace_id}`)

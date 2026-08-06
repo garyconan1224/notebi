@@ -1,14 +1,16 @@
 import { useLibraryStore, type ViewMode } from '@/store/libraryStore'
+import { useTranslation } from 'react-i18next'
 
 export function ViewToggle() {
+  const { t } = useTranslation('pages')
   const viewMode = useLibraryStore((s) => s.viewMode)
   const setViewMode = useLibraryStore((s) => s.setViewMode)
 
   return (
     <div className="view-toggle">
       {([
-        { id: 'grid' as ViewMode, title: '网格视图' },
-        { id: 'list' as ViewMode, title: '列表视图' },
+        { id: 'grid' as ViewMode, title: t('library.gridView') },
+        { id: 'list' as ViewMode, title: t('library.listView') },
       ]).map(({ id, title }) => {
         const on = viewMode === id
         return (
