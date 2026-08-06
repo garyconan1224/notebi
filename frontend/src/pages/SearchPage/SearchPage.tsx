@@ -456,7 +456,7 @@ export default function SearchPage() {
                 data-active={mode === 'smart'}
                 onClick={() => setMode('smart')}
               >
-                问知识库
+                {t('knowledge.askKb')}
               </button>
               <button
                 type="button"
@@ -465,7 +465,7 @@ export default function SearchPage() {
                 data-active={mode === 'exact'}
                 onClick={() => setMode('exact')}
               >
-                找原文
+                {t('knowledge.findOriginal')}
               </button>
             </div>
             <button

@@ -273,6 +273,7 @@
     "content": "Content",
     "untitledSource": "Untitled source",
     "noPreviewSegments": "No preview segments yet",
-    "clear": "Clear"
+    "clear": "Clear",
+    "askKb": "Ask Knowledge Base"
   }
 }
