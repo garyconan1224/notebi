@@ -1,4 +1,5 @@
 import { Plus, Search } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import type { FavoriteGroup } from '@/services/workspaces'
 
@@ -14,6 +15,8 @@ interface Props {
 }
 
 export function FavoriteOrganizer(props: Props) {
+  const { t } = useTranslation('pages')
+
   return (
     <div className="fav-organizer">
       <label className="fav-search">
@@ -22,7 +25,7 @@ export function FavoriteOrganizer(props: Props) {
           placeholder="搜索收藏标题或合集" />
       </label>
       <select value={props.groupId} onChange={event => props.onGroup(event.target.value)}>
-        <option value="__all__">全部分组</option>
+        <option value="__all__">{t('favorites.allGroups')}</option>
         {props.groups.map(group => (
           <option key={group.group_id} value={group.group_id}>
             {group.name}（{group.item_count}）

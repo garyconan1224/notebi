@@ -45,5 +45,22 @@
     "diagnostics": "Diagnostics",
     "taskId": "Task ID",
     "batchId": "Batch ID"
+  },
+  "favorites": {
+    "title": "Favorites",
+    "hint": "Star an item in the workspace to collect it here.",
+    "favorited": "Favorited",
+    "favoritedAt": "Favorited {time}",
+    "open": "Open",
+    "allGroups": "All Groups"
+  },
+  "knowledge": {
+    "title": "Knowledge Base",
+    "status": "Status",
+    "coverage": "Coverage",
+    "lastUpdated": "Last Updated",
+    "notReady": "Index not ready. Refresh the index to ask across all notes.",
+    "scope": "Choose collection scope",
+    "noCollections": "No collections available"
   }
 }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertCircle,
@@ -66,6 +67,8 @@ function statusText(status: KnowledgeStatus | null): string {
 }
 
 export default function KnowledgePage() {
+  const { t } = useTranslation('pages')
+
   const navigate = useNavigate()
   const [status, setStatus] = useState<KnowledgeStatus | null>(null)
   const [loadingStatus, setLoadingStatus] = useState(true)
@@ -254,7 +257,7 @@ export default function KnowledgePage() {
               <BookOpen size={14} />
               Global Knowledge
             </div>
-            <h1 className="mt-1 text-2xl font-semibold text-foreground">知识库</h1>
+            <h1 className="mt-1 text-2xl font-semibold text-foreground">{t('knowledge.title')}</h1>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => void refreshStatus()} disabled={loadingStatus}>
@@ -273,11 +276,11 @@ export default function KnowledgePage() {
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <div className="rounded-md border border-border bg-card px-3 py-2">
-            <div className="text-xs text-muted-foreground">状态</div>
+            <div className="text-xs text-muted-foreground">{t('knowledge.status')}</div>
             <div className="mt-1 text-sm font-medium text-foreground">{statusText(status)}</div>
           </div>
           <div className="rounded-md border border-border bg-card px-3 py-2">
-            <div className="text-xs text-muted-foreground">覆盖</div>
+            <div className="text-xs text-muted-foreground">{t('knowledge.coverage')}</div>
             <div className="mt-1 flex items-center gap-2">
               <div className="h-2 flex-1 rounded-full bg-muted">
                 <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${coverage}%` }} />
@@ -286,7 +289,7 @@ export default function KnowledgePage() {
             </div>
           </div>
           <div className="rounded-md border border-border bg-card px-3 py-2">
-            <div className="text-xs text-muted-foreground">上次更新</div>
+            <div className="text-xs text-muted-foreground">{t('knowledge.lastUpdated')}</div>
             <div className="mt-1 text-sm font-medium text-foreground">
               {formatDate(status?.last_indexed_at)}
             </div>
@@ -298,7 +301,7 @@ export default function KnowledgePage() {
         {status && status.item_count > 0 && !status.ready && !status.running ? (
           <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
             <AlertCircle size={16} />
-            <span>索引未就绪，刷新索引后即可跨全部笔记提问。</span>
+            <span>{t('knowledge.notReady')}</span>
           </div>
         ) : null}
 
@@ -320,7 +323,7 @@ export default function KnowledgePage() {
               {pickerOpen && (
                 <div className="absolute left-0 top-full z-50 mt-1 max-h-64 w-72 overflow-y-auto rounded-md border border-border bg-card shadow-lg">
                   <div className="flex items-center justify-between border-b border-border px-3 py-2">
-                    <span className="text-xs font-medium text-muted-foreground">选择合集范围</span>
+                    <span className="text-xs font-medium text-muted-foreground">{t('knowledge.scope')}</span>
                     {selectedWorkspaceCount > 0 && (
                       <button
                         type="button"
@@ -332,7 +335,7 @@ export default function KnowledgePage() {
                     )}
                   </div>
                   {workspaceOptions.length === 0 ? (
-                    <div className="px-3 py-4 text-xs text-muted-foreground">暂无可选合集</div>
+                    <div className="px-3 py-4 text-xs text-muted-foreground">{t('knowledge.noCollections')}</div>
                   ) : (
                     workspaceOptions.map((ws) => {
                       const isSelected = selectedWorkspaceIds.includes(ws.id)

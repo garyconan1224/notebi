@@ -45,5 +45,22 @@
     "diagnostics": "诊断信息",
     "taskId": "任务编号",
     "batchId": "批次编号"
+  },
+  "favorites": {
+    "title": "收藏夹",
+    "hint": "在工作区里点击星标即可把素材收藏到这里。",
+    "favorited": "收藏",
+    "favoritedAt": "收藏于 {time}",
+    "open": "打开",
+    "allGroups": "全部分组"
+  },
+  "knowledge": {
+    "title": "知识库",
+    "status": "状态",
+    "coverage": "覆盖",
+    "lastUpdated": "上次更新",
+    "notReady": "索引未就绪，刷新索引后即可跨全部笔记提问。",
+    "scope": "选择合集范围",
+    "noCollections": "暂无可选合集"
   }
 }

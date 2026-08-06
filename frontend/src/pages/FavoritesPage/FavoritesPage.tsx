@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { RefreshCw, Star } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -26,6 +27,8 @@ const TAB_DEFS: { key: TabKey; label: string }[] = [
 ]
 
 export default function FavoritesPage() {
+  const { t } = useTranslation('pages')
+
   const [entries, setEntries] = useState<ResolvedFavorite[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -116,8 +119,8 @@ export default function FavoritesPage() {
       <div className="fav-header">
         <div className="fav-header-text">
           <div className="lib-kicker">FAVORITES · LOCAL</div>
-          <h2>收藏夹</h2>
-          <p>在工作区里点击星标即可把素材收藏到这里。</p>
+          <h2>{t('favorites.title')}</h2>
+          <p>{t('favorites.hint')}</p>
         </div>
         <div className="fav-header-actions">
           <FavoriteTransferActions onImported={message => {
@@ -172,7 +175,7 @@ export default function FavoritesPage() {
           <div className="empty-state-title">
             {tab === 'all' ? '还没有收藏内容' : `还没有${TAB_DEFS.find(t => t.key === tab)?.label ?? ''}收藏`}
           </div>
-          <div className="empty-state-desc">在工作区里点击星标即可把素材收藏到这里。</div>
+          <div className="empty-state-desc">{t('favorites.hint')}</div>
         </div>
       ) : (
         <div className="note-grid">

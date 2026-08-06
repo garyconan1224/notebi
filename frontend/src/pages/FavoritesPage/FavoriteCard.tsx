@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Star } from 'lucide-react'
 
 import type { ResolvedFavorite } from '@/services/workspaces'
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export function FavoriteCard({ entry, onUnfavorite }: Props) {
+  const { t } = useTranslation('pages')
   return (
     <Link to={entry.jump_url} style={{ textDecoration: 'none' }}>
       <article className="note-card" data-kind={entry.item_type}>
@@ -47,12 +49,12 @@ export function FavoriteCard({ entry, onUnfavorite }: Props) {
           </div>
           <p className="note-summary">{entry.workspace_name}</p>
           <div className="note-meta-row">
-            <span>收藏</span>
-            <span>收藏于 {new Date(entry.favorited_at).toLocaleString()}</span>
+            <span>{t('favorites.favorited')}</span>
+            <span>{t('favorites.favoritedAt', { time: new Date(entry.favorited_at).toLocaleString() })}</span>
           </div>
           <div className="note-card-actions">
             <span>收藏</span>
-            <button className="note-open">打开</button>
+            <button className="note-open">{t('favorites.open')}</button>
           </div>
         </div>
       </article>
