@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, BookOpenCheck, Brain, Camera, Check, ChevronDown, Copy, Download, ExternalLink, FileDown, FileText, FileType, Film, History, Image, List, MessageCircle, Pause, Pencil, Play, Plus, Presentation, RefreshCw, Sparkles, Subtitles, Trash2, X } from 'lucide-react'
+import { ArrowLeft, BookOpenCheck, Brain, Camera, Check, ChevronDown, Copy, Download, ExternalLink, FileDown, FileText, FileType, Film, Image, List, MessageCircle, Pause, Pencil, Play, Plus, Presentation, RefreshCw, Sparkles, Subtitles, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
@@ -36,7 +36,6 @@ import { EDITOR_PREFS_STORAGE_KEY, FONT_FAMILY_VALUE, FONT_WEIGHT_VALUE, TEXT_TO
 import LNVideoPanel, { type LNVideoPanelHandle } from '@/pages/results/LearningNotesPage/LNVideoPanel'
 import LNTranscriptPanel from '@/pages/results/LearningNotesPage/LNTranscriptPanel'
 import NoteAudioPanel, { type NoteAudioPanelHandle } from './NoteAudioPanel'
-import { NoteHistoryPanel } from './NoteHistoryPanel'
 import '@/pages/results/LearningNotesPage/learning-notes.css'
 import './note-shell.css'
 import { NewSummaryModal } from '@/components/NewSummaryModal'
@@ -494,7 +493,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   } | null>(null)
   const [immersiveOpen, setImmersiveOpen] = useState(false)
   const [sourceMdOpen, setSourceMdOpen] = useState(false)
-  const [historyOpen, setHistoryOpen] = useState(false)
   // VN4.3 AI 工具下拉
   const [aiToolsOpen, setAiToolsOpen] = useState(false)
   const [artifactTool, setArtifactTool] = useState<NoteArtifactKind | null>(null)
@@ -1969,9 +1967,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         {saveStatus === 'failed' && '保存失败'}
         {saveStatus === 'idle' && '自动保存'}
       </span>
-      <button className="btn-ghost" onClick={() => setHistoryOpen(true)}>
-        <History size={13} />{t('shell.versionHistory')}
-      </button>
     </span>
   )
   const noteMetaRows = [
@@ -2183,17 +2178,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                         )
                       })
                 )}
-                <div className="nibi-note-version-divider" />
-                <button
-                  type="button"
-                  className="nibi-note-version-history"
-                  onClick={() => {
-                    setTemplateDropOpen(false)
-                    setHistoryOpen(true)
-                  }}
-                >
-                  <History size={13} /> {t('shell.viewVersionHistory')}
-                </button>
               </div>
             )}
           </div>
@@ -3275,21 +3259,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <NoteHistoryPanel
-        open={historyOpen}
-        workspaceId={workspaceId}
-        itemId={itemId}
-        onClose={() => setHistoryOpen(false)}
-        onRestored={(updated) => {
-          setNote(updated)
-          switchEditorBody(extractEditableBody(
-            updated.note_md,
-            String(updated.frontmatter?.type ?? ''),
-          ))
-          setSaveStatus('saved')
-          setSavedAt(formatTime(new Date()))
-        }}
-      />
     </div>
   )
 }

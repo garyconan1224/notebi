@@ -202,22 +202,6 @@ describe('NoteShell summary switching', () => {
     expect(screen.getByRole('button', { name: '重新生成总结' })).not.toBeNull()
   })
 
-  it('顶栏提供不依赖正文滚动位置的版本历史入口', async () => {
-    render(
-      <MemoryRouter>
-        <NoteShell workspaceId="ws-1" itemId="item-1" />
-      </MemoryRouter>,
-    )
-
-    await waitFor(() => expectAnyEditorToContain('主笔记正文'))
-
-    // 版本历史并入版本下拉：主笔记 / AI 总结 / 查看版本历史
-    fireEvent.click(screen.getByRole('button', { name: '主笔记' }))
-    fireEvent.click(screen.getByRole('button', { name: /查看版本历史/ }))
-
-    expect(document.querySelector('.note-history-panel')).not.toBeNull()
-  })
-
   it('点击结果页标签会跳转到合集筛选', async () => {
     mocks.getItemNote.mockResolvedValue({
       ...MAIN_NOTE,
