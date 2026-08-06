@@ -1,4 +1,5 @@
 import type { LibraryItem } from '@/services/library'
+import { useTranslation } from 'react-i18next'
 import {
   TYPE_ICON,
   STATE_COLOR,
@@ -19,18 +20,19 @@ interface ListViewProps {
 }
 
 export function ListView({ items, selectMode, selectedSet, selectionKey, onToggle, onOpen, onDelete }: ListViewProps) {
+  const { t } = useTranslation('pages')
   return (
     <div className="lv-wrapper">
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr>
             {selectMode && <th className="lv-th" style={{ width: 36 }}></th>}
-            <th className="lv-th">名称</th>
-            <th className="lv-th" style={{ width: 80 }}>类型</th>
-            <th className="lv-th" style={{ width: 110 }}>状态</th>
-            <th className="lv-th" style={{ width: 80 }}>时长</th>
-            <th className="lv-th" style={{ width: 160 }}>合集</th>
-            <th className="lv-th" style={{ width: 100 }}>创建时间</th>
+            <th className="lv-th">{t('library.name')}</th>
+            <th className="lv-th" style={{ width: 80 }}>{t('library.type')}</th>
+            <th className="lv-th" style={{ width: 110 }}>{t('library.status')}</th>
+            <th className="lv-th" style={{ width: 80 }}>{t('library.duration')}</th>
+            <th className="lv-th" style={{ width: 160 }}>{t('library.collectionCol')}</th>
+            <th className="lv-th" style={{ width: 100 }}>{t('library.createdAt')}</th>
             <th className="lv-th" style={{ width: 40 }}></th>
           </tr>
         </thead>
@@ -66,7 +68,7 @@ export function ListView({ items, selectMode, selectedSet, selectionKey, onToggl
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <Icon size={16} strokeWidth={1.4} style={{ color: 'var(--mut)', flexShrink: 0 }} />
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {item.name || '未命名'}
+                      {item.name || t('library.untitled')}
                     </span>
                   </div>
                 </td>

@@ -1,0 +1,28 @@
+{
+  "library": {
+    "folder": "文件夹",
+    "collection": "笔记合集",
+    "itemsCount": "{{count}} 项内容",
+    "updated": "更新 {{time}}",
+    "emptyCollection": "先往这个合集里放一条内容",
+    "waitingContent": "等待内容",
+    "name": "名称",
+    "type": "类型",
+    "status": "状态",
+    "duration": "时长",
+    "collectionCol": "合集",
+    "createdAt": "创建时间",
+    "sort": "排序",
+    "untitled": "未命名",
+    "favorited": "已收藏",
+    "frames": "{{count}} 帧"
+  },
+  "workbench": {
+    "heroTitle": "把内容变成清晰笔记",
+    "heroDesc": "粘贴链接或拖入文件，NoteBi 自动识别内容类型，提取结构化笔记、字幕和重点摘要。",
+    "processing": "正在处理",
+    "recentNotes": "最近笔记",
+    "loading": "正在读取本地笔记…",
+    "localNote": "本地笔记"
+  }
+}

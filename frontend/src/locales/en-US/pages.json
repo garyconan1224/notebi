@@ -1,0 +1,28 @@
+{
+  "library": {
+    "folder": "Folder",
+    "collection": "Note Collection",
+    "itemsCount": "{{count}} items",
+    "updated": "Updated {{time}}",
+    "emptyCollection": "Add an item to this collection",
+    "waitingContent": "Waiting for content",
+    "name": "Name",
+    "type": "Type",
+    "status": "Status",
+    "duration": "Duration",
+    "collectionCol": "Collection",
+    "createdAt": "Created",
+    "sort": "Sort",
+    "untitled": "Untitled",
+    "favorited": "Favorited",
+    "frames": "{{count}} frames"
+  },
+  "workbench": {
+    "heroTitle": "Turn content into clear notes",
+    "heroDesc": "Paste a link or drop a file. NoteBi detects the content type and extracts structured notes, subtitles, and key takeaways.",
+    "processing": "Processing",
+    "recentNotes": "Recent Notes",
+    "loading": "Loading local notes…",
+    "localNote": "Local Note"
+  }
+}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import type { LibraryWorkspace, LibraryItem } from '@/services/library'
 import { SYSTEM_TAG_DIMENSIONS } from '@/constants/tagDimensions'
@@ -84,6 +85,7 @@ export function WorkspaceCard({
   onUploadCover,
   onResetCover,
 }: WorkspaceCardProps) {
+  const { t } = useTranslation('pages')
   const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
   const [draftName, setDraftName] = useState(workspace.name)
@@ -104,8 +106,8 @@ export function WorkspaceCard({
     .map(([type, count]) => `${TYPE_NAME[type] ?? type} ${count}`)
     .join(' · ')
   const summaryText = workspace.items_count > 0
-    ? `${typeMix || `${workspace.items_count} 项内容`}，可继续生成融合笔记或补充新素材。`
-    : '空笔记合集：适合按主题收纳视频、音频、图片和文本。'
+    ? `${typeMix || `${t('library.itemsCount', { count: workspace.items_count })}`}，可继续生成融合笔记或补充新素材。`
+    : `${t('library.emptyCollection')}：适合按主题收纳视频、音频、图片和文本。`
   const coverThumbnail = workspace.cover_thumbnail
   const collectionTags = useMemo(() => aggregateTags(items), [items])
 
@@ -179,7 +181,7 @@ export function WorkspaceCard({
             <img src={previewSrcForProxy(coverThumbnail)} alt={`${workspace.name} 封面`} loading="lazy" />
             <div className="collection-hero-overlay">
               <span>NOTE COLLECTION</span>
-              <strong>{workspace.items_count} 项内容</strong>
+              <strong>{t('library.itemsCount', { count: workspace.items_count })}</strong>
             </div>
           </div>
         ) : (
@@ -198,7 +200,7 @@ export function WorkspaceCard({
                     ) : (
                       <div className="collection-preview-fallback">
                         <span>{item ? (TYPE_TONE[item.type]?.label ?? item.type.toUpperCase()) : 'NOTE'}</span>
-                        <strong>{item?.name || (index === 0 ? '先往这个合集里放一条内容' : '等待内容')}</strong>
+                        <strong>{item?.name || (index === 0 ? t('library.emptyCollection') : t('library.waitingContent'))}</strong>
                       </div>
                     )}
                   </div>
@@ -247,7 +249,7 @@ export function WorkspaceCard({
         <p className="note-summary">{summaryText}</p>
 
         <div className="note-status-line">
-          <span className="note-inline-chip note-inline-chip--done">文件夹</span>
+          <span className="note-inline-chip note-inline-chip--done">{t('library.folder')}</span>
           <span className="note-inline-chip">笔记合集</span>
         </div>
 
@@ -258,9 +260,9 @@ export function WorkspaceCard({
         )}
 
         <div className="note-meta-row">
-          <span>合集</span>
-          <span>{workspace.items_count} 项内容</span>
-          <span>更新 {formatRelative(workspace.updated_at)}</span>
+          <span>{t('library.collectionCol')}</span>
+          <span>{t('library.itemsCount', { count: workspace.items_count })}</span>
+          <span>{t('library.updated', { time: formatRelative(workspace.updated_at) })}</span>
         </div>
 
         <div className="note-card-actions">
