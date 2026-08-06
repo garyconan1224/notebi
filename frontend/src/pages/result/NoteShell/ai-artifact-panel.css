@@ -263,6 +263,8 @@
   border: 1px solid var(--bdr);
   border-radius: var(--r, 8px);
   background: transparent;
+  /* mind-elixir 需 overflowHidden:false 才注册指针手势，视觉裁切由此处承担 */
+  overflow: hidden;
 }
 
 /* 行动项 */

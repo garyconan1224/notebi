@@ -169,7 +169,9 @@ export function MindMapView({ data, title, onUpdated, exportRef }: MindMapViewPr
       direction: MindElixir.SIDE,
       toolBar: true,
       keypress: true,
-      overflowHidden: true,
+      // 必须为 false：mind-elixir 仅在 overflowHidden=false 时才注册指针手势系统
+      // （选中/双击编辑/拖拽/右键菜单）；视觉裁切由 .mindmap-canvas 的 overflow:hidden 承担。
+      overflowHidden: false,
       contextMenu: { locale: zh_CN },
       newTopicName: t('mindmap.newNode'),
       theme: buildNotebiTheme(isDark),
