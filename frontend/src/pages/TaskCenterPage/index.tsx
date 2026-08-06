@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
@@ -160,6 +161,8 @@ function taskTargetPath(task: TaskRecord): string {
 }
 
 export default function TaskCenterPage() {
+  const { t } = useTranslation('pages')
+
   const navigate = useNavigate()
   const [view, setView] = useState<View>('batches')
   const [batches, setBatches] = useState<TaskBatch[]>([])
@@ -309,23 +312,23 @@ export default function TaskCenterPage() {
               >
                 {refreshing ? '刷新中…' : '刷新'}
               </button>
-              <Link className="btn btn-primary" to="/tasks/new">新建批量任务</Link>
+              <Link className="btn btn-primary" to="/tasks/new">{t('tasks.newBatch')}</Link>
             </>
           )}
         />
 
         <section className="task-stats" aria-label="任务统计">
           <article className="task-stat" data-testid="task-stat-running">
-            <span>处理中</span><strong>{stats.running}</strong>
+            <span>{t('tasks.processing')}</span><strong>{stats.running}</strong>
           </article>
           <article className="task-stat" data-testid="task-stat-completed">
-            <span>已完成</span><strong>{stats.completed}</strong>
+            <span>{t('tasks.completed')}</span><strong>{stats.completed}</strong>
           </article>
           <article className="task-stat" data-testid="task-stat-attention">
-            <span>需处理</span><strong>{stats.attention}</strong>
+            <span>{t('tasks.attention')}</span><strong>{stats.attention}</strong>
           </article>
           <article className="task-stat" data-testid="task-stat-waiting">
-            <span>等待中</span><strong>{stats.waiting}</strong>
+            <span>{t('tasks.waiting')}</span><strong>{stats.waiting}</strong>
           </article>
         </section>
 
@@ -363,7 +366,7 @@ export default function TaskCenterPage() {
               </div>
             )}
             <label className="task-search">
-              <span className="sr-only">搜索任务</span>
+              <span className="sr-only">{t('tasks.search')}</span>
               <input
                 className="input"
                 placeholder={view === 'batches' ? '搜索批次' : '搜索任务'}
@@ -386,14 +389,14 @@ export default function TaskCenterPage() {
           {view === 'batches' && showAdvanced && (
             <div className="task-advanced-filters">
               <label>
-                <span>来源</span>
+                <span>{t('tasks.source')}</span>
                 <select
                   className="input"
                   aria-label="来源"
                   value={batchSource}
                   onChange={(event) => setBatchSource(event.target.value)}
                 >
-                  <option value="">全部来源</option>
+                  <option value="">{t('tasks.allSources')}</option>
                   {Object.entries(SOURCE_LABELS).map(([value, label]) => (
                     <option key={value} value={value}>{label}</option>
                   ))}
@@ -402,10 +405,10 @@ export default function TaskCenterPage() {
             </div>
           )}
 
-          {loading && <div className="task-state" role="status">正在加载任务…</div>}
+          {loading && <div className="task-state" role="status">{t('tasks.loading')}</div>}
           {!loading && error && (
             <div className="task-state task-state-error" role="alert">
-              <strong>任务加载失败</strong>
+              <strong>{t('tasks.loadFailed')}</strong>
               <span>{error}</span>
               <button type="button" className="btn" onClick={() => void load()}>
                 重试
@@ -416,7 +419,7 @@ export default function TaskCenterPage() {
           {!loading && !error && view === 'batches' && (
             <div className="task-batch-list">
               {pageItems.length === 0 && (
-                <div className="task-state">没有匹配的批次</div>
+                <div className="task-state">{t('tasks.noBatch')}</div>
               )}
               {(pageItems as TaskBatch[]).map((batch) => {
                 const waiting = waitingCount(batch)
@@ -483,7 +486,7 @@ export default function TaskCenterPage() {
 
           {!loading && !error && view === 'tasks' && (
             <div className="task-item-list">
-              {pageItems.length === 0 && <div className="task-state">暂无单条任务</div>}
+              {pageItems.length === 0 && <div className="task-state">{t('tasks.noTask')}</div>}
               {(pageItems as TaskRecord[]).map((task) => {
                 const deleting = deletingIds.has(task.task_id)
                 return (
@@ -517,23 +520,23 @@ export default function TaskCenterPage() {
                     </div>
                     <section className="task-public-progress" aria-label={`${taskTitle(task)}处理说明`}>
                       <div>
-                        <span>当前环节</span>
+                        <span>{t('tasks.currentStep')}</span>
                         <strong>{publicTaskStage(task)}</strong>
                       </div>
-                      <p>显示的是处理阶段与可见产出，不展示模型的内部思维过程。</p>
+                      <p>{t('tasks.stepHint')}</p>
                       {completedSummaryPreview(task) && (
                         <div className="task-summary-preview">
-                          <span>总结预览</span>
+                          <span>{t('tasks.summaryPreview')}</span>
                           <p>{completedSummaryPreview(task)}{completedSummaryPreview(task).length >= 360 ? '…' : ''}</p>
-                          {taskNotePath(task) && <Link to={taskNotePath(task)}>打开完整总结</Link>}
+                          {taskNotePath(task) && <Link to={taskNotePath(task)}>{t('tasks.openSummary')}</Link>}
                         </div>
                       )}
                     </section>
                     <details className="task-diagnostics">
-                      <summary>诊断信息</summary>
+                      <summary>{t('tasks.diagnostics')}</summary>
                       <dl>
-                        <div><dt>任务编号</dt><dd>{task.task_id}</dd></div>
-                        {task.batch_id && <div><dt>批次编号</dt><dd>{task.batch_id}</dd></div>}
+                        <div><dt>{t('tasks.taskId')}</dt><dd>{task.task_id}</dd></div>
+                        {task.batch_id && <div><dt>{t('tasks.batchId')}</dt><dd>{task.batch_id}</dd></div>}
                       </dl>
                       <Link
                         to={`/settings/monitor?batch_id=${encodeURIComponent(task.batch_id || '')}&task_id=${encodeURIComponent(task.task_id)}&level=ERROR`}

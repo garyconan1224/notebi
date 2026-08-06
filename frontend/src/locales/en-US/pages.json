@@ -24,5 +24,26 @@
     "recentNotes": "Recent Notes",
     "loading": "Loading local notes…",
     "localNote": "Local Note"
+  },
+  "tasks": {
+    "newBatch": "New Batch Task",
+    "processing": "Processing",
+    "completed": "Completed",
+    "attention": "Needs Attention",
+    "waiting": "Waiting",
+    "search": "Search tasks",
+    "source": "Source",
+    "allSources": "All Sources",
+    "loading": "Loading tasks…",
+    "loadFailed": "Failed to load tasks",
+    "noBatch": "No matching batches",
+    "noTask": "No individual tasks",
+    "currentStep": "Current Step",
+    "stepHint": "Shows processing stages and visible outputs, not the model's internal reasoning.",
+    "summaryPreview": "Summary Preview",
+    "openSummary": "Open Full Summary",
+    "diagnostics": "Diagnostics",
+    "taskId": "Task ID",
+    "batchId": "Batch ID"
   }
 }

@@ -24,5 +24,26 @@
     "recentNotes": "最近笔记",
     "loading": "正在读取本地笔记…",
     "localNote": "本地笔记"
+  },
+  "tasks": {
+    "newBatch": "新建批量任务",
+    "processing": "处理中",
+    "completed": "已完成",
+    "attention": "需处理",
+    "waiting": "等待中",
+    "search": "搜索任务",
+    "source": "来源",
+    "allSources": "全部来源",
+    "loading": "正在加载任务…",
+    "loadFailed": "任务加载失败",
+    "noBatch": "没有匹配的批次",
+    "noTask": "暂无单条任务",
+    "currentStep": "当前环节",
+    "stepHint": "显示的是处理阶段与可见产出，不展示模型的内部思维过程。",
+    "summaryPreview": "总结预览",
+    "openSummary": "打开完整总结",
+    "diagnostics": "诊断信息",
+    "taskId": "任务编号",
+    "batchId": "批次编号"
   }
 }
