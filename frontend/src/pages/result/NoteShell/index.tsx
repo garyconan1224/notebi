@@ -47,7 +47,6 @@ import type { TaskRecord } from '@/types/task'
 import { SourceMdModal } from './SourceMdModal'
 import { NotionExportDialog } from './NotionExportDialog'
 import { FeishuExportDialog } from './FeishuExportDialog'
-import { ChapterTimelineStrip } from './ChapterTimelineStrip'
 import { NoteExportPanel, type ExportDestination, type ExportPlan } from './NoteExportPanel'
 import SpeakerDiarizationRow, { type SpeakerDiarizationInfo, type SpeakerDiarizationStatus } from './SpeakerDiarizationRow'
 import { withStatusToast } from '@/lib/statusToast'
@@ -1036,13 +1035,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const fallbackAudioChapters = useMemo(() => buildAudioChapters(transcriptLines), [transcriptLines])
   const audioChapters = generatedAudioChapters.length > 0 ? generatedAudioChapters : fallbackAudioChapters
   const hasModelChapters = generatedAudioChapters.length > 0
-  const videoEvidenceChapters = useMemo<NoteChapter[]>(() => {
-    if (Array.isArray(note?.chapters) && note.chapters.length > 0) return note.chapters
-    return fallbackAudioChapters.map((chapter) => ({
-      ...chapter,
-      source: 'fallback' as const,
-    }))
-  }, [fallbackAudioChapters, note?.chapters])
   const activeAudioChapterIdx = useMemo(() => {
     let activeIdx = -1
     for (let idx = 0; idx < audioChapters.length; idx += 1) {
@@ -2537,16 +2529,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
             </div>
             {/* 控制条 + 时间线（在 player-wrap 外，避免 overflow:hidden 截断） */}
             {!isPip && transportNode}
-            {/* Q3 融合时间轴：章节段 + 截帧同一条轨，点击跳转 */}
-            {!isPip && (
-              <ChapterTimelineStrip
-                frames={timedVideoFrames}
-                chapters={videoEvidenceChapters}
-                duration={effectiveVideoDuration}
-                currentTime={currentTime}
-                onSeek={handleSeek}
-              />
-            )}
             {/* 转录 */}
             {!isPip && Array.isArray(note.transcript) && (note.transcript as VideoResultTranscriptLine[]).length > 0 ? (
               <div className="nibi-note-transcript-wrap">
