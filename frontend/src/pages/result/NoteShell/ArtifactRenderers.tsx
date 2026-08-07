@@ -10,12 +10,23 @@ import { useMemo, useState } from 'react'
 
 import type { MindMapData } from './MindMapView'
 
-export function ActionItemsView({ items }: { items: Array<{ id: string; text: string; done: boolean }> }) {
+export function ActionItemsView({
+  items,
+  onToggle,
+}: {
+  items: Array<{ id: string; text: string; done: boolean }>
+  onToggle?: (itemId: string, done: boolean) => void
+}) {
   return (
     <ul className="artifact-action-items">
       {items.map((item) => (
         <li key={item.id} className={item.done ? 'is-done' : ''}>
-          <input type="checkbox" readOnly checked={item.done} aria-label={item.text} />
+          <input
+            type="checkbox"
+            checked={item.done}
+            aria-label={item.text}
+            onChange={() => onToggle?.(item.id, !item.done)}
+          />
           <span>{item.text}</span>
         </li>
       ))}

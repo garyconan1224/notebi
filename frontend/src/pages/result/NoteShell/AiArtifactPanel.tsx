@@ -69,10 +69,18 @@ interface ArtifactContentViewProps {
   workspaceId?: string
   itemId?: string
   onMindMapUpdated?: (artifact: NoteArtifact, contentJson: MindMapData) => void
+  onActionItemsUpdated?: (artifact: NoteArtifact, items: Array<{ id: string; text: string; done: boolean }>) => void
   mindMapExportRef?: MindMapExportRef
 }
 
-export function ArtifactContentView({ artifact, workspaceId, itemId, onMindMapUpdated, mindMapExportRef }: ArtifactContentViewProps) {
+export function ArtifactContentView({
+  artifact,
+  workspaceId,
+  itemId,
+  onMindMapUpdated,
+  onActionItemsUpdated,
+  mindMapExportRef,
+}: ArtifactContentViewProps) {
   const contentJson = (artifact.content_json ?? null) as ArtifactContentJson
 
   if (artifact.kind === 'mind_map' && contentJson && (contentJson as MindMapData).root) {
@@ -90,7 +98,18 @@ export function ArtifactContentView({ artifact, workspaceId, itemId, onMindMapUp
     )
   }
   if (artifact.kind === 'action_items' && contentJson && Array.isArray((contentJson as { items?: unknown }).items)) {
-    return <ActionItemsView items={(contentJson as { items: Array<{ id: string; text: string; done: boolean }> }).items} />
+    const items = (contentJson as { items: Array<{ id: string; text: string; done: boolean }> }).items
+    return (
+      <ActionItemsView
+        items={items}
+        onToggle={(itemId, done) =>
+          onActionItemsUpdated?.(
+            artifact,
+            items.map((item) => (item.id === itemId ? { ...item, done } : item)),
+          )
+        }
+      />
+    )
   }
   if (artifact.kind === 'key_cards' && contentJson && Array.isArray((contentJson as { cards?: unknown }).cards)) {
     const cards = (contentJson as { cards: Array<{ id?: string; title?: string; body?: string }> }).cards
@@ -232,6 +251,24 @@ export function AiArtifactPanel({
       .catch(() => toast.error(t('mindmap.saveFailed')))
   }
 
+  /** 行动项勾选：就地更新 content_json.items 并 PATCH 持久化（与导图编辑同一通道）。 */
+  const handleActionItemsUpdated = (
+    artifact: NoteArtifact,
+    items: Array<{ id: string; text: string; done: boolean }>,
+  ) => {
+    void updateNoteArtifact(workspaceId, itemId, artifact.artifact_id, { items })
+      .then(() => {
+        setArtifacts((current) =>
+          current.map((item) =>
+            item.artifact_id === artifact.artifact_id
+              ? { ...item, content_json: { items } as NoteArtifact['content_json'] }
+              : item,
+          ),
+        )
+      })
+      .catch(() => toast.error(t('mindmap.saveFailed')))
+  }
+
   /** 插入为图片：snapdom 截图 → 复用 ln-screenshots 上传通道 → 编辑器 image 节点（保持导图视觉格式）。 */
   const insertMindMapAsImage = async (target: NoteArtifact) => {
     const handle = mindMapExportRef.current
@@ -342,6 +379,7 @@ export function AiArtifactPanel({
                     workspaceId={workspaceId}
                     itemId={itemId}
                     onMindMapUpdated={handleMindMapUpdated}
+                    onActionItemsUpdated={handleActionItemsUpdated}
                     mindMapExportRef={mindMapExportRef}
                   />
                 )}
@@ -359,7 +397,7 @@ export function AiArtifactPanel({
                     <button
                       type="button"
                       onClick={() => {
-                        useLnEditorStore.getState().insertAtCursor(`\n\n${selected.content_md}\n\n`)
+                        useLnEditorStore.getState().insertMarkdownAtCursor(`\n\n${selected.content_md}\n\n`)
                         // 插入成功后关闭面板，让用户直接看到编辑器里的插入结果
                         onClose()
                       }}

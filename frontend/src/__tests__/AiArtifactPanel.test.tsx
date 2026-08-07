@@ -22,12 +22,14 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   create: vi.fn(),
   remove: vi.fn(),
+  update: vi.fn(),
 }))
 
 vi.mock('@/services/noteArtifacts', () => ({
   listNoteArtifacts: mocks.list,
   createNoteArtifact: mocks.create,
   deleteNoteArtifact: mocks.remove,
+  updateNoteArtifact: mocks.update,
 }))
 
 const ARTIFACT = {
@@ -58,9 +60,11 @@ describe('AiArtifactPanel', () => {
     useLnEditorStore.getState().setReplaceSelectionFn(vi.fn(() => true))
   })
 
-  it('重新打开时列出已保存的独立产物，插入笔记后自动关闭面板', async () => {
+  it('重新打开时列出已保存的独立产物，插入笔记走 Markdown 解析通道后自动关闭面板', async () => {
     const insert = vi.fn(() => true)
+    const insertMarkdown = vi.fn(() => true)
     useLnEditorStore.getState().setInsertFn(insert)
+    useLnEditorStore.getState().setInsertMarkdownFn(insertMarkdown)
     const onClose = vi.fn()
 
     render(
@@ -75,8 +79,54 @@ describe('AiArtifactPanel', () => {
 
     expect(await screen.findByText('思维导图')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '插入笔记' }))
-    expect(insert).toHaveBeenCalledWith('\n\n- 核心\n  - 分支\n\n')
+    // 纯文本插入不应被调用；Markdown（含 - [ ] 待办）应解析为真实节点插入
+    expect(insert).not.toHaveBeenCalled()
+    expect(insertMarkdown).toHaveBeenCalledWith('\n\n- 核心\n  - 分支\n\n')
     expect(onClose).toHaveBeenCalled()
+  })
+
+  it('行动项可打勾，勾选后调用 updateNoteArtifact 持久化', async () => {
+    mocks.update.mockResolvedValue({ status: 'updated', artifact_id: 'a1' })
+    mocks.list.mockResolvedValue([
+      {
+        ...ARTIFACT,
+        kind: 'action_items',
+        title: '行动项',
+        content_md: '- [ ] 写周报\n- [x] 开评审会',
+        content_json: {
+          items: [
+            { id: 'a0', text: '写周报', done: false },
+            { id: 'a1', text: '开评审会', done: true },
+          ],
+        },
+      },
+    ])
+
+    render(
+      <AiArtifactPanel
+        open
+        initialKind="action_items"
+        workspaceId="ws-1"
+        itemId="item-1"
+        onClose={vi.fn()}
+      />,
+    )
+
+    const checkbox = (await screen.findAllByRole('checkbox'))[0] as HTMLInputElement
+    expect(checkbox.checked).toBe(false)
+    fireEvent.click(checkbox)
+    await waitFor(() => expect(mocks.update).toHaveBeenCalled())
+    expect(mocks.update).toHaveBeenCalledWith(
+      'ws-1',
+      'item-1',
+      'artifact-1',
+      expect.objectContaining({
+        items: expect.arrayContaining([
+          { id: 'a0', text: '写周报', done: true },
+          { id: 'a1', text: '开评审会', done: true },
+        ]),
+      }),
+    )
   })
 
   it('思维导图产物支持插入为图片与插入为大纲，插入后自动关闭面板', async () => {
