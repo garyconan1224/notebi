@@ -5468,6 +5468,23 @@ def _validate_mind_map_json(content: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+def _validate_action_items_json(content: Any) -> Optional[str]:
+    """轻量校验 action_items 结构；返回错误信息或 None。"""
+    items = content.get("items") if isinstance(content, dict) else None
+    if not isinstance(items, list):
+        return "行动项 content_json 需要 items 数组"
+    for item in items:
+        if not isinstance(item, dict):
+            return "行动项条目必须是对象"
+        if not isinstance(item.get("id"), str) or not item.get("id"):
+            return "行动项条目缺少 id"
+        if not isinstance(item.get("text"), str):
+            return "行动项条目缺少 text"
+        if "done" in item and not isinstance(item["done"], bool):
+            return "行动项 done 必须是布尔值"
+    return None
+
+
 @router.put("/{workspace_id}/items/{item_id}/artifacts/{artifact_id}")
 def update_note_artifact(
     workspace_id: str,
@@ -5485,6 +5502,11 @@ def update_note_artifact(
         kind = str(entry.get("kind") or "")
         if kind == "mind_map":
             error = _validate_mind_map_json(req.content_json)
+            if error:
+                raise ValueError(error)
+            return {**entry, "content_json": req.content_json}
+        if kind == "action_items":
+            error = _validate_action_items_json(req.content_json)
             if error:
                 raise ValueError(error)
             return {**entry, "content_json": req.content_json}
@@ -5506,8 +5528,8 @@ def update_note_artifact(
     # 校验 kind 是否支持更新（非思维导图暂不支持原地编辑）
     for entry in (item.results or {}).get("ai_artifacts") or []:
         if isinstance(entry, dict) and str(entry.get("artifact_id") or "") == artifact_id:
-            if str(entry.get("kind") or "") != "mind_map":
-                raise HTTPException(status_code=400, detail="仅支持更新思维导图产物")
+            if str(entry.get("kind") or "") not in ("mind_map", "action_items"):
+                raise HTTPException(status_code=400, detail="仅支持更新思维导图/行动项产物")
     return {"status": "updated", "artifact_id": artifact_id}
 
 
