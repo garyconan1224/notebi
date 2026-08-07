@@ -809,7 +809,9 @@ def export_transcript(
     mode: str = "article",
     format: str = "txt",
     with_speaker: bool = False,
-    with_timestamp: bool = True,
+    # 默认不带时间轴：mode=article/speaker_grouped 的产物名即「无时间轴」，
+    # 遗留下载路径不传该参数；文档导出路径（format=txt/md/docx）由前端显式传值。
+    with_timestamp: bool = False,
     language: str = "bilingual",
 ) -> StreamingResponse:
     """导出转写文本：TXT / Markdown / Word，支持说话人、时间轴与语言选项。"""
@@ -839,9 +841,19 @@ def export_transcript(
     fallback = results.get("transcript") if isinstance(results.get("transcript"), str) else ""
     translations = _flat_translation_lines(results, len(segments))
     if mode == "article":
+        # article 的产物语义是「无时间轴文章」：没有时间轴/说话人前缀、也不需要双语对照时，
+        # 沿用段落合并渲染（export_transcript_article，480 字段一段）；
+        # 只有选项确实需要逐段结构（时间轴/说话人/双语对照）时才逐段渲染。
+        per_line = with_timestamp or with_speaker or bool(
+            translations and language != "source"
+        )
         if format == "docx":
-            text_content = _build_transcript_document(
-                segments, "txt", with_speaker, with_timestamp, translations, language,
+            text_content = (
+                _build_transcript_document(
+                    segments, "txt", with_speaker, with_timestamp, translations, language,
+                )
+                if per_line
+                else export_transcript_article(segments)
             ) or _build_transcript_txt(fallback)
             blob = _build_transcript_docx(item.name or "转写文本", text_content)
             safe_title = (item.name or "untitled").replace("/", "_").replace("\\", "_")[:50]
@@ -855,8 +867,12 @@ def export_transcript(
                     "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
                 },
             )
-        content = _build_transcript_document(
-            segments, format, with_speaker, with_timestamp, translations, language,
+        content = (
+            _build_transcript_document(
+                segments, format, with_speaker, with_timestamp, translations, language,
+            )
+            if per_line
+            else export_transcript_article(segments)
         ) or _build_transcript_txt(fallback)
     else:
         content = export_transcript_by_speaker(
