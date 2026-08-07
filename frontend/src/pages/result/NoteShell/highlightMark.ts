@@ -61,7 +61,7 @@ export const highlightMarkSchema: MarkSchema = {
         state.closeMark(markType)
       } else {
         const color = DATA_COLOR_RE.exec(value)?.[1] || DEFAULT_HIGHLIGHT_COLOR
-        state.openMark(markType.create({ color }))
+        state.openMark(markType, { color })
       }
     },
   },

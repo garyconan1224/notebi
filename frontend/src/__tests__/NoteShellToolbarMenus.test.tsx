@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import NoteShell from '@/pages/result/NoteShell'
+import { EMPTY_EDITOR_FORMATTING_STATE } from '@/pages/result/NoteShell/editorFormatting'
 import { useLnEditorStore } from '@/store/lnEditorStore'
 import type { ItemNote } from '@/types/workspace'
 
@@ -208,19 +209,8 @@ describe('NoteShell 浮动正文格式工具栏（Q6）', () => {
     const runFormat = vi.fn(() => true)
     useLnEditorStore.getState().setFormatFn(runFormat)
     useLnEditorStore.getState().setFormattingState({
+      ...EMPTY_EDITOR_FORMATTING_STATE,
       bold: true,
-      italic: false,
-      strike: false,
-      inlineCode: false,
-      link: false,
-      heading: false,
-      blockquote: false,
-      bulletList: false,
-      orderedList: false,
-      taskList: false,
-      codeBlock: false,
-      underline: false,
-      headingLevel: 0,
       canBold: true,
       canItalic: true,
       canStrike: true,
@@ -233,7 +223,6 @@ describe('NoteShell 浮动正文格式工具栏（Q6）', () => {
       canTaskList: true,
       canCodeBlock: true,
       canUnderline: true,
-      canClearFormat: false,
     })
 
     await renderNoteShell(TEXT_NOTE)
