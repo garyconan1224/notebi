@@ -43,7 +43,7 @@
 
 ### 最终测试 / 构建结果（真实退出码，2026-08-07）
 
-- 前端测试：`pnpm test` → 100 文件 / 552 passed，退出码 0。
+- 前端测试：`pnpm test` → 100 文件 / 553 passed，退出码 0（连跑两次稳定）。
 - 后端测试：`.venv/bin/python -m pytest tests/backend backend/tests tests/test_*.py -m "not integration" -q` → 1490 passed / 2 skipped / 6 deselected，另有 2 个 twitter 环境性失败（见下）。
   skipped 明细：`test_audio_analyzer.py:315`（silero-vad torch 模型，需 `RUN_AUDIO_MODEL_TESTS=1` 单跑）、`test_ocr_service.py:44`（PaddleOCR 模型不可用）。
 - 构建：`pnpm build`（`tsc -b && vite build`）退出码 0。
