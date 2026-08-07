@@ -240,6 +240,8 @@ export function AiArtifactPanel({
       const blob = await handle.getPngBlob()
       const { url } = await uploadLnScreenshot(workspaceId, blob, Date.now())
       useLnEditorStore.getState().insertAtCursor(`\n\n![${target.title}](${url})\n\n`)
+      // 插入成功后关闭面板，让用户直接看到编辑器里的插入结果
+      onClose()
     } catch {
       toast.error(t('mindmap.insertImageFailed'))
     }
@@ -251,6 +253,8 @@ export function AiArtifactPanel({
     const data = handle?.getData() ?? (target.content_json as MindMapData | null)
     if (!data?.root) return
     useLnEditorStore.getState().insertMarkdownAtCursor(mindMapToMarkdown(data))
+    // 插入成功后关闭面板，让用户直接看到编辑器里的插入结果
+    onClose()
   }
 
   const handleDelete = async (artifact: NoteArtifact) => {
@@ -354,7 +358,11 @@ export function AiArtifactPanel({
                   ) : selected.kind !== 'selection_rewrite' ? (
                     <button
                       type="button"
-                      onClick={() => useLnEditorStore.getState().insertAtCursor(`\n\n${selected.content_md}\n\n`)}
+                      onClick={() => {
+                        useLnEditorStore.getState().insertAtCursor(`\n\n${selected.content_md}\n\n`)
+                        // 插入成功后关闭面板，让用户直接看到编辑器里的插入结果
+                        onClose()
+                      }}
                     >
                       <FilePlus2 size={14} /> 插入笔记
                     </button>

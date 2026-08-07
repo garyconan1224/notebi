@@ -58,9 +58,10 @@ describe('AiArtifactPanel', () => {
     useLnEditorStore.getState().setReplaceSelectionFn(vi.fn(() => true))
   })
 
-  it('重新打开时列出已保存的独立产物，并可插入笔记', async () => {
+  it('重新打开时列出已保存的独立产物，插入笔记后自动关闭面板', async () => {
     const insert = vi.fn(() => true)
     useLnEditorStore.getState().setInsertFn(insert)
+    const onClose = vi.fn()
 
     render(
       <AiArtifactPanel
@@ -68,16 +69,17 @@ describe('AiArtifactPanel', () => {
         initialKind="mind_map"
         workspaceId="ws-1"
         itemId="item-1"
-        onClose={vi.fn()}
+        onClose={onClose}
       />,
     )
 
     expect(await screen.findByText('思维导图')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '插入笔记' }))
     expect(insert).toHaveBeenCalledWith('\n\n- 核心\n  - 分支\n\n')
+    expect(onClose).toHaveBeenCalled()
   })
 
-  it('思维导图产物支持插入为图片与插入为大纲', async () => {
+  it('思维导图产物支持插入为图片与插入为大纲，插入后自动关闭面板', async () => {
     const insert = vi.fn(() => true)
     const insertMarkdown = vi.fn(() => true)
     useLnEditorStore.getState().setInsertFn(insert)
@@ -85,6 +87,7 @@ describe('AiArtifactPanel', () => {
     mocks.list.mockResolvedValue([
       { ...ARTIFACT, content_json: { root: { id: 'n0', text: '核心', children: [] } } },
     ])
+    const onClose = vi.fn()
 
     render(
       <AiArtifactPanel
@@ -92,7 +95,7 @@ describe('AiArtifactPanel', () => {
         initialKind="mind_map"
         workspaceId="ws-1"
         itemId="item-1"
-        onClose={vi.fn()}
+        onClose={onClose}
       />,
     )
 
@@ -104,12 +107,14 @@ describe('AiArtifactPanel', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: '插入为大纲' }))
     expect(insertMarkdown).toHaveBeenCalledWith('## 核心\n\n- 分支')
+    expect(onClose).toHaveBeenCalled()
 
     // 图片插入：snapdom 截图 → 上传 → markdown 图片语法
     fireEvent.click(screen.getByRole('button', { name: '插入为图片' }))
     await waitFor(() =>
       expect(insert).toHaveBeenCalledWith('\n\n![思维导图](/static/workspaces/ws-1/ln-screenshots/shot-1.png)\n\n'),
     )
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(2))
   })
 
   it('选区改写先显示原文和改写结果，接受后才替换', async () => {
