@@ -79,7 +79,9 @@ describe('AiArtifactPanel', () => {
 
   it('思维导图产物支持插入为图片与插入为大纲', async () => {
     const insert = vi.fn(() => true)
+    const insertMarkdown = vi.fn(() => true)
     useLnEditorStore.getState().setInsertFn(insert)
+    useLnEditorStore.getState().setInsertMarkdownFn(insertMarkdown)
     mocks.list.mockResolvedValue([
       { ...ARTIFACT, content_json: { root: { id: 'n0', text: '核心', children: [] } } },
     ])
@@ -96,12 +98,12 @@ describe('AiArtifactPanel', () => {
 
     // 等结构化内容视图挂载（出现「插入为大纲」按钮时 MindMapView 已渲染）
     await screen.findByRole('button', { name: '插入为大纲' })
-    // 大纲插入采用实时导图数据（用户可能已编辑节点）
+    // 大纲插入采用实时导图数据（用户可能已编辑节点），走「解析 Markdown 再插入」通道以保留标题/列表格式
     lastMindElixir().getData.mockReturnValue({
       nodeData: { id: 'n0', topic: '核心', children: [{ id: 'n1', topic: '分支', children: [] }] },
     })
     fireEvent.click(screen.getByRole('button', { name: '插入为大纲' }))
-    expect(insert).toHaveBeenCalledWith('\n\n## 核心\n\n- 分支\n\n')
+    expect(insertMarkdown).toHaveBeenCalledWith('## 核心\n\n- 分支')
 
     // 图片插入：snapdom 截图 → 上传 → markdown 图片语法
     fireEvent.click(screen.getByRole('button', { name: '插入为图片' }))

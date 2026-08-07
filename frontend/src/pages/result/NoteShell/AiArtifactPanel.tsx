@@ -245,12 +245,12 @@ export function AiArtifactPanel({
     }
   }
 
-  /** 插入为大纲：优先取当前编辑中的导图数据，回退产物 content_json，转 Markdown 嵌套列表。 */
+  /** 插入为大纲：优先取当前编辑中的导图数据，回退产物 content_json，转 Markdown 后以真正的标题+列表节点插入。 */
   const insertMindMapAsOutline = (target: NoteArtifact) => {
     const handle = mindMapExportRef.current
     const data = handle?.getData() ?? (target.content_json as MindMapData | null)
     if (!data?.root) return
-    useLnEditorStore.getState().insertAtCursor(`\n\n${mindMapToMarkdown(data)}\n\n`)
+    useLnEditorStore.getState().insertMarkdownAtCursor(mindMapToMarkdown(data))
   }
 
   const handleDelete = async (artifact: NoteArtifact) => {

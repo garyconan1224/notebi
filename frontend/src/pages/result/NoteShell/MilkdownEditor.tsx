@@ -10,10 +10,11 @@
  * 基线（createNoteSeedGuard），规范化不触发保存，真实编辑才保存。
  */
 import { useEffect, useRef } from 'react'
-import { Editor, rootCtx, defaultValueCtx, prosePluginsCtx, editorViewCtx, serializerCtx, marksCtx, remarkPluginsCtx } from '@milkdown/core'
+import { Editor, rootCtx, defaultValueCtx, prosePluginsCtx, editorViewCtx, serializerCtx, marksCtx, remarkPluginsCtx, parserCtx } from '@milkdown/core'
 import { Plugin, TextSelection } from '@milkdown/prose/state'
 import { history, undo, redo } from '@milkdown/prose/history'
 import { keymap } from '@milkdown/prose/keymap'
+import { Slice } from '@milkdown/prose/model'
 import { Milkdown, MilkdownProvider, useEditor, useInstance } from '@milkdown/react'
 import { commonmark } from '@milkdown/preset-commonmark'
 import { gfm } from '@milkdown/preset-gfm'
@@ -156,6 +157,46 @@ function MilkdownEditorInner({
       })
       return true
     })
+    // 「解析 Markdown 再插入」：把 markdown 转成真正的标题/列表等节点插入，
+    // 供思维导图「插入为大纲」等需要保留格式的场景使用。
+    useLnEditorStore.getState().setInsertMarkdownFn((markdown) => {
+      const editor = getEditor()
+      if (!editor) return false
+      let inserted = false
+      editor.action((ctx: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+        const view = ctx.get(editorViewCtx)
+        try {
+          const parser = ctx.get(parserCtx)
+          const parsed = parser(markdown)
+          const { state } = view
+          const { $from } = state.selection
+          // 光标在列表项内时，块级片段会被吞进列表（标题嵌套进 li）。
+          // 此时提升到最外层列表之后插入，保证大纲作为独立块落地。
+          let listDepth = -1
+          for (let d = 1; d <= $from.depth; d += 1) {
+            const name = $from.node(d).type.name
+            if (name === 'bullet_list' || name === 'ordered_list') { listDepth = d; break }
+          }
+          if (listDepth > 0) {
+            const pos = $from.after(listDepth)
+            const tr = state.tr.insert(pos, parsed.content)
+            tr.setSelection(TextSelection.create(tr.doc, pos + parsed.content.size))
+            view.dispatch(tr)
+          } else {
+            // openStart/openEnd 取 0：作为完整块级片段插入，不与相邻段落合并
+            view.dispatch(state.tr.replaceSelection(new Slice(parsed.content, 0, 0)))
+          }
+          view.focus()
+          inserted = true
+        } catch {
+          // 解析失败时降级为纯文本插入
+        }
+      })
+      if (!inserted) {
+        return useLnEditorStore.getState().insertAtCursor(markdown)
+      }
+      return true
+    })
     useLnEditorStore.getState().setWrapSelectionFn((before, after) => {
       const editor = getEditor()
       if (!editor) return false
@@ -210,6 +251,7 @@ function MilkdownEditorInner({
     useLnEditorStore.getState().setFormatFn(formatFn)
     return () => {
       useLnEditorStore.getState().setInsertFn(null)
+      useLnEditorStore.getState().setInsertMarkdownFn(null)
       useLnEditorStore.getState().setWrapSelectionFn(null)
       useLnEditorStore.getState().setGetSelectionFn(null)
       useLnEditorStore.getState().setReplaceSelectionFn(null)

@@ -10,6 +10,8 @@ interface LnEditorState {
   cmView: EditorView | null
   // WYSIWYG 模式（Milkdown）注册的插入函数；优先级高于 cmView
   insertFn: ((text: string) => boolean) | null
+  // WYSIWYG 模式注册的「解析 Markdown 再插入」函数；无注册时降级 insertAtCursor
+  insertMarkdownFn: ((markdown: string) => boolean) | null
   wrapSelectionFn: ((before: string, after: string) => boolean) | null
   getSelectionFn: (() => string) | null
   replaceSelectionFn: ((text: string) => boolean) | null
@@ -17,6 +19,7 @@ interface LnEditorState {
   formattingState: EditorFormattingState
   setCmView: (v: EditorView | null) => void
   setInsertFn: (fn: ((text: string) => boolean) | null) => void
+  setInsertMarkdownFn: (fn: ((markdown: string) => boolean) | null) => void
   setWrapSelectionFn: (fn: ((before: string, after: string) => boolean) | null) => void
   setGetSelectionFn: (fn: (() => string) | null) => void
   setReplaceSelectionFn: (fn: ((text: string) => boolean) | null) => void
@@ -24,6 +27,7 @@ interface LnEditorState {
   setFormattingState: (state: EditorFormattingState) => void
   resetFormatting: () => void
   insertAtCursor: (text: string) => boolean
+  insertMarkdownAtCursor: (markdown: string) => boolean
   wrapSelection: (before: string, after: string) => boolean
   getSelectedText: () => string
   replaceSelection: (text: string) => boolean
@@ -33,6 +37,7 @@ interface LnEditorState {
 export const useLnEditorStore = create<LnEditorState>((set, get) => ({
   cmView: null,
   insertFn: null,
+  insertMarkdownFn: null,
   wrapSelectionFn: null,
   getSelectionFn: null,
   replaceSelectionFn: null,
@@ -41,6 +46,7 @@ export const useLnEditorStore = create<LnEditorState>((set, get) => ({
 
   setCmView: (v) => set({ cmView: v }),
   setInsertFn: (fn) => set({ insertFn: fn }),
+  setInsertMarkdownFn: (fn) => set({ insertMarkdownFn: fn }),
   setWrapSelectionFn: (fn) => set({ wrapSelectionFn: fn }),
   setGetSelectionFn: (fn) => set({ getSelectionFn: fn }),
   setReplaceSelectionFn: (fn) => set({ replaceSelectionFn: fn }),
@@ -64,6 +70,13 @@ export const useLnEditorStore = create<LnEditorState>((set, get) => ({
     })
     cmView.focus()
     return true
+  },
+
+  insertMarkdownAtCursor: (markdown) => {
+    // WYSIWYG：把 Markdown 解析为真实标题/列表节点插入；未注册时降级纯文本插入
+    const { insertMarkdownFn } = get()
+    if (insertMarkdownFn) return insertMarkdownFn(markdown)
+    return get().insertAtCursor(markdown)
   },
 
   wrapSelection: (before, after) => {

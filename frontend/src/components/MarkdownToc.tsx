@@ -84,9 +84,10 @@ export function MarkdownToc({ markdown, scrollRef }: Props) {
     <div className="sm-toc">
       <div className="sm-toc-title">目录</div>
       <ul className="sm-toc-list">
-        {toc.map((entry) => (
+        {toc.map((entry, index) => (
           <li
-            key={entry.id}
+            // 同名标题 slug 相同，附 index 避免 React duplicate key 警告
+            key={`${entry.id}-${index}`}
             className={`sm-toc-item${entry.level === 3 ? ' sm-toc-h3' : ''}`}
             data-active={entry.id === activeId || undefined}
           >
