@@ -31,15 +31,23 @@ vi.mock('@/services/workspaces', () => ({
   updateSpeakerMap: vi.fn(),
 }))
 
-vi.mock('@/services/settings', () => ({
-  fetchSettings: vi.fn(),
-}))
+vi.mock('@/services/settings', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/settings')>()
+  return {
+    ...actual,
+    fetchSettings: vi.fn(),
+  }
+})
 
 vi.mock('@/services/inlineFrames', () => ({
   listInlineFrames: vi.fn().mockResolvedValue([]),
   getSuggestedFrames: vi.fn().mockResolvedValue([]),
   saveInlineFrames: vi.fn(),
 }))
+
+vi.mock('mind-elixir', async () => (await import('./helpers/mindElixirMock')).mindElixirModuleMock)
+vi.mock('mind-elixir/i18n', async () => (await import('./helpers/mindElixirMock')).mindElixirI18nMock)
+vi.mock('@zumer/snapdom', async () => (await import('./helpers/mindElixirMock')).snapdomModuleMock)
 
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: vi.fn() },

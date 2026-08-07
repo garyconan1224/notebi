@@ -1,11 +1,21 @@
 import '@testing-library/jest-dom'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ArtifactContentView } from '@/pages/result/NoteShell/AiArtifactPanel'
-import { estimateNodeLines, mindMapToSvg, nodeHeightFor, MindMapTree } from '@/pages/result/NoteShell/ArtifactRenderers'
-import { updateNoteArtifact } from '@/services/noteArtifacts'
+import {
+  MindMapView,
+  buildNotebiTheme,
+  mindMapToMarkdown,
+  toMindElixirData,
+  toNotebiData,
+} from '@/pages/result/NoteShell/MindMapView'
 import type { NoteArtifact } from '@/services/noteArtifacts'
+import { lastMindElixir, resetMindElixirMock, snapdomModuleMock } from './helpers/mindElixirMock'
+
+vi.mock('mind-elixir', async () => (await import('./helpers/mindElixirMock')).mindElixirModuleMock)
+vi.mock('mind-elixir/i18n', async () => (await import('./helpers/mindElixirMock')).mindElixirI18nMock)
+vi.mock('@zumer/snapdom', async () => (await import('./helpers/mindElixirMock')).snapdomModuleMock)
 
 function artifact(patch: Partial<NoteArtifact>): NoteArtifact {
   return {
@@ -33,106 +43,133 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }))
 
-describe('思维导图换行与编辑能力', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('长文本按行数计算节点高度与行切分', () => {
-    expect(estimateNodeLines('短文本')).toBe(1)
-    expect(estimateNodeLines('这是一段超过十个字符的长文本内容')).toBeGreaterThan(1)
-    const tall = nodeHeightFor('这是一段超过十个字符的长文本内容')
-    expect(tall).toBeGreaterThan(30)
-  })
-
-  it('mindMapToSvg 多行节点输出多个 tspan 且不超框', () => {
-    const contentJson = {
+describe('思维导图数据转换', () => {
+  it('NoteBi 数据转 mind-elixir：text→topic 递归映射', () => {
+    const data = {
       root: {
         id: 'n0',
         text: '中心主题',
-        children: [
-          { id: 'n0-0', text: '这是一个非常长的分支节点文字用于验证换行', children: [] },
-        ],
+        children: [{ id: 'n0-0', text: '分支一', children: [{ id: 'n0-0-0', text: '叶子', children: [] }] }],
       },
     }
-    const svg = mindMapToSvg(contentJson.root)
-    expect(svg).toContain('<tspan')
-    // 长文本不应再被截断到 22 字省略号
-    expect(svg).not.toContain('…')
+    expect(toMindElixirData(data)).toEqual({
+      nodeData: {
+        id: 'n0',
+        topic: '中心主题',
+        children: [{ id: 'n0-0', topic: '分支一', children: [{ id: 'n0-0-0', topic: '叶子', children: [] }] }],
+      },
+    })
   })
 
-  it('添加子节点后回调 onUpdated 并持久化', () => {
-    vi.spyOn(window, 'prompt').mockReturnValue('新分支')
-    const onUpdated = vi.fn()
-    const contentJson = {
-      root: { id: 'n0', text: '根', children: [] },
-    }
-    const { container } = render(
-      <MindMapTree
-        data={contentJson}
+  it('转回 NoteBi 只保留 id/text/children，丢弃 parent 反向引用等运行时字段', () => {
+    const parentRef = { id: 'n0', topic: '根', children: [] } as Record<string, unknown>
+    const child = { id: 'n1', topic: '子', children: [], parent: parentRef, style: { color: '#000' } }
+    parentRef.children = [child]
+    const out = toNotebiData({ nodeData: parentRef } as never)
+    // 无环、无多余字段，可直接 JSON 序列化进 PATCH
+    expect(JSON.parse(JSON.stringify(out))).toEqual({
+      root: { id: 'n0', text: '根', children: [{ id: 'n1', text: '子', children: [] }] },
+    })
+  })
+
+  it('mindMapToMarkdown 生成标题 + 嵌套大纲', () => {
+    const md = mindMapToMarkdown({
+      root: {
+        id: 'n0',
+        text: '核心',
+        children: [
+          { id: 'n1', text: '分支', children: [{ id: 'n2', text: '叶子', children: [] }] },
+        ],
+      },
+    })
+    expect(md).toBe('## 核心\n\n- 分支\n  - 叶子')
+  })
+
+  it('buildNotebiTheme 区分明暗且根节点用强调色', () => {
+    const light = buildNotebiTheme(false)
+    const dark = buildNotebiTheme(true)
+    expect(light.name).toBe('notebi-light')
+    expect(dark.name).toBe('notebi-dark')
+    expect(light.type).toBe('light')
+    expect(dark.type).toBe('dark')
+    expect(light.palette.length).toBeGreaterThanOrEqual(3)
+    expect(light.cssVar?.['--root-bgcolor']).toBeTruthy()
+  })
+})
+
+describe('思维导图编辑接线（mind-elixir 包装）', () => {
+  beforeEach(() => {
+    resetMindElixirMock()
+    vi.clearAllMocks()
+  })
+
+  it('挂载时以双向布局与转换后的数据初始化', () => {
+    render(
+      <MindMapView
+        data={{ root: { id: 'n0', text: '根', children: [{ id: 'n1', text: '子', children: [] }] } }}
         title="t"
-        workspaceId="ws"
-        itemId="it"
-        artifactId="a1"
-        onUpdated={onUpdated}
       />,
     )
-    // 点击根节点旁的添加按钮
-    const add = container.querySelector('.mindmap-node-add')
-    expect(add).not.toBeNull()
-    fireEvent.click(add as Element)
-    expect(window.prompt).toHaveBeenCalled()
-    expect(onUpdated).toHaveBeenCalledTimes(1)
-    const next = onUpdated.mock.calls[0][0] as { root: { children: unknown[] } }
-    expect(next.root.children.length).toBe(1)
+    const mind = lastMindElixir()
+    expect(mind.options.direction).toBe(2) // SIDE 双向
+    expect(mind.init).toHaveBeenCalledWith({
+      nodeData: { id: 'n0', topic: '根', children: [{ id: 'n1', topic: '子', children: [] }] },
+    })
   })
 
-  it('双击节点进入重命名，回车提交并持久化', () => {
+  it('编辑操作经 operation 事件回传 onUpdated 以持久化', () => {
     const onUpdated = vi.fn()
-    const contentJson = {
-      root: { id: 'n0', text: '旧名', children: [] },
-    }
-    const { container } = render(
-      <MindMapTree data={contentJson} title="t" workspaceId="ws" itemId="it" artifactId="a1" onUpdated={onUpdated} />,
+    render(
+      <MindMapView data={{ root: { id: 'n0', text: '根', children: [] } }} title="t" onUpdated={onUpdated} />,
     )
-    const node = container.querySelector('.mindmap-node')
-    expect(node).not.toBeNull()
-    fireEvent.doubleClick(node as Element)
-    const input = container.querySelector('.mindmap-edit input') as HTMLInputElement
-    expect(input).not.toBeNull()
-    fireEvent.change(input, { target: { value: '新名' } })
-    fireEvent.keyDown(input, { key: 'Enter' })
+    const mind = lastMindElixir()
+    mind.getData.mockReturnValue({
+      nodeData: { id: 'n0', topic: '根', children: [{ id: 'x', topic: '新分支', children: [] }] },
+    })
+    act(() => mind.emit('operation', { name: 'addChild' }))
     expect(onUpdated).toHaveBeenCalledTimes(1)
-    const next = onUpdated.mock.calls[0][0] as { root: { text: string } }
-    expect(next.root.text).toBe('新名')
+    expect(onUpdated.mock.calls[0][0]).toEqual({
+      root: { id: 'n0', text: '根', children: [{ id: 'x', text: '新分支', children: [] }] },
+    })
   })
 
-  it('非根节点可删除，根节点不显示删除按钮', () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
+  it('beginEdit 只是进入编辑态，不触发持久化', () => {
     const onUpdated = vi.fn()
-    const contentJson = {
-      root: { id: 'n0', text: '根', children: [{ id: 'n1', text: '子', children: [] }] },
-    }
-    const { container } = render(
-      <MindMapTree data={contentJson} title="t" workspaceId="ws" itemId="it" artifactId="a1" onUpdated={onUpdated} />,
+    render(
+      <MindMapView data={{ root: { id: 'n0', text: '根', children: [] } }} title="t" onUpdated={onUpdated} />,
     )
-    const dels = container.querySelectorAll('.mindmap-node-del')
-    expect(dels.length).toBe(1) // 只有非根节点
-    fireEvent.click(dels[0] as Element)
-    expect(window.confirm).toHaveBeenCalled()
-    expect(onUpdated).toHaveBeenCalledTimes(1)
-    const next = onUpdated.mock.calls[0][0] as { root: { children: unknown[] } }
-    expect(next.root.children.length).toBe(0)
+    act(() => lastMindElixir().emit('operation', { name: 'beginEdit' }))
+    expect(onUpdated).not.toHaveBeenCalled()
   })
 
-  it('编辑后调用 updateNoteArtifact（经 AiArtifactPanel handler 集成由面板测试覆盖）', () => {
-    // 仅验证 service 存在可导入
-    expect(updateNoteArtifact).toBeTypeOf('function')
+  it('卸载时销毁实例并解绑事件', () => {
+    const { unmount } = render(
+      <MindMapView data={{ root: { id: 'n0', text: '根', children: [] } }} title="t" />,
+    )
+    const mind = lastMindElixir()
+    unmount()
+    expect(mind.destroy).toHaveBeenCalled()
+    expect(mind.listeners['operation'] ?? []).toHaveLength(0)
+  })
+
+  it('提供 PNG / SVG 导出按钮，点击走 snapdom 截图', () => {
+    render(
+      <MindMapView data={{ root: { id: 'n0', text: '根', children: [] } }} title="导图标题" />,
+    )
+    act(() => {
+      screen.getByRole('button', { name: '导出 PNG' }).click()
+    })
+    expect(snapdomModuleMock.snapdom).toHaveBeenCalled()
   })
 })
 
 describe('Q4 AI 产物语义渲染', () => {
-  it('思维导图渲染节点连线画布而非 <pre>，支持缩放与折叠', () => {
+  beforeEach(() => {
+    resetMindElixirMock()
+    vi.clearAllMocks()
+  })
+
+  it('思维导图经 mind-elixir 画布渲染而非 <pre>', () => {
     const contentJson = {
       root: {
         id: 'n0',
@@ -146,38 +183,9 @@ describe('Q4 AI 产物语义渲染', () => {
       <ArtifactContentView artifact={artifact({ kind: 'mind_map', content_md: '- 中心主题', content_json: contentJson })} />,
     )
     expect(container.querySelector('pre.note-artifact-content')).toBeNull()
-    expect(screen.getByText('中心主题')).toBeInTheDocument()
-    expect(screen.getByText('分支一')).toBeInTheDocument()
-    // 有导出 PNG / SVG 按钮
+    expect(screen.getByTestId('mindmap-canvas')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '导出 PNG' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '导出 SVG' })).toBeInTheDocument()
-    const canvas = screen.getByTestId('mindmap-canvas')
-    expect(canvas).toHaveStyle({ transform: 'translate(0px, 0px) scale(1)' })
-    fireEvent.click(screen.getByRole('button', { name: '放大思维导图' }))
-    expect(canvas).toHaveStyle({ transform: 'translate(0px, 0px) scale(1.1)' })
-    fireEvent.click(screen.getByRole('button', { name: '重置思维导图缩放' }))
-    expect(canvas).toHaveStyle({ transform: 'translate(0px, 0px) scale(1)' })
-
-    // 节点可折叠：点击「分支一」后叶子隐藏，再点恢复
-    const branch = screen.getByRole('button', { name: /折叠 分支一/ })
-    fireEvent.click(branch)
-    expect(screen.queryByText('叶子')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /展开 分支一/ }))
-    expect(screen.getByText('叶子')).toBeInTheDocument()
-  })
-
-  it('mindMapToSvg 生成真实 SVG（含节点与连线）', () => {
-    const root = {
-      id: 'n0',
-      text: '根',
-      children: [{ id: 'n0-0', text: '子', children: [] }],
-    }
-    const svg = mindMapToSvg(root)
-    expect(svg).toContain('<svg')
-    expect(svg).toContain('</svg>')
-    expect(svg).toContain('根')
-    expect(svg).toContain('子')
-    expect(svg).toContain('<path')
   })
 
   it('行动项渲染为带勾选框的列表', () => {

@@ -59,6 +59,9 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.2.2
         version: 4.2.3(vite@8.0.9(@types/node@24.12.2)(jiti@2.6.1)(yaml@2.8.3))
+      '@zumer/snapdom':
+        specifier: ^2.23.2
+        version: 2.23.2
       axios:
         specifier: ^1.15.0
         version: 1.15.1
@@ -86,6 +89,9 @@ importers:
       markmap-view:
         specifier: ^0.18.12
         version: 0.18.12(markmap-common@0.18.9)
+      mind-elixir:
+        specifier: ^5.15.1
+        version: 5.15.1
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -2524,6 +2530,9 @@ packages:
   '@vue/shared@3.5.37':
     resolution: {integrity: sha512-JzFx4aYGz+EtBl8zzw8XECNWSmNXTrU5jpub3T1lQ+2X5Ys9QzHWafxhE+E5qS2Ry/mVl8o2QqrwRGYYOFYguw==}
 
+  '@zumer/snapdom@2.23.2':
+    resolution: {integrity: sha512-pt/FYBYyDq1LXIjP2CI9qvR78o+hy9rdtTaFxEiDZTD8A3JhNkEj3CT6BQXAsa95UCZXbJKRxf1tEc89oVd7dA==}
+
   acorn-jsx@5.3.2:
     resolution: {integrity: sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==}
     peerDependencies:
@@ -4015,6 +4024,9 @@ packages:
   min-indent@1.0.1:
     resolution: {integrity: sha512-I9jwMn07Sy/IwOj3zVkVik2JTvgpaykDZEigL6Rx6N9LbMywwUSMtxET+7lVoDLLd3O3IXwJwvuuns8UB/HeAg==}
     engines: {node: '>=4'}
+
+  mind-elixir@5.15.1:
+    resolution: {integrity: sha512-Lm/IfNC3jnxqcchKsjkaX/arXDvgPvpPT+BLfTH2Kl1taO9+RPtv/jrCevn1LqPzHoWL2Yl4QeP/xFpjZuZFHw==}
 
   minimatch@10.2.5:
     resolution: {integrity: sha512-MULkVLfKGYDFYejP07QOurDLLQpcjk7Fw+7jXS2R2czRQzR56yHRveU5NDJEOviH+hETZKSkIk5c+T23GjFUMg==}
@@ -8388,6 +8400,8 @@ snapshots:
 
   '@vue/shared@3.5.37': {}
 
+  '@zumer/snapdom@2.23.2': {}
+
   acorn-jsx@5.3.2(acorn@8.16.0):
     dependencies:
       acorn: 8.16.0
@@ -10355,6 +10369,8 @@ snapshots:
       mime-db: 1.52.0
 
   min-indent@1.0.1: {}
+
+  mind-elixir@5.15.1: {}
 
   minimatch@10.2.5:
     dependencies:

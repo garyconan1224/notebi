@@ -244,7 +244,7 @@
   font-size: 11px;
 }
 
-/* 思维导图 */
+/* 思维导图（mind-elixir 包装） */
 .mindmap-wrap { display: flex; flex-direction: column; gap: 10px; }
 .mindmap-actions { display: flex; gap: 8px; }
 .mindmap-actions button {
@@ -257,41 +257,14 @@
   cursor: pointer;
 }
 .mindmap-actions button:hover { border-color: var(--bdrs); color: var(--fg); }
-.mindmap-zoom-value { min-width: 38px; align-self: center; text-align: center; color: var(--fg3); font-size: 12px; }
-.mindmap-viewport { overflow: auto; min-height: 180px; padding: 4px; }
-.mindmap-canvas { width: max-content; min-width: 100%; transform-origin: top left; transition: transform 120ms ease; }
-.mindmap-edge { fill: none; stroke: var(--bdrs, rgba(25, 20, 16, 0.25)); stroke-width: 1.5; }
-.mindmap-node { cursor: pointer; outline: none; }
-.mindmap-node rect { fill: var(--srf, #fff); stroke: var(--bdr, rgba(25, 20, 16, 0.16)); stroke-width: 1.2; }
-.mindmap-node text { font-size: 12.5px; font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: var(--fg2, #3d3929); }
-.mindmap-node.is-root rect { fill: var(--acc, #ff8a36); stroke: var(--acc-text, #e07a1f); }
-.mindmap-node.is-root text { fill: #fff; font-weight: 700; }
-.mindmap-node.is-focused rect { stroke: var(--acc, #ff8a36); stroke-width: 2; }
-.mindmap-node.is-collapsed rect { stroke-dasharray: 4 3; }
-.mindmap-node .mindmap-node-caret { fill: var(--mut, #7c7464); font-size: 10px; }
-.mindmap-node:hover rect { filter: brightness(0.97); }
-.mindmap-node-add { cursor: pointer; }
-.mindmap-node-add rect { fill: var(--bgalt, #f2eee6); stroke: var(--bdr, rgba(25, 20, 16, 0.2)); }
-.mindmap-node-add text { fill: var(--fg2, #3d3929); font-size: 12px; }
-.mindmap-node-add:hover rect { fill: var(--acc, #ff8a36); }
-.mindmap-node-add:hover text { fill: #fff; }
-.mindmap-node-del { cursor: pointer; }
-.mindmap-node-del rect { fill: var(--bgalt, #f2eee6); stroke: var(--bdr, rgba(25, 20, 16, 0.2)); }
-.mindmap-node-del text { fill: var(--err, #b33737); font-size: 12px; }
-.mindmap-node-del:hover rect { fill: var(--err, #b33737); }
-.mindmap-node-del:hover text { fill: #fff; }
-.mindmap-edit { position: absolute; z-index: 5; }
-.mindmap-edit input {
-  width: 100%;
-  height: 100%;
-  box-sizing: border-box;
-  border: 1.5px solid var(--acc, #ff8a36);
-  border-radius: 7px;
-  padding: 0 10px;
-  font: 12.5px 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  color: var(--fg2, #3d3929);
-  background: var(--srf, #fff);
-  outline: none;
+.mindmap-canvas {
+  height: 440px;
+  min-height: 320px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--r, 8px);
+  background: transparent;
+  /* mind-elixir 需 overflowHidden:false 才注册指针手势，视觉裁切由此处承担 */
+  overflow: hidden;
 }
 
 /* 行动项 */

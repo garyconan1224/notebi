@@ -89,12 +89,11 @@
   "mindmap": {
     "exportPng": "Export PNG",
     "exportSvg": "Export SVG",
-    "zoomOut": "Zoom Out Mind Map",
-    "zoomIn": "Zoom In Mind Map",
-    "resetZoom": "Reset Mind Map Zoom",
-    "editNode": "Edit node name",
-    "addChild": "Child node name",
-    "deleteConfirm": "Delete node \"{{name}}\" and its children?",
+    "exportFailed": "Export failed, please retry",
+    "insertAsImage": "Insert as image",
+    "insertAsOutline": "Insert as outline",
+    "insertImageFailed": "Failed to insert image, please retry",
+    "newNode": "New node",
     "saved": "Mind map saved",
     "saveFailed": "Failed to save mind map, please retry"
   },
