@@ -102,21 +102,41 @@ def _parse_mind_map(content_md: str) -> Optional[Dict[str, Any]]:
 
 
 def _parse_action_items(content_md: str) -> Optional[Dict[str, Any]]:
+    """把行动项 Markdown 解析为主任务 + 明细的结构。
+
+    - `- [ ] / - [x]` 顶层条目是唯一可勾选的任务；
+    - 更深缩进的子行（负责人/截止/依赖/完成标准/依据等）归入该任务的 details，
+      不再被展平成独立勾选项；顶层普通 `- 项` 也视为（未勾选）任务。
+    """
     items: List[Dict[str, Any]] = []
+    current: Optional[Dict[str, Any]] = None
     for ln in content_md.splitlines():
         task = _TASK_RE.match(ln)
-        if task:
-            done = task.group(2).lower() == "x"
-            text = _strip_md_inline(task.group(3))
-        else:
-            lst = _LIST_RE.match(ln)
-            if not lst:
-                continue
-            done = False
-            text = _strip_md_inline(lst.group(2))
+        lst = _LIST_RE.match(ln)
+        if not task and not lst:
+            continue
+        indent = len((task or lst).group(1))
+        text = _strip_md_inline(task.group(3) if task else lst.group(2))
         if not text:
             continue
-        items.append({"id": f"a{len(items)}", "text": text, "done": done})
+        is_top = current is None or indent <= int(current.get("_indent") or 0)
+        if is_top:
+            if current is not None:
+                current.pop("_indent", None)
+            current = {
+                "id": f"a{len(items)}",
+                "text": text,
+                "done": bool(task and task.group(2).lower() == "x"),
+                "details": [],
+                "_indent": indent,
+            }
+            items.append(current)
+        else:
+            current["details"].append(text)
+    for item in items:
+        item.pop("_indent", None)
+        if not item["details"]:
+            item.pop("details", None)
     if not items:
         return None
     return {"items": items}

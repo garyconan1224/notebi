@@ -129,6 +129,43 @@ describe('AiArtifactPanel', () => {
     )
   })
 
+  it('行动项导入总结时按当前勾选状态重新生成待办清单', async () => {
+    const insert = vi.fn(() => true)
+    const insertMarkdown = vi.fn(() => true)
+    useLnEditorStore.getState().setInsertFn(insert)
+    useLnEditorStore.getState().setInsertMarkdownFn(insertMarkdown)
+    mocks.list.mockResolvedValue([
+      {
+        ...ARTIFACT,
+        kind: 'action_items',
+        title: '行动项',
+        content_md: '- [ ] 写周报\n- [ ] 开评审会',
+        content_json: {
+          items: [
+            { id: 'a0', text: '写周报', done: true, details: ['负责人：小张'] },
+            { id: 'a1', text: '开评审会', done: false },
+          ],
+        },
+      },
+    ])
+
+    render(
+      <AiArtifactPanel
+        open
+        initialKind="action_items"
+        workspaceId="ws-1"
+        itemId="item-1"
+        onClose={vi.fn()}
+      />,
+    )
+
+    await screen.findByRole('button', { name: '插入笔记' })
+    fireEvent.click(screen.getByRole('button', { name: '插入笔记' }))
+    // 勾选状态实时反映：写周报已 done → - [x]
+    expect(insertMarkdown).toHaveBeenCalledWith('\n\n- [x] 写周报\n  - 负责人：小张\n\n- [ ] 开评审会\n\n')
+    expect(insert).not.toHaveBeenCalled()
+  })
+
   it('思维导图产物支持插入为图片与插入为大纲，插入后自动关闭面板', async () => {
     const insert = vi.fn(() => true)
     const insertMarkdown = vi.fn(() => true)

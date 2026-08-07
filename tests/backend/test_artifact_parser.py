@@ -67,6 +67,34 @@ def test_action_items_parses_todo_and_done() -> None:
     assert items[2]["done"] is False
 
 
+def test_action_items_nested_details_grouped_under_task() -> None:
+    md = """- [ ] **探索并试用网站**
+    - **负责人**：未明确
+    - **截止时间**：未明确
+    - **完成标准**：成功使用
+- [x] 跟进发布
+    - **依据**：材料提到
+"""
+    parsed = parse_artifact_json("action_items", md)
+    assert parsed is not None
+    items = parsed["items"]
+    assert len(items) == 2
+    first, second = items
+    assert first["done"] is False and "探索并试用网站" in first["text"]
+    assert "details" in first and len(first["details"]) == 3
+    assert first["details"][0] == "负责人：未明确"
+    assert second["done"] is True
+    assert second["details"] == ["依据：材料提到"]
+
+
+def test_action_items_top_level_plain_list_is_task() -> None:
+    parsed = parse_artifact_json("action_items", "- 写周报\n- 跟进发布")
+    assert parsed is not None
+    assert len(parsed["items"]) == 2
+    assert all(item["done"] is False for item in parsed["items"])
+    assert "details" not in parsed["items"][0]
+
+
 def test_action_items_empty_returns_none() -> None:
     assert parse_artifact_json("action_items", "没有列表") is None
 

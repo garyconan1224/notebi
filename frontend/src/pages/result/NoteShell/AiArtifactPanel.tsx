@@ -21,6 +21,8 @@ import {
   GlossaryView,
   KeyCardsView,
   TimelineView,
+  actionItemsToMarkdown,
+  type ActionItem,
   type ArtifactContentJson,
 } from './ArtifactRenderers'
 import {
@@ -69,7 +71,7 @@ interface ArtifactContentViewProps {
   workspaceId?: string
   itemId?: string
   onMindMapUpdated?: (artifact: NoteArtifact, contentJson: MindMapData) => void
-  onActionItemsUpdated?: (artifact: NoteArtifact, items: Array<{ id: string; text: string; done: boolean }>) => void
+  onActionItemsUpdated?: (artifact: NoteArtifact, items: ActionItem[]) => void
   mindMapExportRef?: MindMapExportRef
 }
 
@@ -98,7 +100,7 @@ export function ArtifactContentView({
     )
   }
   if (artifact.kind === 'action_items' && contentJson && Array.isArray((contentJson as { items?: unknown }).items)) {
-    const items = (contentJson as { items: Array<{ id: string; text: string; done: boolean }> }).items
+    const items = (contentJson as { items: ActionItem[] }).items
     return (
       <ActionItemsView
         items={items}
@@ -254,7 +256,7 @@ export function AiArtifactPanel({
   /** 行动项勾选：就地更新 content_json.items 并 PATCH 持久化（与导图编辑同一通道）。 */
   const handleActionItemsUpdated = (
     artifact: NoteArtifact,
-    items: Array<{ id: string; text: string; done: boolean }>,
+    items: ActionItem[],
   ) => {
     void updateNoteArtifact(workspaceId, itemId, artifact.artifact_id, { items })
       .then(() => {
@@ -397,7 +399,16 @@ export function AiArtifactPanel({
                     <button
                       type="button"
                       onClick={() => {
-                        useLnEditorStore.getState().insertMarkdownAtCursor(`\n\n${selected.content_md}\n\n`)
+                        // 行动项：用实时 content_json 重新生成待办清单（勾选状态生效）；
+                        // 旧版无结构化内容的产物回退 content_md。
+                        const structured = (selected.content_json as ArtifactContentJson | null)
+                        const actionItems = structured && Array.isArray((structured as { items?: unknown }).items)
+                          ? (structured as { items: ActionItem[] }).items
+                          : null
+                        const insertMarkdown = selected.kind === 'action_items' && actionItems && actionItems.length > 0
+                          ? actionItemsToMarkdown(actionItems)
+                          : selected.content_md
+                        useLnEditorStore.getState().insertMarkdownAtCursor(`\n\n${insertMarkdown}\n\n`)
                         // 插入成功后关闭面板，让用户直接看到编辑器里的插入结果
                         onClose()
                       }}

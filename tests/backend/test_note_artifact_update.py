@@ -99,6 +99,44 @@ def test_action_items_invalid_shape_rejected(client: TestClient) -> None:
     assert resp.status_code == 400
 
 
+def test_list_migrates_flat_action_items_to_task_details(client: TestClient) -> None:
+    """旧版扁平 action_items 读取时迁移为 主任务 + details，并保留 done。"""
+    ws_id, item_id = _create_ws_and_item(client)
+    _seed_artifact(
+        client,
+        ws_id,
+        item_id,
+        "action_items",
+        {
+            "items": [
+                {"id": "a0", "text": "写周报", "done": False},
+                {"id": "a1", "text": "负责人：小张", "done": False},
+                {"id": "a2", "text": "完成标准：周五前", "done": True},
+            ]
+        },
+        artifact_id="flat-1",
+    )
+    # 用扁平结构 + content_md 覆盖种子内容，模拟旧版产物
+    entry = ws_module._store.get(ws_id).items[-1]
+    # 直接在 seed 后补 content_md：重写种子
+    def updater(_e):
+        return {
+            **_e,
+            "kind": "action_items",
+            "content_md": "- [ ] 写周报\n    - **负责人**：小张\n    - **完成标准**：周五前",
+        }
+    ws_module._store.update_item_result_entry(ws_id, item_id, "ai_artifacts", "artifact_id", "flat-1", updater)
+
+    artifacts = client.get(f"/workspaces/{ws_id}/items/{item_id}/artifacts").json()
+    entry = next(a for a in artifacts if a["artifact_id"] == "flat-1")
+    items = entry["content_json"]["items"]
+    # 迁移后：1 个主任务 + details，不再展平
+    assert len(items) == 1
+    assert items[0]["text"] == "写周报"
+    assert items[0]["done"] is False
+    assert items[0]["details"] == ["负责人：小张", "完成标准：周五前"]
+
+
 def test_unsupported_kind_update_rejected(client: TestClient) -> None:
     """非思维导图/行动项产物不允许原地更新。"""
     ws_id, item_id = _create_ws_and_item(client)

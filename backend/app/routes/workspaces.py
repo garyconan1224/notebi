@@ -72,6 +72,7 @@ from backend.app.models.workspace import (
     WorkspaceStatus,
 )
 from backend.app.services.audio_result_demo import build_demo_audio_result
+from backend.app.services.artifact_parser import _parse_action_items
 from backend.app.services.note_assembler import (
     assemble_item_note,
     build_source_md,
@@ -5384,7 +5385,46 @@ def list_note_artifacts(workspace_id: str, item_id: str) -> List[Dict[str, Any]]
         raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
     item = _find_item(rec, item_id)
     artifacts = (item.results or {}).get("ai_artifacts") or []
-    return [dict(entry) for entry in artifacts if isinstance(entry, dict)]
+    # 旧版行动项产物：content_json 曾被展平成逐行条目，读取时按 content_md 一次性迁移为
+    # 「主任务 + details」结构，并保留旧结构里已有的 done 状态（打勾不再丢失）。
+    migrated = False
+    out: List[Dict[str, Any]] = []
+    for entry in artifacts:
+        if not isinstance(entry, dict):
+            out.append(entry)
+            continue
+        if str(entry.get("kind") or "") != "action_items":
+            out.append(entry)
+            continue
+        cj = entry.get("content_json")
+        items = cj.get("items") if isinstance(cj, dict) else None
+        flat = (
+            isinstance(items, list)
+            and len(items) > 0
+            and not any(isinstance(i, dict) and isinstance(i.get("details"), list) for i in items)
+        )
+        if not flat:
+            out.append(entry)
+            continue
+        reparsed = _parse_action_items(str(entry.get("content_md") or ""))
+        if reparsed and isinstance(reparsed.get("items"), list) and reparsed["items"]:
+            old_done = {
+                str(i.get("text", "")): bool(i.get("done"))
+                for i in items
+                if isinstance(i, dict)
+            }
+            for it in reparsed["items"]:
+                if it.get("text") in old_done:
+                    it["done"] = old_done[it["text"]]
+            out.append({**entry, "content_json": reparsed})
+            migrated = True
+        else:
+            out.append(entry)
+    if migrated:
+        results = dict(item.results or {})
+        results["ai_artifacts"] = out
+        _store.update_item(workspace_id, item_id, results=results)
+    return [dict(entry) for entry in out if isinstance(entry, dict)]
 
 
 @router.post("/{workspace_id}/items/{item_id}/artifacts", status_code=201)

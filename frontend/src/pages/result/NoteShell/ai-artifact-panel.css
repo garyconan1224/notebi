@@ -269,9 +269,11 @@
 
 /* 行动项 */
 .artifact-action-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.artifact-action-items li { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--fg2); }
-.artifact-action-items li input { margin-top: 2px; accent-color: var(--acc); }
-.artifact-action-items li.is-done span { text-decoration: line-through; color: var(--mut); }
+.artifact-action-item { font-size: 13px; color: var(--fg2); }
+.artifact-action-item-row { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+.artifact-action-item-row input { margin-top: 2px; accent-color: var(--acc); }
+.artifact-action-item.is-done .artifact-action-item-row span { text-decoration: line-through; color: var(--mut); }
+.artifact-action-item-details { list-style: none; margin: 2px 0 0 22px; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--mut); }
 
 /* 要点卡 */
 .artifact-key-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }

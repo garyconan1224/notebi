@@ -10,24 +10,52 @@ import { useMemo, useState } from 'react'
 
 import type { MindMapData } from './MindMapView'
 
+export interface ActionItem {
+  id: string
+  text: string
+  done: boolean
+  details?: string[]
+}
+
+/** 把行动项结构转回 Markdown 待办清单（勾选状态实时反映，明细保持为子行）。 */
+export function actionItemsToMarkdown(items: ActionItem[]): string {
+  return items
+    .map((item) => {
+      const box = item.done ? '- [x]' : '- [ ]'
+      const lines = [`${box} ${item.text}`]
+      for (const detail of item.details ?? []) lines.push(`  - ${detail}`)
+      return lines.join('\n')
+    })
+    .join('\n\n')
+}
+
 export function ActionItemsView({
   items,
   onToggle,
 }: {
-  items: Array<{ id: string; text: string; done: boolean }>
+  items: ActionItem[]
   onToggle?: (itemId: string, done: boolean) => void
 }) {
   return (
     <ul className="artifact-action-items">
       {items.map((item) => (
-        <li key={item.id} className={item.done ? 'is-done' : ''}>
-          <input
-            type="checkbox"
-            checked={item.done}
-            aria-label={item.text}
-            onChange={() => onToggle?.(item.id, !item.done)}
-          />
-          <span>{item.text}</span>
+        <li key={item.id} className={`artifact-action-item${item.done ? ' is-done' : ''}`}>
+          <label className="artifact-action-item-row">
+            <input
+              type="checkbox"
+              checked={item.done}
+              aria-label={item.text}
+              onChange={() => onToggle?.(item.id, !item.done)}
+            />
+            <span>{item.text}</span>
+          </label>
+          {item.details && item.details.length > 0 && (
+            <ul className="artifact-action-item-details">
+              {item.details.map((detail, index) => (
+                <li key={`${item.id}-${index}`}>{detail}</li>
+              ))}
+            </ul>
+          )}
         </li>
       ))}
     </ul>
@@ -111,7 +139,7 @@ export function TimelineView({ rows }: { rows: Array<{ time: string; event: stri
 
 export type ArtifactContentJson =
   | MindMapData
-  | { items: Array<{ id: string; text: string; done: boolean }> }
+  | { items: Array<ActionItem> }
   | { cards: Array<{ id?: string; title?: string; body?: string; question?: string; answer?: string }> }
   | { columns?: string[]; rows: Array<Record<string, string>> }
   | null

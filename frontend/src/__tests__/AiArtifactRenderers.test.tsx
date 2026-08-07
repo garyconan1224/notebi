@@ -10,6 +10,7 @@ import {
   toMindElixirData,
   toNotebiData,
 } from '@/pages/result/NoteShell/MindMapView'
+import { actionItemsToMarkdown } from '@/pages/result/NoteShell/ArtifactRenderers'
 import type { NoteArtifact } from '@/services/noteArtifacts'
 import { lastMindElixir, resetMindElixirMock, snapdomModuleMock } from './helpers/mindElixirMock'
 
@@ -200,6 +201,35 @@ describe('Q4 AI 产物语义渲染', () => {
     )
     expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(2)
     expect(screen.getByText('写周报')).toBeInTheDocument()
+  })
+
+  it('行动项明细作为不可勾选元信息渲染，只有主任务有勾选框', () => {
+    const contentJson = {
+      items: [
+        {
+          id: 'a0',
+          text: '写周报',
+          done: false,
+          details: ['负责人：未明确', '完成标准：周五前提交'],
+        },
+      ],
+    }
+    const { container } = render(
+      <ArtifactContentView artifact={artifact({ kind: 'action_items', content_md: '- [ ] 写周报', content_json: contentJson })} />,
+    )
+    // 只有主任务一个勾选框，明细不生成勾选框
+    expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(1)
+    expect(screen.getByText('写周报')).toBeInTheDocument()
+    expect(screen.getByText('负责人：未明确')).toBeInTheDocument()
+    expect(screen.getByText('完成标准：周五前提交')).toBeInTheDocument()
+  })
+
+  it('actionItemsToMarkdown 按 done 生成 - [x]/- [ ] 并保留明细子行', () => {
+    const md = actionItemsToMarkdown([
+      { id: 'a0', text: '写周报', done: true, details: ['负责人：小张'] },
+      { id: 'a1', text: '开评审会', done: false },
+    ])
+    expect(md).toBe('- [x] 写周报\n  - 负责人：小张\n\n- [ ] 开评审会')
   })
 
   it('术语表渲染为语义表格', () => {
