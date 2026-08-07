@@ -18,6 +18,7 @@ const schema = new Schema({
     },
     blockquote: { content: 'block+', group: 'block' },
     code_block: { content: 'text*', group: 'block', marks: '' },
+    hr: { group: 'block' },
     text: { group: 'inline' },
     bullet_list: { content: 'list_item+', group: 'block' },
     ordered_list: { content: 'list_item+', group: 'block' },
@@ -25,6 +26,11 @@ const schema = new Schema({
       attrs: { checked: { default: null } },
       content: 'paragraph block*',
     },
+    table: { content: 'table_header_row table_row+', group: 'block' },
+    table_header_row: { content: 'table_header*' },
+    table_row: { content: 'table_cell*' },
+    table_header: { content: 'paragraph+' },
+    table_cell: { content: 'paragraph+' },
   },
   marks: {
     strong: {},
@@ -32,6 +38,7 @@ const schema = new Schema({
     strike_through: {},
     inlineCode: { code: true },
     link: { attrs: { href: {}, title: { default: null } } },
+    highlight: { attrs: { color: { default: '#fff59d' } } },
   },
 })
 
@@ -210,5 +217,128 @@ describe('Q6 标题层级与清除格式', () => {
     const cleared = applyEditorFormatToState(selected, 'clearFormat')
     expect(cleared).not.toBeNull()
     expect(cleared!.doc.child(0).type.name).toBe('paragraph')
+  })
+})
+
+describe('新增工具栏功能命令（高亮/分割线/缩进/表格）', () => {
+  it('高亮对非空选区加色，可换色、可去色；空选区不可高亮', () => {
+    const doc = schema.node('doc', null, [paragraph('需要高亮的文字')])
+    const selected = stateWithDoc(doc, 1, 5)
+
+    const highlighted = applyEditorFormatToState(selected, 'highlight', '#c5e1a5')
+    expect(highlighted).not.toBeNull()
+    const mark = schema.marks.highlight
+    expect(highlighted!.doc.rangeHasMark(1, 5, mark)).toBe(true)
+    expect(getEditorFormattingState(highlighted!).highlight).toBe('#c5e1a5')
+
+    // 换成蓝色：旧色被替换，选区仍统一为单一颜色
+    const recolored = applyEditorFormatToState(
+      stateWithDoc(highlighted!.doc, 1, 5),
+      'highlight',
+      '#90caf9',
+    )
+    expect(recolored).not.toBeNull()
+    expect(getEditorFormattingState(recolored!).highlight).toBe('#90caf9')
+
+    // value 为空字符串 = 移除高亮
+    const removed = applyEditorFormatToState(
+      stateWithDoc(recolored!.doc, 1, 5),
+      'highlight',
+      '',
+    )
+    expect(removed).not.toBeNull()
+    expect(removed!.doc.rangeHasMark(1, 5, mark)).toBe(false)
+    expect(getEditorFormattingState(removed!).highlight).toBeNull()
+
+    // 空选区不可高亮
+    const empty = stateWithDoc(doc, 2)
+    expect(getEditorFormattingState(empty).canHighlight).toBe(false)
+  })
+
+  it('分割线在选区所在段落后插入 hr', () => {
+    const doc = schema.node('doc', null, [paragraph('第一段'), paragraph('第二段')])
+    const selected = stateWithDoc(doc, 2)
+
+    const inserted = applyEditorFormatToState(selected, 'divider')
+    expect(inserted).not.toBeNull()
+    expect(inserted!.doc.childCount).toBe(3)
+    expect(inserted!.doc.child(0).type.name).toBe('paragraph')
+    expect(inserted!.doc.child(1).type.name).toBe('hr')
+    expect(inserted!.doc.child(2).type.name).toBe('paragraph')
+  })
+
+  it('缩进把第二项嵌入第一项下，减少缩进再抬回同级', () => {
+    const doc = schema.node('doc', null, [
+      schema.node('bullet_list', null, [
+        schema.node('list_item', null, [paragraph('甲')]),
+        schema.node('list_item', null, [paragraph('乙')]),
+      ]),
+    ])
+    const secondPos = textPosition(doc, '乙')
+    const selected = stateWithDoc(doc, secondPos, secondPos + 1)
+
+    expect(getEditorFormattingState(selected).canIndent).toBe(true)
+    const indented = applyEditorFormatToState(selected, 'indent')
+    expect(indented).not.toBeNull()
+    const list = indented!.doc.child(0)
+    expect(list.childCount).toBe(1)
+    expect(list.child(0).childCount).toBe(2)
+    expect(list.child(0).child(1).type.name).toBe('bullet_list')
+
+    const nestedPos = textPosition(indented!.doc, '乙')
+    const nestedSelected = stateWithDoc(indented!.doc, nestedPos, nestedPos + 1)
+    expect(getEditorFormattingState(nestedSelected).canOutdent).toBe(true)
+    const outdented = applyEditorFormatToState(nestedSelected, 'outdent')
+    expect(outdented).not.toBeNull()
+    expect(outdented!.doc.child(0).childCount).toBe(2)
+    expect(outdented!.doc.child(0).child(1).textContent).toBe('乙')
+  })
+
+  it('列表首项没有前一项可挂，缩进不可用', () => {
+    const doc = schema.node('doc', null, [
+      schema.node('bullet_list', null, [
+        schema.node('list_item', null, [paragraph('甲')]),
+        schema.node('list_item', null, [paragraph('乙')]),
+      ]),
+    ])
+    const firstPos = textPosition(doc, '甲')
+    const first = stateWithDoc(doc, firstPos, firstPos + 1)
+    expect(getEditorFormattingState(first).canIndent).toBe(false)
+  })
+
+  it('插入表格生成 1 表头行 + 2 数据行、各 3 列，位于当前段落后', () => {
+    const doc = schema.node('doc', null, [paragraph('表格前')])
+    const selected = stateWithDoc(doc, 2)
+
+    const inserted = applyEditorFormatToState(selected, 'table')
+    expect(inserted).not.toBeNull()
+    expect(inserted!.doc.childCount).toBe(2)
+    const table = inserted!.doc.child(1)
+    expect(table.type.name).toBe('table')
+    expect(table.childCount).toBe(3)
+    expect(table.child(0).type.name).toBe('table_header_row')
+    expect(table.child(0).childCount).toBe(3)
+    expect(table.child(0).child(0).type.name).toBe('table_header')
+    expect(table.child(1).type.name).toBe('table_row')
+    expect(table.child(1).childCount).toBe(3)
+    expect(table.child(1).child(0).type.name).toBe('table_cell')
+  })
+
+  it('表格尺寸参数 "4x5" 生成 4 行 5 列；越界值收敛到 2-8 行、1-10 列', () => {
+    const doc = schema.node('doc', null, [paragraph('表格前')])
+    const selected = stateWithDoc(doc, 2)
+
+    const sized = applyEditorFormatToState(selected, 'table', '4x5')
+    expect(sized).not.toBeNull()
+    const table = sized!.doc.child(1)
+    expect(table.childCount).toBe(4)
+    expect(table.child(0).childCount).toBe(5)
+    expect(table.child(3).childCount).toBe(5)
+
+    const clamped = applyEditorFormatToState(selected, 'table', '1x99')
+    expect(clamped).not.toBeNull()
+    const small = clamped!.doc.child(1)
+    expect(small.childCount).toBe(2)
+    expect(small.child(0).childCount).toBe(10)
   })
 })

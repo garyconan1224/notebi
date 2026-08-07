@@ -31,6 +31,9 @@ const VideoTemplatesPage = lazy(
 const ExportSyncSettingsPage = lazy(
   () => import('@/pages/SettingPage/ExportSyncSettingsPage'),
 )
+const NoteDisplaySettingsPage = lazy(
+  () => import('@/pages/SettingPage/NoteDisplaySettingsPage'),
+)
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
 const WorkspaceList = lazy(() => import('@/pages/WorkspacePage/WorkspaceList'))
 const TaskboardPage = lazy(() => import('@/pages/WorkspacePage/TaskboardPage'))
@@ -176,6 +179,7 @@ export const router = createBrowserRouter([
           { path: 'video-templates', element: withSuspense(<VideoTemplatesPage />) },
           { path: 'style-templates', element: withSuspense(<VideoTemplatesPage />) },
           { path: 'export-sync', element: withSuspense(<ExportSyncSettingsPage />) },
+          { path: 'note-display', element: withSuspense(<NoteDisplaySettingsPage />) },
           { path: 'about', element: withSuspense(<AboutPage />) },
           // 旧路由重定向（向后兼容）
           { path: 'providers', element: <Navigate to="/settings/providers-models" replace /> },

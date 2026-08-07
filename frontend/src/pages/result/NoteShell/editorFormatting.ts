@@ -1,8 +1,14 @@
 import { lift, setBlockType, toggleMark, wrapIn } from '@milkdown/prose/commands'
-import { liftListItem, wrapInList } from '@milkdown/prose/schema-list'
+import { undo, redo } from '@milkdown/prose/history'
+import { liftListItem, sinkListItem, wrapInList } from '@milkdown/prose/schema-list'
 import type { Command, Transaction } from '@milkdown/prose/state'
+import type { Node as ProseNode, NodeType } from '@milkdown/prose/model'
 import { EditorState, Selection, TextSelection } from '@milkdown/prose/state'
 import type { EditorView } from '@milkdown/prose/view'
+
+/** 表格尺寸选择网格上限：行含表头（gfm 至少 1 数据行，故下限 2），列 1 起 */
+export const TABLE_GRID_MAX_ROWS = 8
+export const TABLE_GRID_MAX_COLS = 10
 
 export type EditorFormat =
   | 'bold'
@@ -17,7 +23,14 @@ export type EditorFormat =
   | 'taskList'
   | 'codeBlock'
   | 'underline'
+  | 'highlight'
   | 'clearFormat'
+  | 'undo'
+  | 'redo'
+  | 'divider'
+  | 'indent'
+  | 'outdent'
+  | 'table'
 
 export interface EditorFormattingState {
   bold: boolean
@@ -34,6 +47,8 @@ export interface EditorFormattingState {
   taskList: boolean
   codeBlock: boolean
   underline: boolean
+  /** Q6 增强：选区当前的高亮颜色；null = 无统一高亮 */
+  highlight: string | null
   canBold: boolean
   canItalic: boolean
   canStrike: boolean
@@ -47,6 +62,13 @@ export interface EditorFormattingState {
   canCodeBlock: boolean
   canClearFormat: boolean
   canUnderline: boolean
+  canHighlight: boolean
+  canUndo: boolean
+  canRedo: boolean
+  canDivider: boolean
+  canIndent: boolean
+  canOutdent: boolean
+  canTable: boolean
 }
 
 export const EMPTY_EDITOR_FORMATTING_STATE: EditorFormattingState = {
@@ -63,6 +85,7 @@ export const EMPTY_EDITOR_FORMATTING_STATE: EditorFormattingState = {
   taskList: false,
   codeBlock: false,
   underline: false,
+  highlight: null,
   canBold: false,
   canItalic: false,
   canStrike: false,
@@ -76,6 +99,13 @@ export const EMPTY_EDITOR_FORMATTING_STATE: EditorFormattingState = {
   canCodeBlock: false,
   canClearFormat: false,
   canUnderline: false,
+  canHighlight: false,
+  canUndo: false,
+  canRedo: false,
+  canDivider: false,
+  canIndent: false,
+  canOutdent: false,
+  canTable: false,
 }
 
 function markIsActive(state: EditorState, markName: string): boolean {
@@ -248,6 +278,46 @@ function clearFormattingCommand(state: EditorState): Command | null {
   }
 }
 
+/** 选区统一高亮色；选区内存在未高亮文字或多种颜色时返回 null */
+function highlightColorOf(state: EditorState): string | null {
+  const highlight = state.schema.marks.highlight
+  if (!highlight) return null
+  const { empty, from, to, $from } = state.selection
+  if (empty) {
+    const mark = highlight.isInSet(state.storedMarks ?? $from.marks())
+    return mark ? String(mark.attrs.color) : null
+  }
+  let found: string | null = null
+  let uniform = true
+  state.doc.nodesBetween(from, to, (node, pos) => {
+    if (!node.isText) return
+    if (pos >= to || pos + node.nodeSize <= from) return
+    const mark = highlight.isInSet(node.marks)
+    if (!mark) {
+      uniform = false
+      return
+    }
+    const color = String(mark.attrs.color)
+    if (found === null) found = color
+    else if (found !== color) uniform = false
+  })
+  return uniform ? found : null
+}
+
+/** 在当前选区所在顶层块之后插入块级节点（分割线/表格用） */
+function insertBlockAfterSelection(
+  state: EditorState,
+  node: ProseNode,
+  dispatch?: (tr: Transaction) => void,
+): boolean {
+  const $from = state.selection.$from
+  const pos = $from.depth >= 1 ? $from.after(1) : state.doc.content.size
+  if (dispatch) {
+    dispatch(state.tr.insert(pos, node).scrollIntoView())
+  }
+  return true
+}
+
 function commandForFormat(
   state: EditorState,
   format: EditorFormat,
@@ -320,6 +390,47 @@ function commandForFormat(
       ? liftListItem(listItem)
       : wrapInList(orderedList)
   }
+  if (format === 'highlight') {
+    const highlight = state.schema.marks.highlight
+    if (!highlight) return null
+    // value = 目标颜色；空字符串表示移除高亮
+    return (currentState, dispatch) => {
+      const { from, to, empty } = currentState.selection
+      if (empty) return false
+      const tr = currentState.tr.removeMark(from, to, highlight)
+      if (value) tr.addMark(from, to, highlight.create({ color: value }))
+      dispatch?.(tr.scrollIntoView())
+      return true
+    }
+  }
+  if (format === 'undo') return undo
+  if (format === 'redo') return redo
+  if (format === 'divider') {
+    const hr = state.schema.nodes.hr
+    if (!hr) return null
+    return (currentState, dispatch) => insertBlockAfterSelection(currentState, hr.create(), dispatch)
+  }
+  if (format === 'table') {
+    const { table, table_header_row, table_row, table_header, table_cell } = state.schema.nodes
+    if (!table || !table_header_row || !table_row || !table_header || !table_cell) return null
+    return (currentState, dispatch) => {
+      // value = "行数x列数"（首行表头）；gfm 表格至少 1 数据行，故行数下限 2
+      const match = /^(\d+)x(\d+)$/.exec(value)
+      const rows = match ? Math.min(TABLE_GRID_MAX_ROWS, Math.max(2, Number(match[1]))) : 3
+      const cols = match ? Math.min(TABLE_GRID_MAX_COLS, Math.max(1, Number(match[2]))) : 3
+      const makeCells = (cellType: NodeType) =>
+        Array.from({ length: cols }, () => cellType.createAndFill()).filter((n): n is ProseNode => Boolean(n))
+      const headerRow = table_header_row.create(null, makeCells(table_header))
+      const bodyRows = Array.from({ length: rows - 1 }, () => table_row.create(null, makeCells(table_cell)))
+      const tableNode = table.create(null, [headerRow, ...bodyRows])
+      return insertBlockAfterSelection(currentState, tableNode, dispatch)
+    }
+  }
+  if (format === 'indent' || format === 'outdent') {
+    const listItem = state.schema.nodes.list_item
+    if (!listItem) return null
+    return format === 'indent' ? sinkListItem(listItem) : liftListItem(listItem)
+  }
   const bulletList = state.schema.nodes.bullet_list
   const listItem = state.schema.nodes.list_item
   if (!bulletList || !listItem) return null
@@ -343,6 +454,13 @@ export function getEditorFormattingState(state: EditorState): EditorFormattingSt
     codeBlock: commandForFormat(state, 'codeBlock'),
     underline: commandForFormat(state, 'underline'),
     clearFormat: commandForFormat(state, 'clearFormat'),
+    highlight: commandForFormat(state, 'highlight'),
+    undo: commandForFormat(state, 'undo'),
+    redo: commandForFormat(state, 'redo'),
+    divider: commandForFormat(state, 'divider'),
+    indent: commandForFormat(state, 'indent'),
+    outdent: commandForFormat(state, 'outdent'),
+    table: commandForFormat(state, 'table'),
   }
   const level = headingLevelOf(state)
   return {
@@ -359,6 +477,7 @@ export function getEditorFormattingState(state: EditorState): EditorFormattingSt
     taskList: selectionIsTaskList(state),
     codeBlock: selectionIsInNode(state, 'code_block'),
     underline: markIsActive(state, 'underline'),
+    highlight: highlightColorOf(state),
     canBold: Boolean(commands.bold?.(state)),
     canItalic: Boolean(commands.italic?.(state)),
     canStrike: Boolean(commands.strike?.(state)),
@@ -372,6 +491,13 @@ export function getEditorFormattingState(state: EditorState): EditorFormattingSt
     canCodeBlock: Boolean(commands.codeBlock?.(state)),
     canClearFormat: Boolean(commands.clearFormat?.(state)),
     canUnderline: Boolean(commands.underline?.(state)),
+    canHighlight: Boolean(commands.highlight?.(state)),
+    canUndo: Boolean(commands.undo?.(state)),
+    canRedo: Boolean(commands.redo?.(state)),
+    canDivider: Boolean(commands.divider?.(state)),
+    canIndent: Boolean(commands.indent?.(state)),
+    canOutdent: Boolean(commands.outdent?.(state)),
+    canTable: Boolean(commands.table?.(state)),
   }
 }
 

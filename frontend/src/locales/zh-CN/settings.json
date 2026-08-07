@@ -384,7 +384,8 @@
       "exportSync": "导出与同步",
       "trash": "垃圾桶",
       "diagnosticsLogs": "诊断日志",
-      "aboutNoteBi": "关于 NoteBi"
+      "aboutNoteBi": "关于 NoteBi",
+      "noteDisplay": "笔记显示"
     }
   },
   "dirty": {
@@ -789,5 +790,11 @@
     "clear": "清除",
     "confirm": "确认",
     "modelsLoadFailed": "模型加载失败：{{error}}"
+  },
+  "noteDisplay": {
+    "title": "笔记显示",
+    "subtitle": "调整笔记结果页正文的字体、字号、行高、颜色与字重，保存即生效。",
+    "decreaseFontSize": "减小字号",
+    "increaseFontSize": "增大字号"
   }
 }

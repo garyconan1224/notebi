@@ -1,0 +1,122 @@
+/* 设置页「笔记显示」：正文阅读偏好控件（从 note-shell.css 的浮动工具栏弹层迁出） */
+
+.note-display-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.nibi-note-pref-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nibi-note-pref-label {
+  color: var(--mut, #7c7464);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.nibi-note-pref-segment,
+.nibi-note-pref-swatches,
+.nibi-note-pref-stepper,
+.nibi-note-pref-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nibi-note-pref-segment {
+  flex-wrap: wrap;
+}
+
+.nibi-note-pref-chip,
+.nibi-note-pref-ghost,
+.nibi-note-pref-icon-btn {
+  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
+  background: var(--srf, #fff);
+  color: var(--fg2, #3d3929);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.nibi-note-pref-chip {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.nibi-note-pref-chip.is-active,
+.nibi-note-pref-ghost--accent {
+  border-color: var(--acc, #ff8a36);
+  background: var(--accl, rgba(255, 138, 54, 0.12));
+  color: var(--acc, #ff8a36);
+}
+
+.nibi-note-pref-stepper {
+  justify-content: space-between;
+}
+
+.nibi-note-pref-stepper strong {
+  min-width: 54px;
+  text-align: center;
+  color: var(--fg, #191410);
+  font-size: 12px;
+}
+
+.nibi-note-pref-icon-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nibi-note-pref-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
+  background: var(--swatch-color);
+  color: transparent;
+  cursor: pointer;
+  position: relative;
+}
+
+.nibi-note-pref-swatch span {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: transparent;
+}
+
+.nibi-note-pref-swatch.is-active {
+  box-shadow: 0 0 0 2px var(--accl, rgba(255, 138, 54, 0.12));
+}
+
+.nibi-note-pref-swatch.is-active span {
+  color: oklch(100% 0 0);
+}
+
+.nibi-note-pref-actions {
+  justify-content: space-between;
+}
+
+.nibi-note-pref-ghost {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

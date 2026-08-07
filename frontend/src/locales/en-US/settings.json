@@ -384,7 +384,8 @@
       "exportSync": "Export & Sync",
       "trash": "Trash",
       "diagnosticsLogs": "Diagnostics Logs",
-      "aboutNoteBi": "About NoteBi"
+      "aboutNoteBi": "About NoteBi",
+      "noteDisplay": "Note Display"
     }
   },
   "dirty": {
@@ -789,5 +790,11 @@
     "clear": "Clear",
     "confirm": "Confirm",
     "modelsLoadFailed": "Failed to load models: {{error}}"
+  },
+  "noteDisplay": {
+    "title": "Note Display",
+    "subtitle": "Adjust the font, size, line height, color, and weight of note body text. Changes apply immediately.",
+    "decreaseFontSize": "Decrease font size",
+    "increaseFontSize": "Increase font size"
   }
 }

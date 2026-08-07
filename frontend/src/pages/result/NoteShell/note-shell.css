@@ -567,40 +567,6 @@
   }
 }
 
-.nibi-note-pref-panel {
-  position: absolute;
-  right: 0;
-  top: 34px;
-  z-index: 120;
-  width: 312px;
-  padding: 12px;
-  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
-  border-radius: 12px;
-  background: var(--bg, #fff);
-  box-shadow: var(--shadow-md);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.nibi-note-pref-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.nibi-note-pref-label {
-  color: var(--mut, #7c7464);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.nibi-note-pref-hint {
-  color: var(--mut, #7c7464);
-  font-size: 11px;
-  line-height: 1.6;
-}
-
 .nibi-floating-format-bar {
   position: fixed;
   z-index: 220;
@@ -641,179 +607,10 @@
   opacity: 0.4;
 }
 
-.nibi-note-pref-segment,
-.nibi-note-pref-swatches,
-.nibi-note-pref-stepper,
-.nibi-note-pref-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.nibi-note-pref-segment {
-  flex-wrap: wrap;
-}
-
-.nibi-note-pref-chip,
-.nibi-note-pref-ghost,
-.nibi-note-pref-icon-btn {
-  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
-  background: var(--srf, #fff);
-  color: var(--fg2, #3d3929);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.nibi-note-pref-chip {
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.nibi-note-pref-chip.is-active,
-.nibi-note-pref-ghost--accent {
-  border-color: var(--acc, #ff8a36);
-  background: var(--accl, rgba(255, 138, 54, 0.12));
-  color: var(--acc, #ff8a36);
-}
-
-.nibi-note-pref-stepper {
-  justify-content: space-between;
-}
-
-.nibi-note-pref-stepper strong {
-  min-width: 54px;
-  text-align: center;
-  color: var(--fg, #191410);
-  font-size: 12px;
-}
-
-.nibi-note-pref-icon-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.nibi-note-pref-swatch {
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
-  background: var(--swatch-color);
-  color: transparent;
-  cursor: pointer;
-  position: relative;
-}
-
-.nibi-note-pref-swatch span {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
-  color: transparent;
-}
-
-.nibi-note-pref-swatch.is-active {
-  box-shadow: 0 0 0 2px var(--accl, rgba(255, 138, 54, 0.12));
-}
-
-.nibi-note-pref-swatch.is-active span {
-  color: oklch(100% 0 0);
-}
-
-.nibi-note-pref-tone-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 10px 0 6px;
-  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
-  border-radius: 999px;
-  background: var(--srf, #fff);
-  color: var(--fg2, #3d3929);
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.nibi-note-pref-tone-trigger .nibi-note-pref-swatch {
-  width: 18px;
-  height: 18px;
-  pointer-events: none;
-}
-
-.nibi-note-pref-tone-popover {
-  position: absolute;
-  left: 0;
-  top: 34px;
-  z-index: 130;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 132px;
-  padding: 8px;
-  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
-  border-radius: 10px;
-  background: var(--bg, #fff);
-  box-shadow: var(--shadow-md);
-}
-
-.nibi-note-pref-tone-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 5px 8px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--fg2, #3d3929);
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.nibi-note-pref-tone-option:hover {
-  background: var(--bgalt, #f6f2ea);
-}
-
-.nibi-note-pref-tone-option.is-active {
-  color: var(--acc, #ff8a36);
-}
-
-.nibi-note-pref-tone-option .nibi-note-pref-swatch {
-  width: 18px;
-  height: 18px;
-  pointer-events: none;
-}
-
-.nibi-note-pref-actions {
-  justify-content: space-between;
-}
-
 .nibi-note-format-row {
   display: grid;
   grid-template-columns: repeat(5, 32px);
   gap: 8px;
-}
-
-.nibi-note-pref-ghost {
-  height: 30px;
-  padding: 0 10px;
-  border-radius: 8px;
-  font-size: 11px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .nibi-note-export-menu {
@@ -4076,16 +3873,25 @@
   gap: 2px;
   padding: 6px 8px;
   border-bottom: 1px solid var(--bdr, rgba(25, 20, 16, 0.08));
+  flex-shrink: 0;
+}
+
+/* 工具按钮行：水平排布；窄窗时在行内水平滚动（同 .frames 豁免） */
+.ed-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
   overflow-x: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--bdrs, rgba(25, 20, 16, 0.12)) transparent;
-  flex-shrink: 0;
 }
 
 .ed-toolbar--floating {
   position: fixed;
   z-index: 220;
-  max-width: min(92vw, 620px);
+  max-width: min(92vw, 760px);
   border: 1px solid var(--bdr, rgba(25, 20, 16, 0.1));
   border-radius: 10px;
   background: var(--bg, #fff);
@@ -4138,6 +3944,102 @@
 .ed-toolbar-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+}
+
+/* 高亮颜色弹层：悬浮在工具栏下方；按钮 mousedown 被工具栏 preventDefault，选区保留 */
+.ed-highlight-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 8px;
+  z-index: 230;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.1));
+  border-radius: 8px;
+  background: var(--bg, #fff);
+  box-shadow: var(--shadow-md);
+}
+
+.ed-highlight-swatch {
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.15));
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.ed-highlight-swatch.is-active {
+  outline: 2px solid var(--acc, #2563eb);
+  outline-offset: 1px;
+}
+
+.ed-highlight-none {
+  border: none;
+  background: transparent;
+  color: var(--fg2, #3d3929);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--rs, 6px);
+  white-space: nowrap;
+}
+
+.ed-highlight-none:hover {
+  background: var(--bgalt, #f7f3ec);
+}
+
+/* 表格尺寸选择弹层：悬浮网格，hover 划选行×列（同 WPS/Office 交互）
+   右对齐到表格按钮正下方，鼠标从按钮移到网格最短 */
+.ed-table-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 8px;
+  z-index: 230;
+  padding: 8px;
+  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.1));
+  border-radius: 8px;
+  background: var(--bg, #fff);
+  box-shadow: var(--shadow-md);
+}
+
+.ed-table-pop-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--fg2, #3d3929);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.ed-table-pop-hint {
+  color: var(--mut, #7c7464);
+  font-size: 11px;
+}
+
+.ed-table-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 16px);
+  gap: 4px;
+}
+
+.ed-table-cell {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--bdr, rgba(25, 20, 16, 0.2));
+  border-radius: 3px;
+  background: var(--srf, #fff);
+  cursor: pointer;
+}
+
+.ed-table-cell.is-active {
+  background: var(--acc, #2563eb);
+  border-color: var(--acc, #2563eb);
 }
 
 /* Q3：转写导出的「区分说话人」选项 */

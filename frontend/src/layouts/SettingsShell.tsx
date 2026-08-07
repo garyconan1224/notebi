@@ -11,6 +11,7 @@ import {
   Info,
   Languages,
   Share2,
+  Type,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTranslation } from 'react-i18next'
@@ -90,6 +91,7 @@ export function SettingsShell() {
       label: t('shell.nav.groupNotes'),
       items: [
         { path: '/settings/style-templates', icon: <Palette size={16} />, label: t('shell.nav.noteTemplates') },
+        { path: '/settings/note-display', icon: <Type size={16} />, label: t('shell.nav.noteDisplay') },
         { path: '/settings/export-sync', icon: <Share2 size={16} />, label: t('shell.nav.exportSync') },
         { path: '/settings/trash', icon: <Trash2 size={16} />, label: t('shell.nav.trash') },
       ],

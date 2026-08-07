@@ -3144,8 +3144,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         onTextAlignChange={
           isTextNote ? (align) => updateEditorPrefs({ textAlign: align }) : undefined
         }
-        editorPrefs={editorPrefs}
-        onEditorPrefsChange={updateEditorPrefs}
       />
 
       <NoteExportPanel

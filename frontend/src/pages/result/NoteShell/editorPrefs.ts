@@ -1,9 +1,10 @@
 /**
  * 正文阅读偏好（字体 / 字号 / 行高 / 颜色 / 字重 / 对齐）。
  *
- * 原为 NoteShell 顶栏 Aa 面板的私有定义；Aa 面板移除后改由浮动
- * EditorToolbar 编辑，类型与常量抽到此处供 NoteShell 与工具栏共用。
- * 偏好经 localStorage 持久化，NoteShell 以 --note-copy-* 变量应用。
+ * 原为 NoteShell 顶栏 Aa 面板的私有定义；Aa 面板移除后曾由浮动
+ * EditorToolbar 编辑，现归设置页「笔记显示」管理，类型与常量抽到
+ * 此处供 NoteShell 与设置页共用。偏好经 localStorage 持久化，
+ * NoteShell 以 --note-copy-* 变量应用。
  */
 
 export const EDITOR_PREFS_STORAGE_KEY = 'nibi.note.editorPrefs'
@@ -69,6 +70,11 @@ export const FONT_WEIGHT_VALUE: Record<NoteEditorPrefs['fontWeight'], number> = 
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
+}
+
+export function writeEditorPrefs(prefs: NoteEditorPrefs): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(EDITOR_PREFS_STORAGE_KEY, JSON.stringify(prefs))
 }
 
 export function readEditorPrefs(): NoteEditorPrefs {

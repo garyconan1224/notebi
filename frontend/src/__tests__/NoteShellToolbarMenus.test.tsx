@@ -317,21 +317,15 @@ describe('NoteShell 正文设置（浮动工具栏 Q2）', () => {
     document.dispatchEvent(new Event('selectionchange'))
   }
 
-  it('选中文字后经浮动工具栏打开正文设置，颜色为点击切换', async () => {
+  it('浮动工具栏不再提供正文设置入口（偏好已移入设置页「笔记显示」）', async () => {
     await renderNoteShell(TEXT_NOTE)
     selectEditorText()
 
     const toolbar = await screen.findByRole('toolbar', { name: '正文格式' })
-    fireEvent.click(within(toolbar).getByRole('button', { name: '正文设置' }))
+    expect(within(toolbar).queryByRole('button', { name: '正文设置' })).toBeNull()
+    expect(screen.queryByRole('group', { name: '正文偏好设置' })).toBeNull()
 
-    const panel = screen.getByRole('group', { name: '正文偏好设置' })
-    const swatches = within(panel).getAllByRole('button', { name: '颜色' })
-    expect(swatches.length).toBeGreaterThanOrEqual(2)
-    const soft = swatches[1]
-    fireEvent.click(soft)
-    await waitFor(() => expect(soft).toHaveAttribute('aria-pressed', 'true'))
-
-    // 顶栏不再有 Aa 设置入口
+    // 顶栏也不再有 Aa 设置入口
     expect(screen.queryByRole('button', { name: /Aa 设置/ })).toBeNull()
   })
 })

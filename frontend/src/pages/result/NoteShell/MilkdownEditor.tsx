@@ -12,6 +12,8 @@
 import { useEffect, useRef } from 'react'
 import { Editor, rootCtx, defaultValueCtx, prosePluginsCtx, editorViewCtx, serializerCtx, marksCtx, remarkPluginsCtx } from '@milkdown/core'
 import { Plugin, TextSelection } from '@milkdown/prose/state'
+import { history, undo, redo } from '@milkdown/prose/history'
+import { keymap } from '@milkdown/prose/keymap'
 import { Milkdown, MilkdownProvider, useEditor, useInstance } from '@milkdown/react'
 import { commonmark } from '@milkdown/preset-commonmark'
 import { gfm } from '@milkdown/preset-gfm'
@@ -23,6 +25,7 @@ import { timestampPlugin, unescapeNoteTimestamps } from './milkdownTimestamp'
 import { createNoteSeedGuard, type NoteSeedGuard } from './milkdownSeedGuard'
 import { stripUnresolvedFramePlaceholders } from './frameMarkdown'
 import { underlineHtmlRemarkPlugin, underlineMarkSchema } from './underlineMark'
+import { highlightHtmlRemarkPlugin, highlightMarkSchema } from './highlightMark'
 import { useLnEditorStore } from '@/store/lnEditorStore'
 import {
   getEditorFormattingState,
@@ -59,8 +62,10 @@ function MilkdownEditorInner({
         .config((ctx: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
           ctx.set(rootCtx, root)
           ctx.set(defaultValueCtx, safeMarkdown)
-          ctx.update(remarkPluginsCtx, (plugins: any) => [...plugins, { plugin: underlineHtmlRemarkPlugin, options: {} }])
-          ctx.update(marksCtx, (marks: any) => [...marks, ['underline', underlineMarkSchema]])
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ctx.update(remarkPluginsCtx, (plugins: any) => [...plugins, { plugin: underlineHtmlRemarkPlugin, options: {} }, { plugin: highlightHtmlRemarkPlugin, options: {} }])
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ctx.update(marksCtx, (marks: any) => [...marks, ['underline', underlineMarkSchema], ['highlight', highlightMarkSchema]])
           ctx.get(listenerCtx)
             .markdownUpdated((_ctx: any, md: string) => { // eslint-disable-line @typescript-eslint/no-explicit-any
               // 先反转义时间码方括号（Milkdown commonmark 序列化器会把 [ 转义成 \[），
@@ -101,6 +106,12 @@ function MilkdownEditorInner({
             })
             return [
               ...ps,
+              history(),
+              keymap({
+                'Mod-z': undo,
+                'Mod-y': redo,
+                'Shift-Mod-z': redo,
+              }),
               timestampPlugin(() => onSeekRef.current ?? (() => {})),
               ...(registerCommands ? [formattingPlugin] : []),
             ]
