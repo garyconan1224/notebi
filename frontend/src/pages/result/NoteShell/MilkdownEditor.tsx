@@ -57,6 +57,41 @@ function MilkdownEditorInner({
   const onSeekRef = useRef(onSeek)
   onSeekRef.current = onSeek
 
+  // 任务清单（- [ ] / - [x]）勾选切换：mousedown 落在 li 左侧复选框区域时翻转 checked 属性，
+  // 经 listener → markdownUpdated → onMarkdownChange 持久化；点击文本区域不拦截（可正常编辑）。
+  const taskTogglePlugin = new Plugin({
+    view: (view) => {
+      const onMouseDown = (event: MouseEvent) => {
+        const target = event.target as HTMLElement
+        const li = target.closest('li[data-item-type="task"]') as HTMLElement | null
+        if (!li) return
+        const rect = li.getBoundingClientRect()
+        if (event.clientX - rect.left > 20) return
+        event.preventDefault()
+        const coords = view.posAtCoords({ left: event.clientX, top: event.clientY })
+        if (!coords) return
+        const $pos = view.state.doc.resolve(coords.pos)
+        for (let depth = $pos.depth; depth >= 0; depth -= 1) {
+          const node = $pos.node(depth)
+          // gfm 在基础 list_item 上扩展 checked 属性（- [ ] / - [x]）
+          if (node.type.name !== 'list_item' || node.attrs.checked == null) continue
+          const checked = node.attrs.checked === true
+          view.dispatch(
+            view.state.tr.setNodeMarkup($pos.before(depth), undefined, {
+              ...node.attrs,
+              checked: !checked,
+            }),
+          )
+          break
+        }
+      }
+      view.dom.addEventListener('mousedown', onMouseDown)
+      return {
+        destroy: () => view.dom.removeEventListener('mousedown', onMouseDown),
+      }
+    },
+  })
+
   useEditor(
     (root) => {
       const editor = Editor.make()
@@ -114,6 +149,7 @@ function MilkdownEditorInner({
                 'Shift-Mod-z': redo,
               }),
               timestampPlugin(() => onSeekRef.current ?? (() => {})),
+              taskTogglePlugin,
               ...(registerCommands ? [formattingPlugin] : []),
             ]
           })
