@@ -135,7 +135,7 @@ def _cluster(embeddings: np.ndarray, num_speakers: Optional[int]) -> np.ndarray:
 def _merge_labeled_windows(
     windows: Sequence[Tuple[float, float]], labels: Sequence[int],
 ) -> List[SpeakerSegment]:
-    """合并相邻同说话人段；短片段并入邻近主段以抑制聚类标签抖动。"""
+    """合并相邻且同标签的窗口，保留真实的短说话人轮次。"""
     if not windows:
         return []
     merged: List[SpeakerSegment] = []
@@ -146,39 +146,7 @@ def _merge_labeled_windows(
             merged[-1] = SpeakerSegment(previous.start, max(previous.end, end), speaker)
         else:
             merged.append(SpeakerSegment(start, end, speaker))
-    _absorb_short_segments(merged)
     return merged
-
-
-def _absorb_short_segments(segments: List[SpeakerSegment]) -> None:
-    """将中间 <=1.2s 的短段并入相邻主说话人段，减少聚类标签抖动产生的碎片。"""
-    if len(segments) < 2:
-        return
-    i = 1
-    while i < len(segments) - 1:
-        seg = segments[i]
-        if seg.end - seg.start > 1.2:
-            i += 1
-            continue
-        prev = segments[i - 1]
-        nxt = segments[i + 1]
-        gap_prev = seg.start - prev.end
-        gap_next = nxt.start - seg.end
-        if prev.speaker == seg.speaker and gap_prev <= 0.9:
-            prev.end = max(prev.end, seg.end)
-            del segments[i]
-        elif nxt.speaker == seg.speaker and gap_next <= 0.9:
-            nxt.start = min(nxt.start, seg.start)
-            del segments[i]
-        elif gap_prev <= gap_next:
-            prev.end = seg.end
-            del segments[i]
-        else:
-            nxt.start = seg.start
-            del segments[i]
-        if i > 0 and i < len(segments) and segments[i - 1].speaker == segments[i].speaker:
-            segments[i - 1].end = max(segments[i - 1].end, segments[i].end)
-            del segments[i]
 
 
 def run_wespeaker_diarization(

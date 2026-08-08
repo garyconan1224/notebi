@@ -28,9 +28,9 @@ from shared.settings_store import load_settings
 from shared.text_loader import TextDocument, TextLoaderError, load_auto, load_url
 from shared.audio_analyzer import (
     DiarizationError,
-    assign_speakers_to_segments,
     export_srt,
     export_txt,
+    label_transcript_segments,
     run_diarization,
     run_vad,
 )
@@ -49,6 +49,10 @@ from shared.segment_refiner import refine_segments
 from shared.xiaohongshu_share import is_xiaohongshu_url_or_text, run_xiaohongshu_download
 from src.vidmirror.core.providers import ChatRequest
 from src.vidmirror.core.providers.registry import create_default_registry
+
+# Keep the historical module hook for narrow pipeline tests and callers; it now
+# points to the refine-then-label implementation.
+assign_speakers_to_segments = label_transcript_segments
 
 
 def _tier_capture_params() -> CaptureParams:
@@ -5182,7 +5186,7 @@ def _handle_video_diarization_retry(record: TaskRecord, runner: TaskRunner) -> D
             ),
             num_speakers=speaker_count,
         )
-        segments = refine_segments(assign_speakers_to_segments(segments, diar))
+        segments = assign_speakers_to_segments(segments, diar)
     finally:
         extracted_audio.unlink(missing_ok=True)
 
@@ -5239,7 +5243,7 @@ def _handle_audio_diarization_retry(record: TaskRecord, runner: TaskRunner) -> D
         ),
         num_speakers=speaker_count,
     )
-    segments = refine_segments(assign_speakers_to_segments(segments, diar))
+    segments = assign_speakers_to_segments(segments, diar)
     log(f"✅ 检测到 {diar.num_speakers} 个说话人，{len(diar.segments)} 段")
 
     runner.store.update(task_id, status=TaskStatus.SUM.value)

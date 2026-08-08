@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+MIN_SPEAKER_COVERAGE = 0.65
+MIN_SPEAKER_MARGIN = 0.15
 
 
 # ── 数据类 ────────────────────────────────────────────────────
@@ -417,25 +419,73 @@ def assign_speakers_to_segments(
     transcript_segments: List[Dict[str, Any]],
     diarization: DiarizationResult,
 ) -> List[Dict[str, Any]]:
-    """给每条 transcript_segment 标 speaker（按最大时间重叠）。
+    """给有足够时间证据的 transcript_segment 标 speaker。
 
-    返回新 list（不修改原 segments）。
+    说话人窗口可能因滑窗而互相重叠，因此按每个标签的时间并集计算覆盖率。
+    边界证据不足时保留字幕但清除旧 speaker，避免阶段重试沿用误标。
     """
+    def _union_duration(intervals: List[Tuple[float, float]]) -> float:
+        total = 0.0
+        current_start: Optional[float] = None
+        current_end: Optional[float] = None
+        for start, end in sorted(intervals):
+            if current_start is None:
+                current_start, current_end = start, end
+            elif current_end is not None and start <= current_end:
+                current_end = max(current_end, end)
+            else:
+                total += (current_end or 0.0) - current_start
+                current_start, current_end = start, end
+        if current_start is not None:
+            total += (current_end or 0.0) - current_start
+        return total
+
     enriched: List[Dict[str, Any]] = []
     for seg in transcript_segments:
+        out = dict(seg)
+        out.pop("speaker", None)
         try:
             s = float(seg.get("start") or 0.0)
             e = float(seg.get("end") or s)
         except (TypeError, ValueError):
-            enriched.append(dict(seg))
+            enriched.append(out)
             continue
-        best: Tuple[float, str] = (0.0, "")
+
+        duration = e - s
+        if duration <= 0:
+            enriched.append(out)
+            continue
+
+        by_speaker: Dict[str, List[Tuple[float, float]]] = {}
         for sp in diarization.segments:
-            overlap = max(0.0, min(e, sp.end) - max(s, sp.start))
-            if overlap > best[0]:
-                best = (overlap, sp.speaker)
-        out = dict(seg)
-        if best[1]:
-            out["speaker"] = best[1]
+            speaker = str(sp.speaker or "").strip()
+            overlap_start = max(s, float(sp.start))
+            overlap_end = min(e, float(sp.end))
+            if speaker and overlap_end > overlap_start:
+                by_speaker.setdefault(speaker, []).append((overlap_start, overlap_end))
+
+        ranked = sorted(
+            (
+                (_union_duration(intervals) / duration, speaker)
+                for speaker, intervals in by_speaker.items()
+            ),
+            reverse=True,
+        )
+        if ranked:
+            coverage, speaker = ranked[0]
+            margin = coverage - (ranked[1][0] if len(ranked) > 1 else 0.0)
+            if coverage >= MIN_SPEAKER_COVERAGE and margin >= MIN_SPEAKER_MARGIN:
+                out["speaker"] = speaker
         enriched.append(out)
     return enriched
+
+
+def label_transcript_segments(
+    transcript_segments: List[Dict[str, Any]],
+    diarization: DiarizationResult,
+) -> List[Dict[str, Any]]:
+    """先细分 ASR 字幕，再按时间证据贴说话人标签。"""
+    from shared.segment_refiner import refine_segments
+
+    refined = refine_segments(transcript_segments)
+    return assign_speakers_to_segments(refined, diarization)

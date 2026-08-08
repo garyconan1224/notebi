@@ -10,7 +10,6 @@ import numpy as np
 
 from shared.wespeaker_diarizer import (
     SpeakerSegment,
-    _absorb_short_segments,
     _merge_labeled_windows,
     run_wespeaker_diarization,
 )
@@ -66,38 +65,27 @@ def test_wespeaker_requires_audio_file(tmp_path: Path) -> None:
         run_wespeaker_diarization(tmp_path / "missing.m4a")
     assert getattr(exc.value, "code", "") == "audio_missing"
 
-
-def _seg(start: float, end: float, speaker: str) -> SpeakerSegment:
-    return SpeakerSegment(start, end, speaker)
-
-
 def test_merge_adjacent_same_speaker_within_gap() -> None:
     windows = [(0.0, 1.0), (1.0, 2.0), (2.0, 3.0)]
     merged = _merge_labeled_windows(windows, [0, 0, 0])
     assert [(s.start, s.end) for s in merged] == [(0.0, 3.0)]
 
 
-def test_absorb_short_segment_into_nearest_neighbor() -> None:
-    segments = [
-        _seg(0.0, 3.0, "SPEAKER_00"),
-        _seg(3.0, 4.0, "SPEAKER_01"),
-        _seg(4.0, 5.0, "SPEAKER_00"),
-    ]
-    _absorb_short_segments(segments)
-    assert [(s.start, s.end, s.speaker) for s in segments] == [
-        (0.0, 5.0, "SPEAKER_00"),
+def test_short_alternating_turn_is_preserved() -> None:
+    windows = [(0.0, 3.0), (3.0, 4.0), (4.0, 5.0)]
+    merged = _merge_labeled_windows(windows, [0, 1, 0])
+    assert [(s.start, s.end, s.speaker) for s in merged] == [
+        (0.0, 3.0, "SPEAKER_00"),
+        (3.0, 4.0, "SPEAKER_01"),
+        (4.0, 5.0, "SPEAKER_00"),
     ]
 
 
-def test_absorb_keeps_boundary_segments() -> None:
-    segments = [
-        _seg(0.0, 1.0, "SPEAKER_00"),
-        _seg(1.0, 3.5, "SPEAKER_01"),
-        _seg(3.5, 4.0, "SPEAKER_00"),
-    ]
-    _absorb_short_segments(segments)
-    assert [(s.start, s.end, s.speaker) for s in segments] == [
+def test_short_boundary_turn_is_preserved() -> None:
+    windows = [(0.0, 1.0), (1.0, 2.0), (2.0, 3.0)]
+    merged = _merge_labeled_windows(windows, [0, 1, 0])
+    assert [(s.start, s.end, s.speaker) for s in merged] == [
         (0.0, 1.0, "SPEAKER_00"),
-        (1.0, 3.5, "SPEAKER_01"),
-        (3.5, 4.0, "SPEAKER_00"),
+        (1.0, 2.0, "SPEAKER_01"),
+        (2.0, 3.0, "SPEAKER_00"),
     ]

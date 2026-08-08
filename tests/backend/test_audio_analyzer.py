@@ -26,6 +26,7 @@ from shared.audio_analyzer import (
     export_transcript_article,
     export_transcript_by_speaker,
     export_txt,
+    label_transcript_segments,
     run_diarization,
     run_vad,
 )
@@ -158,6 +159,51 @@ def test_assign_speakers_unknown_segments_passthrough():
     )
     out = assign_speakers_to_segments(transcript, diar)
     assert "speaker" not in out[0]
+
+
+def test_assign_speakers_does_not_guess_at_equal_boundary_overlap():
+    transcript = [{"start": 0.0, "end": 2.0, "text": "A/B 边界"}]
+    diar = DiarizationResult(
+        num_speakers=2,
+        segments=[
+            SpeakerSegment(start=0.0, end=1.0, speaker="A"),
+            SpeakerSegment(start=1.0, end=2.0, speaker="B"),
+        ],
+    )
+    out = assign_speakers_to_segments(transcript, diar)
+    assert "speaker" not in out[0]
+
+
+def test_assign_speakers_removes_stale_label_when_boundary_is_ambiguous():
+    transcript = [{"start": 0.0, "end": 2.0, "text": "A/B 边界", "speaker": "B"}]
+    diar = DiarizationResult(
+        num_speakers=2,
+        segments=[
+            SpeakerSegment(start=0.0, end=1.0, speaker="A"),
+            SpeakerSegment(start=1.0, end=2.0, speaker="B"),
+        ],
+    )
+    out = assign_speakers_to_segments(transcript, diar)
+    assert "speaker" not in out[0]
+
+
+def test_label_transcript_segments_refines_before_assigning_speakers():
+    transcript = [{
+        "start": 0.0,
+        "end": 4.0,
+        "text": "B说了很多很多很多很多很多很多很多很多。A说了很多很多很多很多很多很多很多很多。",
+    }]
+    diar = DiarizationResult(
+        num_speakers=2,
+        segments=[
+            SpeakerSegment(start=0.0, end=2.0, speaker="B"),
+            SpeakerSegment(start=2.0, end=4.0, speaker="A"),
+        ],
+    )
+    out = label_transcript_segments(transcript, diar)
+    assert len(out) == 2
+    assert out[0]["speaker"] == "B"
+    assert out[1]["speaker"] == "A"
 
 
 # ── diarization engine contract ───────────────────────────────
