@@ -161,6 +161,20 @@ def test_assign_speakers_unknown_segments_passthrough():
     assert "speaker" not in out[0]
 
 
+def test_assign_speakers_labels_short_turn_with_its_own_speaker():
+    transcript = [{"start": 3.0, "end": 4.0, "text": "A 的短回应"}]
+    diar = DiarizationResult(
+        num_speakers=2,
+        segments=[
+            SpeakerSegment(start=0.0, end=3.0, speaker="B"),
+            SpeakerSegment(start=3.0, end=4.0, speaker="A"),
+            SpeakerSegment(start=4.0, end=5.0, speaker="B"),
+        ],
+    )
+    out = assign_speakers_to_segments(transcript, diar)
+    assert out[0]["speaker"] == "A"
+
+
 def test_assign_speakers_does_not_guess_at_equal_boundary_overlap():
     transcript = [{"start": 0.0, "end": 2.0, "text": "A/B 边界"}]
     diar = DiarizationResult(
