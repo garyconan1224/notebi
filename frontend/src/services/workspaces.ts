@@ -766,10 +766,30 @@ export async function updateTranscriptSegment(
   itemId: string,
   segmentIdx: number,
   editedText: string,
-): Promise<{ segment_idx: number; edited_text: string | null }> {
+): Promise<{
+  segment_idx: number
+  edited_text: string | null
+  /** 原文保存后后端增量重译的跟随译文（lang→新译文，空串=跟随失败需补译） */
+  updated_translations?: Record<string, string>
+}> {
   const res = await http.patch(
     `${BASE}/${workspaceId}/items/${itemId}/transcript/segments/${segmentIdx}`,
     { edited_text: editedText },
+  )
+  return res.data
+}
+
+/** PATCH /workspaces/{id}/items/{itemId}/transcript/segments/{idx}/translation — 编辑单段译文 */
+export async function updateTranscriptTranslation(
+  workspaceId: string,
+  itemId: string,
+  segmentIdx: number,
+  targetLang: string,
+  editedText: string,
+): Promise<{ segment_idx: number; target_lang: string; edited_text: string }> {
+  const res = await http.patch(
+    `${BASE}/${workspaceId}/items/${itemId}/transcript/segments/${segmentIdx}/translation`,
+    { target_lang: targetLang, edited_text: editedText },
   )
   return res.data
 }

@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react'
 import { ChevronDown, FileCode, Globe, Languages, Loader2, Quote } from 'lucide-react'
 import { toast } from 'sonner'
 import type { VideoResultTranscriptLine } from '@/services/workspaces'
-import { updateTranscriptSegment, translateTranscriptSegments } from '@/services/workspaces'
+import { updateTranscriptSegment, translateTranscriptSegments, updateTranscriptTranslation } from '@/services/workspaces'
 import type { TranscriptTranslations } from '@/types/workspace'
 import { useLnEditorStore } from '@/store/lnEditorStore'
 
@@ -162,8 +162,8 @@ export default function LNTranscriptPanel({
   const activeRef = useRef<HTMLDivElement>(null)
   const insertAtCursor = useLnEditorStore((s) => s.insertAtCursor)
 
-  // ── 双击编辑状态 ──
-  const [editingIdx, setEditingIdx] = useState<number | null>(null)
+  // ── 双击编辑状态（field 区分原文/译文）──
+  const [editing, setEditing] = useState<{ idx: number; field: 'source' | 'translation' } | null>(null)
   const [editText, setEditText] = useState('')
   // 乐观更新：保存成功后立即在面板回显新文字（key=段下标），免刷新；重进页面组件重挂即清空
   const [localEdits, setLocalEdits] = useState<Record<number, string>>({})
@@ -174,16 +174,58 @@ export default function LNTranscriptPanel({
     }
   }, [activeIdx])
 
+  const startEdit = useCallback(
+    (idx: number, field: 'source' | 'translation') => {
+      setEditing({ idx, field })
+      setEditText(
+        field === 'source'
+          ? (localEdits[idx] ?? transcript[idx]?.text ?? '')
+          : (localTranslations?.[idx] ?? ''),
+      )
+    },
+    [localEdits, transcript, localTranslations],
+  )
+
+  const mergeTranslationUpdates = useCallback((idx: number, updates: Record<string, string>) => {
+    setTranslationCache((prev) => {
+      const next = { ...prev }
+      for (const [lang, text] of Object.entries(updates)) {
+        const langCache = { ...(next[lang] ?? {}) }
+        if (text) langCache[idx] = text
+        else delete langCache[idx]
+        next[lang] = langCache
+      }
+      return next
+    })
+  }, [])
+
   const handleEditSave = useCallback(
     async (idx: number) => {
+      const field = editing?.idx === idx ? editing.field : 'source'
       const trimmed = editText.trim()
+      if (field === 'translation') {
+        const current = localTranslations?.[idx] ?? ''
+        if (trimmed === current) {
+          setEditing(null)
+          return
+        }
+        try {
+          await updateTranscriptTranslation(workspaceId, itemId, idx, translateLang, trimmed)
+          mergeTranslationUpdates(idx, { [translateLang]: trimmed })
+          toast.success('译文已保存')
+        } catch {
+          toast.error('保存失败，请重试')
+        }
+        setEditing(null)
+        return
+      }
       const current = localEdits[idx] ?? transcript[idx]?.text ?? ''
       if (trimmed === current) {
-        setEditingIdx(null)
+        setEditing(null)
         return
       }
       try {
-        await updateTranscriptSegment(workspaceId, itemId, idx, trimmed)
+        const res = await updateTranscriptSegment(workspaceId, itemId, idx, trimmed)
         // 乐观更新：空内容 = 恢复原文（移除 override 回退到原 text），否则记下新文字
         setLocalEdits((prev) => {
           const next = { ...prev }
@@ -191,18 +233,21 @@ export default function LNTranscriptPanel({
           else delete next[idx]
           return next
         })
-        toast.success('字幕已保存')
+        const followed = res.updated_translations ?? {}
+        if (Object.keys(followed).length) mergeTranslationUpdates(idx, followed)
+        const stale = Object.values(followed).some((text) => !text.trim())
+        toast.success(stale ? '字幕已保存，译文跟随失败，请点「重新翻译」补译' : '字幕已保存')
         onSaved?.()
       } catch {
         toast.error('保存失败，请重试')
       }
-      setEditingIdx(null)
+      setEditing(null)
     },
-    [editText, transcript, workspaceId, itemId, localEdits, onSaved],
+    [editText, editing, transcript, workspaceId, itemId, localEdits, localTranslations, translateLang, mergeTranslationUpdates, onSaved],
   )
 
   const handleEditCancel = useCallback(() => {
-    setEditingIdx(null)
+    setEditing(null)
     setEditText('')
   }, [])
 
@@ -423,7 +468,7 @@ export default function LNTranscriptPanel({
       ) : (
         <>
           {transcript.map((line, i) => {
-            const isEditing = editingIdx === i
+            const isEditing = editing?.idx === i
             const displayText = localEdits[i] ?? line.text
             const speakerName = line.speaker
               ? (speakerMap?.[line.speaker] || line.speaker.replace(/^SPEAKER_/, 'S'))
@@ -449,8 +494,12 @@ export default function LNTranscriptPanel({
                 onClick={() => !isEditing && onSeek(line.t_sec)}
                 onDoubleClick={(e) => {
                   e.stopPropagation()
-                  setEditingIdx(i)
-                  setEditText(displayText)
+                  if (mode === 'translated') {
+                    if (translatedText) startEdit(i, 'translation')
+                    else toast.error('该语言暂无译文，请先翻译后再编辑译文')
+                  } else {
+                    startEdit(i, 'source')
+                  }
                 }}
               >
                 {detailedSpeaker && (
@@ -483,7 +532,13 @@ export default function LNTranscriptPanel({
                       </span>
                     )}
                     {mode === 'bilingual' && translatedText && (
-                      <span className="ln-tr-translated">{translatedText}</span>
+                      <span
+                        className="ln-tr-translated"
+                        onDoubleClick={(e) => {
+                          e.stopPropagation()
+                          startEdit(i, 'translation')
+                        }}
+                      >{translatedText}</span>
                     )}
                     {mode === 'translated' && (
                       <span className="ln-tr-translated">{translatedText || displayText}</span>

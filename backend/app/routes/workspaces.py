@@ -5167,6 +5167,47 @@ def _translation_complete(segments: List[Dict[str, Any]], source_texts: List[str
     return total > 0 and _translation_filled_count(segments, source_texts) == total
 
 
+def _retranslate_segment_in_cache(
+    workspace_id: str,
+    item_id: str,
+    results: Dict[str, Any],
+    total: int,
+    segment_idx: int,
+    source_text: str,
+) -> Dict[str, str]:
+    """原文编辑后，对每个已有译文缓存的语言增量重译该段并写回 results.translations。
+
+    LLM 失败或原文为空时清空该段译文（缓存转为不完整），
+    前端凭「重新翻译」整批补译；返回值 lang→新译文（空串=跟随失败）。
+    """
+    translations = dict(results.get("translations") or {})
+    if not translations:
+        return {}
+    updated: Dict[str, str] = {}
+    for lang, cached in translations.items():
+        segs = _normalize_translation_segments(cached, total)
+        if not any(str(s.get("text") or "").strip() for s in segs):
+            continue
+        new_trans = ""
+        if str(source_text or "").strip():
+            try:
+                batch = _translate_segments_batch([str(source_text)], lang)
+                new_trans = str((batch[0] or {}).get("text") or "").strip()
+            except Exception:
+                logger.warning(
+                    "update_transcript_segment: 增量重译失败 lang=%s idx=%d",
+                    lang, segment_idx, exc_info=True,
+                )
+                new_trans = ""
+        segs[segment_idx]["text"] = new_trans
+        translations[lang] = segs
+        updated[lang] = new_trans
+    if updated:
+        results["translations"] = translations
+        _store.update_item(workspace_id, item_id, results=results)
+    return updated
+
+
 @router.patch("/{workspace_id}/items/{item_id}/transcript/segments/{segment_idx}")
 def update_transcript_segment(
     workspace_id: str,
@@ -5229,7 +5270,65 @@ def update_transcript_segment(
     except Exception:
         logger.warning("update_transcript_segment: 同步 transcript.json / source.md 失败（best-effort）", exc_info=True)
 
-    return {"segment_idx": segment_idx, "edited_text": new_text or None}
+    # ④ 译文跟随：对每个已缓存语言增量重译该段；失败语言返回空串由前端提示补译
+    final_text = new_text or str(lines[segment_idx].get("text", ""))
+    updated_translations = _retranslate_segment_in_cache(
+        workspace_id, item_id, results, len(lines), segment_idx, final_text,
+    )
+
+    return {
+        "segment_idx": segment_idx,
+        "edited_text": new_text or None,
+        "updated_translations": updated_translations,
+    }
+
+
+class TranscriptTranslationEditRequest(BaseModel):
+    """转录译文编辑请求体。"""
+
+    target_lang: str = Field(..., description="目标语言代码，如 zh/en/ja")
+    edited_text: str = Field("", description="编辑后的译文，空字符串表示清空该段译文")
+
+
+@router.patch("/{workspace_id}/items/{item_id}/transcript/segments/{segment_idx}/translation")
+def update_transcript_translation(
+    workspace_id: str,
+    item_id: str,
+    segment_idx: int,
+    req: TranscriptTranslationEditRequest,
+) -> Dict[str, Any]:
+    """编辑单段转录译文（译文可修改；导出读同一份缓存，自动跟随）。"""
+    rec = _store.get(workspace_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"workspace not found: {workspace_id}")
+    item = _find_item(rec, item_id)
+    nd = note_dir(_canonical_note_owner(workspace_id, item_id), item_id)
+    lines = _note_transcript(item.results or {}, nd)
+    if segment_idx < 0 or segment_idx >= len(lines):
+        raise HTTPException(
+            status_code=400,
+            detail=f"segment_idx {segment_idx} out of range (0-{len(lines) - 1})",
+        )
+    target_lang = req.target_lang.strip().lower()
+    if not target_lang:
+        raise HTTPException(status_code=400, detail="target_lang 不能为空")
+
+    results = dict(item.results or {})
+    translations = dict(results.get("translations") or {})
+    if not translations.get(target_lang):
+        raise HTTPException(status_code=400, detail="该语言尚无译文缓存，请先翻译")
+
+    segs = _normalize_translation_segments(translations[target_lang], len(lines))
+    segs[segment_idx]["text"] = req.edited_text.strip()
+    translations[target_lang] = segs
+    results["translations"] = translations
+    _store.update_item(workspace_id, item_id, results=results)
+
+    return {
+        "segment_idx": segment_idx,
+        "target_lang": target_lang,
+        "edited_text": req.edited_text.strip(),
+    }
 
 
 # ── 总结 CRUD ──────────────────────────────────────────────────
