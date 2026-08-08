@@ -22,13 +22,11 @@ from backend.app.services.asr_fast_whisper import (
     is_model_cached,
 )
 from backend.app.services.asr_mlx_whisper import MLX_MODEL_MAP, resolve_mlx_repo_id
-from shared.sherpa_diarizer import _model_root
 from shared.settings_store import load_settings, save_settings
 
 
 _FAST_SIZES = ("tiny", "base", "small", "medium", "large-v3", "large-v3-turbo")
 _WESPEAKER_CACHE_DIR = Path.home() / ".wespeaker"
-_PYANNOTE_REPO_ID = "pyannote/speaker-diarization-community-1"
 _jobs_lock = threading.Lock()
 _jobs: dict[str, dict[str, Any]] = {}
 
@@ -107,30 +105,6 @@ def _mlx_status(size: str) -> dict[str, Any]:
     }
 
 
-def _sherpa_status() -> dict[str, Any]:
-    root = _model_root()
-    segment = root / "model.int8.onnx"
-    embedding = root / "3dspeaker_eres2net_base_zh-cn_16k.onnx"
-    cached = segment.is_file() and embedding.is_file()
-    job = _job("sherpa-diarization")
-    return {
-        "model_id": "sherpa-diarization",
-        "family": "speaker-diarization",
-        "title": "说话人识别 · Sherpa ONNX",
-        "description": "区分多人发言并支持姓名、角色和说话人总结。",
-        "estimated_size_mb": 0,
-        "done_mb": round(sum(path.stat().st_size for path in (segment, embedding) if path.is_file()) / 1024 / 1024, 1),
-        "pending_mb": 0,
-        "cached": cached,
-        "compatible": True,
-        "cache_dir": str(root),
-        "status": "ready" if cached else str(job.get("status") or "not_downloaded"),
-        "progress": 1.0 if cached else float(job.get("progress") or 0),
-        "message": str(job.get("message") or "未下载"),
-        "error": str(job.get("error") or ""),
-    }
-
-
 def _ocr_status() -> dict[str, Any]:
     job = _job("paddleocr-zh")
     # PaddleOCR owns the exact cache layout, which can change by runtime version.
@@ -176,41 +150,12 @@ def _wespeaker_status() -> dict[str, Any]:
     }
 
 
-def _pyannote_status() -> dict[str, Any]:
-    job = _job("pyannote")
-    token_available = bool(
-        os.environ.get("HF_TOKEN")
-        or os.environ.get("HUGGINGFACE_TOKEN")
-        or os.environ.get("HUGGING_FACE_HUB_TOKEN")
-    )
-    cached = _repo_cached(_PYANNOTE_REPO_ID)
-    return {
-        "model_id": "pyannote",
-        "family": "speaker-diarization",
-        "title": "说话人回退 · Pyannote Community-1",
-        "description": "需要 Hugging Face Token 与模型许可；仅作为 Sherpa/WeSpeaker 不可用时的高级回退。",
-        "estimated_size_mb": 0,
-        "done_mb": 0,
-        "pending_mb": 0,
-        "cached": cached,
-        "compatible": token_available,
-        "cache_dir": str(_hf_hub_cache_dir()),
-        "status": "ready" if cached else str(job.get("status") or ("needs_token" if not token_available else "not_downloaded")),
-        "progress": 1.0 if cached else float(job.get("progress") or 0),
-        "message": str(job.get("message") or ("请先在环境中配置 HF_TOKEN" if not token_available else "未下载")),
-        "error": str(job.get("error") or ""),
-        "requires_token": True,
-    }
-
-
 def list_local_models() -> list[dict[str, Any]]:
     models = [
         *[_fast_status(size) for size in _FAST_SIZES],
         *[_mlx_status(size) for size in _FAST_SIZES if size in MLX_MODEL_MAP],
-        _sherpa_status(),
         _ocr_status(),
         _wespeaker_status(),
-        _pyannote_status(),
     ]
     settings = load_settings()
     active_type = settings.transcriber.type
@@ -260,11 +205,6 @@ def _run_download(model_id: str, report: Callable[[float, str], None]) -> None:
         from backend.app.services.asr_mlx_whisper import _ensure_model_downloaded
         _ensure_model_downloaded(resolve_mlx_repo_id(variant), progress_callback=report)
         return
-    if model_id == "sherpa-diarization":
-        from shared.sherpa_diarizer import ensure_sherpa_models
-        ensure_sherpa_models(progress_callback=report)
-        report(1.0, "说话人识别模型已就绪")
-        return
     if model_id == "paddleocr-zh":
         report(0.05, "正在初始化 PaddleOCR 官方模型")
         from shared.ocr_service import _get_engine
@@ -276,19 +216,6 @@ def _run_download(model_id: str, report: Callable[[float, str], None]) -> None:
         from wespeakerruntime import Speaker
         Speaker(lang="chs", intra_op_num_threads=2)
         report(1.0, "WeSpeaker 音色模型已就绪")
-        return
-    if model_id == "pyannote":
-        token = (
-            os.environ.get("HF_TOKEN")
-            or os.environ.get("HUGGINGFACE_TOKEN")
-            or os.environ.get("HUGGING_FACE_HUB_TOKEN")
-        )
-        if not token:
-            raise RuntimeError("请先配置 HF_TOKEN，并在 Hugging Face 接受 Community-1 许可")
-        report(0.05, "正在连接 Pyannote Community-1 模型")
-        from pyannote.audio import Pipeline  # type: ignore
-        Pipeline.from_pretrained(_PYANNOTE_REPO_ID, token=token)
-        report(1.0, "Pyannote 回退模型已就绪")
         return
     raise ValueError("未知本地模型")
 

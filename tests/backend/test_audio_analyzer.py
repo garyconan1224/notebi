@@ -3,18 +3,15 @@
 主要覆盖不需要跑真模型的部分：
 - export_srt / export_txt 纯字符串生成
 - assign_speakers_to_segments 时间重叠映射
-- run_diarization 使用 pyannote 4 API，并对不可用状态抛出结构化错误
+- run_diarization 委托给 WeSpeaker 引擎
 - VAD 用合成静音 wav 验证（silero-vad 已装时跑真模型）
 """
 
 from __future__ import annotations
 
 import os
-import sys
-import types
 import wave
 from pathlib import Path
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -166,50 +163,11 @@ def test_assign_speakers_unknown_segments_passthrough():
 # ── diarization engine contract ───────────────────────────────
 
 
-def test_run_diarization_raises_structured_error_without_token(monkeypatch, tmp_path):
-    monkeypatch.setenv("NOTEBI_DIARIZATION_ENGINE", "pyannote")
-    for key in ("HF_TOKEN", "HUGGINGFACE_TOKEN", "HUGGING_FACE_HUB_TOKEN"):
-        monkeypatch.delenv(key, raising=False)
-    with pytest.raises(RuntimeError) as exc:
-        run_diarization(tmp_path / "nope.wav")
-    assert getattr(exc.value, "code", "") == "missing_token"
-    assert getattr(exc.value, "engine", "") == "pyannote"
-
-
-def test_run_diarization_uses_sherpa_by_default(monkeypatch, tmp_path):
-    captured = {}
-
-    def fake_sherpa(audio_path, *, progress_callback=None, num_speakers=None):
-        captured["audio_path"] = audio_path
-        captured["progress_callback"] = progress_callback
-        captured["num_speakers"] = num_speakers
-        return DiarizationResult(
-            num_speakers=1,
-            segments=[SpeakerSegment(start=0.0, end=1.0, speaker="SPEAKER_00")],
-            engine="sherpa-onnx",
-            model="pyannote-segmentation-3.0+3D-Speaker",
-        )
-
-    monkeypatch.delenv("NOTEBI_DIARIZATION_ENGINE", raising=False)
-    monkeypatch.setattr("shared.audio_analyzer.run_sherpa_diarization", fake_sherpa)
-    progress = lambda ratio, message: None
-    audio_path = tmp_path / "interview.m4a"
-
-    result = run_diarization(audio_path, progress_callback=progress, num_speakers=2)
-
-    assert result.engine == "sherpa-onnx"
-    assert captured == {
-        "audio_path": audio_path,
-        "progress_callback": progress,
-        "num_speakers": 2,
-    }
-
-
-def test_run_diarization_auto_prefers_wespeaker(monkeypatch, tmp_path):
+def test_run_diarization_uses_wespeaker(monkeypatch, tmp_path):
     captured = {}
 
     def fake_wespeaker(audio_path, *, progress_callback=None, num_speakers=None):
-        captured.update(audio_path=audio_path, num_speakers=num_speakers)
+        captured.update(audio_path=audio_path, progress_callback=progress_callback, num_speakers=num_speakers)
         return DiarizationResult(
             num_speakers=2,
             segments=[SpeakerSegment(start=0.0, end=1.0, speaker="SPEAKER_00")],
@@ -217,84 +175,19 @@ def test_run_diarization_auto_prefers_wespeaker(monkeypatch, tmp_path):
             model="test-model",
         )
 
-    monkeypatch.setenv("NOTEBI_DIARIZATION_ENGINE", "auto")
+    monkeypatch.delenv("NOTEBI_DIARIZATION_ENGINE", raising=False)
     monkeypatch.setattr("shared.wespeaker_diarizer.run_wespeaker_diarization", fake_wespeaker)
-    result = run_diarization(tmp_path / "interview.m4a", num_speakers=2)
+    progress = lambda ratio, message: None
+    audio_path = tmp_path / "interview.m4a"
+
+    result = run_diarization(audio_path, progress_callback=progress, num_speakers=2)
 
     assert result.engine == "wespeaker"
-    assert captured["num_speakers"] == 2
-
-
-def test_run_diarization_auto_falls_back_to_pyannote(monkeypatch, tmp_path):
-    class FakePipeline:
-        @classmethod
-        def from_pretrained(cls, checkpoint, **kwargs):
-            return cls()
-
-        def __call__(self, audio_path):
-            return SimpleNamespace(
-                speaker_diarization=[
-                    (SimpleNamespace(start=0.0, end=1.0), "SPEAKER_00"),
-                ]
-            )
-
-    def unavailable_sherpa(audio_path, *, progress_callback=None, num_speakers=None):
-        raise DiarizationError(
-            "engine_unavailable",
-            "sherpa-onnx unavailable",
-            engine="sherpa-onnx",
-            model="test-model",
-        )
-
-    fake_audio_module = types.ModuleType("pyannote.audio")
-    fake_audio_module.Pipeline = FakePipeline
-    monkeypatch.setitem(sys.modules, "pyannote.audio", fake_audio_module)
-    monkeypatch.setenv("NOTEBI_DIARIZATION_ENGINE", "auto")
-    monkeypatch.setenv("HF_TOKEN", "test-token")
-    monkeypatch.setattr("shared.audio_analyzer.run_sherpa_diarization", unavailable_sherpa)
-
-    result = run_diarization(tmp_path / "interview.wav")
-
-    assert result.engine == "pyannote"
-
-
-def test_run_diarization_uses_pyannote_4_community_output(monkeypatch, tmp_path):
-    captured = {}
-
-    class FakePipeline:
-        @classmethod
-        def from_pretrained(cls, checkpoint, **kwargs):
-            captured["checkpoint"] = checkpoint
-            captured["kwargs"] = kwargs
-            return cls()
-
-        def __call__(self, audio_path):
-            captured["audio_path"] = audio_path
-            return SimpleNamespace(
-                speaker_diarization=[
-                    (SimpleNamespace(start=0.25, end=1.5), "SPEAKER_00"),
-                    (SimpleNamespace(start=1.75, end=3.0), "SPEAKER_01"),
-                ]
-            )
-
-    fake_audio_module = types.ModuleType("pyannote.audio")
-    fake_audio_module.Pipeline = FakePipeline
-    monkeypatch.setitem(sys.modules, "pyannote.audio", fake_audio_module)
-    monkeypatch.setenv("NOTEBI_DIARIZATION_ENGINE", "pyannote")
-    monkeypatch.setenv("HF_TOKEN", "test-token")
-
-    audio_path = tmp_path / "interview.wav"
-    result = run_diarization(audio_path)
-
     assert captured == {
-        "checkpoint": "pyannote/speaker-diarization-community-1",
-        "kwargs": {"token": "test-token"},
-        "audio_path": str(audio_path),
+        "audio_path": audio_path,
+        "progress_callback": progress,
+        "num_speakers": 2,
     }
-    assert result.engine == "pyannote"
-    assert result.model == "pyannote/speaker-diarization-community-1"
-    assert result.num_speakers == 2
-    assert [segment.speaker for segment in result.segments] == ["SPEAKER_00", "SPEAKER_01"]
 
 
 # ── VAD 烟雾测试（silero 已装则跑真模型）──────────────────────

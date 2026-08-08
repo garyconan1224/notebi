@@ -10,8 +10,6 @@ import {
   type LocalModelStatus,
 } from '@/services/localModels'
 
-const PYANNOTE_ACCESS_URL = 'https://huggingface.co/pyannote/speaker-diarization-community-1'
-
 /** S5: 模型家族 → 用途分组标题（以真实后端 family 值为准；未知家族归“其他”） */
 const FAMILY_PURPOSE_KEY: Record<string, string> = {
   'fast-whisper': 'localModels.familyAsr',
@@ -137,15 +135,6 @@ export default function LocalModelsPanel() {
                       <summary>{t('localModels.techDetails')}</summary>
                       <small>{t('localModels.cache', { dir: model.cache_dir, size: formatSize(model.estimated_size_mb, t) })}</small>
                     </details>
-                    {model.model_id === 'pyannote' && !ready && (
-                      <small className="local-model-guidance">
-                        {model.status === 'failed'
-                          ? t('localModels.pyannoteBlocked')
-                          : t('localModels.pyannoteNeedLicense')}
-                        <a href={PYANNOTE_ACCESS_URL} target="_blank" rel="noreferrer">{t('localModels.openLicense')}</a>
-                        {t('localModels.thenRefresh')}
-                      </small>
-                    )}
                     {model.status === 'downloading' && (
                       <div className="local-model-progress" role="progressbar" aria-label={t('localModels.downloadAria', { title: model.title })} aria-valuenow={Math.round(model.progress * 100)}>
                         <span style={{ width: `${Math.round(model.progress * 100)}%` }} />

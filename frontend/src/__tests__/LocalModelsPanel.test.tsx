@@ -49,10 +49,8 @@ const models = [
 const backendCatalog = [
   makeModel({ model_id: 'fast-whisper:base', family: 'fast-whisper', title: 'Faster Whisper · base' }),
   makeModel({ model_id: 'mlx-whisper:base', family: 'mlx-whisper', title: 'MLX Whisper · base', compatible: false }),
-  makeModel({ model_id: 'sherpa-diarization', family: 'speaker-diarization', title: '说话人识别 · Sherpa ONNX' }),
   makeModel({ model_id: 'paddleocr-zh', family: 'ocr', title: '图片文字识别 · PaddleOCR 中文', status: 'not_verified' }),
   makeModel({ model_id: 'wespeaker', family: 'speaker-embedding', title: '音色识别 · WeSpeaker' }),
-  makeModel({ model_id: 'pyannote', family: 'speaker-diarization', title: '说话人回退 · Pyannote Community-1', compatible: false, status: 'needs_token', requires_token: true }),
 ]
 
 describe('LocalModelsPanel', () => {
@@ -94,7 +92,7 @@ describe('LocalModelsPanel', () => {
     // 组标题顺序按后端目录首次出现顺序
     const headers = [...container.querySelectorAll('.local-model-purpose-header')]
       .map((node) => node.textContent)
-    expect(headers).toEqual(['语音转写', '说话人识别', '图片文字识别'])
+    expect(headers).toEqual(['语音转写', '图片文字识别', '说话人识别'])
 
     // 所有模型仍在页面中
     for (const model of backendCatalog) {
@@ -175,25 +173,5 @@ describe('LocalModelsPanel', () => {
     fireEvent.click((await screen.findAllByRole('button', { name: '下载' }))[0])
     await waitFor(() => expect(mocks.downloadLocalModel).toHaveBeenCalledWith('fast-whisper:base'))
     expect(mocks.listLocalModels).toHaveBeenCalledTimes(2)
-  })
-
-  it('explains how to authorize the gated Pyannote fallback before retrying', async () => {
-    mocks.listLocalModels.mockResolvedValue([
-      ...models,
-      {
-        model_id: 'pyannote', family: 'speaker-diarization', title: '说话人回退 · Pyannote Community-1',
-        description: '需要 Hugging Face Token 与模型许可', estimated_size_mb: 0, done_mb: 0, pending_mb: 0,
-        cached: false, compatible: true, cache_dir: '/tmp/hf', status: 'failed',
-        progress: 0, message: '下载失败', error: 'Cannot access gated repo', requires_token: true,
-      },
-    ])
-
-    render(<LocalModelsPanel />)
-
-    expect(await screen.findByText(/Community-1 的访问许可阻止了下载/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '打开模型授权页' })).toHaveAttribute(
-      'href',
-      'https://huggingface.co/pyannote/speaker-diarization-community-1',
-    )
   })
 })

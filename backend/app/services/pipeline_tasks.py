@@ -5582,7 +5582,7 @@ def handle_audio_task(record: TaskRecord, runner: TaskRunner) -> Dict[str, Any]:
             "根据音色区分说话人...",
             public_stage="DIARIZATION",
         )
-        log("🎤 说话人分离中（sherpa-onnx，失败时回退 pyannote）")
+        log("🎤 说话人分离中（WeSpeaker 音色模型）")
         try:
             diar = run_diarization(
                 audio_local_path,

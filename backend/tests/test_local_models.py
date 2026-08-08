@@ -16,10 +16,8 @@ def test_local_models_lists_explicit_runtime_downloads() -> None:
     ids = {entry["model_id"] for entry in models}
     assert "fast-whisper:base" in ids
     assert "mlx-whisper:base" in ids
-    assert "sherpa-diarization" in ids
     assert "paddleocr-zh" in ids
     assert "wespeaker" in ids
-    assert "pyannote" in ids
     assert all("status" in entry and "cache_dir" in entry for entry in models)
 
 

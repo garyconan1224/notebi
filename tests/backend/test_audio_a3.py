@@ -189,8 +189,8 @@ def test_audio_diarization_failure_keeps_transcript_as_partial(tmp_path: Path) -
             side_effect=DiarizationError(
                 "inference_failed",
                 "模型加载失败",
-                engine="pyannote",
-                model="pyannote/speaker-diarization-community-1",
+                engine="wespeaker",
+                model="WeSpeaker ResNet34-LM",
             ),
         ),
     ):
@@ -203,8 +203,8 @@ def test_audio_diarization_failure_keeps_transcript_as_partial(tmp_path: Path) -
         "stage": "diarization",
         "code": "inference_failed",
         "message": "模型加载失败",
-        "engine": "pyannote",
-        "model": "pyannote/speaker-diarization-community-1",
+        "engine": "wespeaker",
+        "model": "WeSpeaker ResNet34-LM",
     }
     assert any(
         call.kwargs.get("status") == TaskStatus.PARTIAL.value
@@ -287,8 +287,8 @@ def test_audio_diarization_retry_reuses_transcript_without_asr(tmp_path: Path) -
             "backend.app.services.pipeline_tasks.run_diarization",
             return_value=DiarizationResult(
                 num_speakers=2,
-                engine="pyannote",
-                model="community-1",
+                engine="wespeaker",
+                model="WeSpeaker ResNet34-LM",
                 segments=[
                     SpeakerSegment(0.0, 1.0, "SPEAKER_00"),
                     SpeakerSegment(1.0, 2.0, "SPEAKER_01"),
@@ -353,8 +353,8 @@ def test_video_diarization_retry_reuses_transcript_without_transcribing(tmp_path
             "backend.app.services.pipeline_tasks.run_diarization",
             return_value=DiarizationResult(
                 num_speakers=2,
-                engine="pyannote",
-                model="community-1",
+                engine="wespeaker",
+                model="WeSpeaker ResNet34-LM",
                 segments=[
                     SpeakerSegment(0.0, 1.0, "SPEAKER_00"),
                     SpeakerSegment(1.0, 2.0, "SPEAKER_01"),

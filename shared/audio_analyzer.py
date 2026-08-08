@@ -2,7 +2,7 @@
 
 提供给 `handle_audio_task` 的可独立测试的纯函数 / 数据类：
 - VAD：silero-vad 检测人声片段
-- 说话人分离：sherpa-onnx 跨平台离线优先，pyannote.audio 可回退
+- 说话人分离：WeSpeaker 本地音色模型离线运行
 - 字幕导出：transcript_segments → .srt / .txt
 
 所有重模型都 lazy import，让导入本模块不会触发 torch 启动。
@@ -128,146 +128,20 @@ def run_vad(audio_path: Path, sampling_rate: int = 16000) -> VadResult:
 # ── 说话人分离 ────────────────────────────────────────────────
 
 
-def _run_pyannote_diarization(
-    audio_path: Path,
-    *,
-    num_speakers: Optional[int] = None,
-) -> DiarizationResult:
-    """通过 pyannote Community-1 生成引擎无关的说话人时间段。"""
-    engine = "pyannote"
-    model = "pyannote/speaker-diarization-community-1"
-    token = (
-        os.environ.get("HF_TOKEN")
-        or os.environ.get("HUGGINGFACE_TOKEN")
-        or os.environ.get("HUGGING_FACE_HUB_TOKEN")
-    )
-    if not token:
-        raise DiarizationError(
-            "missing_token",
-            "未检测到 Hugging Face Token，无法执行说话人分析。",
-            engine=engine,
-            model=model,
-        )
-
-    try:
-        from pyannote.audio import Pipeline  # type: ignore
-    except ImportError as err:
-        raise DiarizationError(
-            "engine_unavailable",
-            "pyannote.audio 未安装，无法执行说话人分析。",
-            engine=engine,
-            model=model,
-        ) from err
-
-    try:
-        pipeline = Pipeline.from_pretrained(
-            model,
-            token=token,
-        )
-        call_options = {"num_speakers": num_speakers} if num_speakers else {}
-        output = pipeline(str(audio_path), **call_options)
-    except Exception as err:
-        raise DiarizationError(
-            "inference_failed",
-            f"pyannote 模型加载或推理失败：{err}",
-            engine=engine,
-            model=model,
-        ) from err
-
-    segments: List[SpeakerSegment] = []
-    speakers = set()
-    diarization = getattr(output, "speaker_diarization", output)
-    if hasattr(diarization, "itertracks"):
-        entries = ((turn, speaker) for turn, _, speaker in diarization.itertracks(yield_label=True))
-    else:
-        entries = iter(diarization)
-    try:
-        for turn, speaker in entries:
-            speaker_id = str(speaker)
-            segments.append(
-                SpeakerSegment(start=float(turn.start), end=float(turn.end), speaker=speaker_id)
-            )
-            speakers.add(speaker_id)
-    except Exception as err:
-        raise DiarizationError(
-            "invalid_output",
-            f"pyannote 返回了无法解析的说话人结果：{err}",
-            engine=engine,
-            model=model,
-        ) from err
-    return DiarizationResult(
-        num_speakers=len(speakers),
-        segments=segments,
-        engine=engine,
-        model=model,
-    )
-
-
-def run_sherpa_diarization(
-    audio_path: Path,
-    *,
-    progress_callback: Optional[Callable[[float, str], None]] = None,
-    num_speakers: Optional[int] = None,
-) -> DiarizationResult:
-    """Lazy bridge keeps the heavyweight sherpa runtime out of module import."""
-    from shared.sherpa_diarizer import run_sherpa_diarization as run
-
-    return run(
-        audio_path,
-        progress_callback=progress_callback,
-        num_speakers=num_speakers,
-    )
-
-
 def run_diarization(
     audio_path: Path,
     *,
     progress_callback: Optional[Callable[[float, str], None]] = None,
     num_speakers: Optional[int] = None,
 ) -> DiarizationResult:
-    """Run WeSpeaker first, then sherpa-onnx/pyannote fallback in auto mode."""
-    engine = os.environ.get("NOTEBI_DIARIZATION_ENGINE", "auto").strip().lower() or "auto"
-    if engine not in {"auto", "wespeaker", "sherpa", "sherpa-onnx", "pyannote"}:
-        raise DiarizationError(
-            "invalid_engine",
-            f"未知说话人分析引擎：{engine}",
-            engine=engine,
-            model="",
-        )
-    if engine == "pyannote":
-        return _run_pyannote_diarization(audio_path, num_speakers=num_speakers)
+    """Run WeSpeaker offline diarization (no HF token, no extra model download)."""
+    from shared.wespeaker_diarizer import run_wespeaker_diarization
 
-    if engine in {"auto", "wespeaker"}:
-        try:
-            from shared.wespeaker_diarizer import run_wespeaker_diarization
-
-            return run_wespeaker_diarization(
-                audio_path,
-                progress_callback=progress_callback,
-                num_speakers=num_speakers,
-            )
-        except DiarizationError as wespeaker_error:
-            if engine == "wespeaker":
-                raise
-            logger.warning("WeSpeaker 不可用，回退 sherpa-onnx：%s", wespeaker_error)
-
-    try:
-        return run_sherpa_diarization(
-            audio_path,
-            progress_callback=progress_callback,
-            num_speakers=num_speakers,
-        )
-    except DiarizationError as sherpa_error:
-        if engine != "auto":
-            raise
-        has_hf_token = any(
-            os.environ.get(key)
-            for key in ("HF_TOKEN", "HUGGINGFACE_TOKEN", "HUGGING_FACE_HUB_TOKEN")
-        )
-        if not has_hf_token:
-            raise
-        logger.warning("sherpa-onnx 不可用，回退 pyannote：%s", sherpa_error)
-        return _run_pyannote_diarization(audio_path, num_speakers=num_speakers)
+    return run_wespeaker_diarization(
+        audio_path,
+        progress_callback=progress_callback,
+        num_speakers=num_speakers,
+    )
 
 
 # ── 字幕导出 ──────────────────────────────────────────────────
