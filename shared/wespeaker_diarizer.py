@@ -106,6 +106,52 @@ def _windows(ranges: Iterable[Tuple[float, float]], duration: float) -> List[Tup
     return windows
 
 
+def _merge_small_clusters(
+    windows: Sequence[Tuple[float, float]],
+    labels: Sequence[int],
+    min_ratio: float = 0.08,
+) -> np.ndarray:
+    """把总时长占比低于 min_ratio 的碎簇并入时间最近邻簇。
+
+    仅用于自动推断人数(明示 num_speakers 时跳过)。碎簇通常是误拆——
+    把同一说话人的声音变化聚成额外的人。按窗口时间最近邻并入,
+    避免把短发言整体塞进错误的说话人。
+    """
+    labels = np.asarray(labels)
+    if len(windows) < 2 or len(set(labels)) < 2:
+        return labels
+    windows = [(float(s), float(e)) for s, e in windows]
+
+    while True:
+        durations: dict = {}
+        for cl in set(labels.tolist()):
+            total = 0.0
+            for idx in np.where(labels == cl)[0]:
+                total += windows[idx][1] - windows[idx][0]
+            durations[cl] = total
+        grand_total = sum(durations.values())
+        if grand_total <= 0:
+            return labels
+        small = [cl for cl, d in durations.items() if d / grand_total < min_ratio]
+        if not small:
+            break
+        cl = min(small, key=lambda c: durations[c])
+        idxs = np.where(labels == cl)[0]
+        other = np.where(labels != cl)[0]
+        other_centers = [
+            (windows[i][0] + windows[i][1]) / 2.0 for i in other
+        ]
+        for i in idxs:
+            t = (windows[i][0] + windows[i][1]) / 2.0
+            nearest = int(other[np.argmin(np.abs(np.asarray(other_centers) - t))])
+            labels[i] = labels[nearest]
+        # 重排标签为 0,1,2...
+        uniq = sorted(set(labels.tolist()))
+        mapping = {old: new for new, old in enumerate(uniq)}
+        labels = np.array([mapping[l] for l in labels])
+    return labels
+
+
 def _cluster(embeddings: np.ndarray, num_speakers: Optional[int]) -> np.ndarray:
     from sklearn.cluster import KMeans
     from sklearn.metrics import silhouette_score
@@ -205,6 +251,9 @@ def run_wespeaker_diarization(
         if len(embeddings) < 2:
             raise DiarizationError("insufficient_embeddings", "WeSpeaker 未提取到足够音色特征。", engine=engine, model=model_name)
         labels = _cluster(np.vstack(embeddings), num_speakers)
+        if num_speakers is None:
+            # 自动推断人数时,把误拆的碎簇并入最近邻,避免同一人拆成两人
+            labels = _merge_small_clusters(kept_windows, labels)
         segments = _merge_labeled_windows(kept_windows, labels)
         speakers = {segment.speaker for segment in segments}
         if len(speakers) < (num_speakers or 1):

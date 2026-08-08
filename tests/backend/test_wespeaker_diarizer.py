@@ -11,6 +11,7 @@ import numpy as np
 from shared.wespeaker_diarizer import (
     SpeakerSegment,
     _merge_labeled_windows,
+    _merge_small_clusters,
     run_wespeaker_diarization,
 )
 
@@ -89,3 +90,40 @@ def test_short_boundary_turn_is_preserved() -> None:
         (1.0, 2.0, "SPEAKER_01"),
         (2.0, 3.0, "SPEAKER_00"),
     ]
+
+
+def test_merge_small_clusters_absorbs_fragmented_cluster() -> None:
+    """碎簇(总占比 < 8%)应并入时间最近邻簇,保留真实说话人轮次。"""
+    # 3 个说话人,其中 cluster 2 只有 1 个短窗口(占 ~5%),应并入邻簇
+    windows = [
+        (0.0, 10.0), (10.0, 20.0), (20.0, 30.0),  # cluster 0: 30s
+        (30.0, 40.0), (40.0, 50.0), (50.0, 60.0),  # cluster 1: 30s
+        (60.0, 62.0),  # cluster 2: 2s (占比 2/62 ≈ 3.2% < 8%)
+    ]
+    labels = [0, 0, 0, 1, 1, 1, 2]
+    merged = _merge_small_clusters(windows, labels, min_ratio=0.08)
+    # 碎簇 2 被并入,最终只剩 2 个簇
+    assert len(set(merged.tolist())) == 2
+    # 碎簇窗口并入的是时间最近的 cluster 1
+    assert merged[-1] == 1
+
+
+def test_merge_small_clusters_keeps_balanced_clusters() -> None:
+    """各簇占比都 ≥ 阈值时,不合并(保持原标签)。"""
+    windows = [
+        (0.0, 10.0), (10.0, 20.0), (20.0, 30.0),  # cluster 0: 30s
+        (30.0, 40.0), (40.0, 50.0), (50.0, 60.0),  # cluster 1: 30s
+        (60.0, 70.0), (70.0, 80.0), (80.0, 90.0),  # cluster 2: 30s
+    ]
+    labels = [0, 0, 0, 1, 1, 1, 2, 2, 2]
+    merged = _merge_small_clusters(windows, labels, min_ratio=0.08)
+    assert len(set(merged.tolist())) == 3
+
+
+def test_merge_small_clusters_skips_when_few_windows() -> None:
+    """窗口数不足时不合并。"""
+    windows = [(0.0, 5.0)]
+    labels = [0]
+    merged = _merge_small_clusters(windows, labels, min_ratio=0.08)
+    assert merged.tolist() == [0]
+
