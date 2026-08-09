@@ -28,7 +28,7 @@ import type { TaskRecord } from '@/types/task'
 import type { TemplateCategory } from '@/services/templates'
 import { withStatusToast } from '@/lib/statusToast'
 
-import { flattenText, MarkdownToc, slugify } from './MarkdownToc'
+import { MarkdownToc, assignHeadingIds } from './MarkdownToc'
 import { NewSummaryModal } from './NewSummaryModal'
 
 import './summaries-tab.css'
@@ -138,6 +138,17 @@ export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummary
   useEffect(() => {
     refresh()
   }, [refresh])
+
+  // 渲染后给总结正文 h1-h4 补写唯一 id（与 MarkdownToc.extractToc 同名去重一致）
+  useEffect(() => {
+    if (!selected) return
+    const container = scrollRef.current
+    if (!container) return
+    const frame = window.requestAnimationFrame(() => {
+      assignHeadingIds(container)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [selected])
 
   useEffect(() => {
     if (!creatingTaskId || !creatingTask) return
@@ -569,8 +580,12 @@ export function SummariesTab({ workspaceId, itemId, onApplyToNote, activeSummary
               <ReactMarkdown
                 remarkPlugins={remarkPlugins}
                 components={{
-                  h2: ({ children, ...props }) => <h2 id={slugify(flattenText(children))} {...props}>{children}</h2>,
-                  h3: ({ children, ...props }) => <h3 id={slugify(flattenText(children))} {...props}>{children}</h3>,
+                  // 标题 id 由 assignHeadingIds 在渲染后统一补写（与 extractToc 同名去重一致），
+                  // renderer 不设 id，避免重复 id 覆盖去重逻辑
+                  h1: ({ children, ...props }) => <h1 {...props}>{children}</h1>,
+                  h2: ({ children, ...props }) => <h2 {...props}>{children}</h2>,
+                  h3: ({ children, ...props }) => <h3 {...props}>{children}</h3>,
+                  h4: ({ children, ...props }) => <h4 {...props}>{children}</h4>,
                 }}
               >
                 {selected.content_md}

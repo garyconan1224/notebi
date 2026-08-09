@@ -24,7 +24,7 @@ import type { VideoResultTranscriptLine } from '@/services/workspaces'
 import type { ItemNote, NoteChapter } from '@/types/workspace'
 import { createSummary, deleteSummary, listSummaries, renameSummary, updateSummaryContent, type ItemSummary } from '@/services/summaries'
 import { retryPipelineTask } from '@/services/pipeline'
-import { MarkdownToc, extractToc, slugify } from '@/components/MarkdownToc'
+import { MarkdownToc, assignHeadingIds, extractToc } from '@/components/MarkdownToc'
 import { platformLabelFromUrl } from './note-shell-utils'
 import { Badge } from '@/components/ui/badge'
 import { SYSTEM_TAG_DIMENSIONS } from '@/constants/tagDimensions'
@@ -497,6 +497,9 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [artifactTool, setArtifactTool] = useState<NoteArtifactKind | null>(null)
   const aiToolsDropRef = useRef<HTMLDivElement>(null)
   const exportDropRef = useRef<HTMLDivElement>(null)
+  // 悬浮目录：弹出面板开合
+  const [tocOpen, setTocOpen] = useState(false)
+  const tocDropRef = useRef<HTMLDivElement>(null)
   const exportAbortRef = useRef<AbortController | null>(null)
   const operationNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const operationNoticeSeqRef = useRef(0)
@@ -947,9 +950,21 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
     return () => document.removeEventListener('mousedown', handle)
   }, [exportOpen])
 
-  // Escape 关闭导出/AI 菜单并把焦点还给触发按钮
+  // 点击外部关闭悬浮目录
   useEffect(() => {
-    if (!exportOpen && !aiToolsOpen) return
+    if (!tocOpen) return
+    const handle = (e: MouseEvent) => {
+      if (tocDropRef.current && !tocDropRef.current.contains(e.target as Node)) {
+        setTocOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [tocOpen])
+
+  // Escape 关闭导出/AI 菜单/悬浮目录并把焦点还给触发按钮
+  useEffect(() => {
+    if (!exportOpen && !aiToolsOpen && !tocOpen) return
     const handle = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       if (exportOpen) {
@@ -960,10 +975,14 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
         setAiToolsOpen(false)
         aiToolsDropRef.current?.querySelector('button')?.focus()
       }
+      if (tocOpen) {
+        setTocOpen(false)
+        tocDropRef.current?.querySelector('button')?.focus()
+      }
     }
     document.addEventListener('keydown', handle)
     return () => document.removeEventListener('keydown', handle)
-  }, [exportOpen, aiToolsOpen])
+  }, [exportOpen, aiToolsOpen, tocOpen])
 
   // 图文笔记：图片索引 + 加载错误
   const [selectedImageIdx, setSelectedImageIdx] = useState(0)
@@ -1227,28 +1246,53 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   // 切换视图模式（记忆 localStorage）
 
   const currentBody = editingBody
-  const showInlineToc = useMemo(() => extractToc(currentBody).length > 0, [currentBody])
-  const inlineTocNode = showInlineToc ? (
-    <aside className="nibi-note-inline-toc" aria-label="正文目录">
-      <MarkdownToc markdown={currentBody} scrollRef={noteScrollRef} />
-    </aside>
+  // 至少 2 个标题才显示目录：避免正文只有 1 个孤立标题（如重复的笔记标题）撑出单项目录
+  const showInlineToc = useMemo(() => extractToc(currentBody).length >= 2, [currentBody])
+  // 悬浮目录：平时不占正文宽度，点按钮弹出面板，点外部 / Esc 收起
+  const floatingTocNode = showInlineToc ? (
+    <div className="nibi-note-floating-toc" ref={tocDropRef}>
+      <button
+        type="button"
+        className="nibi-note-floating-toc-btn"
+        onClick={() => setTocOpen((v) => !v)}
+        aria-expanded={tocOpen}
+        title="正文目录"
+      >
+        <List size={14} /> 目录
+      </button>
+      {tocOpen && (
+        <div className="nibi-note-floating-toc-panel">
+          <MarkdownToc markdown={currentBody} scrollRef={noteScrollRef} />
+        </div>
+      )}
+    </div>
   ) : null
 
+  // 主视图：Milkdown 渲染后给正文 h1-h4 补写稳定 id（供目录跳转/高亮）。只扫编辑器面板，
+  // 避免 .note-copy 里 UI 生成的 h2（如「内容总结」）被补 id 干扰 activeId。
   useEffect(() => {
     const container = noteScrollRef.current
     if (!container) return
 
     const frame = window.requestAnimationFrame(() => {
-      const headings = container.querySelectorAll<HTMLElement>('.note-copy h2, .note-copy h3')
-      headings.forEach((heading) => {
-        const text = heading.textContent?.trim()
-        if (!text) return
-        heading.id = slugify(text)
-      })
+      assignHeadingIds(container, { selector: '.note-milkdown h1, .note-milkdown h2, .note-milkdown h3, .note-milkdown h4' })
     })
 
     return () => window.cancelAnimationFrame(frame)
-  }, [currentBody, seedVersion])
+  }, [currentBody, seedVersion, milkdownKey])
+
+  // 沉浸式：Milkdown 渲染后给正文 h1-h4 补写 id，修复目录点击/高亮此前失效的问题。
+  // 只扫 .nibi-note-immersive-article 内的 .note-milkdown，避开文章标题 h1。
+  useEffect(() => {
+    const container = immersiveScrollRef.current
+    if (!container || !immersiveOpen) return
+
+    const frame = window.requestAnimationFrame(() => {
+      assignHeadingIds(container, { selector: '.nibi-note-immersive-article .note-milkdown h1, .nibi-note-immersive-article .note-milkdown h2, .nibi-note-immersive-article .note-milkdown h3, .nibi-note-immersive-article .note-milkdown h4' })
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [currentBody, seedVersion, milkdownKey, immersiveOpen])
 
   const chatSystemPrompt = useMemo(
     () => buildChatSystemPrompt(currentBody),
@@ -2579,7 +2623,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
 
           {/* ── 右栏（40%）：标签 + 结构化笔记 ── */}
           <div className="nibi-note-right">
-            <div className={`nibi-note-right-scroll${showInlineToc ? ' has-toc' : ''}`} ref={noteScrollRef}>
+            {floatingTocNode}
+            <div className="nibi-note-right-scroll" ref={noteScrollRef}>
               <div className="note-copy">
                 <div className="note-copy-head">
                   <h1>{title || '未命名笔记'}</h1>
@@ -2615,7 +2660,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 {/* 保存状态 */}
                 <div style={{ padding: '12px 0', textAlign: 'right' }}>{saveStatusNode}</div>
               </div>
-              {inlineTocNode}
             </div>
           </div>
         </div>
@@ -2766,7 +2810,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
 
           {/* ── 右栏：标题 + 标签 + 总结 + 正文 ── */}
           <div className="nibi-note-right">
-            <div className={`nibi-note-right-scroll${showInlineToc ? ' has-toc' : ''}`} ref={noteScrollRef}>
+            {floatingTocNode}
+            <div className="nibi-note-right-scroll" ref={noteScrollRef}>
               <div className="note-copy">
                 <div className="note-copy-head">
                   <h1>{title || '未命名笔记'}</h1>
@@ -2830,7 +2875,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 {/* 保存状态 */}
                 <div style={{ padding: '12px 0', textAlign: 'right' }}>{saveStatusNode}</div>
               </div>
-              {inlineTocNode}
             </div>
           </div>
         </div>
@@ -2913,7 +2957,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
 
           {/* ── 右栏：标题 + 标签 + 总结 + 正文 ── */}
           <div className="nibi-note-right">
-            <div className={`nibi-note-right-scroll${showInlineToc ? ' has-toc' : ''}`} ref={noteScrollRef}>
+            {floatingTocNode}
+            <div className="nibi-note-right-scroll" ref={noteScrollRef}>
               <div className="note-copy">
                 <div className="note-copy-head">
                   <h1>{title || '未命名笔记'}</h1>
@@ -2949,7 +2994,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 {/* 保存状态 */}
                 <div style={{ padding: '12px 0', textAlign: 'right' }}>{saveStatusNode}</div>
               </div>
-              {inlineTocNode}
             </div>
           </div>
         </div>
@@ -2991,7 +3035,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
 
           {/* ── 右栏：标题 + 标签 + 总结 + 正文 ── */}
           <div className="nibi-note-right nibi-text-right">
-            <div className={`nibi-note-right-scroll${showInlineToc ? ' has-toc' : ''}`} ref={noteScrollRef}>
+            {floatingTocNode}
+            <div className="nibi-note-right-scroll" ref={noteScrollRef}>
               <div className="note-copy">
                 <div className="note-copy-head">
                   <h1>{title || '未命名笔记'}</h1>
@@ -3033,7 +3078,6 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                 {/* 保存状态 */}
                 <div style={{ padding: '12px 0', textAlign: 'right' }}>{saveStatusNode}</div>
               </div>
-              {inlineTocNode}
             </div>
           </div>
         </div>
