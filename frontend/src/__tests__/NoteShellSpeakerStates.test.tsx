@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -141,6 +141,54 @@ describe('NoteShell 说话人状态接线（Q2 / D1）', () => {
     await waitFor(() => expect(screen.getAllByTestId('note-editor').length).toBeGreaterThan(0))
     expect(screen.getByText(/2 位说话人/)).not.toBeNull()
     // 折叠态不出现重命名输入
+    expect(screen.queryByLabelText('SPEAKER_00 姓名')).toBeNull()
+  })
+
+  it('保存姓名后触发 fetchNote 刷新重挂载，展开状态保持不变，直到手动折叠', async () => {
+    // 模拟真实网络：getItemNote / updateSpeakerMap 都跨宏任务 resolve，
+    // 使保存成功后的 fetchNote 真的渲染一帧 loading 骨架屏（组件卸载再重挂载），
+    // 从而复现「刷新后内部 state 丢失」的场景。
+    let fetchCount = 0
+    const withNetworkDelay = async (payload: ItemNote) => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      fetchCount += 1
+      return payload
+    }
+    mocks.getItemNote.mockImplementation(async () =>
+      withNetworkDelay(
+        audioNote({
+          speaker_status: 'data',
+          transcript: [
+            { t_sec: 0, t_str: '00:00', text: '你好', speaker: 'SPEAKER_00' },
+            { t_sec: 3, t_str: '00:03', text: '你好呀', speaker: 'SPEAKER_01' },
+          ],
+          speaker_map: { SPEAKER_00: '主持人', SPEAKER_01: '嘉宾' },
+        }),
+      ),
+    )
+    mocks.updateSpeakerMap.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      return { speaker_map: {}, summary_refresh: { status: 'updated', updated_count: 0 } }
+    })
+    renderShell()
+    await waitFor(() => expect(screen.getAllByTestId('note-editor').length).toBeGreaterThan(0))
+    const fetchCountBefore = fetchCount
+    // 展开说话人列表
+    fireEvent.click(screen.getByRole('button', { name: /2 位说话人/ }))
+    expect(screen.getByLabelText('SPEAKER_00 姓名')).not.toBeNull()
+    // 修改姓名并保存（触发后端 → fetchNote → loading 骨架屏真实渲染）
+    const input = screen.getByLabelText('SPEAKER_00 姓名')
+    fireEvent.change(input, { target: { value: '新主持人' } })
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter' })
+    })
+    expect(mocks.updateSpeakerMap).toHaveBeenCalled()
+    await waitFor(() => expect(fetchCount).toBeGreaterThan(fetchCountBefore))
+    // 刷新重挂载后仍然保持展开，输入框仍在
+    expect(screen.getByLabelText('SPEAKER_00 姓名')).not.toBeNull()
+    expect((screen.getByLabelText('SPEAKER_00 姓名') as HTMLInputElement).value).toBe('主持人')
+    // 手动折叠后恢复折叠态
+    fireEvent.click(screen.getByRole('button', { name: /2 位说话人/ }))
     expect(screen.queryByLabelText('SPEAKER_00 姓名')).toBeNull()
   })
 })

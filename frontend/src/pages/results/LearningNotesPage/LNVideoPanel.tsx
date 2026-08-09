@@ -80,7 +80,16 @@ export function buildTimelineTicks(duration: number): TimelineTick[] {
     ?? TIMELINE_TICK_INTERVALS[TIMELINE_TICK_INTERVALS.length - 1]
   const seconds = [0]
   for (let sec = interval; sec < duration; sec += interval) seconds.push(sec)
-  if (seconds[seconds.length - 1] !== duration) seconds.push(duration)
+  const lastLoop = seconds[seconds.length - 1]
+  // 末尾刻度处理：
+  // 1) 展示标签相同时（浮点时长如 60.000363 与循环刻度 60 都是 01:00）不追加；
+  // 2) 循环末刻度与真实时长位置极近（< 1/3 个刻度间隔）时，用真实时长替换它，
+  //    避免 06:00(98.9%) 与 06:04(100%) 两个刻度在时间轴末端几乎重叠。
+  if (formatTs(lastLoop) === formatTs(duration) || (duration - lastLoop) < interval / 3) {
+    seconds[seconds.length - 1] = duration
+  } else {
+    seconds.push(duration)
+  }
   return seconds.map((sec) => ({
     sec,
     label: formatTs(sec),
@@ -124,10 +133,21 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
     const [loop, setLoop] = useState(false)
     const [progress, setProgress] = useState(0)
     const [duration, setDuration] = useState(0)
+    // 时间码可编辑：点击当前时间可输入 mm:ss 跳转
+    const [timeEditing, setTimeEditing] = useState(false)
+    const [timeInput, setTimeInput] = useState('')
     const [hoverTime, setHoverTime] = useState<number | null>(null)
     const [hoverX, setHoverX] = useState(0)
+    // 预览窗 fixed 定位坐标（跟随鼠标，超出左栏/右栏仍置顶显示）
+    const [previewPos, setPreviewPos] = useState<{ x: number; y: number } | null>(null)
     const [isFullscreen, setIsFullscreen] = useState(false)
     const [nativePip, setNativePip] = useState(false)
+    // 无预生成帧时，hover 时间轴用视频实时截帧做预览缩略图（data URL）
+    const [livePreview, setLivePreview] = useState<string | null>(null)
+    const livePreviewReqRef = useRef(0)
+    const livePreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    // 离屏截帧 video：独立于主播放器 seek，避免 hover 预览打断播放/滚动字幕
+    const captureVideoRef = useRef<HTMLVideoElement | null>(null)
     const [subtitlesOn, setSubtitlesOn] = useState(true)
     const pipActive = typeof onTogglePip === 'function' ? !!isPipActive : nativePip
 
@@ -279,17 +299,78 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
       v.currentTime = pct * v.duration
     }, [])
 
+    /* ── 无预生成帧时的实时截帧预览（hover 时间轴缩略图）──
+       有故事板帧的素材始终走最近帧（不实时截帧，避免 hover 卡顿）；
+       只有完全没有帧的素材（历史遗留/配图关闭）才用离屏 video 截帧兜底。 */
+    const hasAnyFrame = useCallback(() => {
+      for (const frame of frames) {
+        if (typeof frame.sec === 'number' && frame.url) return true
+      }
+      return false
+    }, [frames])
+
+    const captureLivePreview = useCallback((time: number, token: number) => {
+      // 用离屏 video 截帧，不碰主播放器 currentTime——否则 hover 预览会
+      // 打断播放、让进度条/字幕闪动（seek → 恢复的副作用）。
+      let v = captureVideoRef.current
+      if (!v) {
+        v = document.createElement('video')
+        v.preload = 'auto'
+        v.muted = true
+        v.src = src
+        captureVideoRef.current = v
+      }
+      if (v.readyState < 2) return
+      const onSeeked = () => {
+        v?.removeEventListener('seeked', onSeeked)
+        // 已有更新的截帧请求，丢弃这次过期结果
+        if (token !== livePreviewReqRef.current) return
+        try {
+          const canvas = document.createElement('canvas')
+          canvas.width = v?.videoWidth || 0
+          canvas.height = v?.videoHeight || 0
+          const ctx = canvas.getContext('2d')
+          if (ctx && v) {
+            ctx.drawImage(v, 0, 0)
+            setLivePreview(canvas.toDataURL('image/jpeg', 0.72))
+          }
+        } catch {
+          setLivePreview(null)
+        }
+      }
+      v.addEventListener('seeked', onSeeked, { once: true })
+      v.currentTime = Math.max(0, Math.min(v.duration || time, time))
+    }, [src])
+
     const onProgressHover = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
       const bar = progressRef.current
       if (!bar || !duration) return
       const rect = bar.getBoundingClientRect()
       const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-      setHoverTime(pct * duration)
+      const time = pct * duration
+      setHoverTime(time)
       setHoverX(pct * 100)
-    }, [duration])
+      // 预览窗 fixed 定位，完全跟随鼠标坐标（不 clamp），超出左栏/右栏仍置顶
+      setPreviewPos({ x: e.clientX, y: e.clientY })
+      // 有帧素材始终用预生成帧；只有无帧素材才触发实时截帧兜底
+      if (hasAnyFrame()) {
+        if (livePreviewTimerRef.current) clearTimeout(livePreviewTimerRef.current)
+        livePreviewReqRef.current += 1
+        setLivePreview(null)
+        return
+      }
+      if (livePreviewTimerRef.current) clearTimeout(livePreviewTimerRef.current)
+      livePreviewTimerRef.current = setTimeout(() => {
+        livePreviewReqRef.current += 1
+        captureLivePreview(time, livePreviewReqRef.current)
+      }, 180)
+    }, [duration, hasAnyFrame, captureLivePreview])
 
     const onProgressLeave = useCallback(() => {
       setHoverTime(null)
+      setPreviewPos(null)
+      setLivePreview(null)
+      if (livePreviewTimerRef.current) clearTimeout(livePreviewTimerRef.current)
     }, [])
 
     /* ── 画面点击播放/暂停（Q2：子控件不得冒泡触发） ── */
@@ -308,11 +389,49 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
 
     /* ── 时间轴 slider：键盘 seek（←/→ 步进 5s）与 hover 预览 ── */
 
+    const seekToTime = useCallback((sec: number) => {
+      const v = videoRef.current
+      if (!v) return
+      const upper = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : Number.MAX_SAFE_INTEGER
+      v.currentTime = Math.max(0, Math.min(upper, sec))
+    }, [])
+
     const seekBy = useCallback((delta: number) => {
       const v = videoRef.current
       if (!v) return
       const upper = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : Number.MAX_SAFE_INTEGER
       v.currentTime = Math.max(0, Math.min(upper, v.currentTime + delta))
+    }, [])
+
+    // ── 时间码可编辑跳转：点击当前时间 → 输入 mm:ss → 回车/失焦生效 ──
+
+    const startTimeEdit = useCallback(() => {
+      const v = videoRef.current
+      setTimeInput(formatTs(v?.currentTime ?? 0))
+      setTimeEditing(true)
+    }, [])
+
+    const commitTimeEdit = useCallback(() => {
+      setTimeEditing(false)
+      const raw = timeInput.trim()
+      if (!raw) return
+      // 支持 m:ss / mm:ss / 纯秒数
+      const match = raw.match(/^(?:(\d+):)?(\d{1,2})(?::(\d{1,2}))?$/)
+      if (!match) return
+      let sec: number
+      if (match[3] != null) {
+        // h:mm:ss 或 mm:ss
+        sec = Number(match[1] || 0) * 3600 + Number(match[2]) * 60 + Number(match[3])
+      } else if (match[1] != null) {
+        sec = Number(match[1]) * 60 + Number(match[2])
+      } else {
+        sec = Number(match[2])
+      }
+      seekToTime(Number.isFinite(sec) ? sec : 0)
+    }, [timeInput, seekToTime])
+
+    const cancelTimeEdit = useCallback(() => {
+      setTimeEditing(false)
     }, [])
 
     const handleSliderKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -443,6 +562,15 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
       }
     }, [workspaceId, insertAtCursor])
 
+    /* ── 卸载清理：清除 hover 截帧防抖定时器 ── */
+
+    useEffect(() => {
+      return () => {
+        if (livePreviewTimerRef.current) clearTimeout(livePreviewTimerRef.current)
+        livePreviewReqRef.current += 1
+      }
+    }, [])
+
     /* ── 键盘快捷键 ── */
 
     useEffect(() => {
@@ -475,7 +603,7 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
     /* ── 通知父组件状态变化（驱动 transportNode getter 刷新） ── */
     useEffect(() => {
       onTransportChange?.()
-    }, [playing, speed, muted, volume, loop, progress, duration, hoverTime, hoverX, isFullscreen, pipActive, subtitlesOn, shooting, onTransportChange])
+    }, [playing, speed, muted, volume, loop, progress, duration, hoverTime, hoverX, isFullscreen, pipActive, subtitlesOn, shooting, timeEditing, timeInput, onTransportChange])
 
     /**
      * Q2 控制带：transport + 当前时间/进度合并为一条 44–52px 的 `.note-ctl-band`，
@@ -511,7 +639,33 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
             <button className={`note-icon-btn${isFullscreen ? ' is-on' : ''}`} onClick={toggleFullscreen} title={isFullscreen ? '退出全屏' : '全屏'} aria-pressed={isFullscreen}>
               {isFullscreen ? <Minimize size={15} /> : <Maximize size={15} />}
             </button>
-            <span className="note-ctl-time">{formatTs(currentSec)} / {formatTs(duration)}</span>
+            <span className="note-ctl-time">
+              {timeEditing ? (
+                <input
+                  className="note-time-input"
+                  value={timeInput}
+                  onChange={(e) => setTimeInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitTimeEdit()
+                    if (e.key === 'Escape') cancelTimeEdit()
+                    e.stopPropagation()
+                  }}
+                  onBlur={commitTimeEdit}
+                  autoFocus
+                  aria-label="跳转到时间"
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="note-time-btn"
+                  onClick={startTimeEdit}
+                  title="点击输入时间跳转（如 1:30）"
+                >
+                  {formatTs(currentSec)}
+                </button>
+              )}
+              {' / '}{formatTs(duration)}
+            </span>
             <span className="note-ctl-spacer" />
             <button className="note-speed" onClick={cycleSpeed} title="切换倍速">
               {formatSpeed(speed)}x
@@ -558,13 +712,16 @@ const LNVideoPanel = forwardRef<LNVideoPanelHandle, LNVideoPanelProps>(
                 ))}
                 <div
                   className="note-progress-hover"
-                  style={{ left: `${hoverX}%`, opacity: hoverTime != null ? 1 : 0 }}
+                  style={{ left: `${hoverX}%`, opacity: hoverTime != null && !previewPos ? 1 : 0 }}
                 >
-                  {hoverTime != null && formatTs(hoverTime)}
+                  {hoverTime != null && !previewPos && formatTs(hoverTime)}
                 </div>
-                {hoverTime != null && (
-                  <div className="note-timeline-preview" style={{ left: `${hoverX}%` }}>
-                    {previewFrame && <img src={previewFrame.url} alt="" />}
+                {hoverTime != null && previewPos && (
+                  <div
+                    className="note-timeline-preview"
+                    style={{ left: previewPos.x, top: previewPos.y }}
+                  >
+                    {previewFrame ? <img src={previewFrame.url} alt="" /> : livePreview ? <img src={livePreview} alt="" /> : null}
                     <span>{formatTs(hoverTime)}</span>
                   </div>
                 )}

@@ -168,10 +168,17 @@ export default function LNTranscriptPanel({
   // 乐观更新：保存成功后立即在面板回显新文字（key=段下标），免刷新；重进页面组件重挂即清空
   const [localEdits, setLocalEdits] = useState<Record<number, string>>({})
 
+  // 激活行只滚动自身面板（.ln-transcript-panel，overflow:auto），不递归滚动外层
+  // overflow:hidden 容器——否则展开说话人列表后，外层 wrap 会被 scrollIntoView
+  // 整体滚走，把「N 位说话人」折叠按钮顶出可视区。
   useEffect(() => {
-    if (activeRef.current) {
-      activeRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }
+    if (!activeRef.current) return
+    const panel = activeRef.current.closest('.ln-transcript-panel') as HTMLElement | null
+    if (!panel) return
+    const rowRect = activeRef.current.getBoundingClientRect()
+    const panelRect = panel.getBoundingClientRect()
+    const target = panel.scrollTop + (rowRect.top - panelRect.top) - panel.clientHeight / 2 + rowRect.height / 2
+    panel.scrollTop = Math.max(0, target)
   }, [activeIdx])
 
   const startEdit = useCallback(

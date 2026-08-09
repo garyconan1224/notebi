@@ -468,6 +468,7 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
   const [note, setNote] = useState<ItemNote | null>(null)
   const [speakerMap, setSpeakerMap] = useState<Record<string, string>>({})
   const [speakerRoles, setSpeakerRoles] = useState<Record<string, string>>({})
+  const [speakerListExpanded, setSpeakerListExpanded] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [askAiOpen, setAskAiOpen] = useState(false)
@@ -2584,6 +2585,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                   onRetry={() => void handleRetrySpeakerAnalysis()}
                   onRename={(speakerId, name, role) => void handleSpeakerProfileSave(speakerId, name, role)}
                   roleOptions={SPEAKER_ROLE_OPTIONS}
+                  expanded={speakerListExpanded}
+                  onToggleExpanded={setSpeakerListExpanded}
                 />
                 <LNTranscriptPanel
                   transcript={note.transcript as VideoResultTranscriptLine[]}
@@ -2770,6 +2773,8 @@ export default function NoteShell({ workspaceId: propWs, itemId: propItem }: { w
                       onRetry={() => void handleRetrySpeakerAnalysis()}
                       onRename={(speakerId, name, role) => void handleSpeakerProfileSave(speakerId, name, role)}
                       roleOptions={SPEAKER_ROLE_OPTIONS}
+                      expanded={speakerListExpanded}
+                      onToggleExpanded={setSpeakerListExpanded}
                     />
                     <LNTranscriptPanel
                   transcript={transcriptLines}

@@ -277,6 +277,34 @@
   flex-shrink: 0;
 }
 
+/* 时间码可编辑跳转：当前时间是可点击按钮，编辑时变输入框 */
+.vm-ln-scope .note-time-btn {
+  border: none;
+  background: none;
+  padding: 0 2px;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  cursor: text;
+  border-radius: 3px;
+}
+
+.vm-ln-scope .note-time-btn:hover {
+  background: var(--line);
+}
+
+.vm-ln-scope .note-time-input {
+  width: 52px;
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--ink);
+  background: var(--bg-elev);
+  border: 1px solid var(--acc, var(--accent));
+  border-radius: 3px;
+  padding: 0 3px;
+  outline: none;
+}
+
 .vm-ln-scope .note-ctl-spacer {
   flex: 1 1 auto;
   min-width: 4px;
@@ -437,9 +465,10 @@
 
 /* hover/focus 预览：最近故事板帧 + 时间码 */
 .vm-ln-scope .note-timeline-preview {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%);
+  /* fixed 定位：完全跟随鼠标坐标，不受左栏 overflow:hidden 裁剪，
+     超出左栏/右栏仍置顶显示在总结上方 */
+  position: fixed;
+  transform: translate(-50%, calc(-100% - 14px));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -450,7 +479,7 @@
   border-radius: 6px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
   pointer-events: none;
-  z-index: 20;
+  z-index: 500;
 }
 
 .vm-ln-scope .note-timeline-preview img {
@@ -460,6 +489,9 @@
   border-radius: 4px;
   display: block;
   background: #0a0a0a;
+  /* Tailwind preflight 给 img 设 max-width:100%；hover 到时间轴末尾时
+     预览窗可用宽度被压缩，会连带把缩略图压成细条。固定尺寸下不需要它。 */
+  max-width: none;
 }
 
 .vm-ln-scope .note-timeline-preview span {

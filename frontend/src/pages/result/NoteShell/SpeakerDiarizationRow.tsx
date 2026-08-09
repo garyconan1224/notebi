@@ -32,6 +32,8 @@ interface SpeakerDiarizationRowProps {
   retrying?: boolean
   onRename?: (speakerId: string, name: string, role: string) => void
   roleOptions?: readonly string[]
+  expanded?: boolean
+  onToggleExpanded?: (expanded: boolean) => void
 }
 
 function formatTimecode(sec: number): string {
@@ -47,8 +49,20 @@ export default function SpeakerDiarizationRow({
   retrying = false,
   onRename,
   roleOptions = [],
+  expanded = false,
+  onToggleExpanded,
 }: SpeakerDiarizationRowProps) {
-  const [expanded, setExpanded] = useState(false)
+  // 受控模式：NoteShell 传入 expanded + onToggleExpanded，展开状态跨重挂载保留
+  //（保存姓名会触发 fetchNote → loading → 组件卸载重挂载，内部 state 会丢失折叠态）。
+  // 未传 onToggleExpanded 时退回组件内部 state，保持独立使用不受影响。
+  const [internalExpanded, setInternalExpanded] = useState(false)
+  const isControlled = onToggleExpanded !== undefined
+  const expandedValue = isControlled ? expanded : internalExpanded
+  const toggle = () => {
+    const next = !expandedValue
+    if (isControlled) onToggleExpanded?.(next)
+    else setInternalExpanded(next)
+  }
 
   if (status === 'none') return null
 
@@ -81,12 +95,12 @@ export default function SpeakerDiarizationRow({
   }
 
   return (
-    <div className={`nibi-speaker-row nibi-speaker-row--data${expanded ? ' is-expanded' : ''}`}>
+    <div className={`nibi-speaker-row nibi-speaker-row--data${expandedValue ? ' is-expanded' : ''}`}>
       <button
         type="button"
         className="nibi-speaker-row-head"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expandedValue}
+        onClick={toggle}
       >
         <span className="nibi-speaker-row-swatches" aria-hidden="true">
           {speakers.slice(0, 3).map((speaker) => (
@@ -100,7 +114,7 @@ export default function SpeakerDiarizationRow({
         <span>{speakers.length} 位说话人</span>
         <ChevronDown size={13} className="nibi-speaker-row-caret" />
       </button>
-      {expanded && (
+      {expandedValue && (
         <div className="nibi-speaker-row-body">
           {speakers.map((speaker) => (
             <SpeakerEditRow
