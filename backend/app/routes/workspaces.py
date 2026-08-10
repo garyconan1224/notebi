@@ -2464,9 +2464,8 @@ def _knowledge_map_items(include_inbox: bool) -> List[Dict[str, Any]]:
             )
             if owner_item is None:
                 continue
-            collection_ids = _store.member_workspace_ids(
-                owner_workspace_id, owner_item_id
-            )
+            # 合集即素材归属的 workspace；成员关系（跨合集引用）不作为地图合集来源。
+            collection_ids = [owner_workspace_id]
             items_by_key[key] = {
                 "item_id": owner_item.item_id,
                 "workspace_id": owner_workspace_id,

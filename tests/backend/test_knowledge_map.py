@@ -122,6 +122,58 @@ def test_knowledge_map_aggregates_active_items_and_tag_cooccurrence(tmp_path: Pa
         _close_client(client)
 
 
+def test_knowledge_map_filters_by_collection_as_workspace(tmp_path: Path) -> None:
+    """合集筛选等价于素材归属的 workspace 筛选。"""
+    client, store, _ = _client(tmp_path)
+    try:
+        store.create(
+            WorkspaceRecord(
+                workspace_id="ws_alpha",
+                name="合集甲",
+                items=[
+                    WorkspaceItem(
+                        item_id="item-1",
+                        type="video",
+                        source="url",
+                        source_value="https://example.com/1",
+                        name="甲素材",
+                        tags={"custom_tags": ["共享"]},
+                    )
+                ],
+            )
+        )
+        store.create(
+            WorkspaceRecord(
+                workspace_id="ws_beta",
+                name="合集乙",
+                items=[
+                    WorkspaceItem(
+                        item_id="item-2",
+                        type="text",
+                        source="local",
+                        source_value="manual",
+                        name="乙素材",
+                        tags={"custom_tags": ["共享"]},
+                    )
+                ],
+            )
+        )
+
+        facets = client.get("/workspaces/knowledge-map").json()["facets"]
+        assert facets["collections"] == [
+            ["ws_alpha", "合集甲"],
+            ["ws_beta", "合集乙"],
+        ]
+
+        filtered = client.get(
+            "/workspaces/knowledge-map", params={"collection_id": "ws_alpha"}
+        ).json()
+        assert filtered["stats"]["items"] == 1
+        assert {item["item_id"] for item in filtered["items"]} == {"item-1"}
+    finally:
+        _close_client(client)
+
+
 def test_knowledge_map_rejects_non_positive_limit(tmp_path: Path) -> None:
     client, _, _ = _client(tmp_path)
     try:

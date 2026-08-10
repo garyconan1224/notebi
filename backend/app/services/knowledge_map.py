@@ -109,11 +109,12 @@ def filter_knowledge_map_items(
     filtered: List[Dict[str, Any]] = []
     normalized_tag = tag.strip()
     for item in items:
-        collection_ids = {str(value) for value in item.get("collection_ids") or []}
         item_tags = set(normalize_map_tags(item.get("tags")))
-        if workspace_id and item.get("workspace_id") != workspace_id and workspace_id not in collection_ids:
-            continue
-        if collection_id and collection_id not in collection_ids:
+        # 合集即素材归属的 workspace；collection_id 与 workspace_id 等价。
+        if (workspace_id or collection_id) and item.get("workspace_id") not in {
+            workspace_id,
+            collection_id,
+        }:
             continue
         if item_type and item.get("type") != item_type:
             continue
