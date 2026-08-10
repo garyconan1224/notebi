@@ -3,6 +3,7 @@
     "resources": ["resources/**/*"],
     "windows": {
       "nsis": {
+        "compression": "zlib",
         "installMode": "currentUser",
         "displayLanguageSelector": true,
         "languages": ["SimpChinese", "English"]

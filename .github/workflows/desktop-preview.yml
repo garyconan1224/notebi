@@ -104,6 +104,13 @@ jobs:
             throw "Packaged backend did not pass /health"
           }
 
+      - name: Create Windows Python SBOM
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          $python = (Get-Command python).Source
+          cyclonedx-py environment $python --output-reproducible --spec-version 1.6 --output-file "release\NoteBi_$env:APP_VERSION`_windows-x64-unsigned-preview-sbom.cdx.json"
+
       - name: Prepare Windows backend and FFmpeg
         shell: pwsh
         run: |
@@ -124,9 +131,26 @@ jobs:
             if ($actual -ne $entry.Value) { throw "Checksum mismatch: $($entry.Key)" }
           }
 
-      - name: Build unsigned NSIS installer
+      - name: Build Windows desktop binary
         working-directory: frontend
-        run: pnpm desktop:build --bundles nsis
+        run: pnpm desktop:build --no-bundle
+
+      - name: Reclaim Windows Rust build intermediates
+        shell: pwsh
+        run: |
+          $paths = @(
+            "src-tauri\target\release\build",
+            "src-tauri\target\release\deps",
+            "src-tauri\target\release\.fingerprint",
+            "src-tauri\target\release\incremental"
+          )
+          foreach ($path in $paths) {
+            if (Test-Path $path) { Remove-Item -Recurse -Force $path }
+          }
+
+      - name: Bundle unsigned NSIS installer
+        working-directory: frontend
+        run: pnpm desktop:bundle --bundles nsis
 
       - name: Collect Windows preview asset
         shell: pwsh
@@ -138,8 +162,6 @@ jobs:
           Copy-Item $installer.FullName $asset
           $hash = (Get-FileHash -Algorithm SHA256 $asset).Hash.ToLowerInvariant()
           "$hash  $([System.IO.Path]::GetFileName($asset))" | Set-Content -Encoding ascii "$asset.sha256"
-          $python = (Get-Command python).Source
-          cyclonedx-py environment $python --output-reproducible --spec-version 1.6 --output-file "release\NoteBi_$env:APP_VERSION`_windows-x64-unsigned-preview-sbom.cdx.json"
 
       - name: Upload Windows unsigned preview
         uses: actions/upload-artifact@v4
@@ -231,6 +253,12 @@ jobs:
             exit 1
           fi
 
+      - name: Create Linux Python SBOM
+        shell: bash
+        run: |
+          mkdir -p release
+          cyclonedx-py environment "$(command -v python)" --output-reproducible --spec-version 1.6 --output-file "release/NoteBi_${APP_VERSION}_linux-x64-preview-sbom.cdx.json"
+
       - name: Prepare Linux backend and FFmpeg
         shell: bash
         run: |
@@ -246,21 +274,36 @@ jobs:
           echo "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903  src-tauri/resources/FFMPEG-LICENSE.txt" | sha256sum --check
           chmod +x src-tauri/resources/ffmpeg src-tauri/resources/ffprobe
 
-      - name: Build AppImage and Debian package
+      - name: Build Linux desktop binary
         working-directory: frontend
-        run: pnpm desktop:build --bundles appimage,deb
+        run: pnpm desktop:build --no-bundle
+
+      - name: Reclaim Linux build environment
+        shell: bash
+        run: |
+          site_packages="$(python -c 'import site; print(site.getsitepackages()[0])')"
+          expected_site_packages="$pythonLocation/lib/python3.11/site-packages"
+          if [ "$site_packages" != "$expected_site_packages" ]; then
+            echo "Refusing to remove unexpected Python path: $site_packages"
+            exit 1
+          fi
+          sudo rm -rf -- "$site_packages"
+          rm -rf src-tauri/target/release/build src-tauri/target/release/deps src-tauri/target/release/.fingerprint src-tauri/target/release/incremental
+          df -h /
+
+      - name: Bundle AppImage and Debian package
+        working-directory: frontend
+        run: pnpm desktop:bundle --bundles appimage,deb
 
       - name: Collect Linux preview assets
         shell: bash
         run: |
-          mkdir -p release
           appimage=$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' -print -quit)
           deb=$(find src-tauri/target/release/bundle/deb -maxdepth 1 -name '*.deb' -print -quit)
           test -n "$appimage" && test -n "$deb"
           cp "$appimage" "release/NoteBi_${APP_VERSION}_linux-x64-preview.AppImage"
           cp "$deb" "release/NoteBi_${APP_VERSION}_linux-x64-preview.deb"
           sha256sum release/NoteBi_${APP_VERSION}_linux-x64-preview.* > "release/NoteBi_${APP_VERSION}_linux-x64-preview.sha256"
-          cyclonedx-py environment "$(command -v python)" --output-reproducible --spec-version 1.6 --output-file "release/NoteBi_${APP_VERSION}_linux-x64-preview-sbom.cdx.json"
 
       - name: Upload Linux preview
         uses: actions/upload-artifact@v4
