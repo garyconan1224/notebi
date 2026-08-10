@@ -88,16 +88,6 @@ export default function KnowledgeMapPage() {
 
       <section className="knowledge-map-toolbar" aria-label={t('map.filters')}>
         <label className="knowledge-map-field">
-          <span>{t('map.workspace')}</span>
-          <select
-            value={filters.workspace_id ?? ''}
-            onChange={(event) => updateFilter('workspace_id', event.target.value)}
-          >
-            <option value="">{t('map.all')}</option>
-            {data?.facets.workspaces.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-          </select>
-        </label>
-        <label className="knowledge-map-field">
           <span>{t('map.collection')}</span>
           <select
             value={filters.collection_id ?? ''}
