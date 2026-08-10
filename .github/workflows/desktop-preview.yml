@@ -291,25 +291,52 @@ jobs:
           rm -rf src-tauri/target/release/build src-tauri/target/release/deps src-tauri/target/release/.fingerprint src-tauri/target/release/incremental
           df -h /
 
-      - name: Bundle AppImage and Debian package
+      - name: Bundle Debian package
         working-directory: frontend
-        run: pnpm desktop:bundle --bundles appimage,deb
+        run: pnpm desktop:bundle --verbose --bundles deb
 
-      - name: Collect Linux preview assets
+      - name: Collect Debian preview asset
+        shell: bash
+        run: |
+          deb=$(find src-tauri/target/release/bundle/deb -maxdepth 1 -name '*.deb' -print -quit)
+          test -n "$deb"
+          cp "$deb" "release/NoteBi_${APP_VERSION}_linux-x64-preview.deb"
+          sha256sum "release/NoteBi_${APP_VERSION}_linux-x64-preview.deb" > "release/NoteBi_${APP_VERSION}_linux-x64-preview.deb.sha256"
+
+      - name: Upload Linux Debian preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: notebi-linux-x64-deb-preview
+          path: |
+            release/NoteBi_${{ env.APP_VERSION }}_linux-x64-preview.deb
+            release/NoteBi_${{ env.APP_VERSION }}_linux-x64-preview.deb.sha256
+            release/NoteBi_${{ env.APP_VERSION }}_linux-x64-preview-sbom.cdx.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Bundle AppImage without stripping embedded sidecars
+        working-directory: frontend
+        env:
+          NO_STRIP: "true"
+        run: pnpm desktop:bundle --verbose --bundles appimage
+
+      - name: Collect AppImage preview asset
         shell: bash
         run: |
           appimage=$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' -print -quit)
-          deb=$(find src-tauri/target/release/bundle/deb -maxdepth 1 -name '*.deb' -print -quit)
-          test -n "$appimage" && test -n "$deb"
+          test -n "$appimage"
           cp "$appimage" "release/NoteBi_${APP_VERSION}_linux-x64-preview.AppImage"
-          cp "$deb" "release/NoteBi_${APP_VERSION}_linux-x64-preview.deb"
-          sha256sum release/NoteBi_${APP_VERSION}_linux-x64-preview.* > "release/NoteBi_${APP_VERSION}_linux-x64-preview.sha256"
+          sha256sum "release/NoteBi_${APP_VERSION}_linux-x64-preview.AppImage" > "release/NoteBi_${APP_VERSION}_linux-x64-preview.AppImage.sha256"
 
-      - name: Upload Linux preview
+      - name: Upload Linux AppImage preview
         uses: actions/upload-artifact@v4
         with:
-          name: notebi-linux-x64-preview
-          path: release/NoteBi_*_linux-x64-preview*
+          name: notebi-linux-x64-appimage-preview
+          path: |
+            release/NoteBi_${{ env.APP_VERSION }}_linux-x64-preview.AppImage
+            release/NoteBi_${{ env.APP_VERSION }}_linux-x64-preview.AppImage.sha256
+            release/NoteBi_${{ env.APP_VERSION }}_linux-x64-preview-sbom.cdx.json
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
