@@ -33,15 +33,38 @@ NoteBi 是一个本地优先的内容笔记工具。它可以导入本地视频�
 - 支持把 Chat、Embedding、Rerank 分别配置到不同服务
 - 支持通过内网地址接入华为昇腾模型服务
 
+## 当前发布状态
+
+NoteBi 目前已经具备公开源码、macOS 启动器、Windows 源码启动器和 Windows 离线包构建工具，但**还没有发布经过三平台实机验收的桌面安装包**。
+
+| 平台 | 当前可用方式 | 状态 |
+|---|---|---|
+| macOS Apple Silicon / Intel | 源码 + `.command` 启动器 | macOS 是当前主要开发与验证环境 |
+| Windows x64 | 源码 + `.bat` 启动器 | 启动器与离线包工具已具备，正式 Release 仍需 Windows 实机验收 |
+| Linux x64 | 源码手动启动 | 桌面启动器与完整实机验收待补 |
+| 桌面安装包 | `.dmg` / `.msi` 或 `.exe` / `.AppImage` | 尚未发布，实施方案见[全平台发行路线](docs/CROSS_PLATFORM_RELEASE.md) |
+
+不要把源码仓库或构建脚本等同于已经验证的安装包。可下载资产会统一发布在 [GitHub Releases](https://github.com/garyconan1224/notebi/releases)。
+
+## 技术栈
+
+| 层 | 技术 |
+|---|---|
+| 前端 | React 19 · TypeScript · Vite 8 · Tailwind 4 |
+| 后端 | Python 3.11 · FastAPI · 本地文件 / SQLite |
+| 转写与说话人 | MLX-Whisper · Faster-Whisper · WeSpeaker |
+| 下载与媒体 | yt-dlp · FFmpeg · OpenCV |
+| 知识库 | FAISS · 可配置 Embedding / Rerank 模型 |
+
 ## 运行方式选择
 
 | 方式 | 适用对象 | 运行条件 |
 |---|---|---|
 | 源码模式 | 开发者、需要改代码的人 | Python、Node.js、FFmpeg |
-| Windows 离线懒人包 | 不想安装开发环境、需要内网运行的人 | 解压后的内置 runtime 和模型 |
+| Windows 离线包构建模式 | 需要准备内网发行包的维护者 | 已准备的 Windows runtime、前端产物和可再分发模型 |
 | 昇腾内网模式 | 使用华为内网模型的人 | NoteBi 客户端 + 内网 OpenAI-compatible 服务 |
 
-Windows 懒人包保留完整源码，不把业务封装进不可修改的 EXE。详见 [Windows 离线懒人包说明](docs/WINDOWS_OFFLINE_BUNDLE.md)。
+Windows 离线包保留完整源码，不把业务封装进不可修改的 EXE。当前仓库提供构建器和预检工具，并不附带已经验收的 runtime 或模型资产。详见 [Windows 离线包说明](docs/WINDOWS_OFFLINE_BUNDLE.md)。
 
 ## 快速开始：macOS
 
@@ -122,7 +145,7 @@ cd ..
 
 ## 快速开始：Windows 离线懒人包
 
-正式发行包解压后包含 `runtime\python`、`runtime\ffmpeg`、`frontend\dist` 和 `models`，不需要安装 Node.js，也不需要执行 pip 安装。
+维护者构建并完成实机验收后的离线包应包含 `runtime\python`、`runtime\ffmpeg`、`frontend\dist` 和 `models`，不需要安装 Node.js，也不需要执行 pip 安装。当前 GitHub Releases 尚未提供该资产。
 
 ```text
 解压 NoteBi-Windows-x64-offline.zip
@@ -195,6 +218,12 @@ python scripts/build_windows_offline_bundle.py \
 
 构建脚本只复制已准备好的文件，不联网下载依赖或模型。完整参数和目录约定见 [WINDOWS_OFFLINE_BUNDLE.md](docs/WINDOWS_OFFLINE_BUNDLE.md)。
 
+## 全平台发行路线
+
+推荐采用两层交付：先保持现有源码/便携包可复现，再用 Tauri 2 承载窗口和生命周期，用平台原生构建的 Python 后端作为 sidecar。PyInstaller 不是跨平台交叉编译器，因此 Windows、macOS 和 Linux 必须分别在对应系统构建和验收。
+
+目标资产包括 macOS Apple Silicon / Intel 的 `.dmg`、Windows x64 安装包，以及 Linux x64 的 `.AppImage` 和 `.deb`。代码签名、模型许可证、首次启动下载和实机验收门槛见 [CROSS_PLATFORM_RELEASE.md](docs/CROSS_PLATFORM_RELEASE.md)。
+
 ## 目录结构
 
 ```text
@@ -212,6 +241,15 @@ backend/tests/  后端测试
 - 安全问题见 [SECURITY.md](SECURITY.md)，不要在公开 Issue 中提交密钥、Cookie 或私人素材。
 - 支持范围见 [SUPPORT.md](SUPPORT.md)。
 
+## 代码参考与致谢
+
+- 产品形态与交互受到 [BiliNote](https://github.com/JefferyHcool/BiliNote) 启发。
+- 视频下载基于 [yt-dlp](https://github.com/yt-dlp/yt-dlp)，本地转写使用 [MLX-Whisper](https://github.com/ml-explore/mlx-examples) / [faster-whisper](https://github.com/SYSTRAN/faster-whisper)。
+
 ## License
 
 [MIT](LICENSE)
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=garyconan1224/notebi&type=Date)](https://www.star-history.com/#garyconan1224/notebi&Date)
