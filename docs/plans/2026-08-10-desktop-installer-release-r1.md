@@ -1,10 +1,10 @@
 # NoteBi 桌面安装器与全平台发行 R1 计划
 
-> 状态：执行中；账号/签名后置。新增依赖、跨 5 个以上生产文件和安装器架构选择仍是强制停点。
+> 状态：执行中；Windows x64 未签名开发版优先，Apple 账号审核中。新增依赖、跨 5 个以上生产文件和安装器架构选择仍是强制停点。
 
 ## 目标
 
-交付 macOS Apple Silicon、macOS Intel、Windows x64、Linux x64 四个可重复构建的桌面资产。用户可以区分应用位置和模型位置；安装引导先准备并校验所选模型，所有组件和 `/health` 就绪后才进入 NoteBi 主页面。
+先交付 Windows x64 未签名开发版，再交付 macOS Apple Silicon / Intel 和 Linux x64 可重复构建资产。用户可以区分应用位置和模型位置；安装引导先准备并校验所选模型，所有组件和 `/health` 就绪后才进入 NoteBi 主页面。
 
 ## 当前证据
 
@@ -33,6 +33,8 @@
 
 无论选 A 或 B，用户可见结果不变：应用位置与模型位置分离；模型/组件未完成或 `/health` 未通过时不打开主页面。
 
+Windows 开发版默认按 A 实施：NSIS 负责应用目录，NoteBi 首次准备窗口负责模型目录和启动门禁。若用户坚持应用目录也必须由 NoteBi 自己的统一页面处理，再改选 B。
+
 ## 批次
 
 ### R1.0：发行契约与模型 manifest
@@ -42,12 +44,13 @@
 3. 用标准库实现 manifest 校验和路径穿越防护；先写失败测试，再扩展现有 Windows 预检。
 4. 待用户确认首装模型：建议按平台推荐一个 ASR 模型为必需，WeSpeaker/OCR/增强模型保持可选；不得在许可证未审计前写入真实下载 URL。
 
-### R1.1：macOS Apple Silicon 最小桌面闭环
+### R1.1：Windows x64 未签名开发版最小闭环
 
 1. 经用户授权安装并锁定 Rust stable、Tauri 2 CLI/API、PyInstaller。
-2. 新增 Tauri 壳，只显示 setup/main 两个路由；setup 完成记录和 manifest 校验共同决定能否进入 main。
+2. 新增 Tauri + NSIS 壳；NSIS 选择应用目录，setup/main 两个路由隔离，setup 完成记录和 manifest 校验共同决定能否进入 main。
 3. Python sidecar 使用 `onedir`，FFmpeg 作为平台资源；用户数据和模型均放在 app bundle 外。
-4. 实测选择模型目录、下载中断恢复、SHA256 失败、端口冲突、`/health` 超时、退出清理。
+4. GitHub Windows runner 生成 `windows-x64-unsigned-preview`，不得写 Signed；本机不可替代 Windows 安装证据。
+5. Windows 实测安装目录、模型目录、下载中断恢复、SHA256 失败、端口冲突、`/health` 超时、卸载和残留数据策略。
 
 ### R1.2：四目标 CI 构建
 
@@ -56,11 +59,11 @@
 3. 只上传 Draft/Prerelease；任何目标失败都不提升正式 Release。
 4. 安装器 smoke test 至少覆盖启动门禁和 `/health`，实机媒体能力另做平台验收。
 
-### R1.3：签名与正式发行
+### R1.3：Apple 签名与正式发行
 
-1. 接入 `docs/RELEASE_ACCOUNTS.md` 中的 Apple / Windows 所有者凭据。
+1. 接入 `docs/RELEASE_ACCOUNTS.md` 中的 Apple 所有者凭据；不配置 Windows 签名。
 2. 开启 GitHub `release` environment 人工批准；签名 secret 不进入 PR job。
-3. 先签名/公证，再上传 Release；生成 provenance、SHA256、许可证与已知限制。
+3. macOS 先签名/公证再上传；Windows 继续作为未签名开发资产并显示 SmartScreen/签名限制；生成 provenance、SHA256、许可证与已知限制。
 4. 四平台真实安装、卸载、模型恢复、真实素材导入→转写→笔记→导出→重启读回完成后才转正式版。
 
 ## 新依赖停点
