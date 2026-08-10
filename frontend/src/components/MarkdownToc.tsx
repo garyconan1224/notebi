@@ -64,8 +64,8 @@ export function extractToc(markdown: string): TocEntry[] {
   const lines = markdown.split('\n')
   const entries: TocEntry[] = []
   const used = new Map<string, number>()
-  // 各级「最近标题」索引：lastLevel[level-1] = entries 里的下标
-  const lastAtLevel: number[] = []
+  // 各级「最近标题」索引：lastLevel[level-1] = entries 里的下标，undefined 表示该级暂无
+  const lastAtLevel: Array<number | undefined> = []
 
   let pendingPointCount = 0  // 当前标题下累计的块数
   let inFence = false
