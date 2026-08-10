@@ -99,6 +99,10 @@ from backend.app.services.video_result_demo import build_demo_video_result
 from backend.app.services.workspace_search_service import _jump_url, search_one_workspace
 from backend.app.services.workspace_store import WorkspaceStore
 from backend.app.services.workspace_knowledge import invalidate_workspace_index
+from backend.app.services.knowledge_map import (
+    build_knowledge_map,
+    filter_knowledge_map_items,
+)
 from shared.config import DATA_DIR
 from shared.settings_store import load_settings
 from shared.url_sniffer import sniff_url
@@ -2425,6 +2429,120 @@ def get_library(
             })
 
     return {"items": items_out, "workspaces": workspaces_out}
+
+
+def _knowledge_map_items(include_inbox: bool) -> List[Dict[str, Any]]:
+    """读取信息地图素材，按 canonical item 去重合集引用。"""
+    records = _store.list_all(include_trashed=False, trashed_only=False)
+    workspace_names = {
+        rec.workspace_id: rec.name
+        for rec in records
+        if rec.source != "inbox"
+    }
+    items_by_key: Dict[tuple[str, str], Dict[str, Any]] = {}
+
+    for rec in records:
+        if rec.source == "inbox" and not include_inbox:
+            continue
+        view = _store.get(rec.workspace_id) or rec
+        for item in view.items:
+            try:
+                owner_workspace_id, owner_item_id = _store.owner_reference(
+                    rec.workspace_id, item.item_id
+                )
+            except KeyError:
+                continue
+            key = (owner_workspace_id, owner_item_id)
+            if key in items_by_key:
+                continue
+            owner = _store.get(owner_workspace_id)
+            if owner is None:
+                continue
+            owner_item = next(
+                (candidate for candidate in owner.items if candidate.item_id == owner_item_id),
+                None,
+            )
+            if owner_item is None:
+                continue
+            collection_ids = _store.member_workspace_ids(
+                owner_workspace_id, owner_item_id
+            )
+            items_by_key[key] = {
+                "item_id": owner_item.item_id,
+                "workspace_id": owner_workspace_id,
+                "workspace_name": owner.name,
+                "type": owner_item.type,
+                "source": owner_item.source,
+                "name": owner_item.name or owner_item.source_value or owner_item.item_id,
+                "source_value": owner_item.source_value,
+                "favorite": owner_item.item_id in owner.favorites,
+                "tags": owner_item.tags or {},
+                "collection_ids": collection_ids,
+                "collection_names": [
+                    workspace_names[collection_id]
+                    for collection_id in collection_ids
+                    if collection_id in workspace_names
+                ],
+                "created_at": owner_item.created_at,
+                "updated_at": owner_item.updated_at,
+            }
+    return list(items_by_key.values())
+
+
+@router.get("/knowledge-map")
+def get_knowledge_map(
+    workspace_id: str = "",
+    collection_id: str = "",
+    item_type: str = "",
+    source: str = "",
+    tag: str = "",
+    favorite: Optional[bool] = None,
+    include_inbox: bool = False,
+    limit: int = Query(60, ge=1, le=200),
+) -> Dict[str, Any]:
+    """返回全局信息地图及其筛选后的素材详情。"""
+    candidates = _knowledge_map_items(include_inbox)
+    items = filter_knowledge_map_items(
+        candidates,
+        workspace_id=workspace_id,
+        collection_id=collection_id,
+        item_type=item_type,
+        source=source,
+        tag=tag,
+        favorite=favorite,
+    )
+    result = build_knowledge_map(items, limit=limit)
+    result["filters"] = {
+        "workspace_id": workspace_id,
+        "collection_id": collection_id,
+        "item_type": item_type,
+        "source": source,
+        "tag": tag,
+        "favorite": favorite,
+        "include_inbox": include_inbox,
+        "limit": limit,
+    }
+    result["facets"] = {
+        "workspaces": sorted(
+            {
+                (item["workspace_id"], item["workspace_name"])
+                for item in candidates
+            }
+        ),
+        "collections": sorted(
+            {
+                (collection_id, name)
+                for item in candidates
+                for collection_id, name in zip(
+                    item.get("collection_ids") or [],
+                    item.get("collection_names") or [],
+                )
+            }
+        ),
+        "types": sorted({str(item["type"]) for item in candidates}),
+        "sources": sorted({str(item["source"]) for item in candidates}),
+    }
+    return result
 
 
 class BatchDeleteRequest(BaseModel):
