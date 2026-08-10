@@ -1,0 +1,271 @@
+name: Desktop Preview Packages
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/release-github
+    paths:
+      - ".github/workflows/desktop-preview.yml"
+      - "assets/notebi-icon.svg"
+      - "backend/**"
+      - "frontend/**"
+      - "packaging/**"
+      - "shared/**"
+      - "src-tauri/**"
+      - "requirements.txt"
+      - "THIRD_PARTY_NOTICES.md"
+
+concurrency:
+  group: desktop-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  APP_VERSION: "0.3.0"
+  FFMPEG_RELEASE_BASE: "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1"
+
+jobs:
+  windows-x64-unsigned-preview:
+    name: Windows x64 unsigned preview
+    runs-on: windows-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            packaging/requirements-desktop-build.txt
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Install backend build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r packaging/requirements-desktop-build.txt
+
+      - name: Build Python sidecar
+        run: python -m PyInstaller --noconfirm --clean --distpath packaging/dist --workpath packaging/build packaging/notebi_backend.spec
+
+      - name: Smoke test Python sidecar
+        shell: pwsh
+        run: |
+          $env:NOTEBI_DATA_DIR = "$env:RUNNER_TEMP\notebi-smoke\data"
+          $env:NOTEBI_STATE_DIR = "$env:RUNNER_TEMP\notebi-smoke\state"
+          $env:NOTEBI_PROJECTS_DIR = "$env:RUNNER_TEMP\notebi-smoke\projects"
+          $stdout = "$env:RUNNER_TEMP\notebi-sidecar.stdout.log"
+          $stderr = "$env:RUNNER_TEMP\notebi-sidecar.stderr.log"
+          $process = Start-Process -FilePath "packaging\dist\notebi-backend\notebi-backend.exe" -ArgumentList "--host", "127.0.0.1", "--port", "8011" -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+          $ready = $false
+          try {
+            for ($attempt = 0; $attempt -lt 90; $attempt++) {
+              try {
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:8011/health" -TimeoutSec 2
+                if ($health.status -eq "healthy") {
+                  $ready = $true
+                  break
+                }
+              } catch {}
+              Start-Sleep -Seconds 2
+            }
+          } finally {
+            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+          }
+          if (-not $ready) {
+            Get-Content $stdout -ErrorAction SilentlyContinue
+            Get-Content $stderr -ErrorAction SilentlyContinue
+            throw "Packaged backend did not pass /health"
+          }
+
+      - name: Prepare Windows backend and FFmpeg
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "src-tauri\resources" | Out-Null
+          Copy-Item -Recurse "packaging\dist\notebi-backend" "src-tauri\resources\backend"
+          Invoke-WebRequest -Uri "$env:FFMPEG_RELEASE_BASE/ffmpeg-win32-x64" -OutFile "src-tauri\resources\ffmpeg.exe"
+          Invoke-WebRequest -Uri "$env:FFMPEG_RELEASE_BASE/ffprobe-win32-x64" -OutFile "src-tauri\resources\ffprobe.exe"
+          Invoke-WebRequest -Uri "$env:FFMPEG_RELEASE_BASE/win32-x64.LICENSE" -OutFile "src-tauri\resources\FFMPEG-LICENSE.txt"
+          Copy-Item "THIRD_PARTY_NOTICES.md" "src-tauri\resources\THIRD_PARTY_NOTICES.md"
+          $expected = @{
+            "src-tauri\resources\ffmpeg.exe" = "04e1307997530f9cf2fe35cba2ca7e8875ca91da02f89d6c7243df819c94ad00"
+            "src-tauri\resources\ffprobe.exe" = "3a7e2dc003dc2cd1472827e4c7c4f056ae1ae0ae7c5bbc580c99b49827351ba4"
+            "src-tauri\resources\FFMPEG-LICENSE.txt" = "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+          }
+          foreach ($entry in $expected.GetEnumerator()) {
+            $actual = (Get-FileHash -Algorithm SHA256 $entry.Key).Hash.ToLowerInvariant()
+            if ($actual -ne $entry.Value) { throw "Checksum mismatch: $($entry.Key)" }
+          }
+
+      - name: Build unsigned NSIS installer
+        working-directory: frontend
+        run: pnpm desktop:build -- --bundles nsis
+
+      - name: Collect Windows preview asset
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          $installer = Get-ChildItem "src-tauri\target\release\bundle\nsis\*.exe" | Select-Object -First 1
+          if (-not $installer) { throw "NSIS installer was not generated" }
+          $asset = "release\NoteBi_$env:APP_VERSION`_windows-x64-unsigned-preview-setup.exe"
+          Copy-Item $installer.FullName $asset
+          $hash = (Get-FileHash -Algorithm SHA256 $asset).Hash.ToLowerInvariant()
+          "$hash  $([System.IO.Path]::GetFileName($asset))" | Set-Content -Encoding ascii "$asset.sha256"
+          $python = (Get-Command python).Source
+          cyclonedx-py environment $python --output-reproducible --spec-version 1.6 --output-file "release\NoteBi_$env:APP_VERSION`_windows-x64-unsigned-preview-sbom.cdx.json"
+
+      - name: Upload Windows unsigned preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: notebi-windows-x64-unsigned-preview
+          path: release/*windows-x64-unsigned-preview*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  linux-x64-preview:
+    name: Linux x64 preview
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux desktop build libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            packaging/requirements-desktop-build.txt
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Install backend build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r packaging/requirements-desktop-build.txt
+
+      - name: Build Python sidecar
+        run: python -m PyInstaller --noconfirm --clean --distpath packaging/dist --workpath packaging/build packaging/notebi_backend.spec
+
+      - name: Smoke test Python sidecar
+        shell: bash
+        run: |
+          export NOTEBI_DATA_DIR="$RUNNER_TEMP/notebi-smoke/data"
+          export NOTEBI_STATE_DIR="$RUNNER_TEMP/notebi-smoke/state"
+          export NOTEBI_PROJECTS_DIR="$RUNNER_TEMP/notebi-smoke/projects"
+          packaging/dist/notebi-backend/notebi-backend --host 127.0.0.1 --port 8011 >"$RUNNER_TEMP/notebi-sidecar.log" 2>&1 &
+          sidecar_pid=$!
+          ready=0
+          for _ in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:8011/health | grep -q '"status":"healthy"'; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          kill "$sidecar_pid" 2>/dev/null || true
+          wait "$sidecar_pid" 2>/dev/null || true
+          if [ "$ready" -ne 1 ]; then
+            cat "$RUNNER_TEMP/notebi-sidecar.log"
+            exit 1
+          fi
+
+      - name: Prepare Linux backend and FFmpeg
+        shell: bash
+        run: |
+          cp -a packaging/dist/notebi-backend src-tauri/resources/backend
+          chmod +x src-tauri/resources/backend/notebi-backend
+          curl --fail --location "$FFMPEG_RELEASE_BASE/ffmpeg-linux-x64" --output src-tauri/resources/ffmpeg
+          curl --fail --location "$FFMPEG_RELEASE_BASE/ffprobe-linux-x64" --output src-tauri/resources/ffprobe
+          curl --fail --location "$FFMPEG_RELEASE_BASE/linux-x64.LICENSE" --output src-tauri/resources/FFMPEG-LICENSE.txt
+          cp THIRD_PARTY_NOTICES.md src-tauri/resources/THIRD_PARTY_NOTICES.md
+          echo "e7e7fb30477f717e6f55f9180a70386c62677ef8a4d4d1a5d948f4098aa3eb99  src-tauri/resources/ffmpeg" | sha256sum --check
+          echo "4f231a1960d83e403d08f7971e271707bec278a9ae18e21b8b5b03186668450d  src-tauri/resources/ffprobe" | sha256sum --check
+          echo "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903  src-tauri/resources/FFMPEG-LICENSE.txt" | sha256sum --check
+          chmod +x src-tauri/resources/ffmpeg src-tauri/resources/ffprobe
+
+      - name: Build AppImage and Debian package
+        working-directory: frontend
+        run: pnpm desktop:build -- --bundles appimage,deb
+
+      - name: Collect Linux preview assets
+        shell: bash
+        run: |
+          mkdir -p release
+          appimage=$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' -print -quit)
+          deb=$(find src-tauri/target/release/bundle/deb -maxdepth 1 -name '*.deb' -print -quit)
+          test -n "$appimage" && test -n "$deb"
+          cp "$appimage" "release/NoteBi_${APP_VERSION}_linux-x64-preview.AppImage"
+          cp "$deb" "release/NoteBi_${APP_VERSION}_linux-x64-preview.deb"
+          sha256sum release/NoteBi_${APP_VERSION}_linux-x64-preview.* > "release/NoteBi_${APP_VERSION}_linux-x64-preview.sha256"
+          cyclonedx-py environment "$(command -v python)" --output-reproducible --spec-version 1.6 --output-file "release/NoteBi_${APP_VERSION}_linux-x64-preview-sbom.cdx.json"
+
+      - name: Upload Linux preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: notebi-linux-x64-preview
+          path: release/NoteBi_*_linux-x64-preview*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

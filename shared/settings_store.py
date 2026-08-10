@@ -14,10 +14,10 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Literal
 
-TEXT_BACKEND_OPENAI_COMPAT: str = "openai_compatible"
-ROOT_DIR: Path = Path(__file__).resolve().parent.parent
+from shared.runtime_paths import STATE_DIR
 
-SETTINGS_DIR: Path = ROOT_DIR / ".local"
+TEXT_BACKEND_OPENAI_COMPAT: str = "openai_compatible"
+SETTINGS_DIR = STATE_DIR
 SETTINGS_PATH: Path = SETTINGS_DIR / "settings.json"
 
 ProviderKind = Literal["openai_compatible", "anthropic"]
@@ -397,6 +397,7 @@ class AppSettings:
     download: DownloadConfig = field(default_factory=DownloadConfig)
     performance: PerformanceConfig = field(default_factory=PerformanceConfig)
     task_defaults: TaskDefaultsConfig = field(default_factory=TaskDefaultsConfig)
+    model_storage_dir: str = ""
     tavily_api_key: str = ""
 
     @classmethod
@@ -424,6 +425,7 @@ class AppSettings:
             download=DownloadConfig.from_dict(data.get("download")),
             performance=PerformanceConfig.from_dict(data.get("performance")),
             task_defaults=TaskDefaultsConfig.from_dict(data.get("task_defaults")),
+            model_storage_dir=str(data.get("model_storage_dir") or ""),
             tavily_api_key=str(data.get("tavily_api_key") or ""),
         )
 

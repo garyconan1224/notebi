@@ -1,6 +1,6 @@
 # NoteBi 全平台发行路线
 
-> 状态：架构与首次安装流程已确认；新增依赖和生产实现仍需按批授权。桌面壳与安装包尚未实现，本文不代表任何平台安装包已经通过实机验收。
+> 状态：Windows/Linux 桌面壳、sidecar、模型目录设置和预览构建工作流已进入实现验证；Apple 暂缓。本文不代表任何平台安装包已经通过实机验收。
 
 ## 结论
 
@@ -8,8 +8,8 @@ NoteBi 当前是 React 前端加本地 FastAPI 服务，不是原生桌面应用
 
 ```text
 Tauri 2 桌面壳
-├── 安装引导（系统预检、两个独立目录、许可证）
-├── 模型管理器（下载/导入、断点续传、SHA256）
+├── 原生安装器（应用目录、许可证）
+├── 设置页模型管理器（目录、明确点击下载、切换）
 ├── frontend/dist
 ├── NoteBi FastAPI sidecar（各平台原生构建）
 ├── FFmpeg / FFprobe（各平台独立资产）
@@ -23,9 +23,9 @@ Tauri 2 桌面壳
 
 - Tauri 可直接使用现有 Vite 构建产物，不需要重写 React 页面。
 - Tauri 的 `externalBin` 支持把 Python API 服务作为 sidecar，并要求按目标架构提供对应二进制。
-- 后端先使用 PyInstaller `onedir` 或等价的目录式 runtime；重量级模型和动态库不适合一开始压成单文件。
+- 后端使用 PyInstaller `onedir` sidecar，安装时已经展开依赖，避免 `onefile` 首次运行临时解压约 1 GB 内容导致长时间白屏；模型权重不打入 sidecar。
 - PyInstaller 不是交叉编译器：Windows 包在 Windows 构建，macOS 包在 macOS 构建，Linux 包在 Linux 构建。
-- 在线安装器本身不默认塞入模型权重。用户在安装阶段确认必需/可选模型，安装器先下载所选模型并显示来源、许可证、版本、大小与 SHA256；全部校验完成后才安装并启动应用。内网离线包导入已有模型包，但走相同校验和启动门禁。
+- 安装器不塞入、选择或下载模型权重。应用通过资源检查和 `/health` 后正常打开；用户之后在「设置 → 本地模型」选择目录并明确点击下载。内网旧式便携包仍可由维护者预置模型，但不改变新桌面包的交互契约。
 
 ## 首次安装状态机
 
@@ -36,14 +36,6 @@ Tauri 2 桌面壳
   ↓
 选择应用安装目录 ── 独立检查空间与写权限
   ↓
-选择模型存储目录 ── 独立检查空间与写权限
-  ↓
-确认模型清单、来源、许可证与预计体积
-  ↓
-下载或导入模型（暂停 / 继续 / 断点续传 / 重试）
-  ↓
-manifest + 大小 + SHA256 校验
-  ↓
 安装应用 runtime / FFmpeg / sidecar / frontend
   ↓
 启动本地后端并等待 /health，同时验证前端资源
@@ -51,7 +43,7 @@ manifest + 大小 + SHA256 校验
 全部成功 → 启用“打开 NoteBi”
 ```
 
-任何失败都停留在对应阶段，不打开页面，并保留已经校验通过的分块或模型。用户返回修改目录时，安装器应先判断已完成内容能否原地复用，不能无提示重复下载。
+任何应用安装或健康检查失败都停留在对应阶段，不打开主页面。模型不属于安装门禁：用户进入应用后在设置页选择目录并点击下载。
 
 ### 目录契约
 
@@ -64,33 +56,31 @@ manifest + 大小 + SHA256 校验
 
 “打开 NoteBi”默认禁用，只有以下条件同时满足才启用：
 
-1. 本次选择的必需模型全部存在且 SHA256 匹配。
-2. runtime、FFmpeg、sidecar 和前端资源版本与安装 manifest 一致。
-3. 本地后端进程成功启动，`/health` 在超时前返回成功。
-4. 前端入口可读取，安装器没有未解决的致命错误。
+1. runtime、FFmpeg、sidecar 和前端资源版本与安装 manifest 一致。
+2. 本地后端进程成功启动，`/health` 在超时前返回成功。
+3. 前端入口可读取，安装器没有未解决的致命错误。
 
-可选增强模型允许用户不选择；一旦选择，就必须完成下载和校验后才算本次安装成功。后续在应用内新增可选模型时，沿用同一下载器与校验规则，但不改变首次安装的完成记录。
+所有模型都在应用内按需下载。下载失败只影响对应能力，不把已健康启动的 NoteBi 重新判定为安装失败。
 
 ## 目标发行资产
 
 | 目标 | GitHub Release 资产 | 最低验收 |
 |---|---|---|
-| macOS Apple Silicon | `NoteBi_<version>_aarch64.dmg` | 签名、公证、启动、ASR、说话人、导出 |
-| macOS Intel | `NoteBi_<version>_x64.dmg` | 签名、公证、CPU ASR、远程模型、导出 |
-| Windows x64 | `NoteBi_<version>_x64-setup.exe` 或 `.msi` | 签名、安装/卸载、FFmpeg、ASR、说话人、导出 |
-| Linux x64 | `NoteBi_<version>_amd64.AppImage` 与 `.deb` | Ubuntu 实机启动、ASR、远程模型、导出 |
+| Windows x64 | `NoteBi_<version>_windows-x64-unsigned-preview-setup.exe` | 未签名提示、安装/卸载、FFmpeg、设置页模型下载、导出 |
+| Linux x64 | `NoteBi_<version>_linux-x64-preview.AppImage` 与 `.deb` | Ubuntu 实机启动、ASR、远程模型、导出 |
+| macOS Apple Silicon / Intel | 后置 `.dmg` | 等 Apple 账号后再接入签名、公证与原生 job |
 
-Linux ARM64 和 Windows ARM64 放在第二阶段；先把四个主要资产做成可重复构建和可真实验收的版本。
+Linux ARM64、Windows ARM64 和全部 Apple 资产放在后续阶段；先把 Windows/Linux x64 做成可重复构建和可真实验收的版本。
 
 ## 原生构建矩阵
 
 GitHub Actions 使用各平台原生 runner：
 
-- `macos-latest`：Apple Silicon；另用 Intel runner 构建 x64。
 - `windows-latest`：Windows x64。
 - `ubuntu-22.04`：Linux x64。
+- Apple job 当前不存在；账号通过后再增加 macOS 原生 runner。
 
-每个 job 依次完成：锁定 Python / Node / Rust 版本、安装发行依赖、运行前后端测试、构建前端、构建 Python sidecar、生成安装包、启动 smoke test、上传草稿 Release。不得在一个平台伪造另一个平台的构建或验收结果。
+每个预览 job 依次完成：锁定 Python / Node / Rust 版本、安装发行依赖、构建前端、构建 Python sidecar、对打包后的 sidecar 执行 `/health` smoke test、校验 FFmpeg SHA256、生成安装包、校验和与 CycloneDX SBOM，然后上传 Actions Artifact。现有前后端测试由独立工作流把关。不得在一个平台伪造另一个平台的构建或验收结果。
 
 ## 签名与密钥
 
@@ -107,31 +97,31 @@ GitHub Actions 使用各平台原生 runner：
 2. 检查 README、Issue 模板、许可证、历史密钥扫描和仓库大小。
 3. 维护者确认后切换为 Public；此阶段不创建虚假的桌面 Release。
 
-### R1：桌面壳最小闭环
+### R1：桌面壳最小闭环（实现验证中）
 
-1. 维护者确认架构并授权新增 Rust / Tauri / PyInstaller 依赖。
-2. 新增 Tauri 2 壳和单一开发平台 sidecar，先冻结安装状态机与三个目录契约。
-3. 完成系统预检、两个目录选择、模型 manifest、断点续传、SHA256 和错误恢复。
-4. 完成安装、启动、退出、后端异常、端口冲突、日志与用户数据目录；验证未完成时绝不打开窗口。
+1. 已确认并安装 Rust / Tauri / PyInstaller 发行依赖。
+2. 已新增 Tauri 2 壳、Windows/Linux 平台 sidecar 配置和三个目录契约。
+3. 已补设置页模型目录保存/GET 回读；模型维持明确点击下载，不进入安装状态机。
+4. 启动页在 sidecar `/health` 前阻断主路由；退出时回收由桌面壳启动的子进程。
 5. 用真实素材完成一次导入、转写、生成笔记、编辑、导出和重启读回。
 
-### R2：四目标原生打包
+### R2：Windows/Linux 原生打包（CI 验证中）
 
-1. 在各平台原生 runner 构建 sidecar 与安装包。
+1. 在 Windows/Ubuntu 原生 runner 构建 sidecar 与安装包。
 2. 把 FFmpeg 和原生 Python 依赖按平台锁定。
 3. 为每个平台执行自定义应用目录、自定义模型目录、暂停续传、校验失败、安装后 `/health`、前端打开和最小 API smoke test。
 
-### R3：签名、模型与正式 Release
+### R3：Apple、平台实测与正式 Release
 
-1. 配置 macOS 签名/公证和 Windows 签名。
+1. Apple 账号通过后配置 macOS 签名/公证；Windows 按用户决定继续不做代码签名。
 2. 审计模型许可证、版本、SHA256、镜像来源、失败恢复与首次下载遥测边界。
 3. 先创建 Draft/Prerelease，完成四平台实机验收后再提升为正式 Release。
 
-## 本轮不做
+## 当前边界
 
-- 不安装 Rust、Tauri、PyInstaller 或新的系统依赖。
-- 不提交尚不能构建的空工作流。
-- 不上传模型权重、Python runtime、FFmpeg 或未签名安装包。
+- 不创建 Apple 构建、签名或公证 job。
+- 不上传或在安装期下载模型权重。
+- Windows 资产必须含 `unsigned-preview`，不能描述成已签名。
 - 不宣称 Windows/Linux 已通过实机验收。
 
 ## 官方依据

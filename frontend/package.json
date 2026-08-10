@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "desktop:build": "tauri build --config ../src-tauri/tauri.conf.json",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run"
@@ -29,6 +30,7 @@
     "@milkdown/transformer": "^7.21.2",
     "@radix-ui/react-tabs": "^1.1.0",
     "@tailwindcss/vite": "^4.2.2",
+    "@tauri-apps/api": "^2.11.1",
     "@zumer/snapdom": "^2.23.2",
     "axios": "^1.15.0",
     "class-variance-authority": "^0.7.1",
@@ -58,6 +60,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@tauri-apps/cli": "^2.11.4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^24.12.2",

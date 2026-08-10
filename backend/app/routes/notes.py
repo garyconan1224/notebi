@@ -26,6 +26,7 @@ from backend.app.models.tasks import LEGACY_STATUS_MAP, TERMINAL_STATUS_VALUES, 
 from backend.app.routes.pipeline import _runner as _pipeline_runner
 from backend.app.routes.pipeline import _store as _pipeline_store
 from shared.config import ROOT_DIR, ensure_workspace_dirs, get_workspace_videos_dir
+from shared.runtime_paths import STATE_DIR
 from shared.settings_store import load_settings
 
 router = APIRouter(prefix="/api", tags=["bilinote-compat"])
@@ -53,7 +54,7 @@ def _err(msg: str, *, code: int = 1, data: Optional[Dict[str, Any]] = None) -> B
 # ── 辅助：当前项目解析 ────────────────────────────────────────
 # 后端进程无 streamlit 上下文，直接读取 `.local/current_project.json`；
 # 若文件缺失则兜底为 "default_project"（与 shared.config._sanitize_workspace_id 兜底一致）。
-_CURRENT_PROJECT_PATH: Path = ROOT_DIR / ".local" / "current_project.json"
+_CURRENT_PROJECT_PATH: Path = STATE_DIR / "current_project.json"
 
 
 def _resolve_project_id(project_id: Optional[str]) -> str:

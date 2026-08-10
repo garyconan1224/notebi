@@ -1,0 +1,2 @@
+pyinstaller>=6.0,<7
+cyclonedx-bom==7.3.1

@@ -7,6 +7,9 @@ import LocalModelsPanel from '@/pages/SettingPage/LocalModelsPanel'
 const mocks = vi.hoisted(() => ({
   listLocalModels: vi.fn(),
   downloadLocalModel: vi.fn(),
+  activateLocalModel: vi.fn(),
+  getLocalModelStorage: vi.fn(),
+  updateLocalModelStorage: vi.fn(),
 }))
 
 vi.mock('@/services/localModels', () => mocks)
@@ -58,13 +61,16 @@ describe('LocalModelsPanel', () => {
     vi.clearAllMocks()
     mocks.listLocalModels.mockResolvedValue(models)
     mocks.downloadLocalModel.mockResolvedValue(undefined)
+    mocks.activateLocalModel.mockResolvedValue(undefined)
+    mocks.getLocalModelStorage.mockResolvedValue({ directory: '', effective_cache_dir: '/tmp/hf' })
+    mocks.updateLocalModelStorage.mockResolvedValue({ directory: '', effective_cache_dir: '/tmp/hf' })
   })
 
   it('列出本地模型、状态和缓存目录', async () => {
     render(<LocalModelsPanel />)
     expect(await screen.findByText('Faster Whisper · base')).toBeInTheDocument()
     // 缓存路径在折叠区城内，仍在 DOM 中
-    expect(screen.getAllByText(/\/tmp\/hf/)).toHaveLength(2)
+    expect(screen.getAllByText(/\/tmp\/hf/)).toHaveLength(3)
     expect(screen.getByText('待下载')).toBeInTheDocument()
     const buttons = screen.getAllByRole('button', { name: '下载' })
     expect(buttons[0]).toBeEnabled()

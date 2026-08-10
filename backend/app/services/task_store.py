@@ -25,14 +25,14 @@ from backend.app.models.tasks import (
     TaskRecord,
     TaskStatus,
 )
-from shared.config import ROOT_DIR
+from shared.runtime_paths import STATE_DIR
 
 logger = logging.getLogger(__name__)
 
 # 旧单文件路径（仅用于迁移与测试兼容）
-TASK_STORE_PATH = ROOT_DIR / ".local" / "backend_tasks.json"
+TASK_STORE_PATH = STATE_DIR / "backend_tasks.json"
 # 新目录：每任务一个 JSON 文件
-TASK_STORE_DIR = ROOT_DIR / ".local" / "tasks"
+TASK_STORE_DIR = STATE_DIR / "tasks"
 
 MAX_LOG_ENTRIES = 200  # 每个任务只保留最近 N 条日志
 SAVE_DEBOUNCE_S = 0.5  # progress/download_speed 写入节流间隔

@@ -16,8 +16,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-ROOT_DIR: Path = Path(__file__).resolve().parent.parent
-STORE_DIR: Path = ROOT_DIR / ".local"
+from shared.runtime_paths import STATE_DIR
+
+STORE_DIR = STATE_DIR
 STORE_PATH: Path = STORE_DIR / "video_templates.json"
 # Q5（反馈 #12）：模板「新建可见」持久化。独立小文件，不改动模板本体；
 # 旧数据缺省即可见（True），不做迁移。

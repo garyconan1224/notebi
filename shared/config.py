@@ -11,19 +11,18 @@ import warnings
 from pathlib import Path
 
 from shared.dotenv_loader import load_dotenv_if_present
+from shared.runtime_paths import DATA_DIR, PROJECTS_DIR, SOURCE_ROOT, STATE_DIR
 
 load_dotenv_if_present()
 
 # ── 路径常量 ──────────────────────────────────────────────────
 
 # NoteBi 项目根目录
-ROOT_DIR: Path = Path(__file__).resolve().parent.parent
+ROOT_DIR: Path = SOURCE_ROOT
 
-# 共享数据目录；测试/离线工具可通过环境变量显式隔离，生产默认值不变。
-DATA_DIR: Path = Path(os.getenv("NOTEBI_DATA_DIR", str(ROOT_DIR / "data"))).resolve()
+# 共享数据目录；桌面 sidecar 通过 NOTEBI_*_DIR 写入系统用户数据目录。
 VIDEOS_DIR: Path = DATA_DIR / "videos"        # 下载器输出 / 视频分析输入
 JSON_DATA_DIR: Path = DATA_DIR / "json_data"  # 视频分析 JSON 输出 / 导演台知识库
-PROJECTS_DIR: Path = ROOT_DIR / "projects"    # 导演台项目存档
 
 # N1b 新布局：每个 workspace 的产物目录与 workspace_store 的 JSON 同住 data/workspaces/
 # 形态：data/workspaces/<id>.json + data/workspaces/<id>/{videos,json_data,text,runtime}/
@@ -172,7 +171,7 @@ def get_anthropic_api_base_url() -> str:
 
 
 def _read_local_settings_value(field: str) -> str:
-    settings_path = ROOT_DIR / ".local" / "settings.json"
+    settings_path = STATE_DIR / "settings.json"
     if not settings_path.is_file():
         return ""
     try:

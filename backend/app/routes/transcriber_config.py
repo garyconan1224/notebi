@@ -8,6 +8,7 @@ from __future__ import annotations
 """
 
 from dataclasses import asdict, replace
+from pathlib import Path
 from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -74,6 +75,10 @@ class TranscriberConfigUpdateRequest(BaseModel):
     cpu_threads: Optional[int] = None
     beam_size: Optional[int] = None
     vad_filter: Optional[bool] = None
+
+
+class LocalModelStorageRequest(BaseModel):
+    directory: str
 
 
 def _serialize(cfg: TranscriberConfig) -> Dict[str, Any]:
@@ -178,6 +183,47 @@ def get_local_models() -> Dict[str, Any]:
     Listing is read-only.  Downloads always require the explicit POST below.
     """
     return {"models": list_local_models()}
+
+
+def _local_model_storage_payload() -> Dict[str, str]:
+    configured = load_settings().model_storage_dir.strip()
+    return {
+        "directory": configured,
+        "effective_cache_dir": str(
+            Path(configured).expanduser() / "huggingface" / "hub"
+            if configured
+            else _hf_hub_cache_dir()
+        ),
+    }
+
+
+@router.get("/local_models/storage")
+def get_local_model_storage() -> Dict[str, str]:
+    return _local_model_storage_payload()
+
+
+@router.put("/local_models/storage")
+def update_local_model_storage(req: LocalModelStorageRequest) -> Dict[str, str]:
+    raw = req.directory.strip()
+    if not raw:
+        settings = load_settings()
+        save_settings(replace(settings, model_storage_dir=""))
+        return _local_model_storage_payload()
+
+    target = Path(raw).expanduser()
+    if not target.is_absolute():
+        raise HTTPException(status_code=422, detail="模型目录必须是绝对路径")
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        probe = target / ".notebi-write-test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+    except OSError as err:
+        raise HTTPException(status_code=422, detail=f"模型目录不可写：{err}") from err
+
+    settings = load_settings()
+    save_settings(replace(settings, model_storage_dir=str(target)))
+    return _local_model_storage_payload()
 
 
 @router.post("/local_models/{model_id:path}/download", status_code=202)

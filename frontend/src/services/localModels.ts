@@ -31,3 +31,18 @@ export async function downloadLocalModel(modelId: string): Promise<void> {
 export async function activateLocalModel(modelId: string): Promise<void> {
   await http.post(`/local_models/${encodeURIComponent(modelId)}/activate`)
 }
+
+export interface LocalModelStorage {
+  directory: string
+  effective_cache_dir: string
+}
+
+export async function getLocalModelStorage(): Promise<LocalModelStorage> {
+  const response = await http.get<LocalModelStorage>('/local_models/storage')
+  return response.data
+}
+
+export async function updateLocalModelStorage(directory: string): Promise<LocalModelStorage> {
+  const response = await http.put<LocalModelStorage>('/local_models/storage', { directory })
+  return response.data
+}

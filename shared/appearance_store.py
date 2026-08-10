@@ -13,8 +13,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-ROOT_DIR: Path = Path(__file__).resolve().parent.parent
-STORE_DIR: Path = ROOT_DIR / ".local"
+from shared.runtime_paths import STATE_DIR
+
+STORE_DIR = STATE_DIR
 SETTINGS_PATH: Path = STORE_DIR / "appearance_settings.json"
 
 VALID_THEMES = ("paper", "graphite", "sage", "midnight")

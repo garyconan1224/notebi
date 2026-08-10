@@ -28,6 +28,14 @@ def _hf_hub_cache_dir() -> Path:
     hf_home = os.getenv("HF_HOME")
     if hf_home:
         return Path(hf_home).expanduser() / "hub"
+    try:
+        from shared.settings_store import load_settings
+
+        configured = load_settings().model_storage_dir.strip()
+        if configured:
+            return Path(configured).expanduser() / "huggingface" / "hub"
+    except Exception:
+        pass
     return Path.home() / ".cache" / "huggingface" / "hub"
 
 
@@ -366,7 +374,13 @@ def _load_model(
         watcher.start()
         try:
             effective_threads = cpu_threads if cpu_threads > 0 else min(os.cpu_count() or 4, 8)
-            model = WhisperModel(model_source, device=device, compute_type=compute_type, cpu_threads=effective_threads)
+            model = WhisperModel(
+                model_source,
+                device=device,
+                compute_type=compute_type,
+                cpu_threads=effective_threads,
+                download_root=str(_hf_hub_cache_dir()),
+            )
         finally:
             stop_evt.set()
             watcher.join(timeout=1.0)

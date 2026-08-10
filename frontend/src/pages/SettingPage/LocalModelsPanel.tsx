@@ -5,8 +5,10 @@ import { Download, RefreshCw } from 'lucide-react'
 
 import {
   downloadLocalModel,
+  getLocalModelStorage,
   activateLocalModel,
   listLocalModels,
+  updateLocalModelStorage,
   type LocalModelStatus,
 } from '@/services/localModels'
 
@@ -46,10 +48,21 @@ export default function LocalModelsPanel() {
   const [models, setModels] = useState<LocalModelStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState('')
+  const [storageDir, setStorageDir] = useState('')
+  const [savedStorageDir, setSavedStorageDir] = useState('')
+  const [effectiveCacheDir, setEffectiveCacheDir] = useState('')
+  const [savingStorage, setSavingStorage] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
-      setModels(await listLocalModels())
+      const [nextModels, storage] = await Promise.all([
+        listLocalModels(),
+        getLocalModelStorage(),
+      ])
+      setModels(nextModels)
+      setStorageDir(storage.directory)
+      setSavedStorageDir(storage.directory)
+      setEffectiveCacheDir(storage.effective_cache_dir)
     } catch {
       toast.error(t('localModels.loadFailed'))
     } finally {
@@ -102,11 +115,54 @@ export default function LocalModelsPanel() {
     }
   }
 
+  const saveStorage = async () => {
+    setSavingStorage(true)
+    try {
+      await updateLocalModelStorage(storageDir)
+      const readback = await getLocalModelStorage()
+      setStorageDir(readback.directory)
+      setSavedStorageDir(readback.directory)
+      setEffectiveCacheDir(readback.effective_cache_dir)
+      toast.success(t('localModels.storageSaved'))
+    } catch {
+      toast.error(t('localModels.storageSaveFailed'))
+    } finally {
+      setSavingStorage(false)
+    }
+  }
+
   if (loading) return <div className="settings-empty">{t('localModels.loading')}</div>
 
   return (
     <div className="settings-subpanel">
       <section className="settings-card">
+        <div className="settings-row">
+          <div>
+            <label className="settings-row-label" htmlFor="local-model-storage">
+              {t('localModels.storageLabel')}
+            </label>
+            <div className="settings-row-hint">
+              {t('localModels.storageHint', { directory: effectiveCacheDir })}
+            </div>
+          </div>
+          <div className="settings-row-control" style={{ display: 'flex', gap: 8 }}>
+            <input
+              id="local-model-storage"
+              className="settings-native-input"
+              value={storageDir}
+              onChange={(event) => setStorageDir(event.target.value)}
+              placeholder={t('localModels.storagePlaceholder')}
+            />
+            <button
+              type="button"
+              className="btn"
+              disabled={savingStorage || storageDir === savedStorageDir}
+              onClick={() => void saveStorage()}
+            >
+              {savingStorage ? t('localModels.storageSaving') : t('localModels.storageSave')}
+            </button>
+          </div>
+        </div>
         <div className="settings-row">
           <div>
             <div className="settings-row-label">{t('localModels.panelTitle')}</div>

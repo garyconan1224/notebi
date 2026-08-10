@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
+from shared.settings_store import AppSettings
 
 
 client = TestClient(app)
@@ -39,3 +40,29 @@ def test_local_model_download_requires_known_explicit_model(monkeypatch) -> None
     assert accepted.json()["model_id"] == "fast-whisper:base"
     assert captured == ["fast-whisper:base"]
     assert missing.status_code == 404
+
+
+def test_local_model_storage_directory_round_trips(tmp_path, monkeypatch) -> None:
+    import backend.app.routes.transcriber_config as route
+
+    current = AppSettings()
+    saved: list[AppSettings] = []
+    monkeypatch.setattr(route, "load_settings", lambda: saved[-1] if saved else current)
+    monkeypatch.setattr(route, "save_settings", saved.append)
+
+    target = tmp_path / "notebi-models"
+    response = client.put("/local_models/storage", json={"directory": str(target)})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "directory": str(target),
+        "effective_cache_dir": str(target / "huggingface" / "hub"),
+    }
+    assert saved[-1].model_storage_dir == str(target)
+    assert client.get("/local_models/storage").json() == response.json()
+
+
+def test_local_model_storage_rejects_relative_directory() -> None:
+    response = client.put("/local_models/storage", json={"directory": "relative/models"})
+
+    assert response.status_code == 422

@@ -43,6 +43,10 @@ frontend/.env.local
 frontend/.playwright-cli/
 frontend/dist/
 frontend/tsconfig.tsbuildinfo
+src-tauri/target/
+src-tauri/gen/
+packaging/build/
+packaging/dist/
 product-builds/
 release/
 GEMINI.md
