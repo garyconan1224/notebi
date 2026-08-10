@@ -53,10 +53,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
-          cache-dependency-path: |
-            requirements.txt
-            packaging/requirements-desktop-build.txt
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -73,7 +69,7 @@ jobs:
       - name: Install backend build dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -r packaging/requirements-desktop-build.txt
+          pip install --no-cache-dir -r requirements.txt -r packaging/requirements-desktop-build.txt
 
       - name: Build Python sidecar
         run: python -m PyInstaller --noconfirm --clean --distpath packaging/dist --workpath packaging/build packaging/notebi_backend.spec
@@ -113,6 +109,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "src-tauri\resources" | Out-Null
           Copy-Item -Recurse "packaging\dist\notebi-backend" "src-tauri\resources\backend"
+          Remove-Item -Recurse -Force "packaging\build", "packaging\dist"
           Invoke-WebRequest -Uri "$env:FFMPEG_RELEASE_BASE/ffmpeg-win32-x64" -OutFile "src-tauri\resources\ffmpeg.exe"
           Invoke-WebRequest -Uri "$env:FFMPEG_RELEASE_BASE/ffprobe-win32-x64" -OutFile "src-tauri\resources\ffprobe.exe"
           Invoke-WebRequest -Uri "$env:FFMPEG_RELEASE_BASE/win32-x64.LICENSE" -OutFile "src-tauri\resources\FFMPEG-LICENSE.txt"
@@ -129,7 +126,7 @@ jobs:
 
       - name: Build unsigned NSIS installer
         working-directory: frontend
-        run: pnpm desktop:build -- --bundles nsis
+        run: pnpm desktop:build --bundles nsis
 
       - name: Collect Windows preview asset
         shell: pwsh
@@ -162,6 +159,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Free Linux runner disk for desktop packaging
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          sudo apt-get clean
+          df -h /
+
       - name: Install Linux desktop build libraries
         run: |
           sudo apt-get update
@@ -183,10 +187,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
-          cache-dependency-path: |
-            requirements.txt
-            packaging/requirements-desktop-build.txt
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -203,7 +203,7 @@ jobs:
       - name: Install backend build dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -r packaging/requirements-desktop-build.txt
+          pip install --no-cache-dir -r requirements.txt -r packaging/requirements-desktop-build.txt
 
       - name: Build Python sidecar
         run: python -m PyInstaller --noconfirm --clean --distpath packaging/dist --workpath packaging/build packaging/notebi_backend.spec
@@ -236,6 +236,7 @@ jobs:
         run: |
           cp -a packaging/dist/notebi-backend src-tauri/resources/backend
           chmod +x src-tauri/resources/backend/notebi-backend
+          rm -rf packaging/build packaging/dist
           curl --fail --location "$FFMPEG_RELEASE_BASE/ffmpeg-linux-x64" --output src-tauri/resources/ffmpeg
           curl --fail --location "$FFMPEG_RELEASE_BASE/ffprobe-linux-x64" --output src-tauri/resources/ffprobe
           curl --fail --location "$FFMPEG_RELEASE_BASE/linux-x64.LICENSE" --output src-tauri/resources/FFMPEG-LICENSE.txt
@@ -247,7 +248,7 @@ jobs:
 
       - name: Build AppImage and Debian package
         working-directory: frontend
-        run: pnpm desktop:build -- --bundles appimage,deb
+        run: pnpm desktop:build --bundles appimage,deb
 
       - name: Collect Linux preview assets
         shell: bash

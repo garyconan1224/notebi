@@ -4,7 +4,7 @@
   "version": "0.3.0",
   "identifier": "com.notebi.desktop",
   "build": {
-    "beforeBuildCommand": "pnpm build",
+    "beforeBuildCommand": "pnpm --dir frontend build",
     "frontendDist": "../frontend/dist"
   },
   "app": {
