@@ -43,6 +43,7 @@ const SearchPage = lazy(() => import('@/pages/SearchPage/SearchPage'))
 const WorkbenchPage = lazy(() => import('@/pages/WorkbenchPage/index'))
 const ProcessingPage = lazy(() => import('@/pages/result/ProcessingPage/index'))
 const LibraryPage = lazy(() => import('@/pages/LibraryPage/index'))
+const KnowledgeMapPage = lazy(() => import('@/pages/KnowledgeMapPage/index'))
 const NoteShell = lazy(() => import('@/pages/result/NoteShell/index'))
 const TaskCenterPage = lazy(() => import('@/pages/TaskCenterPage/index'))
 const BatchCreatePage = lazy(() => import('@/pages/TaskCenterPage/BatchCreatePage'))
@@ -108,6 +109,7 @@ export const router = createBrowserRouter([
         },
       },
       { path: 'library', element: withSuspense(<LibraryPage />) },
+      { path: 'knowledge-map', element: withSuspense(<KnowledgeMapPage />) },
       { path: 'notes', element: withSuspense(<LibraryPage />) },
       { path: 'tasks', element: withSuspense(<TaskCenterPage />) },
       { path: 'tasks/new', element: withSuspense(<BatchCreatePage />) },

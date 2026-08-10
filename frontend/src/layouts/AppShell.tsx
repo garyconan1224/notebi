@@ -8,6 +8,7 @@ import {
   FolderOpen,
   Star,
   Search,
+  Network,
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
@@ -46,6 +47,7 @@ const NAV_ITEMS: NavItem[] = [
 const BOTTOM_ITEMS: NavItem[] = [
   { id: 'favorites',   path: '/favorites',   icon: Star,       label: 'favorites' },
   { id: 'knowledge',   path: '/knowledge',   icon: Search,     label: 'knowledge' },
+  { id: 'knowledgeMap', path: '/knowledge-map', icon: Network, label: 'knowledgeMap' },
   { id: 'settings',    path: '/settings',    icon: Settings,   label: 'settings' },
 ]
 
@@ -165,6 +167,7 @@ function pageTitleForPath(pathname: string, t: (key: string) => string): string 
   if (pathname.startsWith('/notes')) return t('nav.notes')
   if (pathname.startsWith('/tasks')) return t('nav.tasks')
   if (pathname.startsWith('/collections') || pathname.startsWith('/workspaces')) return t('nav.collections')
+  if (pathname.startsWith('/knowledge-map')) return t('nav.knowledgeMap')
   if (pathname.startsWith('/knowledge') || pathname.startsWith('/search')) return t('nav.knowledge')
   if (pathname.startsWith('/favorites')) return t('nav.favorites')
   if (pathname.startsWith('/settings')) return t('nav.settings')
@@ -207,6 +210,10 @@ export function AppShell({ children }: AppShellProps) {
     if (item.id === 'collections') {
       return location.pathname.startsWith('/collections') || location.pathname === '/workspaces'
     }
+    if (item.id === 'knowledge') {
+      return location.pathname.startsWith('/knowledge') && !location.pathname.startsWith('/knowledge-map')
+    }
+    if (item.id === 'knowledgeMap') return location.pathname.startsWith('/knowledge-map')
     return location.pathname.startsWith(item.path)
   }
 
