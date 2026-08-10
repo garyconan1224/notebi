@@ -41,7 +41,7 @@ NoteBi 已具备源码运行方式，并正在 `codex/release-github` 分支构�
 |---|---|---|
 | macOS Apple Silicon / Intel | 源码 + `.command` 启动器 | Apple 签名、公证和桌面 job 暂缓 |
 | Windows x64 | NSIS `.exe` 无签名开发预览 | CI 构建；会显示未知发布者 / SmartScreen 提示，正式 Release 仍需实机验收 |
-| Linux x64 | AppImage + `.deb` 开发预览 | CI 构建；仍需 Ubuntu 实机验收 |
+| Linux x64 | AppImage + `.deb` CPU 开发预览 | CI 使用 CPU-only PyTorch，避免把 CUDA 运行时误装进发行包；仍需 Ubuntu 实机验收 |
 | 自动化产物 | GitHub Actions Artifacts | 通过 sidecar `/health` smoke test 后上传，尚不等于正式 Release |
 
 不要把构建成功等同于安装和媒体能力已经验收。预览产物先保存在 GitHub Actions；实机验收通过后才会发布到 [GitHub Releases](https://github.com/garyconan1224/notebi/releases)。

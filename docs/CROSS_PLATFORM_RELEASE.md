@@ -67,7 +67,7 @@ Tauri 2 桌面壳
 | 目标 | GitHub Release 资产 | 最低验收 |
 |---|---|---|
 | Windows x64 | `NoteBi_<version>_windows-x64-unsigned-preview-setup.exe` | 未签名提示、安装/卸载、FFmpeg、设置页模型下载、导出 |
-| Linux x64 | `NoteBi_<version>_linux-x64-preview.AppImage` 与 `.deb` | Ubuntu 实机启动、ASR、远程模型、导出 |
+| Linux x64 | `NoteBi_<version>_linux-x64-preview.AppImage` 与 `.deb`（CPU-only PyTorch） | Ubuntu 实机启动、CPU ASR、远程模型、导出 |
 | macOS Apple Silicon / Intel | 后置 `.dmg` | 等 Apple 账号后再接入签名、公证与原生 job |
 
 Linux ARM64、Windows ARM64 和全部 Apple 资产放在后续阶段；先把 Windows/Linux x64 做成可重复构建和可真实验收的版本。

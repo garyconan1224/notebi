@@ -1,0 +1,6 @@
+# Linux desktop previews are intentionally CPU-only. Installing torch from
+# PyPI pulls the CUDA 13 runtime into the frozen sidecar even on GitHub's
+# CPU-only runner, adding several gigabytes that the app cannot use.
+torch==2.8.0
+torchaudio==2.8.0
+torchvision==0.23.0
