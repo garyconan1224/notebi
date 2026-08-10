@@ -341,6 +341,35 @@ jobs:
           compression-level: 0
           retention-days: 14
 
+      - name: Archive embedded runtime for AppImage
+        shell: bash
+        run: |
+          runtime_archive="$RUNNER_TEMP/notebi-runtime.tar"
+          tar --format=posix -C src-tauri/resources -cf "$runtime_archive" \
+            backend \
+            ffmpeg \
+            ffprobe \
+            FFMPEG-LICENSE.txt \
+            THIRD_PARTY_NOTICES.md
+          rm -rf src-tauri/resources/backend src-tauri/target/release/bundle/deb
+          rm -f \
+            src-tauri/resources/ffmpeg \
+            src-tauri/resources/ffprobe \
+            src-tauri/resources/FFMPEG-LICENSE.txt \
+            src-tauri/resources/THIRD_PARTY_NOTICES.md \
+            "release/NoteBi_${APP_VERSION}_linux-x64-preview.deb" \
+            "release/NoteBi_${APP_VERSION}_linux-x64-preview.deb.sha256"
+          mv "$runtime_archive" src-tauri/resources/runtime.tar
+          (
+            cd src-tauri/resources
+            sha256sum runtime.tar > runtime.tar.sha256
+            tar -tf runtime.tar | grep -qx 'backend/notebi-backend'
+            tar -tf runtime.tar | grep -qx 'ffmpeg'
+            tar -tf runtime.tar | grep -qx 'ffprobe'
+          )
+          du -sh src-tauri/resources/runtime.tar
+          df -h /
+
       - name: Bundle AppImage without stripping embedded sidecars
         working-directory: frontend
         env:

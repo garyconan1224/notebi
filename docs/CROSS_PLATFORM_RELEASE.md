@@ -72,6 +72,8 @@ Tauri 2 桌面壳
 
 Linux ARM64、Windows ARM64 和全部 Apple 资产放在后续阶段；先把 Windows/Linux x64 做成可重复构建和可真实验收的版本。
 
+AppImage 在构建前把 Python sidecar、FFmpeg 与许可证文件归档并写入 SHA256 清单，避免 `linuxdeploy` 对静态 FFmpeg 和 PyInstaller 私有库执行 `patchelf`。应用首次启动时校验归档并解包到 NoteBi 用户数据目录，再启动本地服务；模型仍由用户在设置页单独选择目录和点击下载。
+
 ## 原生构建矩阵
 
 GitHub Actions 使用各平台原生 runner：
