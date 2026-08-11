@@ -1,6 +1,9 @@
 name: Publish Preview Release
 
 on:
+  push:
+    branches:
+      - codex/publish-preview-release
   workflow_dispatch:
 
 permissions:
