@@ -7,7 +7,6 @@
 - `.env`、`.local/settings.json`、API Key、Cookie、内部 IP 和证书
 - `data/`、项目素材、用户笔记、SQLite 数据库和任务日志
 - 本地模型缓存，除非模型许可证允许且明确作为 Release Asset 发布
-- 华为内网专用配置和昇腾服务器信息
 
 ## 发布前检查
 
@@ -35,6 +34,6 @@ rg -n --hidden -g '!data/**' -g '!.local/**' \
 3. 推送当前发布分支，等待 CI 通过。
 4. 检查仓库在线页面、README 图片、安装链接和敏感信息。
 5. 确认没有问题后，再切换为 Public。
-6. 创建 Release，上传 Windows runtime 包和 Windows 离线完整包。
+6. 实机验收通过后创建 Release，上传 Windows 未签名预览安装包与 Linux AppImage / `.deb`；不上传模型权重或用户数据。
 
 GitHub 上传、创建远程仓库和切换公开状态都属于外部状态变更，必须由维护者最后确认后执行。

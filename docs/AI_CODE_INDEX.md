@@ -9,7 +9,6 @@
 | 开发流程 | `docs/WORKFLOW.md` |
 | 当前可执行计划 | `docs/plans/` |
 | 项目协作规则 | `CLAUDE.md`、`AGENTS.md`、`docs/rules/` |
-| 清理记录 | `docs/PROJECT_CLEANUP_2026-07-29.md` |
 | macOS / Windows 安装 | `docs/INSTALL_MACOS.md`、`docs/INSTALL_WINDOWS.md` |
 | 开源发布 | `docs/OPEN_SOURCE_RELEASE.md`、`docs/GITHUB_RELEASE_CHECKLIST.md` |
 | 模型与 Provider | `docs/THIRD_PARTY_MODELS.md`、`docs/openai-compatible-providers.md` |

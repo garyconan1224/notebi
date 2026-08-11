@@ -11,7 +11,7 @@
 - GitHub：`garyconan1224/notebi`，Private，默认分支 `codex/release-github`；commit `38e812b` 的 Backend Tests、Frontend Build、Lint 均已在 GitHub Actions 成功。
 - 本地前端：575 tests passed；`pnpm --dir frontend build` 已通过。
 - 本地后端：1517 passed、2 skipped、6 deselected；Linux 可选 MLX 依赖测试已改为显式假模块并通过远端复验。
-- 现有发行基础：Windows 离线 bundle 构建器、模型 `manifest.json` + SHA256 预检、`/health` 后再打开浏览器。
+- 发行基础：Tauri 桌面壳、平台 sidecar、FFmpeg 校验、`/health` 后再打开主页面。
 - 已新增 `src-tauri`、Rust/Cargo/Tauri/PyInstaller 与 Windows/Linux 预览工作流；当前缺口是远端原生构建结果和目标平台实机验收。
 - 现有设置页模型下载器已经满足“明确点击才下载”；本批只补模型存储目录保存/回读，不抽成安装前下载器。
 - OpenDesign 项目：`notebi-installer-experience-2026-08-10`；早期稿中的安装期模型步骤已作废，当前生产实现只复用其纸张色、墨色、蓝色强调与启动动效语言。

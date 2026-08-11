@@ -134,7 +134,7 @@ def _scan_model_cache_bytes(model_name: str) -> Tuple[int, int]:
         repo_dir = _hf_repo_dir(model_name)
         blobs = repo_dir / "blobs"
         if not blobs.is_dir():
-            # Windows 离线包使用普通文件快照，避免 ZIP 解压后丢失
+            # 常规文件快照可兼容归档解压场景，不依赖符号链接。
             # Hugging Face 缓存原本依赖的符号链接；这种布局没有 blobs，
             # 但 snapshots/<revision>/ 下的文件仍可被 HF Hub 直接读取。
             snapshots = repo_dir / "snapshots"

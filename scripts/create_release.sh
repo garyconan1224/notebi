@@ -58,7 +58,7 @@ if ! command -v pnpm >/dev/null 2>&1; then
 fi
 
 echo "运行源码与代码检查..."
-"$PYTHON_BIN" scripts/portable_preflight.py --mode source --root .
+"$PYTHON_BIN" scripts/source_preflight.py --root .
 "$PYTHON_BIN" -m compileall -q backend shared scripts
 git diff --check
 

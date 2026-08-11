@@ -1,6 +1,6 @@
 # NoteBi 独立启动说明
 
-这个目录是 NoteBi 源码目录。完整的跨平台安装和 Windows 离线懒人包说明请先阅读根目录 `README.md`。
+这个目录是 NoteBi 源码目录。完整的跨平台安装、桌面预览包和模型下载流程请先阅读根目录 `README.md`。
 
 ## 最快打开
 
@@ -68,7 +68,7 @@ cd /Users/conan/Desktop/notebi
 
 ## Windows
 
-Windows 源码模式和 Windows 离线懒人包统一使用：
+Windows 源码模式使用：
 
 ```text
 start-notebi.bat

@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -13,10 +15,70 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-try:
-    from scripts.windows_start import PID_FILE, _terminate, _wait_for, _write_pid_file
-except ModuleNotFoundError:  # direct execution: python scripts/windows_dev_start.py
-    from windows_start import PID_FILE, _terminate, _wait_for, _write_pid_file
+
+PID_FILE = Path(".local") / "windows_pids.json"
+
+
+def _port_is_open(port: int) -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=1):
+            return True
+    except OSError:
+        return False
+
+
+def _terminate(process: subprocess.Popen[str]) -> None:
+    if process.poll() is not None:
+        return
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    else:
+        process.terminate()
+    try:
+        process.wait(timeout=8)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=3)
+
+
+def _wait_for(url: str, process: subprocess.Popen[str], timeout: float = 45) -> None:
+    deadline = time.monotonic() + timeout
+    last_error = "not ready"
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise RuntimeError(f"process exited early with code {process.returncode}")
+        try:
+            with urllib.request.urlopen(url, timeout=1) as response:
+                if 200 <= response.status < 500:
+                    return
+        except Exception as exc:  # noqa: BLE001 - startup polling
+            last_error = str(exc)
+        time.sleep(0.5)
+    raise RuntimeError(f"timed out waiting for {url}: {last_error}")
+
+
+def _write_pid_file(root: Path, backend: subprocess.Popen[str], frontend: subprocess.Popen[str]) -> Path:
+    local_dir = root / ".local"
+    local_dir.mkdir(parents=True, exist_ok=True)
+    path = root / PID_FILE
+    path.write_text(
+        json.dumps(
+            {
+                "backend_pid": backend.pid,
+                "frontend_pid": frontend.pid,
+                "created_by": "scripts/windows_dev_start.py",
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return path
 
 
 def start(root: Path, *, backend_port: int = 8001, frontend_port: int = 5181) -> int:
@@ -29,6 +91,10 @@ def start(root: Path, *, backend_port: int = 8001, frontend_port: int = 5181) ->
     npm = shutil.which("npm.cmd") or shutil.which("npm")
     if not npm:
         print("未找到 npm，请安装 Node.js 18+ 后再启动源码模式。")
+        return 1
+
+    if _port_is_open(backend_port) or _port_is_open(frontend_port):
+        print(f"端口 {backend_port} 或 {frontend_port} 已被占用，请先运行 stop-notebi.bat。")
         return 1
 
     logs = root / ".local"

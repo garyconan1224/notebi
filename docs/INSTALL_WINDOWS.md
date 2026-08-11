@@ -1,6 +1,13 @@
 # Windows 安装与启动
 
-NoteBi 在 Windows 上提供两种启动模式，入口文件相同：`start-notebi.bat`。
+## 桌面预览安装包
+
+Windows x64 预览版使用 NSIS 安装器。请从 [Desktop Preview Packages 工作流](https://github.com/garyconan1224/notebi/actions/workflows/desktop-preview.yml) 下载 `notebi-windows-x64-unsigned-preview` Artifact 并解压后运行安装器。
+
+- 安装器会让你选择应用安装目录。
+- 这是未签名开发预览版，Windows 可能显示“未知发布者”或 SmartScreen 提示。
+- 安装和首次打开不会下载模型；进入「设置 → 本地模型」后选择模型目录，并点击具体模型下载。
+- 当前仅经过 CI 打包与启动检查，仍需要真实 Windows x64 机器完成安装、媒体处理和模型下载验收。
 
 ## 源码模式
 
@@ -24,27 +31,15 @@ NoteBi 在 Windows 上提供两种启动模式，入口文件相同：`start-not
 
 4. 双击 `start-notebi.bat`。
 
-没有 `runtime\python\python.exe` 时，入口会自动使用 `.venv` 启动 FastAPI 和 Vite 开发服务器。
-
-## Windows 离线懒人包
-
-懒人包额外包含：
-
-- `runtime\python\python.exe`
-- `runtime\ffmpeg\bin\ffmpeg.exe`
-- `runtime\ffmpeg\bin\ffprobe.exe`
-- `frontend\dist\index.html`
-- `models\manifest.json` 和模型缓存
-
-解压后双击 `start-notebi.bat`。检测到内置 runtime 后，入口会切换为离线模式：不安装依赖、不下载模型、不启动 Node.js，只启动内置 Python 后端和静态前端服务。
+`start-notebi.bat` 使用 `.venv` 启动 FastAPI 和 Vite 开发服务器。
 
 ## 停止与日志
 
-双击 `stop-notebi.bat`。日志位于：
+双击 `stop-notebi.bat`。源码模式日志位于：
 
 ```text
-logs\backend.log
-logs\frontend.log
+.local\backend.log
+.local\frontend.log
 ```
 
-详细打包规则见 [Windows 离线懒人包](WINDOWS_OFFLINE_BUNDLE.md)。昇腾模型地址仍然通过应用内「设置 → 模型与渠道」配置，不在启动脚本中硬编码。
+模型服务地址仍然通过应用内「设置 → 模型与渠道」配置，不在启动脚本中硬编码。

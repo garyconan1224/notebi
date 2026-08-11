@@ -25,7 +25,7 @@ Tauri 2 桌面壳
 - Tauri 的 `externalBin` 支持把 Python API 服务作为 sidecar，并要求按目标架构提供对应二进制。
 - 后端使用 PyInstaller `onedir` sidecar，安装时已经展开依赖，避免 `onefile` 首次运行临时解压约 1 GB 内容导致长时间白屏；模型权重不打入 sidecar。
 - PyInstaller 不是交叉编译器：Windows 包在 Windows 构建，macOS 包在 macOS 构建，Linux 包在 Linux 构建。
-- 安装器不塞入、选择或下载模型权重。应用通过资源检查和 `/health` 后正常打开；用户之后在「设置 → 本地模型」选择目录并明确点击下载。内网旧式便携包仍可由维护者预置模型，但不改变新桌面包的交互契约。
+- 安装器不塞入、选择或下载模型权重。应用通过资源检查和 `/health` 后正常打开；用户之后在「设置 → 本地模型」选择目录并明确点击下载。
 
 ## 首次安装状态机
 

@@ -38,4 +38,4 @@
 ./stop-notebi.command
 ```
 
-首次启动器会按当前 macOS 环境检查开发依赖。它适合联网开发机，不适合作为华为内网离线启动器；内网场景使用 Windows 离线包和 [昇腾内网说明](ASCEND_INTRANET.md)。
+首次启动器会按当前 macOS 环境检查开发依赖。

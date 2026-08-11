@@ -10,6 +10,13 @@
   <img src="https://img.shields.io/badge/local--first-%E2%9C%93-success" />
 </p>
 
+<p align="center">
+  <img alt="NoteBi desktop startup check" src="docs/media/desktop-startup.png" width="49%" />
+  <img alt="NoteBi local model settings" src="docs/media/local-model-settings.png" width="49%" />
+</p>
+
+<p align="center"><a href="docs/media/notebi-feature-intro-70s.mp4">观看 70 秒功能介绍视频</a></p>
+
 ---
 
 ## NoteBi 是什么
@@ -31,7 +38,6 @@ NoteBi 是一个本地优先的内容笔记工具。它可以导入本地视频�
 - 本地知识库、向量检索和跨笔记问答
 - OpenAI-compatible 模型服务配置
 - 支持把 Chat、Embedding、Rerank 分别配置到不同服务
-- 支持通过内网地址接入华为昇腾模型服务
 
 ## 当前发布状态
 
@@ -45,6 +51,8 @@ NoteBi 已具备源码运行方式，并正在 `codex/release-github` 分支构�
 | 自动化产物 | GitHub Actions Artifacts | 通过 sidecar `/health` smoke test 后上传，尚不等于正式 Release |
 
 不要把构建成功等同于安装和媒体能力已经验收。预览产物先保存在 GitHub Actions；实机验收通过后才会发布到 [GitHub Releases](https://github.com/garyconan1224/notebi/releases)。
+
+当前可供测试的 Windows/Linux 预览安装包见 [Desktop Preview Packages 工作流](https://github.com/garyconan1224/notebi/actions/workflows/desktop-preview.yml)。仓库目前为私有仓库，下载时需要登录有权限的 GitHub 账号。
 
 ### 桌面预览版的启动流程
 
@@ -70,10 +78,6 @@ AppImage 为避免 Linux 打包器改写 Python/FFmpeg 私有二进制，会把�
 | 方式 | 适用对象 | 运行条件 |
 |---|---|---|
 | 源码模式 | 开发者、需要改代码的人 | Python、Node.js、FFmpeg |
-| Windows 离线包构建模式 | 需要准备旧式内网便携包的维护者 | 已准备的 Windows runtime、前端产物和可再分发模型 |
-| 昇腾内网模式 | 使用华为内网模型的人 | NoteBi 客户端 + 内网 OpenAI-compatible 服务 |
-
-Windows 离线包保留完整源码，不把业务封装进不可修改的 EXE。当前仓库提供构建器和预检工具，并不附带已经验收的 runtime 或模型资产。详见 [Windows 离线包说明](docs/WINDOWS_OFFLINE_BUNDLE.md)。
 
 ## 快速开始：macOS
 
@@ -109,7 +113,7 @@ http://localhost:5181
 ./stop-notebi.command
 ```
 
-完整 macOS 说明见 [INSTALL_MACOS.md](docs/INSTALL_MACOS.md)。当前 macOS 启动器会检查并安装开发依赖，因此不适合华为内网。华为内网请使用 Windows 离线包或按照 [昇腾内网说明](docs/ASCEND_INTRANET.md) 部署。
+完整 macOS 说明见 [INSTALL_MACOS.md](docs/INSTALL_MACOS.md)。
 
 ## 快速开始：Windows 源码模式
 
@@ -144,33 +148,13 @@ cd ..
 双击 start-notebi.bat
 ```
 
-如果没有 `runtime\python\python.exe`，启动器会自动进入源码开发模式，使用 `.venv` 和本机 Node.js。启动日志在 `.local\backend.log`、`.local\frontend.log`。
+启动器使用 `.venv` 和本机 Node.js；启动日志在 `.local\backend.log`、`.local\frontend.log`。
 
 停止：
 
 ```text
 双击 stop-notebi.bat
 ```
-
-## 旧式交付：Windows 离线便携包
-
-这一节描述仓库原有的内网便携包工具，不是新的 Tauri 安装包流程。便携包可由维护者预置 `runtime\python`、`runtime\ffmpeg`、`frontend\dist` 和模型；新的 NSIS/AppImage/`.deb` 预览包不会内置或静默下载模型。
-
-```text
-解压 NoteBi-Windows-x64-offline.zip
-双击 start-notebi.bat
-浏览器打开 http://127.0.0.1:5181
-```
-
-启动器会：
-
-1. 检查内置 Python、FFmpeg、前端构建产物和模型清单。
-2. 校验模型 SHA256。
-3. 设置离线环境变量，禁止运行时下载模型。
-4. 启动本地 FastAPI 和静态前端服务。
-5. 自动打开浏览器并写入 `logs`。
-
-它不会执行 `pip install`、不会访问 Hugging Face 或 ModelScope，也不会修改当前的模型 provider 配置。
 
 ## 模型配置与下载
 
@@ -182,23 +166,9 @@ cd ..
 
 - OpenAI-compatible 服务：填写服务地址、模型名和 API Key。
 - 本机模型服务：填写 `http://127.0.0.1:<port>/v1`。
-- 华为昇腾内网服务：填写内网节点的 OpenAI-compatible 地址和模型名。
 - Chat、Embedding、Rerank：可以分别指定不同 provider。
 
 首次启动没有模型服务时，界面仍然可以打开；需要生成总结、翻译或知识库问答时，再配置对应能力的模型。
-
-## 华为昇腾内网
-
-推荐让 Windows NoteBi 作为客户端，把大模型推理放在内网 Linux/昇腾节点：
-
-```text
-Windows NoteBi ──内网 HTTP──> 昇腾模型服务
-                              ├─ Chat
-                              ├─ Embedding
-                              └─ Rerank
-```
-
-NoteBi 不内置或改写昇腾驱动、CANN、vLLM-Ascend 和现有模型配置。详细部署边界、离线转移流程和配置位置见 [ASCEND_INTRANET.md](docs/ASCEND_INTRANET.md)。
 
 ## 开发与验证
 
@@ -213,25 +183,12 @@ pnpm build
 cd ..
 
 # 源码树预检
-./.venv/bin/python scripts/portable_preflight.py --mode source --root .
+./.venv/bin/python scripts/source_preflight.py --root .
 ```
-
-Windows 离线包构建需要一台可以准备 Windows runtime 和模型缓存的构建机：
-
-```bash
-python scripts/build_windows_offline_bundle.py \
-  --source-root . \
-  --output ./release/NoteBi-Windows-x64-offline \
-  --runtime /path/to/prepared/windows-runtime \
-  --models /path/to/prepared/models \
-  --zip ./release/NoteBi-Windows-x64-offline.zip
-```
-
-构建脚本只复制已准备好的文件，不联网下载依赖或模型。完整参数和目录约定见 [WINDOWS_OFFLINE_BUNDLE.md](docs/WINDOWS_OFFLINE_BUNDLE.md)。
 
 ## 全平台发行路线
 
-推荐采用两层交付：先保持现有源码/便携包可复现，再用 Tauri 2 承载窗口和生命周期，用平台原生构建的 Python 后端作为 sidecar。PyInstaller 不是跨平台交叉编译器，因此 Windows、macOS 和 Linux 必须分别在对应系统构建和验收。
+桌面交付使用 Tauri 2 承载窗口和生命周期，用平台原生构建的 Python 后端作为 sidecar。PyInstaller 不是跨平台交叉编译器，因此 Windows、macOS 和 Linux 必须分别在对应系统构建和验收。
 
 当前目标资产是 Windows x64 无签名 NSIS 开发版，以及 Linux x64 的 `.AppImage` 和 `.deb`；Apple 资产后置。代码签名、模型许可证、应用内按需下载和实机验收门槛见 [CROSS_PLATFORM_RELEASE.md](docs/CROSS_PLATFORM_RELEASE.md)。
 
