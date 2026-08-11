@@ -42,8 +42,9 @@ jobs:
         run: |
           set -euo pipefail
           gh release create "${RELEASE_TAG}" \
+            --repo "${GITHUB_REPOSITORY}" \
             --target "${RELEASE_TARGET}" \
             --title "NoteBi v0.3.0 Preview 1" \
             --prerelease \
             --notes $'Windows x64 unsigned preview and Linux x64 preview packages.\n\nModels are not downloaded during installation. After first launch, choose a model directory in Settings → Local Models and explicitly download the model you need.\n\nThis is a preview release: CI packaging and sidecar health checks passed, but Windows/Linux real-machine media testing remains required.'
-          gh release upload "${RELEASE_TAG}" release-assets/*/* --clobber
+          gh release upload "${RELEASE_TAG}" release-assets/*/* --repo "${GITHUB_REPOSITORY}" --clobber
