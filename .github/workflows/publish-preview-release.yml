@@ -1,0 +1,43 @@
+name: Publish Preview Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    name: Publish v0.3.0 Preview 1
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: v0.3.0-preview.1
+      RELEASE_TARGET: 4377051b8aca9d4f2173e2b3992fae6bda6c0f7d
+      SOURCE_RUN_ID: "31455958879"
+    steps:
+      - name: Download successful preview artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p downloads release-assets
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts" \
+            --paginate --jq '.artifacts[] | select(.expired == false) | "\(.id)\t\(.name)"' \
+            | while IFS=$'\t' read -r artifact_id artifact_name; do
+                gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \
+                  > "downloads/${artifact_name}.zip"
+                unzip -q "downloads/${artifact_name}.zip" -d release-assets
+              done
+          sha256sum --check release-assets/*.sha256
+
+      - name: Create and upload preview release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "${RELEASE_TAG}" \
+            --target "${RELEASE_TARGET}" \
+            --title "NoteBi v0.3.0 Preview 1" \
+            --prerelease \
+            --notes $'Windows x64 unsigned preview and Linux x64 preview packages.\n\nModels are not downloaded during installation. After first launch, choose a model directory in Settings → Local Models and explicitly download the model you need.\n\nThis is a preview release: CI packaging and sidecar health checks passed, but Windows/Linux real-machine media testing remains required.'
+          gh release upload "${RELEASE_TAG}" release-assets/* --clobber
